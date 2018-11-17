@@ -1,0 +1,14 @@
+language: bash
+os:
+  - linux
+install:
+  - wget https://ziglang.org/builds/zig-linux-x86_64-master.tar.xz --no-cache
+  - tar -xf zig-linux-*
+git:
+  depth: false
+script:
+  - zig-linux-*/zig version
+  - zig-linux-*/zig test src/index.zig
+  - zig-linux-*/zig test src/index.zig --release-fast
+  - zig-linux-*/zig test src/index.zig --release-safe
+  - zig-linux-*/zig test src/index.zig --release-small
