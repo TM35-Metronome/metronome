@@ -19,17 +19,17 @@ pub const Access = union(enum) {
     Index: usize,
 };
 
-pub fn parseLine(allocator: *mem.Allocator, line: []const u8) !Property {
+pub fn parseProperty(allocator: *mem.Allocator, line: []const u8) !Property {
     var list = std.ArrayList(Access).init(allocator);
     errdefer list.deinit();
 
-    var res = try parseLineList(&list, line);
+    var res = try parsePropertyList(&list, line);
     res.access = list.toOwnedSlice();
 
     return res;
 }
 
-pub fn parseLineList(list: *std.ArrayList(Access), line: []const u8) !Property {
+pub fn parsePropertyList(list: *std.ArrayList(Access), line: []const u8) !Property {
     const State = enum {
         Begin,
         Field,
@@ -93,10 +93,10 @@ pub fn parseLineList(list: *std.ArrayList(Access), line: []const u8) !Property {
     };
 }
 
-fn testParseLine(str: []const u8, res: Property) !void {
+fn testParseProperty(str: []const u8, res: Property) !void {
     var buf: [1024]u8 = undefined;
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
-    const prop = try parseLine(&fb_allocator.allocator, str);
+    const prop = try parseProperty(&fb_allocator.allocator, str);
 
     if (prop.invalid_token) |t1| {
         const t2 = res.invalid_token.?;
@@ -113,18 +113,18 @@ fn testParseLine(str: []const u8, res: Property) !void {
     debug.assert(mem.eql(u8, prop.value, res.value));
 }
 
-fn testParseLineInvalid(str: []const u8, token: Token) !void {
+fn testParsePropertyInvalid(str: []const u8, token: Token) !void {
     var buf: [1024]u8 = undefined;
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
-    const prop = try parseLine(&fb_allocator.allocator, str);
+    const prop = try parseProperty(&fb_allocator.allocator, str);
 
     const t1 = prop.invalid_token.?;
     debug.assert(token.id == t1.id);
     debug.assert(mem.eql(u8, token.str, t1.str));
 }
 
-test "parser.parseLine" {
-    try testParseLine(
+test "parser.parseProperty" {
+    try testParseProperty(
         "a=1",
         Property{
             .invalid_token = null,
@@ -132,7 +132,7 @@ test "parser.parseLine" {
             .value = "1",
         },
     );
-    try testParseLine(
+    try testParseProperty(
         "a.b=1",
         Property{
             .invalid_token = null,
@@ -143,7 +143,7 @@ test "parser.parseLine" {
             .value = "1",
         },
     );
-    try testParseLine(
+    try testParseProperty(
         "a[1]=1",
         Property{
             .invalid_token = null,
@@ -154,27 +154,27 @@ test "parser.parseLine" {
             .value = "1",
         },
     );
-    try testParseLineInvalid(",", Token.init(Token.Id.Invalid, ","));
-    try testParseLineInvalid("1", Token.init(Token.Id.Integer, "1"));
-    try testParseLineInvalid("[", Token.init(Token.Id.LBracket, "["));
-    try testParseLineInvalid("]", Token.init(Token.Id.RBracket, "]"));
-    try testParseLineInvalid("=", Token.init(Token.Id.Equal, "="));
-    try testParseLineInvalid(".", Token.init(Token.Id.Dot, "."));
-    try testParseLineInvalid("a.,", Token.init(Token.Id.Invalid, ","));
-    try testParseLineInvalid("a.1", Token.init(Token.Id.Integer, "1"));
-    try testParseLineInvalid("a.[", Token.init(Token.Id.LBracket, "["));
-    try testParseLineInvalid("a.]", Token.init(Token.Id.RBracket, "]"));
-    try testParseLineInvalid("a.=", Token.init(Token.Id.Equal, "="));
-    try testParseLineInvalid("a..", Token.init(Token.Id.Dot, "."));
-    try testParseLineInvalid("a[,", Token.init(Token.Id.Invalid, ","));
-    try testParseLineInvalid("a[a", Token.init(Token.Id.Identifier, "a"));
-    try testParseLineInvalid("a[[", Token.init(Token.Id.LBracket, "["));
-    try testParseLineInvalid("a[]", Token.init(Token.Id.RBracket, "]"));
-    try testParseLineInvalid("a[=", Token.init(Token.Id.Equal, "="));
-    try testParseLineInvalid("a[.", Token.init(Token.Id.Dot, "."));
-    try testParseLineInvalid("a[1,", Token.init(Token.Id.Invalid, ","));
-    try testParseLineInvalid("a[1a", Token.init(Token.Id.Identifier, "a"));
-    try testParseLineInvalid("a[1 1", Token.init(Token.Id.Integer, "1"));
-    try testParseLineInvalid("a[1=", Token.init(Token.Id.Equal, "="));
-    try testParseLineInvalid("a[1.", Token.init(Token.Id.Dot, "."));
+    try testParsePropertyInvalid(",", Token.init(Token.Id.Invalid, ","));
+    try testParsePropertyInvalid("1", Token.init(Token.Id.Integer, "1"));
+    try testParsePropertyInvalid("[", Token.init(Token.Id.LBracket, "["));
+    try testParsePropertyInvalid("]", Token.init(Token.Id.RBracket, "]"));
+    try testParsePropertyInvalid("=", Token.init(Token.Id.Equal, "="));
+    try testParsePropertyInvalid(".", Token.init(Token.Id.Dot, "."));
+    try testParsePropertyInvalid("a.,", Token.init(Token.Id.Invalid, ","));
+    try testParsePropertyInvalid("a.1", Token.init(Token.Id.Integer, "1"));
+    try testParsePropertyInvalid("a.[", Token.init(Token.Id.LBracket, "["));
+    try testParsePropertyInvalid("a.]", Token.init(Token.Id.RBracket, "]"));
+    try testParsePropertyInvalid("a.=", Token.init(Token.Id.Equal, "="));
+    try testParsePropertyInvalid("a..", Token.init(Token.Id.Dot, "."));
+    try testParsePropertyInvalid("a[,", Token.init(Token.Id.Invalid, ","));
+    try testParsePropertyInvalid("a[a", Token.init(Token.Id.Identifier, "a"));
+    try testParsePropertyInvalid("a[[", Token.init(Token.Id.LBracket, "["));
+    try testParsePropertyInvalid("a[]", Token.init(Token.Id.RBracket, "]"));
+    try testParsePropertyInvalid("a[=", Token.init(Token.Id.Equal, "="));
+    try testParsePropertyInvalid("a[.", Token.init(Token.Id.Dot, "."));
+    try testParsePropertyInvalid("a[1,", Token.init(Token.Id.Invalid, ","));
+    try testParsePropertyInvalid("a[1a", Token.init(Token.Id.Identifier, "a"));
+    try testParsePropertyInvalid("a[1 1", Token.init(Token.Id.Integer, "1"));
+    try testParsePropertyInvalid("a[1=", Token.init(Token.Id.Equal, "="));
+    try testParsePropertyInvalid("a[1.", Token.init(Token.Id.Dot, "."));
 }
