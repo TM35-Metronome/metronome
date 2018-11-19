@@ -1,0 +1,6 @@
+[submodule "lib/zig-crc"]
+	path = lib/zig-crc
+	url = https://github.com/Hejsil/zig-crc.git
+[submodule "lib/fun-with-zig"]
+	path = lib/fun-with-zig
+	url = https://github.com/Hejsil/fun-with-zig.git
