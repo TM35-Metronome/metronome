@@ -7,6 +7,8 @@ const math = std.math;
 const threshold = 2;
 const default_mask = 0x80;
 
+// TODO: Tests
+
 // TODO: This file could use some love in the form of a refactor. So far, it is mostly
 //       a direct translation of blz.c, but with some minor refactors here and there.
 //       Sadly, it's still not clear at all what this code is trying to do other than

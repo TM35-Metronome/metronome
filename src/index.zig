@@ -23,6 +23,7 @@ pub const Overlay = overlay.Overlay;
 
 test "nds" {
     _ = @import("banner.zig");
+    _ = @import("blz.zig");
     _ = @import("common.zig");
     _ = @import("formats.zig");
     _ = @import("fs.zig");
