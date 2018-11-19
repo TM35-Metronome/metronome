@@ -17,6 +17,19 @@ pub const Token = struct {
         Star,
         Equal,
         Dot,
+
+        pub fn str(id: Id) []const u8 {
+            return switch (id) {
+                Id.Invalid => "Invalid",
+                Id.Identifier => "Identifier",
+                Id.Integer => "Integer",
+                Id.LBracket => "[",
+                Id.RBracket => "]",
+                Id.Star => "*",
+                Id.Equal => "=",
+                Id.Dot => ".",
+            };
+        }
     };
 
     pub fn init(id: Id, str: []const u8) Token {
