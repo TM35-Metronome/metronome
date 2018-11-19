@@ -161,7 +161,8 @@ pub const Parser = struct {
     };
 
     const State = enum {
-        Begin,
+        Line,
+        Suffix,
         Field,
         Index,
         IndexEnd,
@@ -174,17 +175,17 @@ pub const Parser = struct {
     pub fn init(tok: Tokenizer) Parser {
         return Parser{
             .tok = tok,
-            .state = State.Field,
+            .state = State.Line,
         };
     }
 
-    pub fn next(par: *Parser) !Result {
+    pub fn next(par: *Parser) !?Result {
         var err_token = Token.init(Token.Id.Invalid, par.tok.rest());
         var res: Node = undefined;
         while (par.tok.next()) |token| {
             err_token = token;
             switch (par.state) {
-                State.Begin => switch (token.id) {
+                State.Suffix => switch (token.id) {
                     Token.Id.Dot => par.state = State.Field,
                     Token.Id.LBracket => par.state = State.Index,
                     Token.Id.Equal => {
@@ -193,9 +194,9 @@ pub const Parser = struct {
                     },
                     else => break,
                 },
-                State.Field => switch (token.id) {
+                State.Line, State.Field => switch (token.id) {
                     Token.Id.Identifier => {
-                        par.state = State.Begin;
+                        par.state = State.Suffix;
                         return Result.ok(Node{ .Field = token.str });
                     },
                     else => break,
@@ -209,7 +210,7 @@ pub const Parser = struct {
                 },
                 State.IndexEnd => switch (token.id) {
                     Token.Id.RBracket => {
-                        par.state = State.Begin;
+                        par.state = State.Suffix;
                         return Result.ok(res);
                     },
                     else => break,
@@ -219,7 +220,7 @@ pub const Parser = struct {
         }
 
         return switch (par.state) {
-            State.Begin => Result.err(err_token, []Token.Id{
+            State.Suffix => Result.err(err_token, []Token.Id{
                 Token.Id.Dot,
                 Token.Id.LBracket,
                 Token.Id.Equal,
@@ -227,7 +228,7 @@ pub const Parser = struct {
             State.Field => Result.err(err_token, []Token.Id{Token.Id.Identifier}),
             State.Index => Result.err(err_token, []Token.Id{Token.Id.Integer}),
             State.IndexEnd => Result.err(err_token, []Token.Id{Token.Id.RBracket}),
-            State.Done => Result.err(err_token, []Token.Id{}),
+            State.Done, State.Line => return null,
         };
     }
 };
@@ -235,7 +236,7 @@ pub const Parser = struct {
 fn testParser(str: []const u8, nodes: []const Node) void {
     var parser = Parser.init(Tokenizer.init(str));
     for (nodes) |n1| {
-        const res = parser.next() catch unreachable;
+        const res = (parser.next() catch unreachable).?;
         const n2 = res.Ok;
         switch (n1) {
             Node.Field => |name| debug.assert(mem.eql(u8, name, n2.Field)),
@@ -243,17 +244,17 @@ fn testParser(str: []const u8, nodes: []const Node) void {
             Node.Value => |value| debug.assert(mem.eql(u8, value, n2.Value)),
         }
     }
+
+    if (parser.next() catch unreachable) |_| unreachable;
 }
 
 test "Parser" {
-    testParser("a", []Node{Node{ .Field = "a" }});
-    testParser("a.b", []Node{
+    testParser("", []Node{});
+    testParser("   ", []Node{});
+    testParser(" # This is a comment", []Node{});
+    testParser("a=1", []Node{
         Node{ .Field = "a" },
-        Node{ .Field = "b" },
-    });
-    testParser("a[1]", []Node{
-        Node{ .Field = "a" },
-        Node{ .Index = 1 },
+        Node{ .Value = "1" },
     });
     testParser("a.b=1", []Node{
         Node{ .Field = "a" },
@@ -264,5 +265,10 @@ test "Parser" {
         Node{ .Field = "a" },
         Node{ .Index = 1 },
         Node{ .Value = "1" },
+    });
+    testParser(" a [ 1 ] = 1", []Node{
+        Node{ .Field = "a" },
+        Node{ .Index = 1 },
+        Node{ .Value = " 1" },
     });
 }
