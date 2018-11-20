@@ -38,6 +38,10 @@ pub const Token = struct {
             .str = str,
         };
     }
+
+    pub fn index(tok: Token, src: []const u8) usize {
+        return @ptrToInt(tok.str.ptr) - @ptrToInt(str.ptr);
+    }
 };
 
 pub const Tokenizer = struct {
@@ -144,9 +148,25 @@ test "Tokenizer" {
 }
 
 pub const Node = union(enum) {
-    Field: []const u8,
-    Index: usize,
-    Value: []const u8,
+    Field: FieldT,
+    Index: IndexT,
+    Value: ValueT,
+
+    pub const FieldT = struct {
+        dot: Token,
+        ident: Token,
+    };
+
+    pub const IndexT = struct {
+        lbracket: Token,
+        int: Token,
+        rbracket: Token,
+    };
+
+    pub const ValueT = struct {
+        equal: Token,
+        str: []const u8,
+    };
 };
 
 pub const Parser = struct {
@@ -173,12 +193,12 @@ pub const Parser = struct {
         }
     };
 
-    const State = enum {
+    const State = union(enum) {
         Line,
         Suffix,
-        Field,
-        Index,
-        IndexEnd,
+        Field: Token,
+        Index: Token,
+        IndexEnd: [2]Token,
         Done,
     };
 
@@ -192,39 +212,63 @@ pub const Parser = struct {
         };
     }
 
-    pub fn next(par: *Parser) !?Result {
+    pub fn next(par: *Parser) ?Result {
         var err_token = Token.init(Token.Id.Invalid, par.tok.rest());
-        var res: Node = undefined;
         while (par.tok.next()) |token| {
             err_token = token;
             switch (par.state) {
-                State.Suffix => switch (token.id) {
-                    Token.Id.Dot => par.state = State.Field,
-                    Token.Id.LBracket => par.state = State.Index,
-                    Token.Id.Equal => {
-                        par.state = State.Done;
-                        return Result.ok(Node{ .Value = par.tok.rest() });
-                    },
-                    else => break,
-                },
-                State.Line, State.Field => switch (token.id) {
+                State.Line => switch (token.id) {
                     Token.Id.Identifier => {
                         par.state = State.Suffix;
-                        return Result.ok(Node{ .Field = token.str });
+                        return Result.ok(Node{
+                            .Field = Node.FieldT{
+                                .dot = Token.init(Token.Id.Dot, token.str[0..0]),
+                                .ident = token,
+                            },
+                        });
                     },
                     else => break,
                 },
-                State.Index => switch (token.id) {
-                    Token.Id.Integer => {
-                        par.state = State.IndexEnd;
-                        res = Node{ .Index = try fmt.parseUnsigned(usize, token.str, 10) };
+                State.Suffix => switch (token.id) {
+                    Token.Id.Dot => par.state = State{ .Field = token },
+                    Token.Id.LBracket => par.state = State{ .Index = token },
+                    Token.Id.Equal => {
+                        par.state = State.Done;
+                        return Result.ok(Node{
+                            .Value = Node.ValueT{
+                                .equal = token,
+                                .str = par.tok.rest(),
+                            },
+                        });
                     },
                     else => break,
                 },
-                State.IndexEnd => switch (token.id) {
+                State.Field => |dot| switch (token.id) {
+                    Token.Id.Identifier => {
+                        par.state = State.Suffix;
+                        return Result.ok(Node{
+                            .Field = Node.FieldT{
+                                .dot = dot,
+                                .ident = token,
+                            },
+                        });
+                    },
+                    else => break,
+                },
+                State.Index => |lbracket| switch (token.id) {
+                    Token.Id.Integer => par.state = State{ .IndexEnd = []Token{ lbracket, token } },
+                    else => break,
+                },
+                State.IndexEnd => |tokens| switch (token.id) {
                     Token.Id.RBracket => {
                         par.state = State.Suffix;
-                        return Result.ok(res);
+                        return Result.ok(Node{
+                            .Index = Node.IndexT{
+                                .lbracket = tokens[0],
+                                .int = tokens[1],
+                                .rbracket = token,
+                            },
+                        });
                     },
                     else => break,
                 },
@@ -249,16 +293,33 @@ pub const Parser = struct {
 fn testParser(str: []const u8, nodes: []const Node) void {
     var parser = Parser.init(Tokenizer.init(str));
     for (nodes) |n1| {
-        const res = (parser.next() catch unreachable).?;
+        const res = parser.next().?;
         const n2 = res.Ok;
         switch (n1) {
-            Node.Field => |name| debug.assert(mem.eql(u8, name, n2.Field)),
-            Node.Index => |index| debug.assert(index == n2.Index),
-            Node.Value => |value| debug.assert(mem.eql(u8, value, n2.Value)),
+            Node.Field => |f1| {
+                const f2 = n2.Field;
+                debug.assert(f1.ident.id == f2.ident.id);
+                debug.assert(mem.eql(u8, f1.ident.str, f2.ident.str));
+            },
+            Node.Index => |in1| {
+                const in2 = n2.Index;
+                debug.assert(in1.lbracket.id == in2.lbracket.id);
+                debug.assert(mem.eql(u8, in1.lbracket.str, in2.lbracket.str));
+                debug.assert(in1.int.id == in2.int.id);
+                debug.assert(mem.eql(u8, in1.int.str, in2.int.str));
+                debug.assert(in1.rbracket.id == in2.rbracket.id);
+                debug.assert(mem.eql(u8, in1.rbracket.str, in2.rbracket.str));
+            },
+            Node.Value => |v1| {
+                const v2 = n2.Value;
+                debug.assert(v1.equal.id == v2.equal.id);
+                debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
+                debug.assert(mem.eql(u8, v1.str, v2.str));
+            },
         }
     }
 
-    if (parser.next() catch unreachable) |_| unreachable;
+    if (parser.next()) |_| unreachable;
 }
 
 test "Parser" {
@@ -266,22 +327,79 @@ test "Parser" {
     testParser("   ", []Node{});
     testParser(" # This is a comment", []Node{});
     testParser("a=1", []Node{
-        Node{ .Field = "a" },
-        Node{ .Value = "1" },
+        Node{
+            .Field = Node.FieldT{
+                .dot = Token.init(Token.Id.Dot, ""),
+                .ident = Token.init(Token.Id.Identifier, "a"),
+            },
+        },
+        Node{
+            .Value = Node.ValueT{
+                .equal = Token.init(Token.Id.Equal, "="),
+                .str = "1",
+            },
+        },
     });
     testParser("a.b=1", []Node{
-        Node{ .Field = "a" },
-        Node{ .Field = "b" },
-        Node{ .Value = "1" },
+        Node{
+            .Field = Node.FieldT{
+                .dot = Token.init(Token.Id.Dot, ""),
+                .ident = Token.init(Token.Id.Identifier, "a"),
+            },
+        },
+        Node{
+            .Field = Node.FieldT{
+                .dot = Token.init(Token.Id.Dot, "."),
+                .ident = Token.init(Token.Id.Identifier, "b"),
+            },
+        },
+        Node{
+            .Value = Node.ValueT{
+                .equal = Token.init(Token.Id.Equal, "="),
+                .str = "1",
+            },
+        },
     });
     testParser("a[1]=1", []Node{
-        Node{ .Field = "a" },
-        Node{ .Index = 1 },
-        Node{ .Value = "1" },
+        Node{
+            .Field = Node.FieldT{
+                .dot = Token.init(Token.Id.Dot, ""),
+                .ident = Token.init(Token.Id.Identifier, "a"),
+            },
+        },
+        Node{
+            .Index = Node.IndexT{
+                .lbracket = Token.init(Token.Id.LBracket, "["),
+                .int = Token.init(Token.Id.Integer, "1"),
+                .rbracket = Token.init(Token.Id.RBracket, "]"),
+            },
+        },
+        Node{
+            .Value = Node.ValueT{
+                .equal = Token.init(Token.Id.Equal, "="),
+                .str = "1",
+            },
+        },
     });
     testParser(" a [ 1 ] = 1", []Node{
-        Node{ .Field = "a" },
-        Node{ .Index = 1 },
-        Node{ .Value = " 1" },
+        Node{
+            .Field = Node.FieldT{
+                .dot = Token.init(Token.Id.Dot, ""),
+                .ident = Token.init(Token.Id.Identifier, "a"),
+            },
+        },
+        Node{
+            .Index = Node.IndexT{
+                .lbracket = Token.init(Token.Id.LBracket, "["),
+                .int = Token.init(Token.Id.Integer, "1"),
+                .rbracket = Token.init(Token.Id.RBracket, "]"),
+            },
+        },
+        Node{
+            .Value = Node.ValueT{
+                .equal = Token.init(Token.Id.Equal, "="),
+                .str = " 1",
+            },
+        },
     });
 }
