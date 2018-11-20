@@ -148,22 +148,22 @@ test "Tokenizer" {
 }
 
 pub const Node = union(enum) {
-    Field: FieldT,
-    Index: IndexT,
-    Value: ValueT,
+    Field: Field,
+    Index: Index,
+    Value: Value,
 
-    pub const FieldT = struct {
+    pub const Field = struct {
         dot: Token,
         ident: Token,
     };
 
-    pub const IndexT = struct {
+    pub const Index = struct {
         lbracket: Token,
         int: Token,
         rbracket: Token,
     };
 
-    pub const ValueT = struct {
+    pub const Value = struct {
         equal: Token,
         str: []const u8,
     };
@@ -221,7 +221,7 @@ pub const Parser = struct {
                     Token.Id.Identifier => {
                         par.state = State.Suffix;
                         return Result.ok(Node{
-                            .Field = Node.FieldT{
+                            .Field = Node.Field{
                                 .dot = Token.init(Token.Id.Dot, token.str[0..0]),
                                 .ident = token,
                             },
@@ -235,7 +235,7 @@ pub const Parser = struct {
                     Token.Id.Equal => {
                         par.state = State.Done;
                         return Result.ok(Node{
-                            .Value = Node.ValueT{
+                            .Value = Node.Value{
                                 .equal = token,
                                 .str = par.tok.rest(),
                             },
@@ -247,7 +247,7 @@ pub const Parser = struct {
                     Token.Id.Identifier => {
                         par.state = State.Suffix;
                         return Result.ok(Node{
-                            .Field = Node.FieldT{
+                            .Field = Node.Field{
                                 .dot = dot,
                                 .ident = token,
                             },
@@ -263,7 +263,7 @@ pub const Parser = struct {
                     Token.Id.RBracket => {
                         par.state = State.Suffix;
                         return Result.ok(Node{
-                            .Index = Node.IndexT{
+                            .Index = Node.Index{
                                 .lbracket = tokens[0],
                                 .int = tokens[1],
                                 .rbracket = token,
@@ -296,12 +296,12 @@ fn testParser(str: []const u8, nodes: []const Node) void {
         const res = parser.next().?;
         const n2 = res.Ok;
         switch (n1) {
-            Node.Field => |f1| {
+            @TagType(Node).Field => |f1| {
                 const f2 = n2.Field;
                 debug.assert(f1.ident.id == f2.ident.id);
                 debug.assert(mem.eql(u8, f1.ident.str, f2.ident.str));
             },
-            Node.Index => |in1| {
+            @TagType(Node).Index => |in1| {
                 const in2 = n2.Index;
                 debug.assert(in1.lbracket.id == in2.lbracket.id);
                 debug.assert(mem.eql(u8, in1.lbracket.str, in2.lbracket.str));
@@ -310,7 +310,7 @@ fn testParser(str: []const u8, nodes: []const Node) void {
                 debug.assert(in1.rbracket.id == in2.rbracket.id);
                 debug.assert(mem.eql(u8, in1.rbracket.str, in2.rbracket.str));
             },
-            Node.Value => |v1| {
+            @TagType(Node).Value => |v1| {
                 const v2 = n2.Value;
                 debug.assert(v1.equal.id == v2.equal.id);
                 debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
@@ -328,13 +328,13 @@ test "Parser" {
     testParser(" # This is a comment", []Node{});
     testParser("a=1", []Node{
         Node{
-            .Field = Node.FieldT{
+            .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
         Node{
-            .Value = Node.ValueT{
+            .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
                 .str = "1",
             },
@@ -342,19 +342,19 @@ test "Parser" {
     });
     testParser("a.b=1", []Node{
         Node{
-            .Field = Node.FieldT{
+            .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
         Node{
-            .Field = Node.FieldT{
+            .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "b"),
             },
         },
         Node{
-            .Value = Node.ValueT{
+            .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
                 .str = "1",
             },
@@ -362,20 +362,20 @@ test "Parser" {
     });
     testParser("a[1]=1", []Node{
         Node{
-            .Field = Node.FieldT{
+            .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
         Node{
-            .Index = Node.IndexT{
+            .Index = Node.Index{
                 .lbracket = Token.init(Token.Id.LBracket, "["),
                 .int = Token.init(Token.Id.Integer, "1"),
                 .rbracket = Token.init(Token.Id.RBracket, "]"),
             },
         },
         Node{
-            .Value = Node.ValueT{
+            .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
                 .str = "1",
             },
@@ -383,20 +383,20 @@ test "Parser" {
     });
     testParser(" a [ 1 ] = 1", []Node{
         Node{
-            .Field = Node.FieldT{
+            .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
         Node{
-            .Index = Node.IndexT{
+            .Index = Node.Index{
                 .lbracket = Token.init(Token.Id.LBracket, "["),
                 .int = Token.init(Token.Id.Integer, "1"),
                 .rbracket = Token.init(Token.Id.RBracket, "]"),
             },
         },
         Node{
-            .Value = Node.ValueT{
+            .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
                 .str = " 1",
             },
