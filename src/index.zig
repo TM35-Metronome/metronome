@@ -152,6 +152,8 @@ pub const Node = union(enum) {
     Index: Index,
     Value: Value,
 
+    pub const Kind = @TagType(Node);
+
     pub const Field = struct {
         dot: Token,
         ident: Token,
@@ -296,12 +298,12 @@ fn testParser(str: []const u8, nodes: []const Node) void {
         const res = parser.next().?;
         const n2 = res.Ok;
         switch (n1) {
-            @TagType(Node).Field => |f1| {
+            Node.Kind.Field => |f1| {
                 const f2 = n2.Field;
                 debug.assert(f1.ident.id == f2.ident.id);
                 debug.assert(mem.eql(u8, f1.ident.str, f2.ident.str));
             },
-            @TagType(Node).Index => |in1| {
+            Node.Kind.Index => |in1| {
                 const in2 = n2.Index;
                 debug.assert(in1.lbracket.id == in2.lbracket.id);
                 debug.assert(mem.eql(u8, in1.lbracket.str, in2.lbracket.str));
@@ -310,7 +312,7 @@ fn testParser(str: []const u8, nodes: []const Node) void {
                 debug.assert(in1.rbracket.id == in2.rbracket.id);
                 debug.assert(mem.eql(u8, in1.rbracket.str, in2.rbracket.str));
             },
-            @TagType(Node).Value => |v1| {
+            Node.Kind.Value => |v1| {
                 const v2 = n2.Value;
                 debug.assert(v1.equal.id == v2.equal.id);
                 debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
