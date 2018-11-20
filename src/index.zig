@@ -169,6 +169,22 @@ pub const Node = union(enum) {
         equal: Token,
         str: []const u8,
     };
+
+    pub fn first(node: Node) Token {
+        return switch (node) {
+            Node.Kind.Field => |field| field.dot,
+            Node.Kind.Index => |index| index.lbracket,
+            Node.Kind.Value => |value| value.equal,
+        };
+    }
+
+    pub fn last(node: Node) Token {
+        return switch (node) {
+            Node.Kind.Field => |field| field.ident,
+            Node.Kind.Index => |index| index.rbracket,
+            Node.Kind.Value => |value| value.equal,
+        };
+    }
 };
 
 pub const Parser = struct {
