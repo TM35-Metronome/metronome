@@ -40,7 +40,7 @@ pub const Token = struct {
     }
 
     pub fn index(tok: Token, src: []const u8) usize {
-        const res = @ptrToInt(tok.str.ptr) - @ptrToInt(str.ptr);
+        const res = @ptrToInt(tok.str.ptr) - @ptrToInt(src.ptr);
         debug.assert(res <= src.len);
         return res;
     }
