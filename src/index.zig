@@ -169,7 +169,7 @@ pub const Node = union(enum) {
 
     pub const Value = struct {
         equal: Token,
-        str: []const u8,
+        value: Token,
     };
 
     pub fn first(node: Node) Token {
@@ -184,7 +184,7 @@ pub const Node = union(enum) {
         return switch (node) {
             Node.Kind.Field => |field| field.ident,
             Node.Kind.Index => |index| index.rbracket,
-            Node.Kind.Value => |value| value.equal,
+            Node.Kind.Value => |value| value.value,
         };
     }
 };
@@ -257,7 +257,7 @@ pub const Parser = struct {
                         return Result.ok(Node{
                             .Value = Node.Value{
                                 .equal = token,
-                                .str = par.tok.rest(),
+                                .value = Token.init(Token.Id.Identifier, par.tok.rest()),
                             },
                         });
                     },
@@ -334,7 +334,8 @@ fn testParser(str: []const u8, nodes: []const Node) void {
                 const v2 = n2.Value;
                 debug.assert(v1.equal.id == v2.equal.id);
                 debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
-                debug.assert(mem.eql(u8, v1.str, v2.str));
+                debug.assert(v1.value.id == v2.value.id);
+                debug.assert(mem.eql(u8, v1.value.str, v2.value.str));
             },
         }
     }
@@ -356,7 +357,7 @@ test "Parser" {
         Node{
             .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
-                .str = "1",
+                .value = Token.init(Token.Id.Identifier, "1"),
             },
         },
     });
@@ -376,7 +377,7 @@ test "Parser" {
         Node{
             .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
-                .str = "1",
+                .value = Token.init(Token.Id.Identifier, "1"),
             },
         },
     });
@@ -397,7 +398,7 @@ test "Parser" {
         Node{
             .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
-                .str = "1",
+                .value = Token.init(Token.Id.Identifier, "1"),
             },
         },
     });
@@ -418,7 +419,7 @@ test "Parser" {
         Node{
             .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
-                .str = " 1",
+                .value = Token.init(Token.Id.Identifier, " 1"),
             },
         },
     });
