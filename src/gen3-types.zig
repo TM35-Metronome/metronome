@@ -249,7 +249,7 @@ pub const Type = enum(u8) {
 };
 
 pub const LevelUpMove = packed struct {
-    move_id: u9,
+    id: u9,
     level: u7,
 };
 
@@ -336,9 +336,9 @@ pub const Game = struct {
         };
     }
 
-    pub fn writeToStream(game: Game, in_stream: var) !void {
+    pub fn writeToStream(game: Game, out_stream: var) !void {
         try game.header.validate();
-        try in_stream.write(game.data);
+        try out_stream.write(game.data);
     }
 
     pub fn deinit(game: *Game) void {

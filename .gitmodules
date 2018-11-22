@@ -4,3 +4,6 @@
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
 	url = https://github.com/Hejsil/zig-clap.git
+[submodule "lib/tm35-format"]
+	path = lib/tm35-format
+	url = https://github.com/TM35-Metronome/tm35-format.git

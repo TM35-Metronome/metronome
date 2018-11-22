@@ -82,7 +82,7 @@ pub fn main() u8 {
     return 0;
 }
 
-pub fn main2(allocator: *mem.Allocator, args: Clap, stream: var) !void {
+pub fn main2(allocator: *mem.Allocator, args: Clap, stream: *io.OutStream(os.File.OutStream.Error)) !void {
     if (args.flag("--help"))
         return try usage(stream);
 

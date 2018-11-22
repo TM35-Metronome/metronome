@@ -13,10 +13,6 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
-
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
@@ -31,15 +27,13 @@ const params = []Param{
 };
 
 fn usage(stream: var) !void {
-    const str =
+    try stream.write(
         \\Usage: tm35-gen3-load [OPTION]... FILE
         \\Prints a generation 3 Pokemon roms data to stdout.
         \\
         \\Options:
         \\
-    ;
-
-    try stream.write(str);
+    );
     try clap.help(stream, params);
 }
 
@@ -98,18 +92,20 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
     if (args.flag("--help"))
         return try usage(stream);
 
-    var file = os.File.openRead(file_name) catch |err| {
-        debug.warn("Couldn't open {}.\n", file_name);
-        return err;
-    };
-    defer file.close();
+    var game = blk: {
+        var file = os.File.openRead(file_name) catch |err| {
+            debug.warn("Couldn't open {}.\n", file_name);
+            return err;
+        };
+        defer file.close();
 
-    var game = try gen3.Game.fromFile(file, allocator);
+        break :blk try gen3.Game.fromFile(file, allocator);
+    };
     defer game.deinit();
 
-    try stream.print("version = {}\n", game.version);
-    try stream.print("game_title = {}\n", game.header.game_title);
-    try stream.print("gamecode = {}\n", game.header.gamecode);
+    try stream.print("version={}\n", @tagName(game.version));
+    try stream.print("game_title={}\n", game.header.game_title);
+    try stream.print("gamecode={}\n", game.header.gamecode);
 
     for (game.trainers) |trainer, i| {
         // The party type is infered from the party data.
@@ -160,7 +156,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                     try stream.print("trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
                     try stream.print("trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                     for (member.moves) |move, k| {
-                        try stream.print("trainers[{}].moves[{}]={}\n", i, j, move.value());
+                        try stream.print("trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
                 }
             },
@@ -216,7 +212,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
         }
 
         try stream.print("pokemons[{}].safari_zone_rate={}\n", i, pokemon.safari_zone_rate);
-        try stream.print("pokemons[{}].safari_zone_rate={}\n", i, @tagName(pokemon.color));
+        try stream.print("pokemons[{}].color={}\n", i, @tagName(pokemon.color));
         try stream.print("pokemons[{}].flip={}\n", i, pokemon.flip);
 
         {
@@ -239,8 +235,10 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
         {
             const learnset = try game.level_up_learnset_pointers[i].toMany(game.data);
             var j: usize = 0;
-            while (learnset[j].move_id != math.maxInt(u9) or learnset[j].level != math.maxInt(u7)) : (j += 1) {
-                try stream.print("pokemons[{}].moves[{}].id={}\n", i, j, learnset[j].move_id);
+
+            // UNSAFE: Bounds check on game data
+            while (learnset[j].id != math.maxInt(u9) or learnset[j].level != math.maxInt(u7)) : (j += 1) {
+                try stream.print("pokemons[{}].moves[{}].id={}\n", i, j, learnset[j].id);
                 try stream.print("pokemons[{}].moves[{}].level={}\n", i, j, learnset[j].level);
             }
         }
