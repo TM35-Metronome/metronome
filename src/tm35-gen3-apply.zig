@@ -162,6 +162,8 @@ const Parser = struct {
     parser: format.Parser,
     line: usize,
 
+    // TODO: This is not the prettiest thing in the world, but it works. I should probably
+    //       clean this up a little, but for now, this is fine.
     fn parse(parser: *Parser, game: gen3.Game, str: []const u8) !void {
         @setEvalBranchQuota(100000);
 
