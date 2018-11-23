@@ -39,15 +39,13 @@ const params = []Param{
 };
 
 fn usage(stream: var) !void {
-    const str =
+    try stream.write(
         \\Usage: tm35-gen3-apply [OPTION]... FILE
         \\Reads the tm35 format from stdin and applies it to a generation 3 Pokemon rom.
         \\
         \\Options:
         \\
-    ;
-
-    try stream.write(str);
+    );
     try clap.help(stream, params);
 }
 

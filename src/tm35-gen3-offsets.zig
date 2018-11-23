@@ -30,15 +30,13 @@ const params = []Param{
 };
 
 fn usage(stream: var) !void {
-    const str =
+    try stream.write(
         \\Usage: tm35-gen3-offsets [OPTION]... [FILE]...
         \\Finds the offsets to data in generation 3 Pokemon roms.
         \\
         \\Options:
         \\
-    ;
-
-    try stream.write(str);
+    );
     try clap.help(stream, params);
 }
 
