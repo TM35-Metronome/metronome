@@ -28,7 +28,8 @@ const params = []Param{
 fn usage(stream: var) !void {
     try stream.write(
         \\Usage: tm35-gen3-load [OPTION]... FILE
-        \\Prints a generation 3 Pokemon roms data to stdout.
+        \\Prints information about a generation 3 Pokemon rom to stdout in the
+        \\tm35 format.
         \\
         \\Options:
         \\

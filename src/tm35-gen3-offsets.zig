@@ -32,7 +32,7 @@ const params = []Param{
 fn usage(stream: var) !void {
     const str =
         \\Usage: tm35-gen3-offsets [OPTION]... [FILE]...
-        \\Finds the offsets of data in generation 3 Pokemon roms.
+        \\Finds the offsets to data in generation 3 Pokemon roms.
         \\
         \\Options:
         \\

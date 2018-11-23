@@ -41,7 +41,7 @@ const params = []Param{
 fn usage(stream: var) !void {
     const str =
         \\Usage: tm35-gen3-apply [OPTION]... FILE
-        \\Reads rom data from stdin and applies it to a generation 3 Pokemon rom.
+        \\Reads the tm35 format from stdin and applies it to a generation 3 Pokemon rom.
         \\
         \\Options:
         \\
