@@ -16,7 +16,6 @@ const os = std.os;
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
-const Searcher = fun.searcher.Searcher;
 
 const params = []Param{
     Param.flag(
