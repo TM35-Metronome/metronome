@@ -51,12 +51,6 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-var args: Clap = undefined;
-var stderr: *io.OutStream(os.File.OutStream.Error) = undefined;
-var stdout: *io.OutStream(os.File.OutStream.Error) = undefined;
-var stdin: *io.InStream(os.File.InStream.Error) = undefined;
-var allocator: *mem.Allocator = undefined;
-
 pub fn main() u8 {
     const stdin_file = std.io.getStdIn() catch return 1;
     const stderr_file = std.io.getStdErr() catch return 1;
@@ -66,38 +60,35 @@ pub fn main() u8 {
     var stdout_out_stream = stdout_file.outStream();
     var buf_in_stream = io.BufferedInStream(os.File.InStream.Error).init(&stdin_in_stream.stream);
 
-    stderr = &stderr_out_stream.stream;
-    stdout = &stdout_out_stream.stream;
-    stdin = &buf_in_stream.stream;
+    const stderr = &stderr_out_stream.stream;
+    const stdout = &stdout_out_stream.stream;
+    const stdin = &buf_in_stream.stream;
 
     var direct_allocator_state = std.heap.DirectAllocator.init();
     const direct_allocator = &direct_allocator_state.allocator;
     defer direct_allocator_state.deinit();
 
     // TODO: Other allocator?
-    allocator = direct_allocator;
+    const allocator = direct_allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
     defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
-    args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
         debug.warn("error: {}\n", err);
         usage(stderr) catch {};
         return 1;
     };
     defer args.deinit();
 
-    main2() catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
+    main2(allocator, args, stdin, stdout, stderr) catch |err| return 1;
 
     return 0;
 }
 
-pub fn main2() !void {
+pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, stderr: var) !void {
     if (args.flag("--help"))
         return try usage(stdout);
 
