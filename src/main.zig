@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const clap = @import("zig-clap");
 const format = @import("tm35-format");
 const fun = @import("fun-with-zig");
@@ -5,10 +6,12 @@ const std = @import("std");
 
 const debug = std.debug;
 const fmt = std.fmt;
+const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
+const rand = std.rand;
 
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
@@ -20,6 +23,10 @@ const params = []Param{
         Names.both("help"),
     ),
     Param.flag(
+        "ensure, that after randomizing the stats, the total stats are the same",
+        Names.long("same-total-stats"),
+    ),
+    Param.option(
         "the seed used to randomize stats",
         Names.both("seed"),
     ),
@@ -83,24 +90,76 @@ pub fn main() u8 {
     return 0;
 }
 
+const stats = [][]const u8{
+    "hp",
+    "attack",
+    "defense",
+    "speed",
+    "sp_attack",
+    "sp_defense",
+};
+
 pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, stderr: var) !void {
     if (args.flag("--help"))
         return try usage(stdout);
 
-    const pokemons = try Parser.parse(allocator, stdin, stdout);
+    const same_total_stats = args.flag("--same-total-stats");
+    const seed = blk: {
+        const seed_str = args.option("--seed") orelse {
+            var buf: [8]u8 = undefined;
+            try std.os.getRandomBytes(buf[0..]);
+            break :blk mem.readInt(buf[0..8], u64, builtin.Endian.Little);
+        };
 
+        break :blk try fmt.parseUnsigned(u64, seed_str, 10);
+    };
 
+    var arena = heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
 
+    const pokemons = try Parser.parse(&arena.allocator, stdin, stdout);
+
+    var random = rand.DefaultPrng.init(seed);
     var iter = pokemons.iterator();
     while (iter.next()) |kv| {
-        inline for ([][]const u8{
-            "hp",
-            "attack",
-            "defense",
-            "speed",
-            "sp_attack",
-            "sp_defense",
-        }) |stat| {
+        const pokemon = &kv.value;
+        const total = pokemon.totalStats();
+
+        inline for (stats) |stat| {
+            if (@field(pokemon, stat)) |*s| {
+                s.* = random.random.int(u8);
+            }
+        }
+
+        if (same_total_stats) {
+            const new_total = pokemon.totalStats();
+            inline for (stats) |stat| {
+                if (@field(pokemon, stat)) |*s| {
+                    const norm = @intToFloat(f64, s.*) / @intToFloat(f64, new_total);
+                    const new_stat = norm * @intToFloat(f64, total);
+                    s.* = math.cast(u8, @floatToInt(u64, new_stat)) catch 255;
+                }
+            }
+
+            next: while (pokemon.totalStats() < total and pokemon.totalStats() != pokemon.maxStats()) {
+                var index = random.random.intRangeLessThan(u16, 0, pokemon.statCount());
+                inline for (stats) |stat| {
+                    if (@field(pokemon, stat)) |*s| {
+                        if (index == 0) {
+                            s.* = math.add(u8, s.*, 1) catch s.*;
+                            continue :next;
+                        } else index -= 1;
+                    }
+                }
+            }
+
+            debug.assert(total == pokemon.totalStats());
+        }
+    }
+
+    iter = pokemons.iterator();
+    while (iter.next()) |kv| {
+        inline for (stats) |stat| {
             if (@field(kv.value, stat)) |s|
                 try stdout.print("pokemons[{}].stats.{}={}\n", kv.key, stat, s);
         }
@@ -118,6 +177,35 @@ const Pokemon = struct {
     sp_attack: ?u8,
     sp_defense: ?u8,
     evos: EvoMap,
+
+    fn totalStats(p: Pokemon) u16 {
+        return u16(p.hp orelse 0) +
+            (p.attack orelse 0) +
+            (p.defense orelse 0) +
+            (p.speed orelse 0) +
+            (p.sp_attack orelse 0) +
+            (p.sp_defense orelse 0);
+    }
+
+    fn statCount(p: Pokemon) u16 {
+        var res: u8 = 0;
+        if (p.hp) |_|
+            res += 1;
+        if (p.attack) |_|
+            res += 1;
+        if (p.speed) |_|
+            res += 1;
+        if (p.sp_attack) |_|
+            res += 1;
+        if (p.sp_defense) |_|
+            res += 1;
+
+        return res;
+    }
+
+    fn maxStats(p: Pokemon) u16 {
+        return p.statCount() * math.maxInt(u8);
+    }
 };
 
 const Parser = struct {
@@ -158,9 +246,7 @@ const Parser = struct {
     fn parseLine(parser: *Parser, pokemons: *PokemonMap, str: []const u8) !PrintLine {
         @setEvalBranchQuota(100000);
 
-        const tf = fun.match.StringSwitch([][]const u8{
-            "pokemons",
-        });
+        const tf = fun.match.StringSwitch([][]const u8{"pokemons"});
 
         const top_field_node = switch (parser.parser.next() orelse return PrintLine.True) {
             format.Parser.Result.Ok => |node| node.Field,
@@ -179,14 +265,7 @@ const Parser = struct {
                 switch (pf.match(pokemon_field_node.ident.str)) {
                     pf.case("stats") => {
                         const stats_field_node = try parser.expect(format.Node.Kind.Field);
-                        const sf = fun.match.StringSwitch([][]const u8{
-                            "hp",
-                            "attack",
-                            "defense",
-                            "speed",
-                            "sp_attack",
-                            "sp_defense",
-                        });
+                        const sf = fun.match.StringSwitch(stats);
 
                         const match = sf.match(stats_field_node.ident.str);
                         const value = switch (match) {
@@ -271,7 +350,7 @@ const Parser = struct {
         switch (parser.parser.next().?) {
             format.Parser.Result.Ok => |node| switch (node) {
                 kind => |res| return res,
-                else => return parser.reportNodeError(node),
+                else => return error.InvalidNode,
             },
             format.Parser.Result.Error => |err| return parser.reportSyntaxError(err),
         }
@@ -285,48 +364,6 @@ const Parser = struct {
     fn expectIntValue(parser: *Parser, comptime Int: type) !Int {
         const value_node = try parser.expect(format.Node.Kind.Value);
         return try parser.parseInt(Int, math.maxInt(Int), value_node.value);
-    }
-
-    fn expectEnumValue(parser: *Parser, comptime Enum: type) !Enum {
-        const value_node = try parser.expect(format.Node.Kind.Value);
-        const token = value_node.value;
-        const value = mem.trim(u8, token.str, "\t ");
-
-        return stringToEnum(Enum, value) orelse {
-            const fields = @typeInfo(Enum).Enum.fields;
-            const column = token.index(parser.parser.tok.str) + 1;
-            parser.warning(column, "expected ");
-
-            inline for (fields) |field, i| {
-                const rev_i = (fields.len - 1) - i;
-                debug.warn("'{}'", field.name);
-                if (rev_i == 1)
-                    debug.warn(" or ");
-                if (rev_i > 1)
-                    debug.warn(", ");
-            }
-
-            debug.warn(" found '{}'\n", value);
-            return error.NotInEnum;
-        };
-    }
-
-    fn expectBoolValue(parser: *Parser) !bool {
-        const value_node = try parser.expect(format.Node.Kind.Value);
-        const bs = fun.match.StringSwitch([][]const u8{
-            "true",
-            "false",
-        });
-
-        return switch (bs.match(value_node.value.str)) {
-            bs.case("true") => true,
-            bs.case("false") => false,
-            else => {
-                const column = value_node.value.index(parser.parser.tok.str) + 1;
-                parser.warning(column, "expected 'true' or 'false' found {}", value_node.value.str);
-                return error.NotBool;
-            }
-        };
     }
 
     fn parseInt(parser: *const Parser, comptime Int: type, bound: Int, token: format.Token) !Int {
@@ -346,25 +383,6 @@ const Parser = struct {
 
         parser.warning(column, "{} is not within the bound {}", str, bound);
         return error.Overflow;
-    }
-
-    fn reportNodeError(parser: *const Parser, node: format.Node) error{InvalidNode} {
-        const first = node.first();
-        const i = first.index(parser.parser.tok.str);
-        var tok = format.Tokenizer.init(parser.parser.tok.str[0..i]);
-
-        parser.warning(i + 1, "'");
-        while (tok.next()) |token|
-            debug.warn("{}", token.str);
-
-        debug.warn("' ");
-        switch (node) {
-            format.Node.Kind.Field => |field| debug.warn("does not have field '{}'\n", field.ident.str),
-            format.Node.Kind.Index => |index| debug.warn("cannot be indexed at '{}'\n", index.int.str),
-            format.Node.Kind.Value => |value| debug.warn("cannot be set to '{}'\n", value.value.str),
-        }
-
-        return error.InvalidNode;
     }
 
     fn reportSyntaxError(parser: *const Parser, err: format.Parser.Error) error{SyntaxError} {
