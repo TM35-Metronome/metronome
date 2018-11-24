@@ -860,14 +860,18 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
             var nodes_array: [max_nodes + 1]Node = undefined;
             var nodes = blk: {
                 if (parser.begin()) |r| {
-                    var size: usize = 0;
+                    var i: usize = 0;
                     var res = r;
-                    for (nodes_array) |*node| {
-                        defer res = parser.next();
+                    while (true) : ({
+                        i += 1;
+                        res = parser.next();
+                    }) {
+                        if (nodes_array.len <= i)
+                            return error.SyntaxError;
+
                         switch (res) {
                             Parser.Result.Ok => |n| {
-                                node.* = n;
-                                size += 1;
+                                nodes_array[i] = n;
                                 if (n == Node.Kind.Value)
                                     break;
                             },
@@ -876,7 +880,7 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
                     }
 
                     debug.assert(parser.state == Parser.State.Done);
-                    break :blk nodes_array[0..size];
+                    break :blk nodes_array[0 .. i + 1];
                 } else return error.NoMatch;
             };
 
