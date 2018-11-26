@@ -880,7 +880,16 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
             var parser = Parser.init(Tokenizer.init(str));
             var nodes_array: [max_nodes + 1]Node = undefined;
             var nodes = blk: {
-                var res = parser.begin() orelse return no_match;
+                var res = parser.begin() orelse {
+                    nodes_array[0] = Node{
+                        .Value = Node.Value{
+                            .equal = Token.init(Token.Id.Invalid, ""),
+                            .value = Token.init(Token.Id.Invalid, ""),
+                        },
+                    };
+                    break :blk nodes_array[0..1];
+                };
+
                 var size: usize = 0;
                 for (nodes_array) |*node| {
                     switch (res) {
@@ -953,6 +962,7 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
 
 test "Matcher" {
     const m = Matcher([][]const u8{
+        "",
         "a",
         "a.*",
         "a.*.*",
@@ -969,6 +979,12 @@ test "Matcher" {
     };
 
     for ([]Test{
+        Test{
+            .str = "",
+            .case = m.case(""),
+            .value = "",
+            .anys = [][]const u8{},
+        },
         Test{
             .str = "a=1",
             .case = m.case("a"),
