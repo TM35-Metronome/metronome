@@ -870,71 +870,74 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
             case: usize,
         };
 
+        const no_match = Result{
+            .anys = undefined,
+            .value = undefined,
+            .case = patterns.len,
+        };
+
         pub fn match(str: []const u8) !Result {
             var parser = Parser.init(Tokenizer.init(str));
             var nodes_array: [max_nodes + 1]Node = undefined;
             var nodes = blk: {
-                var res = parser.begin() orelse return error.NoMatch;
+                var res = parser.begin() orelse return no_match;
                 var size: usize = 0;
                 for (nodes_array) |*node| {
-                    defer {
-                        res = parser.next();
-                        size += 1;
-                    }
-
                     switch (res) {
                         Parser.Result.Ok => |n| {
                             node.* = n;
+                            size += 1;
                             if (n == Node.Kind.Value)
                                 break;
                         },
                         Parser.Result.Error => return error.SyntaxError,
                     }
+
+                    res = parser.next();
                 }
 
                 if (parser.state != Parser.State.Done)
-                    return error.SyntaxError;
+                    return no_match;
 
                 break :blk nodes_array[0..size];
             };
 
             // TODO: Can we generate a state machine instead of this?
-            for (patterns) |pattern, i| {
-                no_match: {
-                    var curr_any: usize = 0;
-                    var anys: [max_anys]Token = undefined;
-                    if (nodes.len - 1 != pattern.len)
-                        break :no_match;
+            next: for (patterns) |pattern, i| {
+                var curr_any: usize = 0;
+                var anys: [max_anys]Token = undefined;
+                if (nodes.len - 1 != pattern.len)
+                    continue :next;
 
-                    for (pattern) |pat, j| {
-                        const node = nodes[j];
-                        if (!pat.match(node))
-                            break :no_match;
-                        switch (pat) {
-                            Pattern.Kind.IndexAny => {
-                                anys[curr_any] = node.Index.int;
-                                curr_any += 1;
-                            },
-                            Pattern.Kind.FieldAny => {
-                                anys[curr_any] = node.Field.ident;
-                                curr_any += 1;
-                            },
-                            else => {},
-                        }
+                for (pattern) |pat, j| {
+                    const node = nodes[j];
+                    if (!pat.match(node))
+                        continue :next;
+
+                    switch (pat) {
+                        Pattern.Kind.IndexAny => {
+                            anys[curr_any] = node.Index.int;
+                            curr_any += 1;
+                        },
+                        Pattern.Kind.FieldAny => {
+                            anys[curr_any] = node.Field.ident;
+                            curr_any += 1;
+                        },
+                        else => {},
                     }
-
-                    const value = nodes[nodes.len - 1];
-                    debug.assert(value == Node.Kind.Value);
-
-                    return Result{
-                        .anys = anys,
-                        .value = value.Value.value,
-                        .case = i,
-                    };
                 }
+
+                const value = nodes[nodes.len - 1];
+                debug.assert(value == Node.Kind.Value);
+
+                return Result{
+                    .anys = anys,
+                    .value = value.Value.value,
+                    .case = i,
+                };
             }
 
-            return error.NoMatch;
+            return no_match;
         }
 
         pub fn case(comptime str: []const u8) comptime_int {
@@ -1002,7 +1005,7 @@ test "Matcher" {
             .value = "6",
             .anys = [][]const u8{ "b", "1", "c", "2" },
         },
-    }) |t| {
+    }) |t, j| {
         const match = try m.match(t.str);
         debug.assert(match.case == t.case);
         debug.assert(mem.eql(u8, match.value.str, t.value));
