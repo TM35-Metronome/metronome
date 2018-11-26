@@ -1005,7 +1005,7 @@ test "Matcher" {
             .value = "6",
             .anys = [][]const u8{ "b", "1", "c", "2" },
         },
-    }) |t, j| {
+    }) |t| {
         const match = try m.match(t.str);
         debug.assert(match.case == t.case);
         debug.assert(mem.eql(u8, match.value.str, t.value));
