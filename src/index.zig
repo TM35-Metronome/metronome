@@ -501,6 +501,21 @@ pub const Pattern = union(enum) {
             Pattern.Kind.IndexAny => |index| index.rbracket,
         };
     }
+
+    pub fn match(pat: Pattern, node: Node) bool {
+        return switch (pat) {
+            Kind.Field => |f1| switch (node) {
+                Node.Kind.Field => |f2| mem.eql(u8, f1.ident.str, f2.ident.str),
+                else => false,
+            },
+            Kind.FieldAny => node == Node.Kind.Field,
+            Kind.Index => |in1| switch (node) {
+                Node.Kind.Index => |in2| mem.eql(u8, in1.int.str, in2.int.str),
+                else => false,
+            },
+            Kind.IndexAny => node == Node.Kind.Index,
+        };
+    }
 };
 
 pub const PatternParser = struct {
@@ -859,29 +874,28 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
             var parser = Parser.init(Tokenizer.init(str));
             var nodes_array: [max_nodes + 1]Node = undefined;
             var nodes = blk: {
-                if (parser.begin()) |r| {
-                    var i: usize = 0;
-                    var res = r;
-                    while (true) : ({
-                        i += 1;
+                var res = parser.begin() orelse return error.NoMatch;
+                var size: usize = 0;
+                for (nodes_array) |*node| {
+                    defer {
                         res = parser.next();
-                    }) {
-                        if (nodes_array.len <= i)
-                            return error.SyntaxError;
-
-                        switch (res) {
-                            Parser.Result.Ok => |n| {
-                                nodes_array[i] = n;
-                                if (n == Node.Kind.Value)
-                                    break;
-                            },
-                            Parser.Result.Error => return error.SyntaxError,
-                        }
+                        size += 1;
                     }
 
-                    debug.assert(parser.state == Parser.State.Done);
-                    break :blk nodes_array[0 .. i + 1];
-                } else return error.NoMatch;
+                    switch (res) {
+                        Parser.Result.Ok => |n| {
+                            node.* = n;
+                            if (n == Node.Kind.Value)
+                                break;
+                        },
+                        Parser.Result.Error => return error.SyntaxError,
+                    }
+                }
+
+                if (parser.state != Parser.State.Done)
+                    return error.SyntaxError;
+
+                break :blk nodes_array[0..size];
             };
 
             // TODO: Can we generate a state machine instead of this?
@@ -894,35 +908,18 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
 
                     for (pattern) |pat, j| {
                         const node = nodes[j];
+                        if (!pat.match(node))
+                            break :no_match;
                         switch (pat) {
-                            Pattern.Kind.Field => |f1| switch (node) {
-                                Node.Kind.Field => |f2| {
-                                    if (!mem.eql(u8, f1.ident.str, f2.ident.str))
-                                        break :no_match;
-                                },
-                                else => break :no_match,
-                            },
-                            Pattern.Kind.FieldAny => {
-                                if (node != Node.Kind.Field)
-                                    break :no_match;
-
-                                anys[curr_any] = node.Field.ident;
-                                curr_any += 1;
-                            },
-                            Pattern.Kind.Index => |in1| switch (node) {
-                                Node.Kind.Index => |in2| {
-                                    if (!mem.eql(u8, in1.int.str, in2.int.str))
-                                        break :no_match;
-                                },
-                                else => break :no_match,
-                            },
                             Pattern.Kind.IndexAny => {
-                                if (node != Node.Kind.Index)
-                                    break :no_match;
-
                                 anys[curr_any] = node.Index.int;
                                 curr_any += 1;
                             },
+                            Pattern.Kind.FieldAny => {
+                                anys[curr_any] = node.Field.ident;
+                                curr_any += 1;
+                            },
+                            else => {},
                         }
                     }
 
