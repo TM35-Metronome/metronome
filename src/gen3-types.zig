@@ -160,17 +160,35 @@ pub const Trainer = packed struct {
     is_double: lu32,
     ai: lu32,
     party: Party,
+
+    pub fn partyAt(trainer: *Trainer, index: usize, data: []u8) !*PartyMemberBase {
+        return switch (trainer.party_type) {
+            PartyType.None => &(try trainer.party.None.toSlice(data))[index].base,
+            PartyType.Item => &(try trainer.party.Item.toSlice(data))[index].base,
+            PartyType.Moves => &(try trainer.party.Moves.toSlice(data))[index].base,
+            PartyType.Both => &(try trainer.party.Both.toSlice(data))[index].base,
+        };
+    }
+
+    pub fn partyLen(trainer: Trainer) usize {
+        return switch (trainer.party_type) {
+            PartyType.None => trainer.party.None.len(),
+            PartyType.Item => trainer.party.Item.len(),
+            PartyType.Moves => trainer.party.Moves.len(),
+            PartyType.Both => trainer.party.Both.len(),
+        };
+    }
 };
 
 pub const PartyType = packed enum(u8) {
-    Base = 0b00,
+    None = 0b00,
     Item = 0b10,
     Moves = 0b01,
     Both = 0b11,
 };
 
 pub const Party = packed union {
-    Base: Slice(PartyMemberBase),
+    None: Slice(PartyMemberNone),
     Item: Slice(PartyMemberItem),
     Moves: Slice(PartyMemberMoves),
     Both: Slice(PartyMemberBoth),
@@ -180,6 +198,14 @@ pub const PartyMemberBase = packed struct {
     iv: lu16,
     level: lu16,
     species: lu16,
+
+    pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
+        return @fieldParentPtr(Parent, "base", base);
+    }
+};
+
+pub const PartyMemberNone = packed struct {
+    base: PartyMemberBase,
 };
 
 pub const PartyMemberItem = packed struct {

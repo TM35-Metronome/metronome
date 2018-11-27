@@ -307,7 +307,7 @@ pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_
 
 pub const em_first_trainers = []gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -318,7 +318,7 @@ pub const em_first_trainers = []gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0x02,
         .encounter_music = 0x0b,
         .trainer_picture = 0,
@@ -331,7 +331,7 @@ pub const em_first_trainers = []gen3.Trainer{
 };
 
 pub const em_last_trainers = []gen3.Trainer{gen3.Trainer{
-    .party_type = gen3.PartyType.Base,
+    .party_type = gen3.PartyType.None,
     .class = 0x41,
     .encounter_music = 0x80,
     .trainer_picture = 0x5c,
@@ -344,7 +344,7 @@ pub const em_last_trainers = []gen3.Trainer{gen3.Trainer{
 
 pub const rs_first_trainers = []gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -355,7 +355,7 @@ pub const rs_first_trainers = []gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0x02,
         .encounter_music = 0x06,
         .trainer_picture = 0x46,
@@ -368,7 +368,7 @@ pub const rs_first_trainers = []gen3.Trainer{
 };
 
 pub const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
-    .party_type = gen3.PartyType.Base,
+    .party_type = gen3.PartyType.None,
     .class = 0x21,
     .encounter_music = 0x0B,
     .trainer_picture = 0x06,
@@ -381,7 +381,7 @@ pub const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
 
 pub const frls_first_trainers = []gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -397,7 +397,7 @@ pub const frls_first_trainers = []gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 2,
         .encounter_music = 6,
         .trainer_picture = 0,
@@ -432,7 +432,7 @@ pub const frls_last_trainers = []gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.Base,
+        .party_type = gen3.PartyType.None,
         .class = 0x47,
         .encounter_music = 0,
         .trainer_picture = 0x60,

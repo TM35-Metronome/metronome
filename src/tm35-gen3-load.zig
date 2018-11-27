@@ -124,11 +124,11 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
         try stream.print("trainers[{}].ai={}\n", i, trainer.ai.value());
 
         switch (trainer.party_type) {
-            gen3.PartyType.Base => {
-                for (try trainer.party.Base.toSlice(game.data)) |member, j| {
-                    try stream.print("trainers[{}].party[{}].iv={}\n", i, j, member.iv.value());
-                    try stream.print("trainers[{}].party[{}].level={}\n", i, j, member.level.value());
-                    try stream.print("trainers[{}].party[{}].species={}\n", i, j, member.species.value());
+            gen3.PartyType.None => {
+                for (try trainer.party.None.toSlice(game.data)) |member, j| {
+                    try stream.print("trainers[{}].party[{}].iv={}\n", i, j, member.base.iv.value());
+                    try stream.print("trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
+                    try stream.print("trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
                 }
             },
             gen3.PartyType.Item => {
