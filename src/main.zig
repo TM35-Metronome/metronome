@@ -243,12 +243,17 @@ fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool, follow_evo
     while (iter.next()) |kv| {
         const curr = kv.key;
         const pokemon = &kv.value;
-
-
+        randomizeFromChildren(&random.random, pokemons, pokemon, same_total_stats, curr);
     }
 }
 
-fn randomizeFromChildren(random: *rand.Random, pokemons: PokemonMap, pokemon: *Pokemon, same_total_stats: bool, curr: usize,) void {
+fn randomizeFromChildren(
+    random: *rand.Random,
+    pokemons: PokemonMap,
+    pokemon: *Pokemon,
+    same_total_stats: bool,
+    curr: usize,
+) void {
     if (pokemon.evolves_from.size == 0)
         return;
 
@@ -264,12 +269,12 @@ fn randomizeFromChildren(random: *rand.Random, pokemons: PokemonMap, pokemon: *P
 
         // TODO: Can this ever happen???
         //                                                   VVVVVVVV
-        const pokemon = pokemons.get(prevolution.key) orelse continue;
+        const p = pokemons.get(prevolution.key) orelse continue;
 
         // We should randomize prevolution by the same rules.
-        randomizeFromChildren(random, pokemons, &pokemon.value, curr);
+        randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
         inline for (Pokemon.stats) |stat_name, i| {
-            if (@field(pokemon.value, stat_name)) |stat| {
+            if (@field(p.value, stat_name)) |stat| {
                 stats[i] += stat;
                 stats_count[i] += 1;
             }
@@ -280,7 +285,7 @@ fn randomizeFromChildren(random: *rand.Random, pokemons: PokemonMap, pokemon: *P
     var average: Pokemon = undefined;
     inline for (Pokemon.stats) |stat_name, i| {
         @field(average, stat_name) = if (@field(pokemon, stat_name)) |_|
-            stats[i] / math.max(stats_count[i], 1)
+            math.cast(u8, stats[i] / math.max(stats_count[i], 1)) catch math.maxInt(u8)
         else
             null;
     }
@@ -288,10 +293,10 @@ fn randomizeFromChildren(random: *rand.Random, pokemons: PokemonMap, pokemon: *P
     var buf: [Pokemon.stats.len]u8 = undefined;
     const old_total = sum(u8, pokemon.toBuf(&buf));
     const average_total = sum(u8, average.toBuf(&buf));
-    const new_random_total = random.intRangeAtMost(u16, average_total, stats.len * math.maxInt(u8));
+    const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
-    const new_stats = randomUntilSum(random, T, average.toBuf(&buf), new_total);
+    const new_stats = randomUntilSum(random, u8, average.toBuf(&buf), new_total);
     pokemon.fromBuf(new_stats);
 }
 
@@ -301,7 +306,30 @@ fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T
 }
 
 fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T {
+    // TODO: In this program, we will never pass buf.len > 6, so we can
+    //       statically have this buffer. If this function is to be more
+    //       general, we problably have to accept an allpocator.
+    var weight_buf: [10]f32 = undefined;
+    const weights: []const f32 = blk: {
+        for (buf) |_, i|
+            weight_buf[i] = random.float(f32);
+
+        break :blk weight_buf[0..buf.len];
+    };
+
+    const curr = sum(T, buf);
     const max = math.min(s, buf.len * math.maxInt(T));
+    if (max < curr)
+        return buf;
+
+    const missing = max - curr;
+    const total_weigth = sum(f32, weights);
+    for (buf) |*item, i| {
+        const to_add_f = @intToFloat(f64, missing) * (weights[i] / total_weigth);
+        const to_add_max = math.min(to_add_f, math.maxInt(u8));
+        item.* = math.add(T, item.*, @floatToInt(u8, to_add_max)) catch math.maxInt(T);
+    }
+
     while (sum(T, buf) < max) {
         const index = random.intRangeLessThan(usize, 0, buf.len);
         buf[index] = math.add(T, buf[index], 1) catch buf[index];
@@ -310,8 +338,16 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T 
     return buf;
 }
 
-fn sum(comptime T: type, buf: []const T) u64 {
-    var res: u64 = 0;
+fn SumReturn(comptime T: type) type {
+    return switch (@typeId(T)) {
+        builtin.TypeId.Int => u64,
+        builtin.TypeId.Float => f64,
+        else => unreachable,
+    };
+}
+
+fn sum(comptime T: type, buf: []const T) SumReturn(T) {
+    var res: SumReturn(T) = 0;
     for (buf) |item|
         res += item;
 
