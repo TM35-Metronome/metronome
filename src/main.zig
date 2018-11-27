@@ -26,6 +26,10 @@ const params = []Param{
         "ensure, that after randomizing the stats, the total stats are the same",
         Names.long("same-total-stats"),
     ),
+    Param.flag(
+        "randomized stats should follow the evolution line",
+        Names.long("follow-evos"),
+    ),
     Param.option(
         "the seed used to randomize stats",
         Names.both("seed"),
@@ -90,20 +94,12 @@ pub fn main() u8 {
     return 0;
 }
 
-const stats = [][]const u8{
-    "hp",
-    "attack",
-    "defense",
-    "speed",
-    "sp_attack",
-    "sp_defense",
-};
-
 pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, stderr: var) !void {
     if (args.flag("--help"))
         return try usage(stdout);
 
     const same_total_stats = args.flag("--same-total-stats");
+    const follow_evos = args.flag("--follow-evos");
     const seed = blk: {
         const seed_str = args.option("--seed") orelse {
             var buf: [8]u8 = undefined;
@@ -118,11 +114,11 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     defer arena.deinit();
 
     const pokemons = try readPokemons(&arena.allocator, stdin, stdout);
-    randomize(pokemons, seed, same_total_stats);
+    randomize(pokemons, seed, same_total_stats, follow_evos);
 
     var iter = pokemons.iterator();
     while (iter.next()) |kv| {
-        inline for (stats) |stat| {
+        inline for (Pokemon.stats) |stat| {
             if (@field(kv.value, stat)) |s|
                 try stdout.print("pokemons[{}].stats.{}={}\n", kv.key, stat, s);
         }
@@ -147,7 +143,7 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
     defer line_buf.deinit();
 
     var line: usize = 1;
-    while (readLine(in_stream, &line_buf)) |str| : (line += 1) {
+    while (try readLine(in_stream, &line_buf)) |str| : (line += 1) {
         if (m.match(str)) |match| switch (match.case) {
             m.case("pokemons[*].stats.hp"),
             m.case("pokemons[*].stats.attack"),
@@ -170,7 +166,7 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
                             .speed = null,
                             .sp_attack = null,
                             .sp_defense = null,
-                            .evos = EvoMap.init(allocator),
+                            .evolves_from = EvoMap.init(allocator),
                         };
                     }
 
@@ -193,9 +189,8 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
                 err: {
                     const value = fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10) catch break :err;
                     const poke_index = fmt.parseUnsigned(usize, match.anys[0].str, 10) catch break :err;
-                    const evo_index = fmt.parseUnsigned(usize, match.anys[1].str, 10) catch break :err;
 
-                    const entry = try res.getOrPut(poke_index);
+                    const entry = try res.getOrPut(value);
                     const pokemon = &entry.kv.value;
                     if (!entry.found_existing) {
                         pokemon.* = Pokemon{
@@ -205,12 +200,11 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
                             .speed = null,
                             .sp_attack = null,
                             .sp_defense = null,
-                            .evos = EvoMap.init(allocator),
+                            .evolves_from = EvoMap.init(allocator),
                         };
                     }
 
-                    const value_str = mem.trim(u8, match.value.str, "\t ");
-                    _ = try pokemon.evos.put(evo_index, value);
+                    _ = try pokemon.evolves_from.put(poke_index, {});
                 }
 
                 try out_stream.print("{}\n", str);
@@ -221,66 +215,126 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
         }
 
         line_buf.shrink(0);
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
     }
 
     return res;
 }
 
-fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool) void {
+fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool, follow_evos: bool) void {
     var random = rand.DefaultPrng.init(seed);
     var iter = pokemons.iterator();
     while (iter.next()) |kv| {
         const pokemon = &kv.value;
-        const total = pokemon.totalStats();
+        var buf: [Pokemon.stats.len]u8 = undefined;
+        const stats = pokemon.toBuf(&buf);
 
-        inline for (stats) |stat| {
-            if (@field(pokemon, stat)) |*s| {
-                s.* = random.random.int(u8);
-            }
-        }
+        const old_total = sum(u8, stats);
+        const new_random_total = random.random.intRangeAtMost(u64, 0, stats.len * math.maxInt(u8));
+        const new_total = if (same_total_stats) old_total else new_random_total;
 
-        if (same_total_stats) {
-            const new_total = pokemon.totalStats();
-            inline for (stats) |stat| {
-                if (@field(pokemon, stat)) |*s| {
-                    const norm = @intToFloat(f64, s.*) / @intToFloat(f64, new_total);
-                    const new_stat = norm * @intToFloat(f64, total);
-                    s.* = math.cast(u8, @floatToInt(u64, new_stat)) catch 255;
-                }
-            }
+        _ = randomWithinSum(&random.random, u8, stats, new_total);
+        pokemon.fromBuf(stats);
+    }
 
-            next: while (pokemon.totalStats() < total and pokemon.totalStats() != pokemon.maxStats()) {
-                var index = random.random.intRangeLessThan(u16, 0, pokemon.statCount());
-                inline for (stats) |stat| {
-                    if (@field(pokemon, stat)) |*s| {
-                        if (index == 0) {
-                            s.* = math.add(u8, s.*, 1) catch s.*;
-                            continue :next;
-                        } else index -= 1;
-                    }
-                }
-            }
+    if (!follow_evos)
+        return;
 
-            debug.assert(total == pokemon.totalStats());
-        }
+    iter = pokemons.iterator();
+    while (iter.next()) |kv| {
+        const curr = kv.key;
+        const pokemon = &kv.value;
+
+
     }
 }
 
-fn readLine(stream: var, buf: *std.Buffer) ![]u8 {
-    while (true) {
-        const byte = try stream.readByte();
+fn randomizeFromChildren(random: *rand.Random, pokemons: PokemonMap, pokemon: *Pokemon, same_total_stats: bool, curr: usize,) void {
+    if (pokemon.evolves_from.size == 0)
+        return;
+
+    // Get the average stats of all the prevolutions
+    var stats = []u64{0} ** Pokemon.stats.len;
+    var stats_count = []u64{0} ** Pokemon.stats.len;
+    var iter = pokemon.evolves_from.iterator();
+
+    while (iter.next()) |prevolution| {
+        // If prevolution == curr, then we have a cycle.
+        if (prevolution.key == curr)
+            continue;
+
+        // TODO: Can this ever happen???
+        //                                                   VVVVVVVV
+        const pokemon = pokemons.get(prevolution.key) orelse continue;
+
+        // We should randomize prevolution by the same rules.
+        randomizeFromChildren(random, pokemons, &pokemon.value, curr);
+        inline for (Pokemon.stats) |stat_name, i| {
+            if (@field(pokemon.value, stat_name)) |stat| {
+                stats[i] += stat;
+                stats_count[i] += 1;
+            }
+        }
+    }
+
+    // Average calculated here
+    var average: Pokemon = undefined;
+    inline for (Pokemon.stats) |stat_name, i| {
+        @field(average, stat_name) = if (@field(pokemon, stat_name)) |_|
+            stats[i] / math.max(stats_count[i], 1)
+        else
+            null;
+    }
+
+    var buf: [Pokemon.stats.len]u8 = undefined;
+    const old_total = sum(u8, pokemon.toBuf(&buf));
+    const average_total = sum(u8, average.toBuf(&buf));
+    const new_random_total = random.intRangeAtMost(u16, average_total, stats.len * math.maxInt(u8));
+    const new_total = if (same_total_stats) old_total else new_random_total;
+
+    const new_stats = randomUntilSum(random, T, average.toBuf(&buf), new_total);
+    pokemon.fromBuf(new_stats);
+}
+
+fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T {
+    mem.set(T, buf, 0);
+    return randomUntilSum(random, T, buf, s);
+}
+
+fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T {
+    const max = math.min(s, buf.len * math.maxInt(T));
+    while (sum(T, buf) < max) {
+        const index = random.intRangeLessThan(usize, 0, buf.len);
+        buf[index] = math.add(T, buf[index], 1) catch buf[index];
+    }
+
+    return buf;
+}
+
+fn sum(comptime T: type, buf: []const T) u64 {
+    var res: u64 = 0;
+    for (buf) |item|
+        res += item;
+
+    return res;
+}
+
+fn readLine(stream: var, buf: *std.Buffer) !?[]u8 {
+    while (stream.readByte()) |byte| {
         switch (byte) {
             '\n' => return buf.toSlice(),
             else => try buf.appendByte(byte),
         }
+    } else |err| switch (err) {
+        error.EndOfStream => {
+            const res = buf.toSlice();
+            return if (res.len == 0) null else res;
+        },
+        else => return err,
     }
 }
 
 const PokemonMap = std.AutoHashMap(usize, Pokemon);
-const EvoMap = std.AutoHashMap(usize, usize);
+const EvoMap = std.AutoHashMap(usize, void);
 
 const Pokemon = struct {
     hp: ?u8,
@@ -289,34 +343,36 @@ const Pokemon = struct {
     speed: ?u8,
     sp_attack: ?u8,
     sp_defense: ?u8,
-    evos: EvoMap,
+    evolves_from: EvoMap,
 
-    fn totalStats(p: Pokemon) u16 {
-        return u16(p.hp orelse 0) +
-            (p.attack orelse 0) +
-            (p.defense orelse 0) +
-            (p.speed orelse 0) +
-            (p.sp_attack orelse 0) +
-            (p.sp_defense orelse 0);
+    const stats = [][]const u8{
+        "hp",
+        "attack",
+        "defense",
+        "speed",
+        "sp_attack",
+        "sp_defense",
+    };
+
+    fn toBuf(p: Pokemon, buf: *[stats.len]u8) []u8 {
+        var i: usize = 0;
+        inline for (stats) |stat_name| {
+            if (@field(p, stat_name)) |stat| {
+                buf[i] = stat;
+                i += 1;
+            }
+        }
+
+        return buf[0..i];
     }
 
-    fn statCount(p: Pokemon) u16 {
-        var res: u8 = 0;
-        if (p.hp) |_|
-            res += 1;
-        if (p.attack) |_|
-            res += 1;
-        if (p.speed) |_|
-            res += 1;
-        if (p.sp_attack) |_|
-            res += 1;
-        if (p.sp_defense) |_|
-            res += 1;
-
-        return res;
-    }
-
-    fn maxStats(p: Pokemon) u16 {
-        return p.statCount() * math.maxInt(u8);
+    fn fromBuf(p: *Pokemon, buf: []u8) void {
+        var i: usize = 0;
+        inline for (stats) |stat_name| {
+            if (@field(p, stat_name)) |*stat| {
+                stat.* = buf[i];
+                i += 1;
+            }
+        }
     }
 };
