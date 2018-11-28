@@ -4,7 +4,6 @@ pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
     const exe = b.addExecutable("tm35-rand-stats", "src/main.zig");
     exe.setBuildMode(mode);
-    exe.addPackagePath("fun-with-zig", "lib/fun-with-zig/index.zig");
     exe.addPackagePath("tm35-format", "lib/tm35-format/src/index.zig");
     exe.addPackagePath("zig-clap", "lib/zig-clap/index.zig");
     b.default_step.dependOn(&exe.step);
