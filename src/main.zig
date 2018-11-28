@@ -1,7 +1,6 @@
 const builtin = @import("builtin");
 const clap = @import("zig-clap");
 const format = @import("tm35-format");
-const fun = @import("fun-with-zig");
 const std = @import("std");
 
 const debug = std.debug;
