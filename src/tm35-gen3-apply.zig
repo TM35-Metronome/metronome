@@ -114,9 +114,12 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     var line: usize = 1;
     var line_buf = try std.Buffer.initSize(allocator, 0);
     defer line_buf.deinit();
-    while (try readLine(stdin, &line_buf)) |str| : (line += 1) {
+    while (io.readLineFrom(stdin, &line_buf)) |str| : (line += 1) {
         apply(game, line, str) catch {};
         line_buf.shrink(0);
+    } else |err| switch (err) {
+        error.EndOfStream => apply(game, line, line_buf.toSlice()) catch {},
+        else => return err,
     }
 
     var out_file = os.File.openWrite(out) catch |err| {
@@ -126,21 +129,6 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     defer out_file.close();
     var out_stream = out_file.outStream();
     try game.writeToStream(&out_stream.stream);
-}
-
-fn readLine(stream: var, buf: *std.Buffer) !?[]u8 {
-    while (stream.readByte()) |byte| {
-        switch (byte) {
-            '\n' => return buf.toSlice(),
-            else => try buf.appendByte(byte),
-        }
-    } else |err| switch (err) {
-        error.EndOfStream => {
-            const res = buf.toSlice();
-            return if (res.len == 0) null else res;
-        },
-        else => return err,
-    }
 }
 
 fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
