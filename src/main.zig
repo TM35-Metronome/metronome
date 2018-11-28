@@ -126,6 +126,31 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
 }
 
 fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !PokemonMap {
+    var res = PokemonMap.init(allocator);
+    var line_buf = try std.Buffer.initSize(allocator, 0);
+    defer line_buf.deinit();
+
+    var line: usize = 1;
+    while (io.readLineFrom(in_stream, &line_buf)) |str| : (line += 1) {
+        const print_line = parseLine(&res, str) catch true;
+        if (print_line)
+            try out_stream.print("{}\n", str);
+
+        line_buf.shrink(0);
+    } else |err| switch (err) {
+        error.EndOfStream => {
+            const str = line_buf.toSlice();
+            const print_line = parseLine(&res, str) catch true;
+            if (print_line)
+                try out_stream.print("{}\n", str);
+        },
+        else => return err,
+    }
+
+    return res;
+}
+
+fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
     @setEvalBranchQuota(100000);
 
     const m = format.Matcher([][]const u8{
@@ -138,86 +163,67 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
         "pokemons[*].evos[*].target",
     });
 
-    var res = PokemonMap.init(allocator);
-    var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
+    const match = try m.match(str);
+    return switch (match.case) {
+        m.case("pokemons[*].stats.hp"),
+        m.case("pokemons[*].stats.attack"),
+        m.case("pokemons[*].stats.defense"),
+        m.case("pokemons[*].stats.speed"),
+        m.case("pokemons[*].stats.sp_attack"),
+        m.case("pokemons[*].stats.sp_defense"),
+        => blk: {
+            const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
+            const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-    var line: usize = 1;
-    while (try readLine(in_stream, &line_buf)) |str| : (line += 1) {
-        if (m.match(str)) |match| switch (match.case) {
-            m.case("pokemons[*].stats.hp"),
-            m.case("pokemons[*].stats.attack"),
-            m.case("pokemons[*].stats.defense"),
-            m.case("pokemons[*].stats.speed"),
-            m.case("pokemons[*].stats.sp_attack"),
-            m.case("pokemons[*].stats.sp_defense"),
-            => success: {
-                err: {
-                    const value = fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10) catch break :err;
-                    const index = fmt.parseUnsigned(usize, match.anys[0].str, 10) catch break :err;
+            const entry = try pokemoms.getOrPut(index);
+            const pokemon = &entry.kv.value;
+            if (!entry.found_existing) {
+                pokemon.* = Pokemon{
+                    .hp = null,
+                    .attack = null,
+                    .defense = null,
+                    .speed = null,
+                    .sp_attack = null,
+                    .sp_defense = null,
+                    .evolves_from = EvoMap.init(pokemoms.allocator),
+                };
+            }
 
-                    const entry = try res.getOrPut(index);
-                    const pokemon = &entry.kv.value;
-                    if (!entry.found_existing) {
-                        pokemon.* = Pokemon{
-                            .hp = null,
-                            .attack = null,
-                            .defense = null,
-                            .speed = null,
-                            .sp_attack = null,
-                            .sp_defense = null,
-                            .evolves_from = EvoMap.init(allocator),
-                        };
-                    }
+            switch (match.case) {
+                m.case("pokemons[*].stats.hp") => pokemon.hp = value,
+                m.case("pokemons[*].stats.attack") => pokemon.attack = value,
+                m.case("pokemons[*].stats.defense") => pokemon.defense = value,
+                m.case("pokemons[*].stats.speed") => pokemon.speed = value,
+                m.case("pokemons[*].stats.sp_attack") => pokemon.sp_attack = value,
+                m.case("pokemons[*].stats.sp_defense") => pokemon.sp_defense = value,
+                else => unreachable,
+            }
 
-                    switch (match.case) {
-                        m.case("pokemons[*].stats.hp") => pokemon.hp = value,
-                        m.case("pokemons[*].stats.attack") => pokemon.attack = value,
-                        m.case("pokemons[*].stats.defense") => pokemon.defense = value,
-                        m.case("pokemons[*].stats.speed") => pokemon.speed = value,
-                        m.case("pokemons[*].stats.sp_attack") => pokemon.sp_attack = value,
-                        m.case("pokemons[*].stats.sp_defense") => pokemon.sp_defense = value,
-                        else => unreachable,
-                    }
+            break :blk false;
+        },
+        m.case("pokemons[*].evos[*].target") => blk: {
+            const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
+            const poke_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-                    break :success;
-                }
+            const entry = try pokemoms.getOrPut(value);
+            const pokemon = &entry.kv.value;
+            if (!entry.found_existing) {
+                pokemon.* = Pokemon{
+                    .hp = null,
+                    .attack = null,
+                    .defense = null,
+                    .speed = null,
+                    .sp_attack = null,
+                    .sp_defense = null,
+                    .evolves_from = EvoMap.init(pokemoms.allocator),
+                };
+            }
 
-                try out_stream.print("{}\n", str);
-            },
-            m.case("pokemons[*].evos[*].target") => {
-                err: {
-                    const value = fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10) catch break :err;
-                    const poke_index = fmt.parseUnsigned(usize, match.anys[0].str, 10) catch break :err;
-
-                    const entry = try res.getOrPut(value);
-                    const pokemon = &entry.kv.value;
-                    if (!entry.found_existing) {
-                        pokemon.* = Pokemon{
-                            .hp = null,
-                            .attack = null,
-                            .defense = null,
-                            .speed = null,
-                            .sp_attack = null,
-                            .sp_defense = null,
-                            .evolves_from = EvoMap.init(allocator),
-                        };
-                    }
-
-                    _ = try pokemon.evolves_from.put(poke_index, {});
-                }
-
-                try out_stream.print("{}\n", str);
-            },
-            else => try out_stream.print("{}\n", str),
-        } else |_| {
-            try out_stream.print("{}\n", str);
-        }
-
-        line_buf.shrink(0);
-    }
-
-    return res;
+            _ = try pokemon.evolves_from.put(poke_index, {});
+            break :blk true;
+        },
+        else => true,
+    };
 }
 
 fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool, follow_evos: bool) void {
@@ -352,21 +358,6 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
         res += item;
 
     return res;
-}
-
-fn readLine(stream: var, buf: *std.Buffer) !?[]u8 {
-    while (stream.readByte()) |byte| {
-        switch (byte) {
-            '\n' => return buf.toSlice(),
-            else => try buf.appendByte(byte),
-        }
-    } else |err| switch (err) {
-        error.EndOfStream => {
-            const res = buf.toSlice();
-            return if (res.len == 0) null else res;
-        },
-        else => return err,
-    }
 }
 
 const PokemonMap = std.AutoHashMap(usize, Pokemon);
