@@ -38,7 +38,7 @@ const params = []Param{
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-rand-stats [OPTION]... FILE
+        \\Usage: tm35-rand-stats [OPTION]...
         \\Reads the tm35 format from stdin and randomizes the stats of pokemons.
         \\
         \\Options:
