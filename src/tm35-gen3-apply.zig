@@ -114,8 +114,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     var line: usize = 1;
     var line_buf = try std.Buffer.initSize(allocator, 0);
     defer line_buf.deinit();
-    while (io.readLineFrom(stdin, &line_buf)) |str| : (line += 1) {
-        apply(game, line, str) catch {};
+    while (stdin.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
+        apply(game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch {};
         line_buf.shrink(0);
     } else |err| switch (err) {
         error.EndOfStream => apply(game, line, line_buf.toSlice()) catch {},
