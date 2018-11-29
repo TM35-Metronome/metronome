@@ -215,6 +215,7 @@ pub const PartyMemberItem = packed struct {
 
 pub const PartyMemberMoves = packed struct {
     base: PartyMemberBase,
+    pad: lu16,
     moves: [4]lu16,
 };
 
