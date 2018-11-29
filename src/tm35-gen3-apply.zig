@@ -376,12 +376,12 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 },
                 m.case("pokemons[*].catch_rate") => pokemon.catch_rate = try parseInt(line, u8, match.value),
                 m.case("pokemons[*].base_exp_yield") => pokemon.base_exp_yield = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].ev_yield.hp") => pokemon.ev_yield.hp = @intCast(u2, try parseInt(line, u8, match.value)),
-                m.case("pokemons[*].ev_yield.attack") => pokemon.ev_yield.attack = @intCast(u2, try parseInt(line, u8, match.value)),
-                m.case("pokemons[*].ev_yield.defense") => pokemon.ev_yield.defense = @intCast(u2, try parseInt(line, u8, match.value)),
-                m.case("pokemons[*].ev_yield.speed") => pokemon.ev_yield.speed = @intCast(u2, try parseInt(line, u8, match.value)),
-                m.case("pokemons[*].ev_yield.sp_attack") => pokemon.ev_yield.sp_attack = @intCast(u2, try parseInt(line, u8, match.value)),
-                m.case("pokemons[*].ev_yield.sp_defense") => pokemon.ev_yield.sp_defense = @intCast(u2, try parseInt(line, u8, match.value)),
+                m.case("pokemons[*].ev_yield.hp") => pokemon.ev_yield.hp = try parseInt(line, u2, match.value),
+                m.case("pokemons[*].ev_yield.attack") => pokemon.ev_yield.attack = try parseInt(line, u2, match.value),
+                m.case("pokemons[*].ev_yield.defense") => pokemon.ev_yield.defense = try parseInt(line, u2, match.value),
+                m.case("pokemons[*].ev_yield.speed") => pokemon.ev_yield.speed = try parseInt(line, u2, match.value),
+                m.case("pokemons[*].ev_yield.sp_attack") => pokemon.ev_yield.sp_attack = try parseInt(line, u2, match.value),
+                m.case("pokemons[*].ev_yield.sp_defense") => pokemon.ev_yield.sp_defense = try parseInt(line, u2, match.value),
                 m.case("pokemons[*].items[*]") => {
                     const index = try parseIntBound(line, usize, pokemon.items.len, match.anys[1]);
                     pokemon.items[index] = lu16.init(try parseIntBound(line, u16, game.items.len, match.value));
@@ -456,7 +456,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             const move = &lvl_up_moves[move_index];
             switch (match.case) {
                 m.case("pokemons[*].moves[*].id") => move.id = try parseInt(line, u9, match.value),
-                m.case("pokemons[*].moves[*].level") => move.level = @intCast(u7, try parseInt(line, u8, match.value)),
+                m.case("pokemons[*].moves[*].level") => move.level = try parseInt(line, u7, match.value),
                 else => unreachable,
             }
         },
