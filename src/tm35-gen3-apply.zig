@@ -541,7 +541,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                             else => unreachable,
                         }
                     },
-                    else => unreachable,
+                    else => {},
                 }
             }
         },
