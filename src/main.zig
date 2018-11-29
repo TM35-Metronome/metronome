@@ -130,7 +130,8 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
     defer line_buf.deinit();
 
     var line: usize = 1;
-    while (io.readLineFrom(in_stream, &line_buf)) |str| : (line += 1) {
+    while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
+        const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
         const print_line = parseLine(&res, str) catch true;
         if (print_line)
             try out_stream.print("{}\n", str);
@@ -138,7 +139,7 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
         line_buf.shrink(0);
     } else |err| switch (err) {
         error.EndOfStream => {
-            const str = line_buf.toSlice();
+            const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
             const print_line = parseLine(&res, str) catch true;
             if (print_line)
                 try out_stream.print("{}\n", str);
@@ -193,7 +194,7 @@ fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
             const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
             const poke_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-            const entry = try pokemoms.getOrPutValue(index, Pokemon.init(pokemoms.allocator));
+            const entry = try pokemoms.getOrPutValue(value, Pokemon.init(pokemoms.allocator));
             const pokemon = &entry.value;
 
             _ = try pokemon.evolves_from.put(poke_index, {});
