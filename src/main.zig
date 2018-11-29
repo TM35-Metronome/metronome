@@ -174,19 +174,8 @@ fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
             const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
             const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-            const entry = try pokemoms.getOrPut(index);
-            const pokemon = &entry.kv.value;
-            if (!entry.found_existing) {
-                pokemon.* = Pokemon{
-                    .hp = null,
-                    .attack = null,
-                    .defense = null,
-                    .speed = null,
-                    .sp_attack = null,
-                    .sp_defense = null,
-                    .evolves_from = EvoMap.init(pokemoms.allocator),
-                };
-            }
+            const entry = try pokemoms.getOrPutValue(index, Pokemon.init(pokemoms.allocator));
+            const pokemon = &entry.value;
 
             switch (match.case) {
                 m.case("pokemons[*].stats.hp") => pokemon.hp = value,
@@ -204,19 +193,8 @@ fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
             const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
             const poke_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-            const entry = try pokemoms.getOrPut(value);
-            const pokemon = &entry.kv.value;
-            if (!entry.found_existing) {
-                pokemon.* = Pokemon{
-                    .hp = null,
-                    .attack = null,
-                    .defense = null,
-                    .speed = null,
-                    .sp_attack = null,
-                    .sp_defense = null,
-                    .evolves_from = EvoMap.init(pokemoms.allocator),
-                };
-            }
+            const entry = try pokemoms.getOrPutValue(index, Pokemon.init(pokemoms.allocator));
+            const pokemon = &entry.value;
 
             _ = try pokemon.evolves_from.put(poke_index, {});
             break :blk true;
@@ -370,6 +348,18 @@ const Pokemon = struct {
     sp_attack: ?u8,
     sp_defense: ?u8,
     evolves_from: EvoMap,
+
+    fn init(allocator: *mem.Allocator) Pokemon {
+        return Pokemon{
+            .hp = null,
+            .attack = null,
+            .defense = null,
+            .speed = null,
+            .sp_attack = null,
+            .sp_defense = null,
+            .evolves_from = EvoMap.init(allocator),
+        };
+    }
 
     const stats = [][]const u8{
         "hp",
