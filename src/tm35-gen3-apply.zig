@@ -302,7 +302,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                             inline for ([][]const u8{ "Moves", "Both" }) |kind| {
                                 if (trainer.party_type == @field(gen3.PartyType, kind)) {
                                     const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
-                                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[1]);
+                                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[2]);
                                     const value = try parseIntBound(line, u16, game.moves.len, match.value);
                                     member.moves[index] = lu16.init(value);
                                     break :success;
@@ -639,7 +639,7 @@ fn parseIntBound(line: usize, comptime Int: type, bound: var, token: format.Toke
         return value;
     }
 
-    warning(line, column, "{} is not within the bound {}", str, u128(bound));
+    warning(line, column, "{} is not within the bound {}\n", str, u128(bound));
     return error.Overflow;
 }
 
