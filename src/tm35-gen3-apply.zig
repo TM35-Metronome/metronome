@@ -244,7 +244,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             const value = match.value;
             const column = value.index(str) + 1;
 
-            if (!mem.eql(u8, value.str, game.header.game_title))
+            if (!mem.eql(u8, value.str, game.header.gamecode))
                 warning(line, column, "Gamecode '{}' differs from '{}'\n", value.str, game.header.gamecode);
         },
 
@@ -302,7 +302,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                             inline for ([][]const u8{ "Moves", "Both" }) |kind| {
                                 if (trainer.party_type == @field(gen3.PartyType, kind)) {
                                     const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
-                                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[2]);
+                                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[1]);
                                     const value = try parseIntBound(line, u16, game.moves.len, match.value);
                                     member.moves[index] = lu16.init(value);
                                     break :success;
