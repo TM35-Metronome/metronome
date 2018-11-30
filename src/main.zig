@@ -119,7 +119,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     while (iter.next()) |kv| {
         inline for (Pokemon.stats) |stat| {
             if (@field(kv.value, stat)) |s|
-                try stdout.print("pokemons[{}].stats.{}={}\n", kv.key, stat, s);
+                try stdout.print(".pokemons[{}].stats.{}={}\n", kv.key, stat, s);
         }
     }
 }
@@ -154,23 +154,23 @@ fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
     @setEvalBranchQuota(100000);
 
     const m = format.Matcher([][]const u8{
-        "pokemons[*].stats.hp",
-        "pokemons[*].stats.attack",
-        "pokemons[*].stats.defense",
-        "pokemons[*].stats.speed",
-        "pokemons[*].stats.sp_attack",
-        "pokemons[*].stats.sp_defense",
-        "pokemons[*].evos[*].target",
+        ".pokemons[*].stats.hp",
+        ".pokemons[*].stats.attack",
+        ".pokemons[*].stats.defense",
+        ".pokemons[*].stats.speed",
+        ".pokemons[*].stats.sp_attack",
+        ".pokemons[*].stats.sp_defense",
+        ".pokemons[*].evos[*].target",
     });
 
     const match = try m.match(str);
     return switch (match.case) {
-        m.case("pokemons[*].stats.hp"),
-        m.case("pokemons[*].stats.attack"),
-        m.case("pokemons[*].stats.defense"),
-        m.case("pokemons[*].stats.speed"),
-        m.case("pokemons[*].stats.sp_attack"),
-        m.case("pokemons[*].stats.sp_defense"),
+        m.case(".pokemons[*].stats.hp"),
+        m.case(".pokemons[*].stats.attack"),
+        m.case(".pokemons[*].stats.defense"),
+        m.case(".pokemons[*].stats.speed"),
+        m.case(".pokemons[*].stats.sp_attack"),
+        m.case(".pokemons[*].stats.sp_defense"),
         => blk: {
             const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
             const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
@@ -179,18 +179,18 @@ fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
             const pokemon = &entry.value;
 
             switch (match.case) {
-                m.case("pokemons[*].stats.hp") => pokemon.hp = value,
-                m.case("pokemons[*].stats.attack") => pokemon.attack = value,
-                m.case("pokemons[*].stats.defense") => pokemon.defense = value,
-                m.case("pokemons[*].stats.speed") => pokemon.speed = value,
-                m.case("pokemons[*].stats.sp_attack") => pokemon.sp_attack = value,
-                m.case("pokemons[*].stats.sp_defense") => pokemon.sp_defense = value,
+                m.case(".pokemons[*].stats.hp") => pokemon.hp = value,
+                m.case(".pokemons[*].stats.attack") => pokemon.attack = value,
+                m.case(".pokemons[*].stats.defense") => pokemon.defense = value,
+                m.case(".pokemons[*].stats.speed") => pokemon.speed = value,
+                m.case(".pokemons[*].stats.sp_attack") => pokemon.sp_attack = value,
+                m.case(".pokemons[*].stats.sp_defense") => pokemon.sp_defense = value,
                 else => unreachable,
             }
 
             break :blk false;
         },
-        m.case("pokemons[*].evos[*].target") => blk: {
+        m.case(".pokemons[*].evos[*].target") => blk: {
             const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
             const poke_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
