@@ -118,7 +118,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
         apply(game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch {};
         line_buf.shrink(0);
     } else |err| switch (err) {
-        error.EndOfStream => apply(game, line, line_buf.toSlice()) catch {},
+        error.EndOfStream => {},
         else => return err,
     }
 
@@ -584,14 +584,14 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             warning(line, err.found.index(str), "expected ");
             for (err.expected) |id, i| {
                 const rev_i = (err.expected.len - 1) - i;
-                debug.warn("{}", id.str());
+                debug.warn("'{}'", id.str());
                 if (rev_i == 1)
                     debug.warn(" or ");
                 if (rev_i > 1)
                     debug.warn(", ");
             }
 
-            debug.warn(" found {}\n", err.found.str);
+            debug.warn(" found '{}'\n", err.found.str);
         },
     }
 }
