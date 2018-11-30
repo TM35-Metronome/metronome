@@ -134,113 +134,111 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
 fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
     @setEvalBranchQuota(100000);
     const m = format.Matcher([][]const u8{
-        "",
-        "version",
-        "game_title",
-        "gamecode",
+        ".version",
+        ".game_title",
+        ".gamecode",
 
-        "trainers[*].class",
-        "trainers[*].encounter_music",
-        "trainers[*].trainer_picture",
-        "trainers[*].items[*]",
-        "trainers[*].is_double",
-        "trainers[*].ai",
-        "trainers[*].party[*].iv",
-        "trainers[*].party[*].level",
-        "trainers[*].party[*].species",
-        "trainers[*].party[*].item",
-        "trainers[*].party[*].moves[*]",
+        ".trainers[*].class",
+        ".trainers[*].encounter_music",
+        ".trainers[*].trainer_picture",
+        ".trainers[*].items[*]",
+        ".trainers[*].is_double",
+        ".trainers[*].ai",
+        ".trainers[*].party[*].iv",
+        ".trainers[*].party[*].level",
+        ".trainers[*].party[*].species",
+        ".trainers[*].party[*].item",
+        ".trainers[*].party[*].moves[*]",
 
-        "moves[*].effect",
-        "moves[*].power",
-        "moves[*].type",
-        "moves[*].accuracy",
-        "moves[*].pp",
-        "moves[*].side_effect_chance",
-        "moves[*].target",
-        "moves[*].priority",
-        "moves[*].flags",
+        ".moves[*].effect",
+        ".moves[*].power",
+        ".moves[*].type",
+        ".moves[*].accuracy",
+        ".moves[*].pp",
+        ".moves[*].side_effect_chance",
+        ".moves[*].target",
+        ".moves[*].priority",
+        ".moves[*].flags",
 
-        "pokemons[*].stats.hp",
-        "pokemons[*].stats.attack",
-        "pokemons[*].stats.defense",
-        "pokemons[*].stats.speed",
-        "pokemons[*].stats.sp_attack",
-        "pokemons[*].stats.sp_defense",
-        "pokemons[*].types[*]",
-        "pokemons[*].catch_rate",
-        "pokemons[*].base_exp_yield",
-        "pokemons[*].ev_yield.hp",
-        "pokemons[*].ev_yield.attack",
-        "pokemons[*].ev_yield.defense",
-        "pokemons[*].ev_yield.speed",
-        "pokemons[*].ev_yield.sp_attack",
-        "pokemons[*].ev_yield.sp_defense",
-        "pokemons[*].items[*]",
-        "pokemons[*].gender_ratio",
-        "pokemons[*].egg_cycles",
-        "pokemons[*].base_friendship",
-        "pokemons[*].growth_rate",
-        "pokemons[*].egg_groups[*]",
-        "pokemons[*].abilities[*]",
-        "pokemons[*].safari_zone_rate",
-        "pokemons[*].color",
-        "pokemons[*].flip",
-        "pokemons[*].tms[*]",
-        "pokemons[*].hms[*]",
-        "pokemons[*].evos[*].method",
-        "pokemons[*].evos[*].param",
-        "pokemons[*].evos[*].target",
-        "pokemons[*].moves[*].id",
-        "pokemons[*].moves[*].level",
+        ".pokemons[*].stats.hp",
+        ".pokemons[*].stats.attack",
+        ".pokemons[*].stats.defense",
+        ".pokemons[*].stats.speed",
+        ".pokemons[*].stats.sp_attack",
+        ".pokemons[*].stats.sp_defense",
+        ".pokemons[*].types[*]",
+        ".pokemons[*].catch_rate",
+        ".pokemons[*].base_exp_yield",
+        ".pokemons[*].ev_yield.hp",
+        ".pokemons[*].ev_yield.attack",
+        ".pokemons[*].ev_yield.defense",
+        ".pokemons[*].ev_yield.speed",
+        ".pokemons[*].ev_yield.sp_attack",
+        ".pokemons[*].ev_yield.sp_defense",
+        ".pokemons[*].items[*]",
+        ".pokemons[*].gender_ratio",
+        ".pokemons[*].egg_cycles",
+        ".pokemons[*].base_friendship",
+        ".pokemons[*].growth_rate",
+        ".pokemons[*].egg_groups[*]",
+        ".pokemons[*].abilities[*]",
+        ".pokemons[*].safari_zone_rate",
+        ".pokemons[*].color",
+        ".pokemons[*].flip",
+        ".pokemons[*].tms[*]",
+        ".pokemons[*].hms[*]",
+        ".pokemons[*].evos[*].method",
+        ".pokemons[*].evos[*].param",
+        ".pokemons[*].evos[*].target",
+        ".pokemons[*].moves[*].id",
+        ".pokemons[*].moves[*].level",
 
-        "tms[*]",
-        "hms[*]",
+        ".tms[*]",
+        ".hms[*]",
 
-        "items[*].id",
-        "items[*].price",
-        "items[*].hold_effect",
-        "items[*].hold_effect_param",
-        "items[*].importance",
-        "items[*].pocked",
-        "items[*].type",
-        "items[*].battle_usage",
-        "items[*].battle_usage",
-        "items[*].secondary_id",
+        ".items[*].id",
+        ".items[*].price",
+        ".items[*].hold_effect",
+        ".items[*].hold_effect_param",
+        ".items[*].importance",
+        ".items[*].pocked",
+        ".items[*].type",
+        ".items[*].battle_usage",
+        ".items[*].battle_usage",
+        ".items[*].secondary_id",
 
-        "zones[*].wild.land.encounter_rate",
-        "zones[*].wild.land.pokemons[*].min_level",
-        "zones[*].wild.land.pokemons[*].max_level",
-        "zones[*].wild.land.pokemons[*].species",
-        "zones[*].wild.surf.encounter_rate",
-        "zones[*].wild.surf.pokemons[*].min_level",
-        "zones[*].wild.surf.pokemons[*].max_level",
-        "zones[*].wild.surf.pokemons[*].species",
-        "zones[*].wild.rock_smash.encounter_rate",
-        "zones[*].wild.rock_smash.pokemons[*].min_level",
-        "zones[*].wild.rock_smash.pokemons[*].max_level",
-        "zones[*].wild.rock_smash.pokemons[*].species",
-        "zones[*].wild.fishing.encounter_rate",
-        "zones[*].wild.fishing.pokemons[*].min_level",
-        "zones[*].wild.fishing.pokemons[*].max_level",
-        "zones[*].wild.fishing.pokemons[*].species",
+        ".zones[*].wild.land.encounter_rate",
+        ".zones[*].wild.land.pokemons[*].min_level",
+        ".zones[*].wild.land.pokemons[*].max_level",
+        ".zones[*].wild.land.pokemons[*].species",
+        ".zones[*].wild.surf.encounter_rate",
+        ".zones[*].wild.surf.pokemons[*].min_level",
+        ".zones[*].wild.surf.pokemons[*].max_level",
+        ".zones[*].wild.surf.pokemons[*].species",
+        ".zones[*].wild.rock_smash.encounter_rate",
+        ".zones[*].wild.rock_smash.pokemons[*].min_level",
+        ".zones[*].wild.rock_smash.pokemons[*].max_level",
+        ".zones[*].wild.rock_smash.pokemons[*].species",
+        ".zones[*].wild.fishing.encounter_rate",
+        ".zones[*].wild.fishing.pokemons[*].min_level",
+        ".zones[*].wild.fishing.pokemons[*].max_level",
+        ".zones[*].wild.fishing.pokemons[*].species",
     });
 
     if (m.match(str)) |match| switch (match.case) {
-        m.case("") => {},
-        m.case("version") => {
+        m.case(".version") => {
             const version = try parseEnum(line, common.Version, match.value);
             if (version != game.version)
                 warning(line, 1, "Version '{}' differs from '{}'\n", @tagName(version), @tagName(game.version));
         },
-        m.case("game_title") => {
+        m.case(".game_title") => {
             const value = match.value;
             const column = value.index(str) + 1;
 
             if (!mem.eql(u8, value.str, game.header.game_title))
                 warning(line, column, "Game title '{}' differs from '{}'\n", value.str, game.header.game_title);
         },
-        m.case("gamecode") => {
+        m.case(".gamecode") => {
             const value = match.value;
             const column = value.index(str) + 1;
 
@@ -248,45 +246,45 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 warning(line, column, "Gamecode '{}' differs from '{}'\n", value.str, game.header.gamecode);
         },
 
-        m.case("trainers[*].class"),
-        m.case("trainers[*].encounter_music"),
-        m.case("trainers[*].trainer_picture"),
-        m.case("trainers[*].items[*]"),
-        m.case("trainers[*].is_double"),
-        m.case("trainers[*].ai"),
-        m.case("trainers[*].party[*].iv"),
-        m.case("trainers[*].party[*].level"),
-        m.case("trainers[*].party[*].species"),
-        m.case("trainers[*].party[*].item"),
-        m.case("trainers[*].party[*].moves[*]"),
+        m.case(".trainers[*].class"),
+        m.case(".trainers[*].encounter_music"),
+        m.case(".trainers[*].trainer_picture"),
+        m.case(".trainers[*].items[*]"),
+        m.case(".trainers[*].is_double"),
+        m.case(".trainers[*].ai"),
+        m.case(".trainers[*].party[*].iv"),
+        m.case(".trainers[*].party[*].level"),
+        m.case(".trainers[*].party[*].species"),
+        m.case(".trainers[*].party[*].item"),
+        m.case(".trainers[*].party[*].moves[*]"),
         => {
             const trainer_index = try parseIntBound(line, usize, game.trainers.len, match.anys[0]);
             const trainer = &game.trainers[trainer_index];
 
             switch (match.case) {
-                m.case("trainers[*].class") => trainer.class = try parseInt(line, u8, match.value),
-                m.case("trainers[*].encounter_music") => trainer.encounter_music = try parseInt(line, u8, match.value),
-                m.case("trainers[*].trainer_picture") => trainer.trainer_picture = try parseInt(line, u8, match.value),
-                m.case("trainers[*].is_double") => trainer.is_double = lu32.init(try parseInt(line, u32, match.value)),
-                m.case("trainers[*].ai") => trainer.ai = lu32.init(try parseInt(line, u32, match.value)),
-                m.case("trainers[*].items[*]") => {
+                m.case(".trainers[*].class") => trainer.class = try parseInt(line, u8, match.value),
+                m.case(".trainers[*].encounter_music") => trainer.encounter_music = try parseInt(line, u8, match.value),
+                m.case(".trainers[*].trainer_picture") => trainer.trainer_picture = try parseInt(line, u8, match.value),
+                m.case(".trainers[*].is_double") => trainer.is_double = lu32.init(try parseInt(line, u32, match.value)),
+                m.case(".trainers[*].ai") => trainer.ai = lu32.init(try parseInt(line, u32, match.value)),
+                m.case(".trainers[*].items[*]") => {
                     const index = try parseIntBound(line, usize, trainer.items.len, match.anys[1]);
                     const value = try parseIntBound(line, u16, game.items.len, match.value);
                     trainer.items[index] = lu16.init(value);
                 },
-                m.case("trainers[*].party[*].iv"),
-                m.case("trainers[*].party[*].level"),
-                m.case("trainers[*].party[*].species"),
-                m.case("trainers[*].party[*].item"),
-                m.case("trainers[*].party[*].moves[*]"),
+                m.case(".trainers[*].party[*].iv"),
+                m.case(".trainers[*].party[*].level"),
+                m.case(".trainers[*].party[*].species"),
+                m.case(".trainers[*].party[*].item"),
+                m.case(".trainers[*].party[*].moves[*]"),
                 => {
                     const party_index = try parseIntBound(line, usize, trainer.partyLen(), match.anys[1]);
                     const base = try trainer.partyAt(party_index, game.data);
                     switch (match.case) {
-                        m.case("trainers[*].party[*].iv") => base.iv = lu16.init(try parseInt(line, u16, match.value)),
-                        m.case("trainers[*].party[*].level") => base.level = lu16.init(try parseInt(line, u16, match.value)),
-                        m.case("trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.base_stats.len, match.value)),
-                        m.case("trainers[*].party[*].item") => success: {
+                        m.case(".trainers[*].party[*].iv") => base.iv = lu16.init(try parseInt(line, u16, match.value)),
+                        m.case(".trainers[*].party[*].level") => base.level = lu16.init(try parseInt(line, u16, match.value)),
+                        m.case(".trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.base_stats.len, match.value)),
+                        m.case(".trainers[*].party[*].item") => success: {
                             inline for ([][]const u8{ "Item", "Both" }) |kind| {
                                 if (trainer.party_type == @field(gen3.PartyType, kind)) {
                                     const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
@@ -298,7 +296,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
 
                             // TODO: Error message and stuff
                         },
-                        m.case("trainers[*].party[*].moves[*]") => success: {
+                        m.case(".trainers[*].party[*].moves[*]") => success: {
                             inline for ([][]const u8{ "Moves", "Both" }) |kind| {
                                 if (trainer.party_type == @field(gen3.PartyType, kind)) {
                                     const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
@@ -318,79 +316,88 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             }
         },
 
-        m.case("moves[*].effect"), m.case("moves[*].power"), m.case("moves[*].type"), m.case("moves[*].accuracy"), m.case("moves[*].pp"), m.case("moves[*].side_effect_chance"), m.case("moves[*].target"), m.case("moves[*].priority"), m.case("moves[*].flags") => {
+        m.case(".moves[*].effect"),
+        m.case(".moves[*].power"),
+        m.case(".moves[*].type"),
+        m.case(".moves[*].accuracy"),
+        m.case(".moves[*].pp"),
+        m.case(".moves[*].side_effect_chance"),
+        m.case(".moves[*].target"),
+        m.case(".moves[*].priority"),
+        m.case(".moves[*].flags"),
+        => {
             const move_index = try parseIntBound(line, usize, game.moves.len, match.anys[0]);
             const move = &game.moves[move_index];
             switch (match.case) {
-                m.case("moves[*].effect") => move.effect = try parseInt(line, u8, match.value),
-                m.case("moves[*].power") => move.power = try parseInt(line, u8, match.value),
-                m.case("moves[*].type") => move.@"type" = try parseEnum(line, gen3.Type, match.value),
-                m.case("moves[*].accuracy") => move.accuracy = try parseInt(line, u8, match.value),
-                m.case("moves[*].pp") => move.pp = try parseInt(line, u8, match.value),
-                m.case("moves[*].side_effect_chance") => move.side_effect_chance = try parseInt(line, u8, match.value),
-                m.case("moves[*].target") => move.target = try parseInt(line, u8, match.value),
-                m.case("moves[*].priority") => move.priority = try parseInt(line, u8, match.value),
-                m.case("moves[*].flags") => move.flags = lu32.init(try parseInt(line, u32, match.value)),
+                m.case(".moves[*].effect") => move.effect = try parseInt(line, u8, match.value),
+                m.case(".moves[*].power") => move.power = try parseInt(line, u8, match.value),
+                m.case(".moves[*].type") => move.@"type" = try parseEnum(line, gen3.Type, match.value),
+                m.case(".moves[*].accuracy") => move.accuracy = try parseInt(line, u8, match.value),
+                m.case(".moves[*].pp") => move.pp = try parseInt(line, u8, match.value),
+                m.case(".moves[*].side_effect_chance") => move.side_effect_chance = try parseInt(line, u8, match.value),
+                m.case(".moves[*].target") => move.target = try parseInt(line, u8, match.value),
+                m.case(".moves[*].priority") => move.priority = try parseInt(line, u8, match.value),
+                m.case(".moves[*].flags") => move.flags = lu32.init(try parseInt(line, u32, match.value)),
                 else => unreachable,
             }
         },
 
-        m.case("pokemons[*].stats.hp"),
-        m.case("pokemons[*].stats.attack"),
-        m.case("pokemons[*].stats.defense"),
-        m.case("pokemons[*].stats.speed"),
-        m.case("pokemons[*].stats.sp_attack"),
-        m.case("pokemons[*].stats.sp_defense"),
-        m.case("pokemons[*].types[*]"),
-        m.case("pokemons[*].catch_rate"),
-        m.case("pokemons[*].base_exp_yield"),
-        m.case("pokemons[*].ev_yield.hp"),
-        m.case("pokemons[*].ev_yield.attack"),
-        m.case("pokemons[*].ev_yield.defense"),
-        m.case("pokemons[*].ev_yield.speed"),
-        m.case("pokemons[*].ev_yield.sp_attack"),
-        m.case("pokemons[*].ev_yield.sp_defense"),
-        m.case("pokemons[*].items[*]"),
-        m.case("pokemons[*].gender_ratio"),
-        m.case("pokemons[*].egg_cycles"),
-        m.case("pokemons[*].base_friendship"),
-        m.case("pokemons[*].growth_rate"),
-        m.case("pokemons[*].egg_groups[*]"),
-        m.case("pokemons[*].abilities[*]"),
-        m.case("pokemons[*].safari_zone_rate"),
-        m.case("pokemons[*].color"),
-        m.case("pokemons[*].flip"),
+        m.case(".pokemons[*].stats.hp"),
+        m.case(".pokemons[*].stats.attack"),
+        m.case(".pokemons[*].stats.defense"),
+        m.case(".pokemons[*].stats.speed"),
+        m.case(".pokemons[*].stats.sp_attack"),
+        m.case(".pokemons[*].stats.sp_defense"),
+        m.case(".pokemons[*].types[*]"),
+        m.case(".pokemons[*].catch_rate"),
+        m.case(".pokemons[*].base_exp_yield"),
+        m.case(".pokemons[*].ev_yield.hp"),
+        m.case(".pokemons[*].ev_yield.attack"),
+        m.case(".pokemons[*].ev_yield.defense"),
+        m.case(".pokemons[*].ev_yield.speed"),
+        m.case(".pokemons[*].ev_yield.sp_attack"),
+        m.case(".pokemons[*].ev_yield.sp_defense"),
+        m.case(".pokemons[*].items[*]"),
+        m.case(".pokemons[*].gender_ratio"),
+        m.case(".pokemons[*].egg_cycles"),
+        m.case(".pokemons[*].base_friendship"),
+        m.case(".pokemons[*].growth_rate"),
+        m.case(".pokemons[*].egg_groups[*]"),
+        m.case(".pokemons[*].abilities[*]"),
+        m.case(".pokemons[*].safari_zone_rate"),
+        m.case(".pokemons[*].color"),
+        m.case(".pokemons[*].flip"),
         => {
             const pokemon_index = try parseIntBound(line, usize, game.base_stats.len, match.anys[0]);
             const pokemon = &game.base_stats[pokemon_index];
             switch (match.case) {
-                m.case("pokemons[*].stats.hp") => pokemon.stats.hp = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].stats.attack") => pokemon.stats.attack = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].stats.defense") => pokemon.stats.defense = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].stats.speed") => pokemon.stats.speed = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].stats.sp_attack") => pokemon.stats.sp_attack = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].stats.sp_defense") => pokemon.stats.sp_defense = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].types[*]") => {
+                m.case(".pokemons[*].stats.hp") => pokemon.stats.hp = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].stats.attack") => pokemon.stats.attack = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].stats.defense") => pokemon.stats.defense = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].stats.speed") => pokemon.stats.speed = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].stats.sp_attack") => pokemon.stats.sp_attack = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].stats.sp_defense") => pokemon.stats.sp_defense = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].types[*]") => {
                     const index = try parseIntBound(line, usize, pokemon.types.len, match.anys[1]);
                     pokemon.types[index] = try parseEnum(line, gen3.Type, match.value);
                 },
-                m.case("pokemons[*].catch_rate") => pokemon.catch_rate = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].base_exp_yield") => pokemon.base_exp_yield = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].ev_yield.hp") => pokemon.ev_yield.hp = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].ev_yield.attack") => pokemon.ev_yield.attack = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].ev_yield.defense") => pokemon.ev_yield.defense = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].ev_yield.speed") => pokemon.ev_yield.speed = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].ev_yield.sp_attack") => pokemon.ev_yield.sp_attack = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].ev_yield.sp_defense") => pokemon.ev_yield.sp_defense = try parseInt(line, u2, match.value),
-                m.case("pokemons[*].items[*]") => {
+                m.case(".pokemons[*].catch_rate") => pokemon.catch_rate = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].base_exp_yield") => pokemon.base_exp_yield = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].ev_yield.hp") => pokemon.ev_yield.hp = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].ev_yield.attack") => pokemon.ev_yield.attack = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].ev_yield.defense") => pokemon.ev_yield.defense = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].ev_yield.speed") => pokemon.ev_yield.speed = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].ev_yield.sp_attack") => pokemon.ev_yield.sp_attack = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].ev_yield.sp_defense") => pokemon.ev_yield.sp_defense = try parseInt(line, u2, match.value),
+                m.case(".pokemons[*].items[*]") => {
                     const index = try parseIntBound(line, usize, pokemon.items.len, match.anys[1]);
                     pokemon.items[index] = lu16.init(try parseIntBound(line, u16, game.items.len, match.value));
                 },
-                m.case("pokemons[*].gender_ratio") => pokemon.gender_ratio = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].egg_cycles") => pokemon.egg_cycles = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].base_friendship") => pokemon.base_friendship = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].growth_rate") => pokemon.growth_rate = try parseEnum(line, common.GrowthRate, match.value),
-                m.case("pokemons[*].egg_groups[*]") => {
+                m.case(".pokemons[*].gender_ratio") => pokemon.gender_ratio = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].egg_cycles") => pokemon.egg_cycles = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].base_friendship") => pokemon.base_friendship = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].growth_rate") => pokemon.growth_rate = try parseEnum(line, common.GrowthRate, match.value),
+                m.case(".pokemons[*].egg_groups[*]") => {
                     const index = try parseIntBound(line, usize, 2, match.anys[1]);
                     switch (index) {
                         0 => pokemon.egg_group1 = try parseEnum(line, common.EggGroup, match.value),
@@ -398,17 +405,17 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                         else => unreachable,
                     }
                 },
-                m.case("pokemons[*].abilities[*]") => {
+                m.case(".pokemons[*].abilities[*]") => {
                     const index = try parseIntBound(line, usize, pokemon.abilities.len, match.anys[1]);
                     pokemon.abilities[index] = try parseInt(line, u8, match.value);
                 },
-                m.case("pokemons[*].safari_zone_rate") => pokemon.safari_zone_rate = try parseInt(line, u8, match.value),
-                m.case("pokemons[*].color") => pokemon.color = try parseEnum(line, common.Color, match.value),
-                m.case("pokemons[*].flip") => pokemon.flip = try parseBool(line, match.value),
+                m.case(".pokemons[*].safari_zone_rate") => pokemon.safari_zone_rate = try parseInt(line, u8, match.value),
+                m.case(".pokemons[*].color") => pokemon.color = try parseEnum(line, common.Color, match.value),
+                m.case(".pokemons[*].flip") => pokemon.flip = try parseBool(line, match.value),
                 else => unreachable,
             }
         },
-        m.case("pokemons[*].tms[*]") => {
+        m.case(".pokemons[*].tms[*]") => {
             const machine_index = try parseIntBound(line, usize, game.machine_learnsets.len, match.anys[0]);
             const tm_index = try parseIntBound(line, usize, game.tms.len, match.anys[1]);
             const value = try parseBool(line, match.value);
@@ -420,7 +427,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             };
             learnset.* = lu64.init(new);
         },
-        m.case("pokemons[*].hms[*]") => {
+        m.case(".pokemons[*].hms[*]") => {
             const machine_index = try parseIntBound(line, usize, game.machine_learnsets.len, match.anys[0]);
             const hm_index = try parseIntBound(line, usize, game.hms.len, match.anys[1]);
             const value = try parseBool(line, match.value);
@@ -432,19 +439,24 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             };
             learnset.* = lu64.init(new);
         },
-        m.case("pokemons[*].evos[*].method"), m.case("pokemons[*].evos[*].param"), m.case("pokemons[*].evos[*].target") => {
+        m.case(".pokemons[*].evos[*].method"),
+        m.case(".pokemons[*].evos[*].param"),
+        m.case(".pokemons[*].evos[*].target"),
+        => {
             const evos_index = try parseIntBound(line, usize, game.evolutions.len, match.anys[0]);
             const evos = &game.evolutions[evos_index];
             const evo_index = try parseIntBound(line, usize, evos.len, match.anys[1]);
             const evo = &evos[evo_index];
             switch (match.case) {
-                m.case("pokemons[*].evos[*].method") => evo.method = try parseEnum(line, common.Evolution.Method, match.value),
-                m.case("pokemons[*].evos[*].param") => evo.param = lu16.init(try parseInt(line, u16, match.value)),
-                m.case("pokemons[*].evos[*].target") => evo.target = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".pokemons[*].evos[*].method") => evo.method = try parseEnum(line, common.Evolution.Method, match.value),
+                m.case(".pokemons[*].evos[*].param") => evo.param = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".pokemons[*].evos[*].target") => evo.target = lu16.init(try parseInt(line, u16, match.value)),
                 else => unreachable,
             }
         },
-        m.case("pokemons[*].moves[*].id"), m.case("pokemons[*].moves[*].level") => {
+        m.case(".pokemons[*].moves[*].id"),
+        m.case(".pokemons[*].moves[*].level"),
+        => {
             const lvl_up_index = try parseIntBound(line, usize, game.level_up_learnset_pointers.len, match.anys[0]);
             const lvl_up_moves = try game.level_up_learnset_pointers[lvl_up_index].toMany(game.data);
             var len: usize = 0;
@@ -455,62 +467,62 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             const move_index = try parseIntBound(line, usize, len, match.anys[1]);
             const move = &lvl_up_moves[move_index];
             switch (match.case) {
-                m.case("pokemons[*].moves[*].id") => move.id = try parseInt(line, u9, match.value),
-                m.case("pokemons[*].moves[*].level") => move.level = try parseInt(line, u7, match.value),
+                m.case(".pokemons[*].moves[*].id") => move.id = try parseInt(line, u9, match.value),
+                m.case(".pokemons[*].moves[*].level") => move.level = try parseInt(line, u7, match.value),
                 else => unreachable,
             }
         },
-        m.case("tms[*]") => {
+        m.case(".tms[*]") => {
             const machine_index = try parseIntBound(line, usize, game.tms.len, match.anys[0]);
             game.tms[machine_index] = lu16.init(try parseInt(line, u16, match.value));
         },
-        m.case("hms[*]") => {
+        m.case(".hms[*]") => {
             const machine_index = try parseIntBound(line, usize, game.hms.len, match.anys[0]);
             game.hms[machine_index] = lu16.init(try parseInt(line, u16, match.value));
         },
 
-        m.case("items[*].id"),
-        m.case("items[*].price"),
-        m.case("items[*].hold_effect"),
-        m.case("items[*].hold_effect_param"),
-        m.case("items[*].importance"),
-        m.case("items[*].pocked"),
-        m.case("items[*].type"),
-        m.case("items[*].battle_usage"),
-        m.case("items[*].secondary_id"),
+        m.case(".items[*].id"),
+        m.case(".items[*].price"),
+        m.case(".items[*].hold_effect"),
+        m.case(".items[*].hold_effect_param"),
+        m.case(".items[*].importance"),
+        m.case(".items[*].pocked"),
+        m.case(".items[*].type"),
+        m.case(".items[*].battle_usage"),
+        m.case(".items[*].secondary_id"),
         => {
             const item_index = try parseIntBound(line, usize, game.items.len, match.anys[0]);
             const item = &game.items[item_index];
             switch (match.case) {
-                m.case("items[*].id") => item.id = lu16.init(try parseInt(line, u16, match.value)),
-                m.case("items[*].price") => item.price = lu16.init(try parseInt(line, u16, match.value)),
-                m.case("items[*].hold_effect") => item.hold_effect = try parseInt(line, u8, match.value),
-                m.case("items[*].hold_effect_param") => item.hold_effect_param = try parseInt(line, u8, match.value),
-                m.case("items[*].importance") => item.importance = try parseInt(line, u8, match.value),
-                m.case("items[*].pocked") => item.pocked = try parseInt(line, u8, match.value),
-                m.case("items[*].type") => item.@"type" = try parseInt(line, u8, match.value),
-                m.case("items[*].battle_usage") => item.battle_usage = lu32.init(try parseInt(line, u8, match.value)),
-                m.case("items[*].secondary_id") => item.secondary_id = lu32.init(try parseInt(line, u32, match.value)),
+                m.case(".items[*].id") => item.id = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".items[*].price") => item.price = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".items[*].hold_effect") => item.hold_effect = try parseInt(line, u8, match.value),
+                m.case(".items[*].hold_effect_param") => item.hold_effect_param = try parseInt(line, u8, match.value),
+                m.case(".items[*].importance") => item.importance = try parseInt(line, u8, match.value),
+                m.case(".items[*].pocked") => item.pocked = try parseInt(line, u8, match.value),
+                m.case(".items[*].type") => item.@"type" = try parseInt(line, u8, match.value),
+                m.case(".items[*].battle_usage") => item.battle_usage = lu32.init(try parseInt(line, u8, match.value)),
+                m.case(".items[*].secondary_id") => item.secondary_id = lu32.init(try parseInt(line, u32, match.value)),
                 else => unreachable,
             }
         },
 
-        m.case("zones[*].wild.land.encounter_rate"),
-        m.case("zones[*].wild.land.pokemons[*].min_level"),
-        m.case("zones[*].wild.land.pokemons[*].max_level"),
-        m.case("zones[*].wild.land.pokemons[*].species"),
-        m.case("zones[*].wild.surf.encounter_rate"),
-        m.case("zones[*].wild.surf.pokemons[*].min_level"),
-        m.case("zones[*].wild.surf.pokemons[*].max_level"),
-        m.case("zones[*].wild.surf.pokemons[*].species"),
-        m.case("zones[*].wild.rock_smash.encounter_rate"),
-        m.case("zones[*].wild.rock_smash.pokemons[*].min_level"),
-        m.case("zones[*].wild.rock_smash.pokemons[*].max_level"),
-        m.case("zones[*].wild.rock_smash.pokemons[*].species"),
-        m.case("zones[*].wild.fishing.encounter_rate"),
-        m.case("zones[*].wild.fishing.pokemons[*].min_level"),
-        m.case("zones[*].wild.fishing.pokemons[*].max_level"),
-        m.case("zones[*].wild.fishing.pokemons[*].species"),
+        m.case(".zones[*].wild.land.encounter_rate"),
+        m.case(".zones[*].wild.land.pokemons[*].min_level"),
+        m.case(".zones[*].wild.land.pokemons[*].max_level"),
+        m.case(".zones[*].wild.land.pokemons[*].species"),
+        m.case(".zones[*].wild.surf.encounter_rate"),
+        m.case(".zones[*].wild.surf.pokemons[*].min_level"),
+        m.case(".zones[*].wild.surf.pokemons[*].max_level"),
+        m.case(".zones[*].wild.surf.pokemons[*].species"),
+        m.case(".zones[*].wild.rock_smash.encounter_rate"),
+        m.case(".zones[*].wild.rock_smash.pokemons[*].min_level"),
+        m.case(".zones[*].wild.rock_smash.pokemons[*].max_level"),
+        m.case(".zones[*].wild.rock_smash.pokemons[*].species"),
+        m.case(".zones[*].wild.fishing.encounter_rate"),
+        m.case(".zones[*].wild.fishing.pokemons[*].min_level"),
+        m.case(".zones[*].wild.fishing.pokemons[*].max_level"),
+        m.case(".zones[*].wild.fishing.pokemons[*].species"),
         => {
             const header_index = try parseIntBound(line, usize, game.wild_pokemon_headers.len, match.anys[0]);
             const header = &game.wild_pokemon_headers[header_index];
@@ -520,7 +532,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 "rock_smash",
                 "fishing",
             }) |area_name| {
-                const pre = "zones[*].wild." ++ area_name;
+                const pre = ".zones[*].wild." ++ area_name;
                 switch (match.case) {
                     m.case(pre ++ ".encounter_rate") => {
                         const area = try @field(header, area_name).toSingle(game.data);
@@ -562,13 +574,12 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
     } else |e| switch (e) {
         error.SyntaxError => {
             var parser = format.Parser.init(format.Tokenizer.init(str));
-            const err = blk: {
-                var r = parser.begin().?;
-                while (true) : (r = parser.next()) switch (r) {
+            const err = done: while (true) {
+                switch (parser.next()) {
                     format.Parser.Result.Ok => {},
-                    format.Parser.Result.Error => |err| break :blk err,
-                };
-            };
+                    format.Parser.Result.Error => |err| break :done err,
+                }
+            } else unreachable;
 
             warning(line, err.found.index(str), "expected ");
             for (err.expected) |id, i| {

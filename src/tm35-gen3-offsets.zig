@@ -103,29 +103,29 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stream: *io.OutStream(os.Fil
         };
 
         const info = try getInfo(data, version, gamecode, game_title);
-        try stream.print("game[{}].game_title={}\n", i, game_title);
-        try stream.print("game[{}].gamecode={}\n", i, gamecode);
-        try stream.print("game[{}].version={}\n", i, @tagName(version));
-        try stream.print("game[{}].trainers.start={}\n", i, info.trainers.start);
-        try stream.print("game[{}].trainers.len={}\n", i, info.trainers.len);
-        try stream.print("game[{}].moves.start={}\n", i, info.moves.start);
-        try stream.print("game[{}].moves.len={}\n", i, info.moves.len);
-        try stream.print("game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
-        try stream.print("game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-        try stream.print("game[{}].base_stats.start={}\n", i, info.machine_learnsets.start);
-        try stream.print("game[{}].base_stats.len={}\n", i, info.machine_learnsets.len);
-        try stream.print("game[{}].evolutions.start={}\n", i, info.evolutions.start);
-        try stream.print("game[{}].evolutions.len={}\n", i, info.evolutions.len);
-        try stream.print("game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
-        try stream.print("game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
-        try stream.print("game[{}].hms.start={}\n", i, info.hms.start);
-        try stream.print("game[{}].hms.len={}\n", i, info.hms.len);
-        try stream.print("game[{}].tms.start={}\n", i, info.tms.start);
-        try stream.print("game[{}].tms.len={}\n", i, info.tms.len);
-        try stream.print("game[{}].items.start={}\n", i, info.items.start);
-        try stream.print("game[{}].items.len={}\n", i, info.items.len);
-        try stream.print("game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
-        try stream.print("game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
+        try stream.print(".game[{}].game_title={}\n", i, game_title);
+        try stream.print(".game[{}].gamecode={}\n", i, gamecode);
+        try stream.print(".game[{}].version={}\n", i, @tagName(version));
+        try stream.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
+        try stream.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
+        try stream.print(".game[{}].moves.start={}\n", i, info.moves.start);
+        try stream.print(".game[{}].moves.len={}\n", i, info.moves.len);
+        try stream.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
+        try stream.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
+        try stream.print(".game[{}].base_stats.start={}\n", i, info.machine_learnsets.start);
+        try stream.print(".game[{}].base_stats.len={}\n", i, info.machine_learnsets.len);
+        try stream.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
+        try stream.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
+        try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
+        try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
+        try stream.print(".game[{}].hms.start={}\n", i, info.hms.start);
+        try stream.print(".game[{}].hms.len={}\n", i, info.hms.len);
+        try stream.print(".game[{}].tms.start={}\n", i, info.tms.start);
+        try stream.print(".game[{}].tms.len={}\n", i, info.tms.len);
+        try stream.print(".game[{}].items.start={}\n", i, info.items.start);
+        try stream.print(".game[{}].items.len={}\n", i, info.items.len);
+        try stream.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
+        try stream.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
     }
 }
 
