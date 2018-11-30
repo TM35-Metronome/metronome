@@ -145,6 +145,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
 
             if (member.species) |s|
                 try stdout.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s);
+            if (member.level) |l|
+                try stdout.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l);
 
             var move_iter = member.moves.iterator();
             while (move_iter.next()) |move_kv| {
@@ -198,13 +200,16 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         ".pokemons[*].moves[*].level",
 
         ".trainers[*].party[*].species",
+        ".trainers[*].party[*].level",
         ".trainers[*].party[*].moves[*]",
 
         ".moves[*].power",
+        ".moves[*].accuracy",
+        ".moves[*].pp",
+        ".moves[*].type",
     });
 
     const match = try m.match(str);
-    const value_str = mem.trim(u8, match.value.str, "\t ");
     return switch (match.case) {
         m.case(".pokemons[*].stats.hp"),
         m.case(".pokemons[*].stats.attack"),
@@ -221,15 +226,15 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             const pokemon = &poke_entry.value;
 
             switch (match.case) {
-                m.case(".pokemons[*].stats.hp") => pokemon.hp = try fmt.parseUnsigned(u8, value_str, 10),
-                m.case(".pokemons[*].stats.attack") => pokemon.attack = try fmt.parseUnsigned(u8, value_str, 10),
-                m.case(".pokemons[*].stats.defense") => pokemon.defense = try fmt.parseUnsigned(u8, value_str, 10),
-                m.case(".pokemons[*].stats.speed") => pokemon.speed = try fmt.parseUnsigned(u8, value_str, 10),
-                m.case(".pokemons[*].stats.sp_attack") => pokemon.sp_attack = try fmt.parseUnsigned(u8, value_str, 10),
-                m.case(".pokemons[*].stats.sp_defense") => pokemon.sp_defense = try fmt.parseUnsigned(u8, value_str, 10),
+                m.case(".pokemons[*].stats.hp") => pokemon.hp = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".pokemons[*].stats.attack") => pokemon.attack = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".pokemons[*].stats.defense") => pokemon.defense = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".pokemons[*].stats.speed") => pokemon.speed = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".pokemons[*].stats.sp_attack") => pokemon.sp_attack = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".pokemons[*].stats.sp_defense") => pokemon.sp_defense = try fmt.parseUnsigned(u8, match.value.str, 10),
                 m.case(".pokemons[*].types[*]") => {
                     // To keep it simple, we just leak a shit ton of type names here.
-                    const type_name = try mem.dupe(allocator, u8, value_str);
+                    const type_name = try mem.dupe(allocator, u8, match.value.str);
                     const by_type_entry = try data.pokemons_by_types.getOrPut(type_name);
                     if (!by_type_entry.found_existing) {
                         by_type_entry.kv.value = std.ArrayList(usize).init(allocator);
@@ -247,8 +252,8 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                     });
                     const move = &move_entry.value;
                     switch (match.case) {
-                        m.case(".pokemons[*].moves[*].id") => move.id = try fmt.parseUnsigned(usize, value_str, 10),
-                        m.case(".pokemons[*].moves[*].level") => move.level = try fmt.parseUnsigned(u8, value_str, 10),
+                        m.case(".pokemons[*].moves[*].id") => move.id = try fmt.parseUnsigned(usize, match.value.str, 10),
+                        m.case(".pokemons[*].moves[*].level") => move.level = try fmt.parseUnsigned(u8, match.value.str, 10),
                         else => unreachable,
                     }
                 },
@@ -258,7 +263,10 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             break :blk true;
         },
 
-        m.case(".trainers[*].party[*].species"), m.case(".trainers[*].party[*].moves[*]") => blk: {
+        m.case(".trainers[*].party[*].species"),
+        m.case(".trainers[*].party[*].level"),
+        m.case(".trainers[*].party[*].moves[*]"),
+        => blk: {
             const trainer_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
             const party_index = try fmt.parseUnsigned(usize, match.anys[1].str, 10);
 
@@ -269,10 +277,11 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             const member = &member_entry.value;
 
             switch (match.case) {
-                m.case(".trainers[*].party[*].species") => member.species = try fmt.parseUnsigned(usize, value_str, 10),
+                m.case(".trainers[*].party[*].species") => member.species = try fmt.parseUnsigned(usize, match.value.str, 10),
+                m.case(".trainers[*].party[*].level") => member.level = try fmt.parseUnsigned(u8, match.value.str, 10),
                 m.case(".trainers[*].party[*].moves[*]") => {
                     const move_index = try fmt.parseUnsigned(usize, match.anys[2].str, 10);
-                    const member_move = try fmt.parseUnsigned(usize, value_str, 10);
+                    const member_move = try fmt.parseUnsigned(usize, match.value.str, 10);
                     _ = try member.moves.put(move_index, member_move);
                 },
                 else => unreachable,
@@ -281,10 +290,27 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             break :blk false;
         },
 
-        m.case(".moves[*].power") => blk: {
+        m.case(".moves[*].power"),
+        m.case(".moves[*].type"),
+        m.case(".moves[*].pp"),
+        m.case(".moves[*].accuracy"),
+        => blk: {
             const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
-            const entry = try data.moves.getOrPutValue(index, Move{ .power = null });
-            entry.value.power = try fmt.parseUnsigned(u8, value_str, 10);
+            const entry = try data.moves.getOrPutValue(index, Move{
+                .power = null,
+                .accuracy = null,
+                .pp = null,
+                .@"type" = null,
+            });
+            const move = &entry.value;
+
+            switch (match.case) {
+                m.case(".moves[*].power") => move.power = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".moves[*].accuracy") => move.accuracy = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".moves[*].pp") => move.pp = try fmt.parseUnsigned(u8, match.value.str, 10),
+                m.case(".moves[*].type") => move.@"type" = try mem.dupe(allocator, u8, match.value.str),
+                else => unreachable,
+            }
 
             break :blk true;
         },
@@ -297,6 +323,24 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
+    const dummy_move: ?usize = blk: {
+        if (!fix_moves)
+            break :blk null;
+
+        var move_iter = data.moves.iterator();
+        var res = move_iter.next() orelse break :blk null;
+        while (move_iter.next()) |move_kv| {
+            if (move_kv.value.pp) |pp| {
+                // If a move has no PP, the it is almost certain that this move is the dummy move
+                // used when party members has less than 4 moves learned.
+                if (pp == 0)
+                    break :blk move_kv.key;
+            }
+        }
+
+        break :blk null;
+    };
+
     var trainer_iter = data.trainers.iterator();
     while (trainer_iter.next()) |trainer_kv| {
         const trainer_i = trainer_kv.key;
@@ -308,26 +352,37 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
         };
 
         var party_iter = trainer.party.iterator();
-        skip: while (party_iter.next()) |party_kv| {
-            const member_i = party_kv.key;
+        while (party_iter.next()) |party_kv| {
             const member = &party_kv.value;
-            const species = member.species orelse continue :skip;
-            const poke_kv = data.pokemons.get(species) orelse continue :skip;
-            const pokemon = poke_kv.value;
+            const old_species = member.species orelse continue;
 
             const new_type = switch (types_op) {
                 TypesOption.same => blk: {
-                    if (pokemon.types.len == 0)
-                        continue :skip;
+                    const pokemon = data.pokemons.get(old_species) orelse {
+                        // If we can't find the prev Pokemons type, then the only thing we can
+                        // do is chose a random one.
+                        break :blk data.types.toSlice()[random.range(usize, 0, data.types.len)];
+                    };
+                    const types = pokemon.value.types;
+                    if (types.len == 0)
+                        continue;
 
-                    break :blk pokemon.types.toSlice()[random.range(usize, 0, pokemon.types.len)];
+                    break :blk types.toSlice()[random.range(usize, 0, types.len)];
                 },
                 TypesOption.random => data.types.toSlice()[random.range(usize, 0, data.types.len)],
                 TypesOption.themed => theme,
             };
 
             const pick_from = data.pokemons_by_types.get(new_type).?.value.toSliceConst();
-            if (simular_total_stats) {
+            if (simular_total_stats) blk: {
+                // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
+                // We therefor just pick a random pokemon and continue.
+                const poke_kv = data.pokemons.get(old_species) orelse {
+                    member.species = pick_from[random.range(usize, 0, pick_from.len)];
+                    break :blk;
+                };
+                const pokemon = poke_kv.value;
+
                 // TODO: We could probably reuse this ArrayList
                 var simular = std.ArrayList(usize).init(allocator);
                 var stats: [Pokemon.stats.len]u8 = undefined;
@@ -351,7 +406,47 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                 member.species = pick_from[random.range(usize, 0, pick_from.len)];
             }
 
-            // TODO: fix_moves
+            if (fix_moves and member.moves.count() != 0) blk: {
+                const pokemon = data.pokemons.get(member.species.?).?.value;
+                const no_move = dummy_move orelse break :blk;
+                const member_lvl = member.level orelse math.maxInt(u8);
+
+                {
+                    // Reset moves
+                    var move_iter = member.moves.iterator();
+                    while (move_iter.next()) |member_move_kv| {
+                        member_move_kv.value = no_move;
+                    }
+                }
+
+                var lvl_move_iter = pokemon.lvl_up_moves.iterator();
+                while (lvl_move_iter.next()) |lvl_up_move| {
+                    const lvl_move_id = lvl_up_move.value.id orelse continue;
+                    const lvl_move_lvl = lvl_up_move.value.level orelse 0;
+                    const lvl_move = data.moves.get(lvl_move_id) orelse continue;
+                    const lvl_move_r = RelativeMove.from(pokemon, lvl_move.value);
+
+                    if (member_lvl < lvl_move_lvl)
+                        continue;
+
+                    var move_iter = member.moves.iterator();
+                    var weakest = move_iter.next().?;
+                    while (move_iter.next()) |member_move_kv| {
+                        const weakest_move = data.moves.get(weakest.value) orelse continue;
+                        const weakest_move_r = RelativeMove.from(pokemon, weakest_move.value);
+                        const member_move = data.moves.get(member_move_kv.value) orelse continue;
+                        const member_move_r = RelativeMove.from(pokemon, member_move.value);
+
+                        if (member_move_r.lessThan(weakest_move_r))
+                            weakest = member_move_kv;
+                    }
+
+                    const weakest_move = data.moves.get(weakest.value) orelse continue;
+                    const weakest_move_r = RelativeMove.from(pokemon, weakest_move.value);
+                    if (weakest_move_r.lessThan(lvl_move_r))
+                        weakest.value = lvl_move_id;
+                }
+            }
         }
     }
 }
@@ -398,11 +493,13 @@ const Trainer = struct {
 
 const PartyMember = struct {
     species: ?usize,
+    level: ?u8,
     moves: MemberMoves,
 
     fn init(allocator: *mem.Allocator) PartyMember {
         return PartyMember{
             .species = null,
+            .level = null,
             .moves = MemberMoves.init(allocator),
         };
     }
@@ -415,6 +512,45 @@ const LvlUpMove = struct {
 
 const Move = struct {
     power: ?u8,
+    accuracy: ?u8,
+    pp: ?u8,
+    @"type": ?[]const u8,
+};
+
+// Represents a moves power in relation to the pokemon who uses it
+const RelativeMove = struct {
+    power: u8,
+    accuracy: u8,
+    pp: u8,
+
+    fn from(p: Pokemon, m: Move) RelativeMove {
+        return RelativeMove{
+            .power = blk: {
+                const power = @intToFloat(f32, m.power orelse 0);
+                const stab = for (p.types.toSlice()) |t1| {
+                    const t2 = m.@"type" orelse continue;
+                    if (mem.eql(u8, t1, t2))
+                        break f32(1.5);
+                } else f32(1.0);
+
+                break :blk math.cast(u8, @floatToInt(u64, power * stab)) catch math.maxInt(u8);
+            },
+            .accuracy = m.accuracy orelse 0,
+            .pp = m.pp orelse 0,
+        };
+    }
+
+    fn lessThan(a: RelativeMove, b: RelativeMove) bool {
+        if (a.power < b.power)
+            return true;
+        if (a.power > b.power)
+            return false;
+        if (a.accuracy < b.accuracy)
+            return true;
+        if (a.accuracy > b.accuracy)
+            return false;
+        return a.pp < b.pp;
+    }
 };
 
 const Pokemon = struct {
