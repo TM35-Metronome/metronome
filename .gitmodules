@@ -7,3 +7,6 @@
 [submodule "lib/tm35-format"]
 	path = lib/tm35-format
 	url = https://github.com/TM35-Metronome/tm35-format.git
+[submodule "lib/tm35-common"]
+	path = lib/tm35-common
+	url = https://github.com/TM35-Metronome/tm35-common.git
