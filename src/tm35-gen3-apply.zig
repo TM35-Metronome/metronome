@@ -89,7 +89,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
         return try usage(stdout);
 
     const file_name = if (args.positionals().len > 0) args.positionals()[0] else {
-        debug.warn("No file provided.");
+        debug.warn("No file provided");
         return try usage(stderr);
     };
 
@@ -102,7 +102,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
 
     var game = blk: {
         var file = os.File.openRead(file_name) catch |err| {
-            debug.warn("Couldn't open {}.\n", file_name);
+            debug.warn("Couldn't open {}\n", file_name);
             return err;
         };
         defer file.close();
@@ -118,12 +118,16 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
         apply(game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch {};
         line_buf.shrink(0);
     } else |err| switch (err) {
-        error.EndOfStream => {},
+        error.EndOfStream => {
+            const str = mem.trim(u8, line_buf.toSlice(), " \t");
+            if (str.len != 0)
+                warning(line, 1, "none empty last line\n");
+        },
         else => return err,
     }
 
     var out_file = os.File.openWrite(out) catch |err| {
-        debug.warn("Couldn't open {}.\n", out);
+        debug.warn("Couldn't open {}\n", out);
         return err;
     };
     defer out_file.close();
