@@ -131,7 +131,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
     defer arena.deinit();
 
     const data = try readData(&arena.allocator, stdin, stdout);
-    randomize(data, seed, fix_moves, simular_total_stats, types);
+    try randomize(data, seed, fix_moves, simular_total_stats, types);
 
     var trainer_iter = data.trainers.iterator();
     while (trainer_iter.next()) |trainer_kv| {
@@ -239,8 +239,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                     try pokemon.types.append(type_name);
                     try by_type_entry.kv.value.append(poke_index);
                 },
-                m.case(".pokemons[*].moves[*].id"),
-                m.case(".pokemons[*].moves[*].level") => {
+                m.case(".pokemons[*].moves[*].id"), m.case(".pokemons[*].moves[*].level") => {
                     const move_index = try fmt.parseUnsigned(usize, match.anys[1].str, 10);
                     const move_entry = try pokemon.lvl_up_moves.getOrPutValue(move_index, LvlUpMove{
                         .level = null,
@@ -259,8 +258,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             break :blk true;
         },
 
-        m.case(".trainers[*].party[*].species"),
-        m.case(".trainers[*].party[*].moves[*]") => blk: {
+        m.case(".trainers[*].party[*].species"), m.case(".trainers[*].party[*].moves[*]") => blk: {
             const trainer_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
             const party_index = try fmt.parseUnsigned(usize, match.anys[1].str, 10);
 
@@ -285,7 +283,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
         m.case(".moves[*].power") => blk: {
             const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
-            const entry = try data.moves.getOrPutValue(index, Move{.power = null});
+            const entry = try data.moves.getOrPutValue(index, Move{ .power = null });
             entry.value.power = try fmt.parseUnsigned(u8, value_str, 10);
 
             break :blk true;
@@ -294,7 +292,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     };
 }
 
-fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, types_op: TypesOption) void {
+fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, types_op: TypesOption) !void {
     const allocator = data.pokemons.allocator;
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
@@ -328,9 +326,30 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                 TypesOption.themed => theme,
             };
 
-            // TODO: simular_total_stats
             const pick_from = data.pokemons_by_types.get(new_type).?.value.toSliceConst();
-            member.species = pick_from[random.range(usize, 0, pick_from.len)];
+            if (simular_total_stats) {
+                // TODO: We could probably reuse this ArrayList
+                var simular = std.ArrayList(usize).init(allocator);
+                var stats: [Pokemon.stats.len]u8 = undefined;
+                var min = @intCast(i64, sum(u8, pokemon.toBuf(&stats)));
+                var max = min;
+
+                while (simular.len < 5) {
+                    min -= 5;
+                    max += 5;
+
+                    for (pick_from) |s| {
+                        const p = data.pokemons.get(s).?.value;
+                        const total = @intCast(i64, sum(u8, p.toBuf(&stats)));
+                        if (min <= total and total <= max)
+                            try simular.append(s);
+                    }
+                }
+
+                member.species = simular.toSlice()[random.range(usize, 0, simular.len)];
+            } else {
+                member.species = pick_from[random.range(usize, 0, pick_from.len)];
+            }
 
             // TODO: fix_moves
         }
@@ -373,9 +392,7 @@ const Trainer = struct {
     party: Party,
 
     fn init(allocator: *mem.Allocator) Trainer {
-        return Trainer{
-            .party = Party.init(allocator),
-        };
+        return Trainer{ .party = Party.init(allocator) };
     }
 };
 
