@@ -138,12 +138,7 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
 
         line_buf.shrink(0);
     } else |err| switch (err) {
-        error.EndOfStream => {
-            const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-            const print_line = parseLine(&res, str) catch true;
-            if (print_line)
-                try out_stream.print("{}\n", str);
-        },
+        error.EndOfStream => {},
         else => return err,
     }
 
