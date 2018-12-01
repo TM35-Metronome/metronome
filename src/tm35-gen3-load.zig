@@ -13,6 +13,8 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
+const BufInStream = io.BufferedInStream(os.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
@@ -38,12 +40,11 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stdout_file = std.io.getStdOut() catch return 1;
-    const stderr_file = std.io.getStdErr() catch return 1;
-    var stdout_out_stream = stdout_file.outStream();
-    var stderr_out_stream = stderr_file.outStream();
-    const stdout = &stdout_out_stream.stream;
-    const stderr = &stderr_out_stream.stream;
+    const unbuf_stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+
+    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
+    const stdout = &buf_stdout.stream;
 
     var direct_allocator_state = std.heap.DirectAllocator.init();
     const direct_allocator = &direct_allocator_state.allocator;
@@ -75,12 +76,11 @@ pub fn main() u8 {
         break :blk poss[0];
     };
 
-    var buf_out_stream = io.BufferedOutStream(os.File.OutStream.Error).init(stdout);
-    main2(allocator, args, file_name, &buf_out_stream.stream) catch |err| {
+    main2(allocator, args, file_name, stdout) catch |err| {
         debug.warn("error: {}\n", err);
         return 1;
     };
-    buf_out_stream.flush() catch |err| {
+    buf_stdout.flush() catch |err| {
         debug.warn("error: {}\n", err);
         return 1;
     };

@@ -20,6 +20,8 @@ const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 
+const BufInStream = io.BufferedInStream(os.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
@@ -48,17 +50,12 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stdin_file = std.io.getStdIn() catch return 1;
-    const stderr_file = std.io.getStdErr() catch return 1;
-    const stdout_file = std.io.getStdOut() catch return 1;
-    var stdin_in_stream = stdin_file.inStream();
-    var stderr_out_stream = stderr_file.outStream();
-    var stdout_out_stream = stdout_file.outStream();
-    var buf_in_stream = io.BufferedInStream(os.File.InStream.Error).init(&stdin_in_stream.stream);
+    const unbuf_stdin = &(std.io.getStdIn() catch return 1).inStream().stream;
+    var buf_stdin = BufInStream.init(unbuf_stdin);
 
-    const stderr = &stderr_out_stream.stream;
-    const stdout = &stdout_out_stream.stream;
-    const stdin = &buf_in_stream.stream;
+    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
+    const stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
+    const stdin = &buf_stdin.stream;
 
     var direct_allocator_state = std.heap.DirectAllocator.init();
     const direct_allocator = &direct_allocator_state.allocator;
