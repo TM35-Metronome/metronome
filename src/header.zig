@@ -222,9 +222,11 @@ pub const Header = packed struct {
         if (!slice.all(gamecode[0..], ascii.isUpper))
             return error.InvalidGamecode;
 
-        const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        if (!slice.all(makercode, ascii.isUpper))
-            return error.InvalidMakercode;
+        // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
+        //       ascii numbers.
+        //const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
+        //if (!slice.all(makercode, ascii.isUpper))
+        //    return error.InvalidMakercode;
 
         if (header.unitcode > 0x03)
             return error.InvalidUnitcode;
