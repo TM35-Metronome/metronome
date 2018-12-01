@@ -58,7 +58,7 @@ pub const Info = struct {
     trainers: TrainerSection,
     moves: MoveSection,
     machine_learnsets: MachineLearnsetSection,
-    base_stats: BaseStatsSection,
+    pokemons: BaseStatsSection,
     evolutions: EvolutionSection,
     level_up_learnset_pointers: LevelUpLearnsetPointerSection,
     hms: HmSection,
@@ -91,7 +91,7 @@ const emerald_us_info = Info{
         .start = 0x0031E898,
         .len = 412,
     },
-    .base_stats = BaseStatsSection{
+    .pokemons = BaseStatsSection{
         .start = 0x003203CC,
         .len = 412,
     },
@@ -137,7 +137,7 @@ pub const ruby_us_info = Info{
         .start = 0x001FD108,
         .len = 412,
     },
-    .base_stats = BaseStatsSection{
+    .pokemons = BaseStatsSection{
         .start = 0x001FEC30,
         .len = 412,
     },
@@ -183,7 +183,7 @@ pub const sapphire_us_info = Info{
         .start = 0x001FD098,
         .len = 412,
     },
-    .base_stats = BaseStatsSection{
+    .pokemons = BaseStatsSection{
         .start = 0x001FEBC0,
         .len = 412,
     },
@@ -229,7 +229,7 @@ pub const fire_us_info = Info{
         .start = 0x00252C38,
         .len = 412,
     },
-    .base_stats = BaseStatsSection{
+    .pokemons = BaseStatsSection{
         .start = 0x002547F4,
         .len = 412,
     },
@@ -275,7 +275,7 @@ pub const leaf_us_info = Info{
         .start = 0x00252C14,
         .len = 412,
     },
-    .base_stats = BaseStatsSection{
+    .pokemons = BaseStatsSection{
         .start = 0x002547D0,
         .len = 412,
     },

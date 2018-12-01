@@ -112,8 +112,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stream: *io.OutStream(os.Fil
         try stream.print(".game[{}].moves.len={}\n", i, info.moves.len);
         try stream.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
         try stream.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-        try stream.print(".game[{}].base_stats.start={}\n", i, info.machine_learnsets.start);
-        try stream.print(".game[{}].base_stats.len={}\n", i, info.machine_learnsets.len);
+        try stream.print(".game[{}].pokemons.start={}\n", i, info.machine_learnsets.start);
+        try stream.print(".game[{}].pokemons.len={}\n", i, info.machine_learnsets.len);
         try stream.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
         try stream.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
         try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
@@ -154,13 +154,6 @@ fn getVersion(gamecode: []const u8) !common.Version {
     return error.UnknownPokemonVersion;
 }
 
-fn dumpSection(sec: var) void {
-    debug.warn("{{\n");
-    debug.warn("        .start = 0x{X8},\n", sec.start);
-    debug.warn("        .len = {},\n", sec.len);
-    debug.warn("    }},\n");
-}
-
 pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_title: [12]u8) !offsets.Info {
     const trainer_searcher = Searcher(gen3.Trainer, [][]const []const u8{
         [][]const u8{ "party" },
@@ -194,14 +187,14 @@ pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_
         last_machine_learnsets,
     ) orelse return error.UnableToFindTmHmLearnsetOffset;
 
-    const base_stats_searcher = Searcher(gen3.BasePokemon, [][]const []const u8{
+    const pokemons_searcher = Searcher(gen3.BasePokemon, [][]const []const u8{
         [][]const u8{ "padding" },
         [][]const u8{ "egg_group1_pad" },
         [][]const u8{ "egg_group2_pad" },
     }).init(data);
-    const base_stats = base_stats_searcher.findSlice3(
-        first_base_stats,
-        last_base_stats,
+    const pokemons = pokemons_searcher.findSlice3(
+        first_pokemons,
+        last_pokemons,
     ) orelse return error.UnableToFindBaseStatsOffset;
 
     const evolution_searcher = Searcher([5]common.Evolution, [][]const []const u8{
@@ -295,7 +288,7 @@ pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_
         .trainers = offsets.TrainerSection.init(data, trainers),
         .moves = offsets.MoveSection.init(data, moves),
         .machine_learnsets = offsets.MachineLearnsetSection.init(data, machine_learnset),
-        .base_stats = offsets.BaseStatsSection.init(data, base_stats),
+        .pokemons = offsets.BaseStatsSection.init(data, pokemons),
         .evolutions = offsets.EvolutionSection.init(data, evolution_table),
         .level_up_learnset_pointers = offsets.LevelUpLearnsetPointerSection.init(data, level_up_learnset_pointers),
         .hms = offsets.HmSection.init(data, hms_slice),
@@ -504,7 +497,7 @@ pub const last_machine_learnsets = []lu64{
     lu64.init(0x00419f03b41b8e28), // Chimecho
 };
 
-pub const first_base_stats = []gen3.BasePokemon{
+pub const first_pokemons = []gen3.BasePokemon{
     // Dummy
     gen3.BasePokemon{
         .stats = common.Stats{
@@ -601,7 +594,7 @@ pub const first_base_stats = []gen3.BasePokemon{
     },
 };
 
-pub const last_base_stats = []gen3.BasePokemon{
+pub const last_pokemons = []gen3.BasePokemon{
 // Chimecho
 gen3.BasePokemon{
     .stats = common.Stats{

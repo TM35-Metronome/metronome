@@ -175,7 +175,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
         try stream.print(".moves[{}].flags={}\n", i, move.flags.value());
     }
 
-    for (game.base_stats) |pokemon, i| {
+    for (game.pokemons) |pokemon, i| {
         try stream.print(".pokemons[{}].stats.hp={}\n", i, pokemon.stats.hp);
         try stream.print(".pokemons[{}].stats.attack={}\n", i, pokemon.stats.attack);
         try stream.print(".pokemons[{}].stats.defense={}\n", i, pokemon.stats.defense);

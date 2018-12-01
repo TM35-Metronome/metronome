@@ -287,7 +287,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                     switch (match.case) {
                         m.case(".trainers[*].party[*].iv") => base.iv = lu16.init(try parseInt(line, u16, match.value)),
                         m.case(".trainers[*].party[*].level") => base.level = lu16.init(try parseInt(line, u16, match.value)),
-                        m.case(".trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.base_stats.len, match.value)),
+                        m.case(".trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.pokemons.len, match.value)),
                         m.case(".trainers[*].party[*].item") => success: {
                             inline for ([][]const u8{ "Item", "Both" }) |kind| {
                                 if (trainer.party_type == @field(gen3.PartyType, kind)) {
@@ -372,8 +372,8 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         m.case(".pokemons[*].color"),
         m.case(".pokemons[*].flip"),
         => {
-            const pokemon_index = try parseIntBound(line, usize, game.base_stats.len, match.anys[0]);
-            const pokemon = &game.base_stats[pokemon_index];
+            const pokemon_index = try parseIntBound(line, usize, game.pokemons.len, match.anys[0]);
+            const pokemon = &game.pokemons[pokemon_index];
             switch (match.case) {
                 m.case(".pokemons[*].stats.hp") => pokemon.stats.hp = try parseInt(line, u8, match.value),
                 m.case(".pokemons[*].stats.attack") => pokemon.stats.attack = try parseInt(line, u8, match.value),
