@@ -13,6 +13,8 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 
+const BufInStream = io.BufferedInStream(os.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
