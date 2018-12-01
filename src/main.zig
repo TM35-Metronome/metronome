@@ -59,18 +59,15 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stdin_file = std.io.getStdIn() catch return 1;
-    const stderr_file = std.io.getStdErr() catch return 1;
-    const stdout_file = std.io.getStdOut() catch return 1;
-    var stdin_stream = stdin_file.inStream();
-    var stderr_stream = stderr_file.outStream();
-    var stdout_stream = stdout_file.outStream();
-    var buf_stdin = io.BufferedInStream(os.File.InStream.Error).init(&stdin_stream.stream);
-    var buf_stdout = io.BufferedOutStream(os.File.OutStream.Error).init(&stdout_stream.stream);
+    const unbuf_stdin = &(std.io.getStdIn() catch return 1).inStream().stream;
+    const unbuf_stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
 
+    var buf_stdin = BufInStream.init(unbuf_stdin);
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+
+    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
     const stdin = &buf_stdin.stream;
     const stdout = &buf_stdout.stream;
-    const stderr = &stderr_stream.stream;
 
     var direct_allocator_state = std.heap.DirectAllocator.init();
     const direct_allocator = &direct_allocator_state.allocator;
