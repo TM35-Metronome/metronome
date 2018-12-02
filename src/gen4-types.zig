@@ -1,8 +1,9 @@
-const std = @import("std");
-const pokemon = @import("index.zig");
-const nds = @import("tm35-nds");
 const common = @import("tm35-common");
 const fun = @import("fun-with-zig");
+const offsets = @import("gen4-offsets.zig");
+const nds = @import("tm35-nds");
+const pokemon = @import("index.zig");
+const std = @import("std");
 
 const mem = std.mem;
 
@@ -17,7 +18,7 @@ pub const BasePokemon = packed struct {
     catch_rate: u8,
     base_exp_yield: u8,
 
-    evs: common.EvYield,
+    ev_yield: common.EvYield,
     items: [2]lu16,
 
     gender_ratio: u8,
@@ -48,10 +49,10 @@ pub const MoveTutor = packed struct {
 };
 
 pub const PartyType = enum(u8) {
-    None: 0b00,
-    Item: 0b10,
-    Moves: 0b01,
-    Both: 0b00,
+    None = 0b00,
+    Item = 0b10,
+    Moves = 0b01,
+    Both = 0b11,
 };
 
 pub const PartyMemberBase = packed struct {
@@ -111,6 +112,7 @@ pub const Type = enum(u8) {
     Bug = 0x06,
     Ghost = 0x07,
     Steel = 0x08,
+    Unknown = 0x09,
     Fire = 0x0A,
     Water = 0x0B,
     Grass = 0x0C,
@@ -170,8 +172,8 @@ pub const DpptWildPokemons = packed struct {
     };
 
     pub const Sea = packed struct {
-        level_max: u8,
-        level_min: u8,
+        min_level: u8,
+        max_level: u8,
         pad1: [2]u8,
         species: lu16,
         pad2: [2]u8,
@@ -200,8 +202,8 @@ pub const HgssWildPokemons = packed struct {
     swarm: [4]lu16,
 
     pub const Sea = packed struct {
-        level_min: u8,
-        level_max: u8,
+        min_level: u8,
+        max_level: u8,
         species: lu16,
     };
 };
@@ -214,31 +216,31 @@ pub const Game = struct {
     trainers: *const nds.fs.Narc,
     parties: *const nds.fs.Narc,
     wild_pokemons: *const nds.fs.Narc,
-    tms: []align(1) lu16,
-    hms: []align(1) lu16,
+    tms: []lu16,
+    hms: []lu16,
 
     pub fn fromRom(rom: nds.Rom) !Game {
         const info = try getInfo(rom.header.game_title, rom.header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
-        const hm_tms_len = (constants.tm_count + constants.hm_count) * @sizeOf(u16);
+        const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = @bytesToSlice(lu16, rom.arm9[hm_tm_index..][0..hm_tms_len]);
 
         return Game{
             .version = info.version,
-            .base_stats = try common.getNarc(rom.root, info.base_stats),
-            .level_up_moves = try common.getNarc(rom.root, info.level_up_moves),
-            .moves = try common.getNarc(rom.root, info.moves),
-            .trainers = try common.getNarc(rom.root, info.trainers),
-            .parties = try common.getNarc(rom.root, info.parties),
-            .pokemons = try common.getNarc(rom.root, info.pokemons),
+            .pokemons = try getNarc(rom.root, info.pokemons),
+            .level_up_moves = try getNarc(rom.root, info.level_up_moves),
+            .moves = try getNarc(rom.root, info.moves),
+            .trainers = try getNarc(rom.root, info.trainers),
+            .parties = try getNarc(rom.root, info.parties),
+            .wild_pokemons = try getNarc(rom.root, info.wild_pokemons),
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
         };
     }
 
-    fn getInfo(game_title: []const u8, gamecode: []const u8) !constants.Info {
-        for (constants.infos) |info| {
+    fn getInfo(game_title: []const u8, gamecode: []const u8) !offsets.Info {
+        for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))
             //    continue;
             if (!mem.eql(u8, info.gamecode, gamecode))
@@ -248,5 +250,15 @@ pub const Game = struct {
         }
 
         return error.NotGen4Game;
+    }
+
+    pub fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
+        const file = file_system.getFile(path) orelse return error.FileNotFound;
+
+        const Tag = @TagType(nds.fs.Nitro.File);
+        switch (file.*) {
+            Tag.Binary => return error.FileNotNarc,
+            Tag.Narc => |res| return res,
+        }
     }
 };

@@ -107,7 +107,9 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
     const game = try gen4.Game.fromRom(rom);
 
     try stream.print(".version={}\n", @tagName(game.version));
-    try stream.print(".game_title={}\n", rom.header.game_title);
+
+    const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
+    try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
     try stream.print(".gamecode={}\n", rom.header.gamecode);
 
     for (game.trainers.nodes.toSlice()) |node, i| {
@@ -150,7 +152,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                     const member = getMember(gen4.PartyMemberMoves, party_data, game.version, j) orelse break;
                     try printMemberBase(stream, i, j, member.base);
                     for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves={}\n", i, j, k, move.value());
+                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
                 }
             },
@@ -161,7 +163,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                     try printMemberBase(stream, i, j, member.base);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                     for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves={}\n", i, j, k, move.value());
+                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
                 }
             },
@@ -176,20 +178,162 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
         try stream.print(".moves[{}].accuracy={}\n", i, move.accuracy);
         try stream.print(".moves[{}].pp={}\n", i, move.pp);
     }
+
+    for (game.pokemons.nodes.toSlice()) |node, i| {
+        const pokemon = nodeAsType(gen4.BasePokemon, node) catch continue;
+        try stream.print(".pokemons[{}].stats.hp={}\n", i, pokemon.stats.hp);
+        try stream.print(".pokemons[{}].stats.attack={}\n", i, pokemon.stats.attack);
+        try stream.print(".pokemons[{}].stats.defense={}\n", i, pokemon.stats.defense);
+        try stream.print(".pokemons[{}].stats.speed={}\n", i, pokemon.stats.speed);
+        try stream.print(".pokemons[{}].stats.sp_attack={}\n", i, pokemon.stats.sp_attack);
+        try stream.print(".pokemons[{}].stats.sp_defense={}\n", i, pokemon.stats.sp_defense);
+
+        for (pokemon.types) |t, j| {
+            try stream.print(".pokemons[{}].types[{}]={}\n", i, j, @tagName(t));
+        }
+
+        try stream.print(".pokemons[{}].catch_rate={}\n", i, pokemon.catch_rate);
+        try stream.print(".pokemons[{}].base_exp_yield={}\n", i, pokemon.base_exp_yield);
+        try stream.print(".pokemons[{}].ev_yield.hp={}\n", i, pokemon.ev_yield.hp);
+        try stream.print(".pokemons[{}].ev_yield.attack={}\n", i, pokemon.ev_yield.attack);
+        try stream.print(".pokemons[{}].ev_yield.defense={}\n", i, pokemon.ev_yield.defense);
+        try stream.print(".pokemons[{}].ev_yield.speed={}\n", i, pokemon.ev_yield.speed);
+        try stream.print(".pokemons[{}].ev_yield.sp_attack={}\n", i, pokemon.ev_yield.sp_attack);
+        try stream.print(".pokemons[{}].ev_yield.sp_defense={}\n", i, pokemon.ev_yield.sp_defense);
+
+        for (pokemon.items) |item, j| {
+            try stream.print(".pokemons[{}].items[{}]={}\n", i, j, item.value());
+        }
+
+        try stream.print(".pokemons[{}].gender_ratio={}\n", i, pokemon.gender_ratio);
+        try stream.print(".pokemons[{}].egg_cycles={}\n", i, pokemon.egg_cycles);
+        try stream.print(".pokemons[{}].base_friendship={}\n", i, pokemon.base_friendship);
+        try stream.print(".pokemons[{}].growth_rate={}\n", i, @tagName(pokemon.growth_rate));
+        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", i, usize(0), @tagName(pokemon.egg_group1));
+        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", i, usize(1), @tagName(pokemon.egg_group2));
+
+        for (pokemon.abilities) |ability, j| {
+            try stream.print(".pokemons[{}].abilities[{}]={}\n", i, j, ability);
+        }
+
+        try stream.print(".pokemons[{}].flee_rate={}\n", i, pokemon.flee_rate);
+        try stream.print(".pokemons[{}].color={}\n", i, @tagName(pokemon.color));
+        {
+            const machine_learnset = pokemon.machine_learnset.value();
+            var j: usize = 0;
+            while (j < game.tms.len) : (j += 1) {
+                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+            }
+            while (j < game.tms.len + game.hms.len) : (j += 1) {
+                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+            }
+        }
+    }
+
+    for (game.tms) |tm, i| {
+        try stream.print(".tms[{}]={}\n", i, tm.value());
+    }
+
+    for (game.hms) |hm, i| {
+        try stream.print(".hms[{}]={}\n", i, hm.value());
+    }
+
+    for (game.wild_pokemons.nodes.toSlice()) |node, i|
+        switch (game.version) {
+        common.Version.Diamond,
+        common.Version.Pearl,
+        common.Version.Platinum,
+        => {
+            const wild_mons = nodeAsType(gen4.DpptWildPokemons, node) catch continue;
+
+            try stream.print(".zones[{}].wild.grass.encounter_rate={}\n", i, wild_mons.grass_rate.value());
+            for (wild_mons.grass) |grass, j| {
+                try stream.print(".zones[{}].wild.grass.pokemons[{}].min_level={}\n", i, j, grass.level);
+                try stream.print(".zones[{}].wild.grass.pokemons[{}].max_level={}\n", i, j, grass.level);
+                try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", i, j, grass.species.value());
+            }
+
+            inline for ([][]const u8{
+                "swarm_replacements",
+                "day_replacements",
+                "night_replacements",
+                "radar_replacements",
+                "unknown_replacements",
+                "gba_replacements",
+            }) |area_name| {
+                for (@field(wild_mons, area_name)) |replacement, k| {
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, replacement.species.value());
+                }
+            }
+
+            inline for ([][]const u8{
+                "surf",
+                "sea_unknown",
+                "old_rod",
+                "good_rod",
+                "super_rod",
+            }) |area_name| {
+                for (@field(wild_mons, area_name)) |sea, k| {
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
+                }
+            }
+        },
+
+        common.Version.HeartGold,
+        common.Version.SoulSilver,
+        => {
+            const wild_mons = nodeAsType(gen4.HgssWildPokemons, node) catch continue;
+            inline for ([][]const u8{
+                "grass_morning",
+                "grass_day",
+                "grass_night",
+            }) |area_name| {
+                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", i, area_name, wild_mons.grass_rate);
+                for (@field(wild_mons, area_name)) |species, j| {
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, j, species.value());
+                }
+            }
+
+            inline for ([][]const u8{
+                "surf",
+                "sea_unknown",
+                "old_rod",
+                "good_rod",
+                "super_rod",
+            }) |area_name, j| {
+                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", i, area_name, wild_mons.sea_rates[j]);
+                for (@field(wild_mons, area_name)) |sea, k| {
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
+                }
+            }
+
+            // TODO: radio, swarm
+        },
+
+        else => unreachable,
+    };
 }
 
 fn printMemberBase(stream: var, i: usize, j: usize, member: gen4.PartyMemberBase) !void {
-    try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.base.iv);
-    try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, member.base.gender);
-    try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, member.base.ability);
-    try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
-    try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.base.species);
-    try stream.print(".trainers[{}].party[{}].form={}\n", i, j, member.base.form);
+    try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.iv);
+    try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, member.gender);
+    try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, member.ability);
+    try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.level.value());
+    try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.species);
+    try stream.print(".trainers[{}].party[{}].form={}\n", i, j, member.form);
 }
 
 fn getMember(comptime T: type, data: []const u8, version: common.Version, i: usize) ?T {
     switch (version) {
-        Diamond, Pearl => blk: {
+        common.Version.Diamond,
+        common.Version.Pearl,
+        => {
             const party = slice.bytesToSliceTrim(T, data);
             if (party.len <= i)
                 return null;
@@ -197,13 +341,18 @@ fn getMember(comptime T: type, data: []const u8, version: common.Version, i: usi
             return party[i];
         },
 
-        Platinum, HeartGold, SoulSilver => blk: {
-            const party = slice.bytesToSliceTrim(gen4.HgSsPlatMember(T), file.data);
+        common.Version.Platinum,
+        common.Version.HeartGold,
+        common.Version.SoulSilver,
+        => {
+            const party = slice.bytesToSliceTrim(gen4.HgSsPlatMember(T), data);
             if (party.len <= i)
                 return null;
 
             return party[i].member;
         },
+
+        else => unreachable,
     }
 }
 
