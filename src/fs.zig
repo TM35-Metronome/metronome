@@ -64,9 +64,7 @@ pub fn Folder(comptime TFile: type) type {
 
         /// Deinitialize and free the filesystem.
         pub fn destroy(folder: *Self) void {
-            const a = folder.allocator();
             folder.deinit();
-            a.destroy(folder);
         }
 
         pub fn init(a: *mem.Allocator) Self {
@@ -78,8 +76,9 @@ pub fn Folder(comptime TFile: type) type {
         }
 
         pub fn deinit(folder: *Self) void {
+            const parent = folder.parent;
             var curr: ?*Self = folder;
-            while (curr != folder.parent) {
+            while (curr != parent) {
                 const f = curr.?;
                 const a = f.allocator();
                 if (f.nodes.popOrNull()) |node| {
@@ -98,8 +97,8 @@ pub fn Folder(comptime TFile: type) type {
                     f.indexs.deinit();
                     f.nodes.deinit();
                     curr = f.parent;
-                    a.destroy(f);
                     f.* = undefined;
+                    a.destroy(f);
                 }
             }
         }

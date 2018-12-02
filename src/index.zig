@@ -72,11 +72,16 @@ pub const Rom = struct {
         const arm9 = blk: {
             try file.seekTo(header.arm9_rom_offset.value());
             const raw = try allocator.alloc(u8, header.arm9_size.value());
-            defer allocator.free(raw);
+            errdefer allocator.free(raw);
 
             try stream.readNoEof(raw);
-            // If blz.decode failes, we assume that the arm9 is not encoded and just use the raw data
-            break :blk blz.decode(raw, allocator) catch raw;
+            if (blz.decode(raw, allocator)) |decoded| {
+                allocator.free(raw);
+                break :blk decoded;
+            } else |_| {
+                // If blz.decode failes, we assume that the arm9 is not encoded and just use the raw data
+                break :blk raw;
+            }
         };
         errdefer allocator.free(arm9);
         const nitro_footer = blk: {
