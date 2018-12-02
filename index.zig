@@ -93,6 +93,7 @@ pub const Color = enum(u7) {
     Gray = 0x07,
     White = 0x08,
     Pink = 0x09,
+    Unknown = 0x0A,
 };
 
 // TODO: Figure out if the this have the same layout in all games that have it.
