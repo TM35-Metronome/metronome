@@ -241,11 +241,6 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         m.case(".trainers[*].items[*]"),
         m.case(".trainers[*].is_double"),
         m.case(".trainers[*].ai"),
-        m.case(".trainers[*].party[*].iv"),
-        m.case(".trainers[*].party[*].level"),
-        m.case(".trainers[*].party[*].species"),
-        m.case(".trainers[*].party[*].item"),
-        m.case(".trainers[*].party[*].moves[*]"),
         => {
             const trainer_index = try parseIntBound(line, usize, game.trainers.len, match.anys[0]);
             const trainer = &game.trainers[trainer_index];
@@ -261,48 +256,60 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                     const value = try parseIntBound(line, u16, game.items.len, match.value);
                     trainer.items[index] = lu16.init(value);
                 },
-                m.case(".trainers[*].party[*].iv"),
-                m.case(".trainers[*].party[*].level"),
-                m.case(".trainers[*].party[*].species"),
-                m.case(".trainers[*].party[*].item"),
-                m.case(".trainers[*].party[*].moves[*]"),
-                => {
-                    const party_index = try parseIntBound(line, usize, trainer.partyLen(), match.anys[1]);
-                    const base = try trainer.partyAt(party_index, game.data);
-                    switch (match.case) {
-                        m.case(".trainers[*].party[*].iv") => base.iv = lu16.init(try parseInt(line, u16, match.value)),
-                        m.case(".trainers[*].party[*].level") => base.level = lu16.init(try parseInt(line, u16, match.value)),
-                        m.case(".trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.pokemons.len, match.value)),
-                        m.case(".trainers[*].party[*].item") => success: {
-                            inline for ([][]const u8{ "Item", "Both" }) |kind| {
-                                if (trainer.party_type == @field(gen3.PartyType, kind)) {
-                                    const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
-                                    const value = try parseIntBound(line, u16, game.items.len, match.value);
-                                    member.item = lu16.init(value);
-                                    break :success;
-                                }
-                            }
-
-                            // TODO: Error message and stuff
-                        },
-                        m.case(".trainers[*].party[*].moves[*]") => success: {
-                            inline for ([][]const u8{ "Moves", "Both" }) |kind| {
-                                if (trainer.party_type == @field(gen3.PartyType, kind)) {
-                                    const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
-                                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[2]);
-                                    const value = try parseIntBound(line, u16, game.moves.len, match.value);
-                                    member.moves[index] = lu16.init(value);
-                                    break :success;
-                                }
-                            }
-
-                            // TODO: Error message and stuff
-                        },
-                        else => unreachable,
-                    }
-                },
                 else => unreachable,
             }
+        },
+
+        m.case(".trainers[*].party[*].iv"),
+        m.case(".trainers[*].party[*].level"),
+        m.case(".trainers[*].party[*].species"),
+        => {
+            const trainer_index = try parseIntBound(line, usize, game.trainers.len, match.anys[0]);
+            const trainer = &game.trainers[trainer_index];
+            const party_index = try parseIntBound(line, usize, trainer.partyLen(), match.anys[1]);
+            const base = try trainer.partyAt(party_index, game.data);
+            switch (match.case) {
+                m.case(".trainers[*].party[*].iv") => base.iv = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".trainers[*].party[*].level") => base.level = lu16.init(try parseInt(line, u16, match.value)),
+                m.case(".trainers[*].party[*].species") => base.species = lu16.init(try parseIntBound(line, u16, game.pokemons.len, match.value)),
+                else => unreachable,
+            }
+        },
+        m.case(".trainers[*].party[*].item") => success: {
+            const trainer_index = try parseIntBound(line, usize, game.trainers.len, match.anys[0]);
+            const trainer = &game.trainers[trainer_index];
+            const party_index = try parseIntBound(line, usize, trainer.partyLen(), match.anys[1]);
+            const base = try trainer.partyAt(party_index, game.data);
+
+            inline for ([][]const u8{ "Item", "Both" }) |kind| {
+                if (trainer.party_type == @field(gen3.PartyType, kind)) {
+                    const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
+                    const value = try parseIntBound(line, u16, game.items.len, match.value);
+                    member.item = lu16.init(value);
+                    break :success;
+                }
+            }
+
+            // TODO: Error message and stuff
+        },
+
+        m.case(".trainers[*].party[*].moves[*]") => success: {
+            const trainer_index = try parseIntBound(line, usize, game.trainers.len, match.anys[0]);
+            const trainer = &game.trainers[trainer_index];
+            const party_index = try parseIntBound(line, usize, trainer.partyLen(), match.anys[1]);
+            const base = try trainer.partyAt(party_index, game.data);
+
+            inline for ([][]const u8{ "Moves", "Both" }) |kind| {
+                if (trainer.party_type == @field(gen3.PartyType, kind)) {
+                    const member = base.toParent(@field(gen3, "PartyMember" ++ kind));
+                    const index = try parseIntBound(line, usize, member.moves.len, match.anys[2]);
+                    const value = try parseIntBound(line, u16, game.moves.len, match.value);
+                    member.moves[index] = lu16.init(value);
+                    break :success;
+                }
+            }
+
+            // TODO: Error message and stuff
         },
 
         m.case(".moves[*].effect"),
