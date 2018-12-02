@@ -1,0 +1,6 @@
+[submodule "lib/tm35-nds"]
+	path = lib/tm35-nds
+	url = https://github.com/TM35-Metronome/tm35-nds.git
+[submodule "lib/zig-clap"]
+	path = lib/zig-clap
+	url = https://github.com/Hejsil/zig-clap.git
