@@ -208,22 +208,10 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         ".items[*].battle_usage",
         ".items[*].secondary_id",
 
-        ".zones[*].wild.land.encounter_rate",
-        ".zones[*].wild.land.pokemons[*].min_level",
-        ".zones[*].wild.land.pokemons[*].max_level",
-        ".zones[*].wild.land.pokemons[*].species",
-        ".zones[*].wild.surf.encounter_rate",
-        ".zones[*].wild.surf.pokemons[*].min_level",
-        ".zones[*].wild.surf.pokemons[*].max_level",
-        ".zones[*].wild.surf.pokemons[*].species",
-        ".zones[*].wild.rock_smash.encounter_rate",
-        ".zones[*].wild.rock_smash.pokemons[*].min_level",
-        ".zones[*].wild.rock_smash.pokemons[*].max_level",
-        ".zones[*].wild.rock_smash.pokemons[*].species",
-        ".zones[*].wild.fishing.encounter_rate",
-        ".zones[*].wild.fishing.pokemons[*].min_level",
-        ".zones[*].wild.fishing.pokemons[*].max_level",
-        ".zones[*].wild.fishing.pokemons[*].species",
+        ".zones[*].wild.*.encounter_rate",
+        ".zones[*].wild.*.pokemons[*].min_level",
+        ".zones[*].wild.*.pokemons[*].max_level",
+        ".zones[*].wild.*.pokemons[*].species",
     });
 
     if (m.match(str)) |match| switch (match.case) {
@@ -508,70 +496,50 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             }
         },
 
-        m.case(".zones[*].wild.land.encounter_rate"),
-        m.case(".zones[*].wild.land.pokemons[*].min_level"),
-        m.case(".zones[*].wild.land.pokemons[*].max_level"),
-        m.case(".zones[*].wild.land.pokemons[*].species"),
-        m.case(".zones[*].wild.surf.encounter_rate"),
-        m.case(".zones[*].wild.surf.pokemons[*].min_level"),
-        m.case(".zones[*].wild.surf.pokemons[*].max_level"),
-        m.case(".zones[*].wild.surf.pokemons[*].species"),
-        m.case(".zones[*].wild.rock_smash.encounter_rate"),
-        m.case(".zones[*].wild.rock_smash.pokemons[*].min_level"),
-        m.case(".zones[*].wild.rock_smash.pokemons[*].max_level"),
-        m.case(".zones[*].wild.rock_smash.pokemons[*].species"),
-        m.case(".zones[*].wild.fishing.encounter_rate"),
-        m.case(".zones[*].wild.fishing.pokemons[*].min_level"),
-        m.case(".zones[*].wild.fishing.pokemons[*].max_level"),
-        m.case(".zones[*].wild.fishing.pokemons[*].species"),
-        => {
+        m.case(".zones[*].wild.*.encounter_rate"),
+        m.case(".zones[*].wild.*.pokemons[*].min_level"),
+        m.case(".zones[*].wild.*.pokemons[*].max_level"),
+        m.case(".zones[*].wild.*.pokemons[*].species"),
+        => success: {
             const header_index = try parseIntBound(line, usize, game.wild_pokemon_headers.len, match.anys[0]);
             const header = &game.wild_pokemon_headers[header_index];
+
             inline for ([][]const u8{
                 "land",
                 "surf",
                 "rock_smash",
                 "fishing",
             }) |area_name| {
-                const pre = ".zones[*].wild." ++ area_name;
-                switch (match.case) {
-                    m.case(pre ++ ".encounter_rate") => {
+                if (mem.eql(u8, match.anys[1].str, area_name)) switch (match.case) {
+                    m.case(".zones[*].wild.*.encounter_rate") => {
                         const area = try @field(header, area_name).toSingle(game.data);
                         area.encounter_rate = try parseInt(line, u8, match.value);
+                        break :success;
                     },
-                    m.case(pre ++ ".pokemons[*].min_level"),
-                    m.case(pre ++ ".pokemons[*].max_level"),
-                    m.case(pre ++ ".pokemons[*].species"),
+                    m.case(".zones[*].wild.*.pokemons[*].min_level"),
+                    m.case(".zones[*].wild.*.pokemons[*].max_level"),
+                    m.case(".zones[*].wild.*.pokemons[*].species"),
                     => {
                         const area = try @field(header, area_name).toSingle(game.data);
                         const wilds = try area.wild_pokemons.toSingle(game.data);
-                        const pokemon_index = try parseIntBound(line, usize, wilds.len, match.anys[1]);
+                        const pokemon_index = try parseIntBound(line, usize, wilds.len, match.anys[2]);
                         const wild = &wilds[pokemon_index];
                         switch (match.case) {
-                            m.case(pre ++ ".pokemons[*].min_level") => wild.min_level = try parseInt(line, u8, match.value),
-                            m.case(pre ++ ".pokemons[*].max_level") => wild.max_level = try parseInt(line, u8, match.value),
-                            m.case(pre ++ ".pokemons[*].species") => wild.species = lu16.init(try parseInt(line, u16, match.value)),
+                            m.case(".zones[*].wild.*.pokemons[*].min_level") => wild.min_level = try parseInt(line, u8, match.value),
+                            m.case(".zones[*].wild.*.pokemons[*].max_level") => wild.max_level = try parseInt(line, u8, match.value),
+                            m.case(".zones[*].wild.*.pokemons[*].species") => wild.species = lu16.init(try parseInt(line, u16, match.value)),
                             else => unreachable,
                         }
+                        break :success;
                     },
                     else => {},
-                }
+                };
             }
+
+            return reportUnexpectedField(line, str);
         },
 
-        else => {
-            var tok = format.Tokenizer.init(str);
-            warning(line, 1, "unexpected field '");
-            while (true) {
-                const token = tok.next();
-                switch (token.id) {
-                    format.Token.Id.Invalid => unreachable,
-                    format.Token.Id.Equal => break,
-                    else => debug.warn("{}", token.str),
-                }
-            }
-            debug.warn("'\n");
-        },
+        else => return reportUnexpectedField(line, str),
     } else |e| switch (e) {
         error.SyntaxError => {
             var parser = format.Parser.init(format.Tokenizer.init(str));
@@ -653,6 +621,20 @@ fn parseIntBound(line: usize, comptime Int: type, bound: var, token: format.Toke
 
     warning(line, column, "{} is not within the bound {}\n", str, u128(bound));
     return error.Overflow;
+}
+
+fn reportUnexpectedField(line: usize, str: []const u8) void {
+    var tok = format.Tokenizer.init(str);
+    warning(line, 1, "unexpected field '");
+    while (true) {
+        const token = tok.next();
+        switch (token.id) {
+            format.Token.Id.Invalid => unreachable,
+            format.Token.Id.Equal => break,
+            else => debug.warn("{}", token.str),
+        }
+    }
+    debug.warn("'\n");
 }
 
 fn warning(line: usize, col: usize, comptime f: []const u8, a: ...) void {
