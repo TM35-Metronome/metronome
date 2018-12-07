@@ -1,8 +1,12 @@
+const bench = @import("bench");
+const fun = @import("fun");
 const std = @import("std");
 
 const debug = std.debug;
 const fmt = std.fmt;
 const mem = std.mem;
+
+const sscan = fun.scan.sscan;
 
 pub const Token = struct {
     id: Id,
@@ -1028,4 +1032,99 @@ test "Matcher" {
         for (t.anys) |a, i|
             debug.assert(mem.eql(u8, match.anys[i].str, a));
     }
+}
+
+test "Matcher.benchmark" {
+    try bench.benchmark(struct {
+        const args = [][]const u8{
+            "foo=0",
+            "foo.bar=0",
+            "foo.bar.baz=0",
+            "foo[0].bar[0].baz[0]=0",
+            "baz=0",
+            "baz.bar=0",
+            "baz.bar.foo=0",
+            "baz[0].bar[0].foo[0]=0",
+            "foo=9223372036854775807",
+            "foo.bar=9223372036854775807",
+            "foo.bar.baz=9223372036854775807",
+            "foo[9223372036854775807].bar[9223372036854775807].baz[9223372036854775807]=9223372036854775807",
+            "baz=9223372036854775807",
+            "baz.bar=9223372036854775807",
+            "baz.bar.foo=9223372036854775807",
+            "baz[9223372036854775807].bar[9223372036854775807].foo[9223372036854775807]=9223372036854775807",
+        };
+
+        const iterations = 100000;
+
+        fn matcherSwitch(str: []const u8) !u128 {
+            const m = Matcher([][]const u8{
+                "foo",
+                "foo.bar",
+                "foo.bar.baz",
+                "foo[*].bar[*].baz[*]",
+                "baz",
+                "baz.bar",
+                "baz.bar.foo",
+                "baz[*].bar[*].foo[*]",
+            });
+
+            const match = try m.match(str);
+            switch (match.case) {
+                m.case("foo") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("foo.bar") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("foo.bar.baz") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("foo[*].bar[*].baz[*]") => {
+                    const a = try fmt.parseUnsigned(u64, match.anys[0].str, 10);
+                    const b = try fmt.parseUnsigned(u64, match.anys[1].str, 10);
+                    const c = try fmt.parseUnsigned(u64, match.anys[2].str, 10);
+                    const d = try fmt.parseUnsigned(u64, match.value.str, 10);
+                    return u128(a) + b + c + d;
+                },
+                m.case("baz") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("baz.bar") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("baz.bar.foo") => return u128(try fmt.parseUnsigned(u64, match.value.str, 10)),
+                m.case("baz[*].bar[*].foo[*]") => {
+                    const a = try fmt.parseUnsigned(u64, match.anys[0].str, 10);
+                    const b = try fmt.parseUnsigned(u64, match.anys[1].str, 10);
+                    const c = try fmt.parseUnsigned(u64, match.anys[2].str, 10);
+                    const d = try fmt.parseUnsigned(u64, match.value.str, 10);
+                    return u128(a) + b + c + d;
+                },
+                else => unreachable,
+            }
+        }
+
+        fn sscanSwitch(str: []const u8) !u128 {
+            const Val = struct {
+                a: u64,
+            };
+            const Val2 = struct {
+                a: u64,
+                b: u64,
+                c: u64,
+                d: u64,
+            };
+
+            if (sscan(str, "foo={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "foo.bar={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "foo.bar.baz={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "foo[{}].bar[{}].baz[{}]={}", Val2)) |v| {
+                return u128(v.a) + v.b + v.c + v.d;
+            } else |_| if (sscan(str, "baz={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "baz.bar={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "baz.bar.foo={}", Val)) |v| {
+                return u128(v.a);
+            } else |_| if (sscan(str, "baz[{}].bar[{}].foo[{}]={}", Val2)) |v| {
+                return u128(v.a) + v.b + v.c + v.d;
+            } else |err| {
+                return err;
+            }
+        }
+    });
 }
