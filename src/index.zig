@@ -82,7 +82,6 @@ pub const Tokenizer = struct {
 
             switch (state) {
                 State.Begin => switch (c) {
-                    '\t', ' ' => start += 1,
                     'a'...'z', 'A'...'Z', '_' => state = State.Identifier,
                     '0'...'9' => state = State.Integer,
                     '[' => return Token.init(Token.Id.LBracket, tok.str[start..tok.i]),
@@ -90,7 +89,6 @@ pub const Tokenizer = struct {
                     '*' => return Token.init(Token.Id.Star, tok.str[start..tok.i]),
                     '=' => return Token.init(Token.Id.Equal, tok.str[start..tok.i]),
                     '.' => return Token.init(Token.Id.Dot, tok.str[start..tok.i]),
-                    '#' => return Token.init(Token.Id.Eos, tok.str[start..tok.i]),
                     else => return Token.init(Token.Id.Invalid, tok.str[start..tok.i]),
                 },
                 State.Identifier => switch (c) {
@@ -130,9 +128,6 @@ fn testTokenizer(str: []const u8, tokens: []const Token) void {
 }
 
 test "Tokenizer" {
-    testTokenizer("  ", []Token{});
-    testTokenizer("#", []Token{});
-    testTokenizer("#11233114411##", []Token{});
     testTokenizer("a", []Token{Token.init(Token.Id.Identifier, "a")});
     testTokenizer("aA", []Token{Token.init(Token.Id.Identifier, "aA")});
     testTokenizer("aA1", []Token{Token.init(Token.Id.Identifier, "aA1")});
@@ -145,10 +140,10 @@ test "Tokenizer" {
     testTokenizer("=", []Token{Token.init(Token.Id.Equal, "=")});
     testTokenizer(".", []Token{Token.init(Token.Id.Dot, ".")});
     testTokenizer(",", []Token{Token.init(Token.Id.Invalid, ",")});
-    testTokenizer("a 1[]=.#15553234 2 sdsd t", []Token{
+    testTokenizer("a[1]=.", []Token{
         Token.init(Token.Id.Identifier, "a"),
-        Token.init(Token.Id.Integer, "1"),
         Token.init(Token.Id.LBracket, "["),
+        Token.init(Token.Id.Integer, "1"),
         Token.init(Token.Id.RBracket, "]"),
         Token.init(Token.Id.Equal, "="),
         Token.init(Token.Id.Dot, "."),
@@ -220,7 +215,6 @@ pub const Parser = struct {
     };
 
     const State = union(enum) {
-        Line,
         Suffix,
         Field: Token,
         Index: Token,
@@ -234,41 +228,7 @@ pub const Parser = struct {
     pub fn init(tok: Tokenizer) Parser {
         return Parser{
             .tok = tok,
-            .state = State.Line,
-        };
-    }
-
-    pub fn begin(par: *Parser) ?Result {
-        var token = Token.init(Token.Id.Invalid, par.tok.rest());
-        while (true) {
-            token = par.tok.next();
-            switch (par.state) {
-                State.Line => switch (token.id) {
-                    Token.Id.Identifier => {
-                        par.state = State.Suffix;
-                        return Result.ok(Node{
-                            .Field = Node.Field{
-                                .dot = Token.init(Token.Id.Dot, token.str[0..0]),
-                                .ident = token,
-                            },
-                        });
-                    },
-                    Token.Id.Eos => {
-                        par.state = State.Done;
-                        return null;
-                    },
-                    else => break,
-                },
-                else => unreachable, // Only call Parser.begin once, before calling Parser.next
-            }
-        }
-
-        return switch (par.state) {
-            State.Line => Result.err(token, []Token.Id{
-                Token.Id.Identifier,
-                Token.Id.Eos,
-            }),
-            else => unreachable, // Only call Parser.begin once, before calling Parser.next
+            .state = State.Suffix,
         };
     }
 
@@ -277,7 +237,6 @@ pub const Parser = struct {
         while (true) {
             token = par.tok.next();
             switch (par.state) {
-                State.Line => unreachable, // Always call Parser.begin before Parser.next
                 State.Suffix => switch (token.id) {
                     Token.Id.Dot => par.state = State{ .Field = token },
                     Token.Id.LBracket => par.state = State{ .Index = token },
@@ -326,7 +285,6 @@ pub const Parser = struct {
         }
 
         return switch (par.state) {
-            State.Line => unreachable, // Always call Parser.begin before Parser.next
             State.Suffix => Result.err(token, []Token.Id{
                 Token.Id.Dot,
                 Token.Id.LBracket,
@@ -342,34 +300,30 @@ pub const Parser = struct {
 
 fn testParser(str: []const u8, nodes: []const Node) void {
     var parser = Parser.init(Tokenizer.init(str));
-    if (parser.begin()) |n| {
-        var node = n;
-        for (nodes) |n1| {
-            defer node = parser.next();
-            const n2 = node.Ok;
-            switch (n1) {
-                Node.Kind.Field => |f1| {
-                    const f2 = n2.Field;
-                    debug.assert(f1.ident.id == f2.ident.id);
-                    debug.assert(mem.eql(u8, f1.ident.str, f2.ident.str));
-                },
-                Node.Kind.Index => |in1| {
-                    const in2 = n2.Index;
-                    debug.assert(in1.lbracket.id == in2.lbracket.id);
-                    debug.assert(mem.eql(u8, in1.lbracket.str, in2.lbracket.str));
-                    debug.assert(in1.int.id == in2.int.id);
-                    debug.assert(mem.eql(u8, in1.int.str, in2.int.str));
-                    debug.assert(in1.rbracket.id == in2.rbracket.id);
-                    debug.assert(mem.eql(u8, in1.rbracket.str, in2.rbracket.str));
-                },
-                Node.Kind.Value => |v1| {
-                    const v2 = n2.Value;
-                    debug.assert(v1.equal.id == v2.equal.id);
-                    debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
-                    debug.assert(v1.value.id == v2.value.id);
-                    debug.assert(mem.eql(u8, v1.value.str, v2.value.str));
-                },
-            }
+    for (nodes) |n1| {
+        const n2 = parser.next().Ok;
+        switch (n1) {
+            Node.Kind.Field => |f1| {
+                const f2 = n2.Field;
+                debug.assert(f1.ident.id == f2.ident.id);
+                debug.assert(mem.eql(u8, f1.ident.str, f2.ident.str));
+            },
+            Node.Kind.Index => |in1| {
+                const in2 = n2.Index;
+                debug.assert(in1.lbracket.id == in2.lbracket.id);
+                debug.assert(mem.eql(u8, in1.lbracket.str, in2.lbracket.str));
+                debug.assert(in1.int.id == in2.int.id);
+                debug.assert(mem.eql(u8, in1.int.str, in2.int.str));
+                debug.assert(in1.rbracket.id == in2.rbracket.id);
+                debug.assert(mem.eql(u8, in1.rbracket.str, in2.rbracket.str));
+            },
+            Node.Kind.Value => |v1| {
+                const v2 = n2.Value;
+                debug.assert(v1.equal.id == v2.equal.id);
+                debug.assert(mem.eql(u8, v1.equal.str, v2.equal.str));
+                debug.assert(v1.value.id == v2.value.id);
+                debug.assert(mem.eql(u8, v1.value.str, v2.value.str));
+            },
         }
     }
 
@@ -377,13 +331,16 @@ fn testParser(str: []const u8, nodes: []const Node) void {
 }
 
 test "Parser" {
-    testParser("", []Node{});
-    testParser("   ", []Node{});
-    testParser(" # This is a comment", []Node{});
-    testParser("a=1", []Node{
+    testParser("=1", []Node{Node{
+        .Value = Node.Value{
+            .equal = Token.init(Token.Id.Equal, "="),
+            .value = Token.init(Token.Id.Identifier, "1"),
+        },
+    }});
+    testParser(".a=1", []Node{
         Node{
             .Field = Node.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
@@ -394,7 +351,7 @@ test "Parser" {
             },
         },
     });
-    testParser("a.b=1", []Node{
+    testParser(".a.b=1", []Node{
         Node{
             .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
@@ -414,7 +371,7 @@ test "Parser" {
             },
         },
     });
-    testParser("a[1]=1", []Node{
+    testParser(".a[1]=1", []Node{
         Node{
             .Field = Node.Field{
                 .dot = Token.init(Token.Id.Dot, ""),
@@ -432,27 +389,6 @@ test "Parser" {
             .Value = Node.Value{
                 .equal = Token.init(Token.Id.Equal, "="),
                 .value = Token.init(Token.Id.Identifier, "1"),
-            },
-        },
-    });
-    testParser(" a [ 1 ] = 1", []Node{
-        Node{
-            .Field = Node.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
-                .ident = Token.init(Token.Id.Identifier, "a"),
-            },
-        },
-        Node{
-            .Index = Node.Index{
-                .lbracket = Token.init(Token.Id.LBracket, "["),
-                .int = Token.init(Token.Id.Integer, "1"),
-                .rbracket = Token.init(Token.Id.RBracket, "]"),
-            },
-        },
-        Node{
-            .Value = Node.Value{
-                .equal = Token.init(Token.Id.Equal, "="),
-                .value = Token.init(Token.Id.Identifier, " 1"),
             },
         },
     });
@@ -547,7 +483,6 @@ pub const PatternParser = struct {
     };
 
     const State = union(enum) {
-        Line,
         Suffix,
         Field: Token,
         Index: Token,
@@ -562,7 +497,7 @@ pub const PatternParser = struct {
     pub fn init(tok: Tokenizer) PatternParser {
         return PatternParser{
             .tok = tok,
-            .state = State.Line,
+            .state = State.Suffix,
         };
     }
 
@@ -571,31 +506,6 @@ pub const PatternParser = struct {
         while (true) {
             token = par.tok.next();
             switch (par.state) {
-                State.Line => switch (token.id) {
-                    Token.Id.Identifier => {
-                        par.state = State.Suffix;
-                        return Result.ok(Pattern{
-                            .Field = Pattern.Field{
-                                .dot = Token.init(Token.Id.Dot, token.str[0..0]),
-                                .ident = token,
-                            },
-                        });
-                    },
-                    Token.Id.Star => {
-                        par.state = State.Suffix;
-                        return Result.ok(Pattern{
-                            .FieldAny = Pattern.FieldAny{
-                                .dot = Token.init(Token.Id.Dot, token.str[0..0]),
-                                .star = token,
-                            },
-                        });
-                    },
-                    Token.Id.Eos => {
-                        par.state = State.Done;
-                        return null;
-                    },
-                    else => break,
-                },
                 State.Suffix => switch (token.id) {
                     Token.Id.Dot => par.state = State{ .Field = token },
                     Token.Id.LBracket => par.state = State{ .Index = token },
@@ -662,11 +572,6 @@ pub const PatternParser = struct {
         }
 
         return switch (par.state) {
-            State.Line => Result.err(token, []Token.Id{
-                Token.Id.Identifier,
-                Token.Id.Star,
-                Token.Id.Eos,
-            }),
             State.Suffix => Result.err(token, []Token.Id{
                 Token.Id.Dot,
                 Token.Id.LBracket,
@@ -729,19 +634,16 @@ fn testPatternParser(str: []const u8, patterns: []const Pattern) void {
 }
 
 test "PatternParser" {
-    testPatternParser("", []Pattern{});
-    testPatternParser("   ", []Pattern{});
-    testPatternParser(" # This is a comment", []Pattern{});
-    testPatternParser("a", []Pattern{Pattern{
+    testPatternParser(".a", []Pattern{Pattern{
         .Field = Pattern.Field{
             .dot = Token.init(Token.Id.Dot, ""),
             .ident = Token.init(Token.Id.Identifier, "a"),
         },
     }});
-    testPatternParser("a.b", []Pattern{
+    testPatternParser(".a.b", []Pattern{
         Pattern{
             .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
@@ -752,10 +654,10 @@ test "PatternParser" {
             },
         },
     });
-    testPatternParser("a[1]", []Pattern{
+    testPatternParser(".a[1]", []Pattern{
         Pattern{
             .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
@@ -767,60 +669,30 @@ test "PatternParser" {
             },
         },
     });
-    testPatternParser(" a [ 1 ]", []Pattern{
-        Pattern{
-            .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
-                .ident = Token.init(Token.Id.Identifier, "a"),
-            },
-        },
-        Pattern{
-            .Index = Pattern.Index{
-                .lbracket = Token.init(Token.Id.LBracket, "["),
-                .int = Token.init(Token.Id.Integer, "1"),
-                .rbracket = Token.init(Token.Id.RBracket, "]"),
-            },
-        },
-    });
-    testPatternParser("*", []Pattern{Pattern{
+    testPatternParser(".*", []Pattern{Pattern{
         .FieldAny = Pattern.FieldAny{
-            .dot = Token.init(Token.Id.Dot, ""),
+            .dot = Token.init(Token.Id.Dot, "."),
             .star = Token.init(Token.Id.Star, "*"),
         },
     }});
-    testPatternParser("a.*", []Pattern{
+    testPatternParser(".a.*", []Pattern{
         Pattern{
             .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
         Pattern{
             .FieldAny = Pattern.FieldAny{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .star = Token.init(Token.Id.Star, "*"),
             },
         },
     });
-    testPatternParser("a[*]", []Pattern{
+    testPatternParser(".a[*]", []Pattern{
         Pattern{
             .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
-                .ident = Token.init(Token.Id.Identifier, "a"),
-            },
-        },
-        Pattern{
-            .IndexAny = Pattern.IndexAny{
-                .lbracket = Token.init(Token.Id.LBracket, "["),
-                .star = Token.init(Token.Id.Star, "*"),
-                .rbracket = Token.init(Token.Id.RBracket, "]"),
-            },
-        },
-    });
-    testPatternParser(" a [ * ]", []Pattern{
-        Pattern{
-            .Field = Pattern.Field{
-                .dot = Token.init(Token.Id.Dot, ""),
+                .dot = Token.init(Token.Id.Dot, "."),
                 .ident = Token.init(Token.Id.Identifier, "a"),
             },
         },
@@ -884,19 +756,9 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
             var parser = Parser.init(Tokenizer.init(str));
             var nodes_array: [max_nodes + 1]Node = undefined;
             var nodes = blk: {
-                var res = parser.begin() orelse {
-                    nodes_array[0] = Node{
-                        .Value = Node.Value{
-                            .equal = Token.init(Token.Id.Invalid, ""),
-                            .value = Token.init(Token.Id.Invalid, ""),
-                        },
-                    };
-                    break :blk nodes_array[0..1];
-                };
-
                 var size: usize = 0;
                 for (nodes_array) |*node| {
-                    switch (res) {
+                    switch (parser.next()) {
                         Parser.Result.Ok => |n| {
                             node.* = n;
                             size += 1;
@@ -905,8 +767,6 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
                         },
                         Parser.Result.Error => return error.SyntaxError,
                     }
-
-                    res = parser.next();
                 }
 
                 if (parser.state != Parser.State.Done)
@@ -967,12 +827,12 @@ pub fn Matcher(comptime pattern_strings: []const []const u8) type {
 test "Matcher" {
     const m = Matcher([][]const u8{
         "",
-        "a",
-        "a.*",
-        "a.*.*",
-        "a.*[*].*[*]",
-        "a[*]",
-        "a[*][*]",
+        ".a",
+        ".a.*",
+        ".a.*.*",
+        ".a.*[*].*[*]",
+        ".a[*]",
+        ".a[*][*]",
     });
 
     const Test = struct {
@@ -984,44 +844,44 @@ test "Matcher" {
 
     for ([]Test{
         Test{
-            .str = "",
+            .str = "=1",
             .case = m.case(""),
-            .value = "",
-            .anys = [][]const u8{},
-        },
-        Test{
-            .str = "a=1",
-            .case = m.case("a"),
             .value = "1",
             .anys = [][]const u8{},
         },
         Test{
-            .str = "a.b=2",
-            .case = m.case("a.*"),
+            .str = ".a=1",
+            .case = m.case(".a"),
+            .value = "1",
+            .anys = [][]const u8{},
+        },
+        Test{
+            .str = ".a.b=2",
+            .case = m.case(".a.*"),
             .value = "2",
             .anys = [][]const u8{"b"},
         },
         Test{
-            .str = "a.b.c=3",
-            .case = m.case("a.*.*"),
+            .str = ".a.b.c=3",
+            .case = m.case(".a.*.*"),
             .value = "3",
             .anys = [][]const u8{ "b", "c" },
         },
         Test{
-            .str = "a[1]=4",
-            .case = m.case("a[*]"),
+            .str = ".a[1]=4",
+            .case = m.case(".a[*]"),
             .value = "4",
             .anys = [][]const u8{"1"},
         },
         Test{
-            .str = "a[1][2]=5",
-            .case = m.case("a[*][*]"),
+            .str = ".a[1][2]=5",
+            .case = m.case(".a[*][*]"),
             .value = "5",
             .anys = [][]const u8{ "1", "2" },
         },
         Test{
-            .str = "a.b[1].c[2]=6",
-            .case = m.case("a.*[*].*[*]"),
+            .str = ".a.b[1].c[2]=6",
+            .case = m.case(".a.*[*].*[*]"),
             .value = "6",
             .anys = [][]const u8{ "b", "1", "c", "2" },
         },
