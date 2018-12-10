@@ -4,6 +4,7 @@ const std = @import("std");
 
 const debug = std.debug;
 const fmt = std.fmt;
+const math = std.math;
 const mem = std.mem;
 
 const sscan = fun.scan.sscan;
@@ -894,6 +895,106 @@ test "Matcher" {
     }
 }
 
+pub const StrParser = struct {
+    str: []const u8,
+
+    pub fn init(str: []const u8) StrParser {
+        return StrParser{ .str = str };
+    }
+
+    pub fn peek(parser: *@This()) !u8 {
+        if (parser.str.len == 0)
+            return error.EndOfString;
+
+        return parser.str[0];
+    }
+
+    pub fn eat(parser: *@This()) !u8 {
+        const c = try parser.peek();
+        parser.str = parser.str[1..];
+        return c;
+    }
+
+    pub fn eatChar(parser: *@This(), c: u8) !void {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        if (c != try parser.eat())
+            return error.InvalidCharacter;
+    }
+
+    pub fn eatStr(parser: *@This(), str: []const u8) !void {
+        if (parser.str.len < str.len)
+            return error.EndOfString;
+        if (!mem.startsWith(u8, parser.str, str))
+            return error.InvalidCharacter;
+
+        parser.str = parser.str[str.len..];
+    }
+
+    pub fn eatUnsigned(parser: *@This(), comptime Int: type, base: Int) !Int {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        var res: Int = try charToDigit(try parser.eat(), Int, base);
+        while (true) {
+            const c = parser.peek() catch return res;
+            const digit = charToDigit(c, Int, base) catch return res;
+            _ = parser.eat() catch unreachable;
+
+            res = try math.mul(Int, res, base);
+            res = try math.add(Int, res, digit);
+        }
+    }
+
+    pub fn eatUnsignedMax(parser: *@This(), comptime Int: type, base: Int, max: var) !Int {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        const res = try parser.eatUnsigned(Int, base);
+        if (max <= res)
+            return error.Overflow;
+
+        return res;
+    }
+
+    pub fn eatIndex(parser: *@This()) !usize {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        _ = try parser.eatChar('[');
+        const res = try parser.eatUnsigned(usize, 10);
+        _ = try parser.eatChar(']');
+
+        return res;
+    }
+
+    pub fn eatIndexMax(parser: *@This(), max: var) !usize {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        const res = try parser.eatIndex(Int, base);
+        if (max <= res)
+            return error.Overflow;
+
+        return res;
+    }
+
+    fn charToDigit(c: u8, comptime Int: type, base: Int) !Int {
+        const value = switch (c) {
+            '0'...'9' => c - '0',
+            'A'...'Z' => c - 'A' + 10,
+            'a'...'z' => c - 'a' + 10,
+            else => return error.InvalidCharacter,
+        };
+
+        if (value >= base)
+            return error.InvalidCharacter;
+
+        return try math.cast(Int, value);
+    }
+};
+
 test "Matcher.benchmark" {
     try bench.benchmark(struct {
         const args = [][]const u8{
@@ -982,6 +1083,44 @@ test "Matcher.benchmark" {
                 return u128(v.a);
             } else |_| if (sscan(str, ".baz[{}].bar[{}].foo[{}]={}", Val2)) |v| {
                 return u128(v.a) + v.b + v.c + v.d;
+            } else |err| {
+                return err;
+            }
+        }
+
+        pub fn StrParserSwitch(str: []const u8) !u128 {
+            var parser = StrParser.init(str);
+
+            if (parser.eatStr(".foo=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".foo.bar=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".foo.bar.baz=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".foo")) |_| {
+                const a = try parser.eatIndex();
+                try parser.eatStr(".bar");
+                const b = try parser.eatIndex();
+                try parser.eatStr(".baz");
+                const c = try parser.eatIndex();
+                try parser.eatChar('=');
+                const d = try parser.eatUnsigned(u64, 10);
+                return u128(a) + b + c + d;
+            } else |_| if (parser.eatStr(".baz=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".baz.bar=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".baz.bar.foo=")) |_| {
+                return u128(try parser.eatUnsigned(u64, 10));
+            } else |_| if (parser.eatStr(".baz")) |_| {
+                const a = try parser.eatIndex();
+                try parser.eatStr(".bar");
+                const b = try parser.eatIndex();
+                try parser.eatStr(".foo");
+                const c = try parser.eatIndex();
+                try parser.eatChar('=');
+                const d = try parser.eatUnsigned(u64, 10);
+                return u128(a) + b + c + d;
             } else |err| {
                 return err;
             }
