@@ -63,6 +63,7 @@ fn usage(stream: var) !void {
 pub fn main() !void {
     const unbuf_stdout = &(try std.io.getStdOut()).outStream().stream;
     var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
     const stderr = &(try std.io.getStdErr()).outStream().stream;
     const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
@@ -131,8 +132,6 @@ pub fn main() !void {
             }
         }
     }
-
-    try buf_stdout.flush();
 }
 
 fn readData(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Data {
