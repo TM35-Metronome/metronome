@@ -78,14 +78,12 @@ pub fn main() !void {
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
-    defer args.deinit();
 
     if (args.flag("--help"))
         return try usage(stdout);
