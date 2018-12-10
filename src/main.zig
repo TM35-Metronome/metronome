@@ -49,50 +49,30 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const unbuf_stdin = &(std.io.getStdIn() catch return 1).inStream().stream;
-    const unbuf_stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
-
-    var buf_stdin = BufInStream.init(unbuf_stdin);
+pub fn main() !void {
+    const unbuf_stdout = &(try std.io.getStdOut()).outStream().stream;
     var buf_stdout = BufOutStream.init(unbuf_stdout);
 
-    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
-    const stdin = &buf_stdin.stream;
+    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
     const stdout = &buf_stdout.stream;
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const direct_allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
+    var direct_allocator = std.heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
 
-    // TODO: Other allocator?
-    const allocator = direct_allocator;
+    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    defer arena.deinit();
+
+    const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
-    _ = iter.next() catch undefined;
+    _ = arg_iter.iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
+    var args = Clap.parse(allocator, clap.args.OsIterator.Error, &arg_iter.iter) catch |err| {
         usage(stderr) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    main2(allocator, args, stdin, stdout, stderr) catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
+        return err;
     };
 
-    buf_stdout.flush() catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-
-    return 0;
-}
-
-pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, stderr: var) !void {
     if (args.flag("--help"))
         return try usage(stdout);
 
@@ -108,10 +88,7 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
         break :blk try fmt.parseUnsigned(u64, seed_str, 10);
     };
 
-    var arena = heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-
-    const pokemons = try readPokemons(&arena.allocator, stdin, stdout);
+    const pokemons = try readPokemons(allocator, stdin, stdout);
     randomize(pokemons, seed, same_total_stats, follow_evos);
 
     var iter = pokemons.iterator();
@@ -121,6 +98,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
                 try stdout.print(".pokemons[{}].stats.{}={}\n", kv.key, stat, s);
         }
     }
+
+    try buf_stdout.flush();
 }
 
 fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !PokemonMap {
@@ -131,7 +110,7 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
     var line: usize = 1;
     while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
         const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-        const print_line = parseLine(&res, str) catch true;
+        const print_line = parseLine(&res, str) catch |err| true;
         if (print_line)
             try out_stream.print("{}\n", str);
 
@@ -144,58 +123,47 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
     return res;
 }
 
-fn parseLine(pokemoms: *PokemonMap, str: []const u8) !bool {
-    @setEvalBranchQuota(100000);
+fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
+    var parser = format.StrParser.init(str);
 
-    const m = format.Matcher([][]const u8{
-        ".pokemons[*].stats.hp",
-        ".pokemons[*].stats.attack",
-        ".pokemons[*].stats.defense",
-        ".pokemons[*].stats.speed",
-        ".pokemons[*].stats.sp_attack",
-        ".pokemons[*].stats.sp_defense",
-        ".pokemons[*].evos[*].target",
-    });
+    try parser.eatStr(".pokemons[");
+    const pokemon_index = try parser.eatUnsigned(usize, 10);
+    try parser.eatStr("].");
 
-    const match = try m.match(str);
-    return switch (match.case) {
-        m.case(".pokemons[*].stats.hp"),
-        m.case(".pokemons[*].stats.attack"),
-        m.case(".pokemons[*].stats.defense"),
-        m.case(".pokemons[*].stats.speed"),
-        m.case(".pokemons[*].stats.sp_attack"),
-        m.case(".pokemons[*].stats.sp_defense"),
-        => blk: {
-            const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
-            const index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
+    if (parser.eatStr("stats.")) |_| {
+        const entry = try pokemons.getOrPutValue(pokemon_index, Pokemon.init(pokemons.allocator));
+        const pokemon = &entry.value;
 
-            const entry = try pokemoms.getOrPutValue(index, Pokemon.init(pokemoms.allocator));
-            const pokemon = &entry.value;
+        if (parser.eatStr("hp=")) |_| {
+            pokemon.hp = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("attack=")) |_| {
+            pokemon.attack = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("defense=")) |_| {
+            pokemon.defense = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("speed=")) |_| {
+            pokemon.speed = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("sp_attack=")) |_| {
+            pokemon.sp_attack = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("sp_defense=")) |_| {
+            pokemon.sp_defense = try parser.eatUnsigned(u8, 10);
+        } else |_| {
+            return true;
+        }
 
-            switch (match.case) {
-                m.case(".pokemons[*].stats.hp") => pokemon.hp = value,
-                m.case(".pokemons[*].stats.attack") => pokemon.attack = value,
-                m.case(".pokemons[*].stats.defense") => pokemon.defense = value,
-                m.case(".pokemons[*].stats.speed") => pokemon.speed = value,
-                m.case(".pokemons[*].stats.sp_attack") => pokemon.sp_attack = value,
-                m.case(".pokemons[*].stats.sp_defense") => pokemon.sp_defense = value,
-                else => unreachable,
-            }
+        return false;
+    } else |_| if (parser.eatStr("evos[")) |_| {
+        _ = try parser.eatUnsigned(usize, 10);
+        try parser.eatStr("].target=");
+        const evo_from_i = try parser.eatUnsigned(usize, 10);
 
-            break :blk false;
-        },
-        m.case(".pokemons[*].evos[*].target") => blk: {
-            const value = try fmt.parseUnsigned(u8, mem.trim(u8, match.value.str, "\t "), 10);
-            const poke_index = try fmt.parseUnsigned(usize, match.anys[0].str, 10);
 
-            const entry = try pokemoms.getOrPutValue(value, Pokemon.init(pokemoms.allocator));
-            const pokemon = &entry.value;
+        const evo_entry = try pokemons.getOrPutValue(evo_from_i, Pokemon.init(pokemons.allocator));
+        const evo_from = &evo_entry.value;
 
-            _ = try pokemon.evolves_from.put(poke_index, {});
-            break :blk true;
-        },
-        else => true,
-    };
+        _ = try evo_from.evolves_from.put(pokemon_index, {});
+    } else |_| {}
+
+    return true;
 }
 
 fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool, follow_evos: bool) void {
