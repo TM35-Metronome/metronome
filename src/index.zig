@@ -958,6 +958,16 @@ pub const StrParser = struct {
         return res;
     }
 
+    pub fn eatUntil(parser: *@This(), c: u8) ![]const u8 {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        var len: usize = 0;
+        while (c != try parser.eat()) : (len += 1) {}
+
+        return reset.str[0..len];
+    }
+
     pub fn eatIndex(parser: *@This()) !usize {
         const reset = parser.*;
         errdefer parser.* = reset;
