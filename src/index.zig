@@ -932,22 +932,22 @@ pub const StrParser = struct {
         parser.str = parser.str[str.len..];
     }
 
-    pub fn eatUnsigned(parser: *@This(), comptime Int: type, base: Int) !Int {
+    pub fn eatUnsigned(parser: *@This(), comptime Int: type, base: u8) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
-        var res: Int = try charToDigit(try parser.eat(), Int, base);
+        var res: Int = try math.cast(Int, try charToDigit(try parser.eat(), base));
         while (true) {
             const c = parser.peek() catch return res;
-            const digit = charToDigit(c, Int, base) catch return res;
+            const digit = charToDigit(c, base) catch return res;
             _ = parser.eat() catch unreachable;
 
-            res = try math.mul(Int, res, base);
-            res = try math.add(Int, res, digit);
+            res = try math.mul(Int, res, try math.cast(Int, base));
+            res = try math.add(Int, res, try math.cast(Int, digit));
         }
     }
 
-    pub fn eatUnsignedMax(parser: *@This(), comptime Int: type, base: Int, max: var) !Int {
+    pub fn eatUnsignedMax(parser: *@This(), comptime Int: type, base: u8, max: var) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -980,7 +980,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    fn charToDigit(c: u8, comptime Int: type, base: Int) !Int {
+    fn charToDigit(c: u8, base: u8) !u8 {
         const value = switch (c) {
             '0'...'9' => c - '0',
             'A'...'Z' => c - 'A' + 10,
@@ -991,7 +991,7 @@ pub const StrParser = struct {
         if (value >= base)
             return error.InvalidCharacter;
 
-        return try math.cast(Int, value);
+        return value;
     }
 };
 
