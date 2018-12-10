@@ -1,5 +1,6 @@
 const clap = @import("zig-clap");
 const common = @import("tm35-common");
+const format = @import("tm35-format");
 const fun = @import("fun-with-zig");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
@@ -30,6 +31,10 @@ const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
 const params = []Param{
+    Param.flag(
+        "abort execution on the first warning emitted",
+        Names.long("abort-on-first-warning"),
+    ),
     Param.flag(
         "display this help text and exit",
         Names.both("help"),
@@ -85,6 +90,7 @@ pub fn main() !void {
         return error.NoFileProvided;
     };
 
+    const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const out = args.option("--output") orelse blk: {
         break :blk try fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
     };
@@ -102,6 +108,8 @@ pub fn main() !void {
     while (stdin.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
         apply(game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch |err| {
             warning(line, 1, "{}\n", @errorName(err));
+            if (abort_on_first_warning)
+                return err;
         };
         line_buf.shrink(0);
     } else |err| switch (err) {
@@ -121,503 +129,321 @@ pub fn main() !void {
 }
 
 fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
-    const eql_index = mem.indexOfScalar(u8, str, '=') orelse return error.SyntaxError;
-    const value = str[eql_index + 1 ..];
+    var parser = format.StrParser.init(str);
 
-    if (sscan(str, ".version=", struct {})) |_| {
-        const version = meta.stringToEnum(common.Version, value) orelse return error.SyntaxError;
+    if (parser.eatStr(".version=")) |_| {
+        const version = meta.stringToEnum(common.Version, parser.str) orelse return error.SyntaxError;
         if (version != game.version)
             return error.VersionDontMatch;
-    } else |_| if (sscan(str, ".game_title=", struct {})) |_| {
-        if (!mem.eql(u8, value, game.header.game_title))
+    } else |_| if (parser.eatStr(".game_title=")) {
+        if (!mem.eql(u8, parser.str, game.header.game_title))
             return error.GameTitleDontMatch;
-    } else |_| if (sscan(str, ".gamecode=", struct {})) |_| {
-        if (!mem.eql(u8, value, game.header.gamecode))
+    } else |_| if (parser.eatStr(".gamecode=")) {
+        if (!mem.eql(u8, parser.str, game.header.gamecode))
             return error.GameCodeDontMatch;
-    } else |_| if (sscan(str, ".trainers[{}].class={}", Index1Value(u8))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
+    } else |_| if (parser.eatStr(".trainers[")) |_| {
+        const trainer_index = try parser.eatUnsignedMax(usize, 10, game.trainers.len);
+        const trainer = &game.trainers[trainer_index];
+        try parser.eatStr("].");
 
-        game.trainers[r.index1].class = r.value;
-    } else |_| if (sscan(str, ".trainers[{}].encounter_music={}", Index1Value(u8))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
+        if (parser.eatStr("class=")) |_| {
+            trainer.class = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("encounter_music=")) |_| {
+            trainer.encounter_music = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("trainer_picture=")) |_| {
+            trainer.trainer_picture = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("items[")) |_| {
+            const item_index = try parser.eatUnsignedMax(usize, 10, trainer.items.len);
+            try parser.eatStr("]=");
+            trainer.items[item_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.items.len));
+        } else |_| if (parser.eatStr("is_double=")) |_| {
+            trainer.is_double = lu32.init(try parser.eatUnsigned(u32, 10));
+        } else |_| if (parser.eatStr("ai=")) |_| {
+            trainer.ai = lu32.init(try parser.eatUnsigned(u32, 10));
+        } else |_| if (parser.eatStr("party[")) |_| {
+            const party_index = try parser.eatUnsignedMax(usize, 10, trainer.partyLen());
+            const member = try trainer.partyAt(party_index, game.data);
+            try parser.eatStr("].");
 
-        game.trainers[r.index1].encounter_music = r.value;
-    } else |_| if (sscan(str, ".trainers[{}].trainer_picture={}", Index1Value(u8))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
+            if (parser.eatStr("iv=")) |_| {
+                member.iv = lu16.init(try parser.eatUnsigned(u16, 10));
+            } else |_| if (parser.eatStr("level=")) |_| {
+                member.level = lu16.init(try parser.eatUnsigned(u16, 10));
+            } else |_| if (parser.eatStr("species=")) |_| {
+                member.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
+            } else |_| if (parser.eatStr("item=")) |_| {
+                const item = try parser.eatUnsignedMax(u16, 10, game.items.len);
+                switch (trainer.party_type) {
+                    gen3.PartyType.Item => member.toParent(gen3.PartyMemberItem).item = lu16.init(item),
+                    gen3.PartyType.Both => member.toParent(gen3.PartyMemberBoth).item = lu16.init(item),
+                    else => return error.NoField,
+                }
+            } else |_| if (parser.eatStr("moves[")) |_| {
+                const mv_ptr = switch (trainer.party_type) {
+                    gen3.PartyType.Moves => blk: {
+                        const move_member = member.toParent(gen3.PartyMemberMoves);
+                        const move_index = try parser.eatUnsignedMax(usize, 10, move_member.moves.len);
+                        break :blk &move_member.moves[move_index];
+                    },
+                    gen3.PartyType.Both => blk: {
+                        const move_member = member.toParent(gen3.PartyMemberBoth);
+                        const move_index = try parser.eatUnsignedMax(usize, 10, move_member.moves.len);
+                        break :blk &move_member.moves[move_index];
+                    },
+                    else => return error.NoField,
+                };
 
-        game.trainers[r.index1].encounter_music = r.value;
-    } else |_| if (sscan(str, ".trainers[{}].items[{}]={}", Index2Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].items.len <= r.index2)
-            return error.OutOfBound;
-
-        game.trainers[r.index1].items[r.index2] = lu16.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].is_double={}", Index1Value(u32))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-
-        game.trainers[r.index1].is_double = lu32.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].ai={}", Index1Value(u32))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-
-        game.trainers[r.index1].ai = lu32.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].party[{}].iv={}", Index2Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].partyLen() <= r.index2)
-            return error.OutOfBound;
-
-        (try game.trainers[r.index1].partyAt(r.index2, game.data)).iv = lu16.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].party[{}].level={}", Index2Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].partyLen() <= r.index2)
-            return error.OutOfBound;
-
-        (try game.trainers[r.index1].partyAt(r.index2, game.data)).level = lu16.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].party[{}].species={}", Index2Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].partyLen() <= r.index2)
-            return error.OutOfBound;
-
-        (try game.trainers[r.index1].partyAt(r.index2, game.data)).species = lu16.init(r.value);
-    } else |_| if (sscan(str, ".trainers[{}].party[{}].item={}", Index2Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].partyLen() <= r.index2)
-            return error.OutOfBound;
-
-        const trainer = &game.trainers[r.index1];
-        const base = try trainer.partyAt(r.index2, game.data);
-        switch (trainer.party_type) {
-            gen3.PartyType.Item => base.toParent(gen3.PartyMemberItem).item = lu16.init(r.value),
-            gen3.PartyType.Both => base.toParent(gen3.PartyMemberBoth).item = lu16.init(r.value),
-            else => return error.NoField,
+                try parser.eatStr("]=");
+                mv_ptr.* = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.len));
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| {
+            return error.NoField;
         }
-    } else |_| if (sscan(str, ".trainers[{}].party[{}].moves[{}]={}", Index3Value(u16))) |r| {
-        if (game.trainers.len <= r.index1)
-            return error.OutOfBound;
-        if (game.trainers[r.index1].partyLen() <= r.index2)
-            return error.OutOfBound;
+    } else |_| if (parser.eatStr(".moves[")) |_| {
+        const move_index = try parser.eatUnsignedMax(usize, 10, game.moves.len);
+        const move = &game.moves[move_index];
+        try parser.eatStr("].");
 
-        const trainer = &game.trainers[r.index1];
-        const base = try trainer.partyAt(r.index2, game.data);
-        switch (trainer.party_type) {
-            gen3.PartyType.Moves => {
-                const member = base.toParent(gen3.PartyMemberMoves);
-                if (member.moves.len <= r.index3)
-                    return error.OutOfBound;
-
-                member.moves[r.index3] = lu16.init(r.value);
-            },
-            gen3.PartyType.Both => {
-                const member = base.toParent(gen3.PartyMemberBoth);
-                if (member.moves.len <= r.index3)
-                    return error.OutOfBound;
-
-                member.moves[r.index3] = lu16.init(r.value);
-            },
-            else => return error.NoField,
+        if (parser.eatStr("effect=")) |_| {
+            move.effect = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("power=")) |_| {
+            move.power = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("type=")) |_| {
+            move.@"type" = meta.stringToEnum(gen3.Type, parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatStr("accuracy=")) |_| {
+            move.accuracy = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("pp=")) |_| {
+            move.pp = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("side_effect_chance=")) |_| {
+            move.side_effect_chance = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("target=")) |_| {
+            move.target = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("priority=")) |_| {
+            move.priority = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("flags=")) |_| {
+            move.flags = lu32.init(try parser.eatUnsigned(u32, 10));
+        } else |_| {
+            return error.NoField;
         }
-    } else |_| if (sscan(str, ".moves[{}].effect={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+    } else |_| if (parser.eatStr(".pokemons[")) {
+        const pokemon_index = try parser.eatUnsignedMax(usize, 10, game.pokemons.len);
+        const pokemon = &game.pokemons[pokemon_index];
+        try parser.eatStr("].");
 
-        game.moves[r.index1].effect = r.value;
-    } else |_| if (sscan(str, ".moves[{}].power={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+        if (parser.eatStr("stats.hp=")) |_| {
+            pokemon.stats.hp = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("stats.attack=")) |_| {
+            pokemon.stats.attack = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("stats.defense=")) |_| {
+            pokemon.stats.defense = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("stats.speed=")) |_| {
+            pokemon.stats.speed = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("stats.sp_attack=")) |_| {
+            pokemon.stats.sp_attack = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("stats.sp_defense=")) |_| {
+            pokemon.stats.sp_defense = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("types[")) |_| {
+            const type_index = try parser.eatUnsignedMax(usize, 10, pokemon.types.len);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].power = r.value;
-    } else |_| if (sscan(str, ".moves[{}].type=", Index1)) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            pokemon.types[type_index] = meta.stringToEnum(gen3.Type, parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatStr("catch_rate=")) |_| {
+            pokemon.catch_rate = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("base_exp_yield=")) |_| {
+            pokemon.base_exp_yield = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("ev_yield.hp=")) |_| {
+            pokemon.ev_yield.hp = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("ev_yield.attack=")) |_| {
+            pokemon.ev_yield.attack = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("ev_yield.defense=")) |_| {
+            pokemon.ev_yield.defense = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("ev_yield.speed=")) |_| {
+            pokemon.ev_yield.speed = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("ev_yield.sp_attack=")) |_| {
+            pokemon.ev_yield.sp_attack = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("ev_yield.sp_defense=")) |_| {
+            pokemon.ev_yield.sp_defense = try parser.eatUnsigned(u2, 10);
+        } else |_| if (parser.eatStr("items[")) |_| {
+            const item_index = try parser.eatUnsignedMax(usize, 10, pokemon.items.len);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].@"type" = meta.stringToEnum(gen3.Type, value) orelse return error.SyntaxError;
-    } else |_| if (sscan(str, ".moves[{}].accuracy={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            pokemon.items[item_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.items.len));
+        } else |_| if (parser.eatStr("gender_ratio=")) |_| {
+            pokemon.gender_ratio = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("egg_cycles=")) |_| {
+            pokemon.egg_cycles = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("base_friendship=")) |_| {
+            pokemon.base_friendship = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("growth_rate=")) |_| {
+            pokemon.growth_rate = meta.stringToEnum(common.GrowthRate, parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatStr("egg_groups[")) |_| {
+            const egg_index = try parser.eatUnsignedMax(usize, 10, 2);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].accuracy = r.value;
-    } else |_| if (sscan(str, ".moves[{}].pp={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            const egg_group = meta.stringToEnum(common.EggGroup, parser.str) orelse return error.SyntaxError;
+            switch (egg_index) {
+                0 => pokemon.egg_group1 = egg_group,
+                1 => pokemon.egg_group2 = egg_group,
+                else => return error.OutOfBound,
+            }
+        } else |_| if (parser.eatStr("abilities[")) |_| {
+            const ability_index = try parser.eatUnsignedMax(usize, 10, pokemon.abilities.len);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].pp = r.value;
-    } else |_| if (sscan(str, ".moves[{}].side_effect_chance={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            // TODO: Check on max number of abilities
+            pokemon.abilities[ability_index] = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("safari_zone_rate=")) |_| {
+            pokemon.safari_zone_rate = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("color=")) |_| {
+            pokemon.color = meta.stringToEnum(common.Color, parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatStr("flip=")) |_| {
+            pokemon.flip = stringToBool(parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatStr("tms[")) |_| {
+            const tm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].side_effect_chance = r.value;
-    } else |_| if (sscan(str, ".moves[{}].target={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            const value = stringToBool(parser.str) orelse return error.SyntaxError;
+            const learnset = &game.machine_learnsets[pokemon_index];
+            const new = switch (value) {
+                true => bits.set(u64, learnset.value(), @intCast(u6, tm_index)),
+                false => bits.clear(u64, learnset.value(), @intCast(u6, tm_index)),
+                else => unreachable,
+            };
+            learnset.* = lu64.init(new);
+        } else |_| if (parser.eatStr("hms[")) |_| {
+            const hm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
+            try parser.eatStr("]=");
 
-        game.moves[r.index1].target = r.value;
-    } else |_| if (sscan(str, ".moves[{}].priority={}", Index1Value(u8))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            const value = stringToBool(parser.str) orelse return error.SyntaxError;
+            const learnset = &game.machine_learnsets[pokemon_index];
+            const new = switch (value) {
+                true => bits.set(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len)),
+                false => bits.clear(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len)),
+                else => unreachable,
+            };
+            learnset.* = lu64.init(new);
+        } else |_| if (parser.eatStr("evos[")) |_| {
+            const evos = &game.evolutions[pokemon_index];
+            const evo_index = try parser.eatUnsignedMax(usize, 10, evos.len);
+            const evo = &evos[evo_index];
+            try parser.eatStr("].");
 
-        game.moves[r.index1].priority = r.value;
-    } else |_| if (sscan(str, ".moves[{}].flags={}", Index1Value(u32))) |r| {
-        if (game.moves.len <= r.index1)
-            return error.OutOfBound;
+            if (parser.eatStr("method=")) |_| {
+                evo.method = meta.stringToEnum(common.Evolution.Method, parser.str) orelse return error.SyntaxError;
+            } else |_| if (parser.eatStr("param=")) |_| {
+                evo.param = lu16.init(try parser.eatUnsigned(u16, 10));
+            } else |_| if (parser.eatStr("target=")) |_| {
+                evo.target = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatStr("moves[")) |_| {
+            const lvl_up_moves = try game.level_up_learnset_pointers[pokemon_index].toMany(game.data);
 
-        game.moves[r.index1].flags = lu32.init(r.value);
-    } else |_| if (sscan(str, ".pokemons[{}].stats.hp={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
+            // TODO: Bounds check
+            const lvl_up_index = try parser.eatUnsigned(usize, 10);
+            const lvl_up_move = &lvl_up_moves[lvl_up_index];
+            try parser.eatStr("].");
 
-        game.pokemons[r.index1].stats.hp = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].stats.attack={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].stats.attack = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].stats.defense={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].stats.defense = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].stats.speed={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].stats.speed = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].stats.sp_attack={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].stats.sp_attack = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].stats.sp_defense={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].stats.sp_defense = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].types[{}]=", Index2)) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-        if (game.pokemons[r.index1].types.len <= r.index2)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].types[r.index2] = meta.stringToEnum(gen3.Type, value) orelse return error.SyntaxError;
-    } else |_| if (sscan(str, ".pokemons[{}].catch_rate={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].catch_rate = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].base_exp_yield={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].base_exp_yield = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.hp={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.hp = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.attack={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.attack = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.defense={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.defense = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.speed={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.speed = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.sp_attack={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.sp_attack = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].ev_yield.sp_defense={}", Index1Value(u2))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].ev_yield.sp_defense = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].items[{}]={}", Index2Value(u16))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-        if (game.pokemons[r.index1].items.len <= r.index2)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].items[r.index2] = lu16.init(r.value);
-    } else |_| if (sscan(str, ".pokemons[{}].gender_ratio={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].gender_ratio = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].egg_cycles={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].egg_cycles = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].base_friendship={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].base_friendship = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].growth_rate=", Index1)) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        game.pokemons[r.index1].growth_rate = meta.stringToEnum(common.GrowthRate, value) orelse return error.SyntaxError;
-    } else |_| if (sscan(str, ".pokemons[{}].egg_groups[{}]=", Index2)) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-
-        const egg_group = meta.stringToEnum(common.EggGroup, value) orelse return error.SyntaxError;
-        switch (r.index2) {
-            0 => game.pokemons[r.index1].egg_group1 = egg_group,
-            1 => game.pokemons[r.index1].egg_group2 = egg_group,
-            else => return error.OutOfBound,
+            if (parser.eatStr("id=")) |_| {
+                lvl_up_move.id = try parser.eatUnsigned(u9, 10);
+            } else |_| if (parser.eatStr("level=")) |_| {
+                lvl_up_move.level = try parser.eatUnsigned(u7, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| {
+            return error.NoField;
         }
-    } else |_| if (sscan(str, ".pokemons[{}].abilities[{}]={}", Index2Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-        if (game.pokemons[r.index1].abilities.len <= r.index2)
-            return error.OutOfBound;
+    } else |_| if (parser.eatStr(".tms[")) {
+        const tm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
+        try parser.eatStr("]=");
 
-        game.pokemons[r.index1].abilities[r.index2] = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].safari_zone_rate={}", Index1Value(u8))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
+        game.tms[tm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.len));
+    } else |_| if (parser.eatStr(".hms[")) {
+        const tm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
+        try parser.eatStr("]=");
 
-        game.pokemons[r.index1].safari_zone_rate = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].color=", Index1)) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
+        game.hms[tm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.len));
+    } else |_| if (parser.eatStr(".items[")) {
+        const item_index = try parser.eatUnsignedMax(usize, 10, game.items.len);
+        const item = &game.items[item_index];
+        try parser.eatStr("].");
 
-        game.pokemons[r.index1].color = meta.stringToEnum(common.Color, value) orelse return error.SyntaxError;
-    } else |_| if (sscan(str, ".pokemons[{}].flip={}", Index1Value(bool))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
+        if (parser.eatStr("id=")) |_| {
+            item.id = lu16.init(try parser.eatUnsigned(u16, 10));
+        } else |_| if (parser.eatStr("price=")) |_| {
+            item.price = lu16.init(try parser.eatUnsigned(u16, 10));
+        } else |_| if (parser.eatStr("hold_effect=")) |_| {
+            item.hold_effect = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("hold_effect_param=")) |_| {
+            item.hold_effect_param = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("importance=")) |_| {
+            item.importance = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("pocked=")) |_| {
+            item.pocked = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("type=")) |_| {
+            item.@"type" = try parser.eatUnsigned(u8, 10);
+        } else |_| if (parser.eatStr("battle_usage=")) |_| {
+            item.battle_usage = lu32.init(try parser.eatUnsigned(u32, 10));
+        } else |_| if (parser.eatStr("secondary_id=")) |_| {
+            item.secondary_id = lu32.init(try parser.eatUnsigned(u32, 10));
+        } else |_| {
+            return error.NoField;
+        }
+    } else |_| if (parser.eatStr(".zones[")) {
+        const zone_index = try parser.eatUnsignedMax(usize, 10, game.wild_pokemon_headers.len);
+        const header = &game.wild_pokemon_headers[zone_index];
+        try parser.eatStr("].wild.");
 
-        game.pokemons[r.index1].flip = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].tms[{}]={}", Index2Value(bool))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-        if (game.tms.len <= r.index2)
-            return error.OutOfBound;
-
-        const learnset = &game.machine_learnsets[r.index1];
-        const new = switch (r.value) {
-            true => bits.set(u64, learnset.value(), @intCast(u6, r.index2)),
-            false => bits.clear(u64, learnset.value(), @intCast(u6, r.index2)),
-            else => unreachable,
-        };
-        learnset.* = lu64.init(new);
-    } else |_| if (sscan(str, ".pokemons[{}].hms[{}]={}", Index2Value(bool))) |r| {
-        if (game.pokemons.len <= r.index1)
-            return error.OutOfBound;
-        if (game.hms.len <= r.index2)
-            return error.OutOfBound;
-
-        const learnset = &game.machine_learnsets[r.index1];
-        const new = switch (r.value) {
-            true => bits.set(u64, learnset.value(), @intCast(u6, r.index2 + game.tms.len)),
-            false => bits.clear(u64, learnset.value(), @intCast(u6, r.index2 + game.tms.len)),
-            else => unreachable,
-        };
-        learnset.* = lu64.init(new);
-    } else |_| if (sscan(str, ".pokemons[{}].evos[{}].method=", Index2)) |r| {
-        if (game.evolutions.len <= r.index1)
-            return error.OutOfBound;
-        if (game.evolutions[r.index1].len <= r.index2)
-            return error.OutOfBound;
-
-        game.evolutions[r.index1][r.index2].method = meta.stringToEnum(common.Evolution.Method, value) orelse return error.SyntaxError;
-    } else |_| if (sscan(str, ".pokemons[{}].evos[{}].param={}", Index2Value(u16))) |r| {
-        if (game.evolutions.len <= r.index1)
-            return error.OutOfBound;
-        if (game.evolutions[r.index1].len <= r.index2)
-            return error.OutOfBound;
-
-        game.evolutions[r.index1][r.index2].param = lu16.init(r.value);
-    } else |_| if (sscan(str, ".pokemons[{}].evos[{}].target={}", Index2Value(u16))) |r| {
-        if (game.evolutions.len <= r.index1)
-            return error.OutOfBound;
-        if (game.evolutions[r.index1].len <= r.index2)
-            return error.OutOfBound;
-
-        game.evolutions[r.index1][r.index2].target = lu16.init(r.value);
-    } else |_| if (sscan(str, ".pokemons[{}].moves[{}].id={}", Index2Value(u9))) |r| {
-        if (game.level_up_learnset_pointers.len <= r.index1)
-            return error.OutOfBound;
-
-        // TODO: Bounds check indexing on lvl up learnset
-
-        const lvl_up_moves = try game.level_up_learnset_pointers[r.index1].toMany(game.data);
-        lvl_up_moves[r.index2].id = r.value;
-    } else |_| if (sscan(str, ".pokemons[{}].moves[{}].level={}", Index2Value(u7))) |r| {
-        if (game.level_up_learnset_pointers.len <= r.index1)
-            return error.OutOfBound;
-
-        // TODO: Bounds check indexing on lvl up learnset
-
-        const lvl_up_moves = try game.level_up_learnset_pointers[r.index1].toMany(game.data);
-        lvl_up_moves[r.index2].level = r.value;
-    } else |_| if (sscan(str, ".tms[{}]={}", Index1Value(u16))) |r| {
-        if (game.tms.len <= r.index1)
-            return error.OutOfBound;
-
-        game.tms[r.index1] = lu16.init(r.value);
-    } else |_| if (sscan(str, ".hms[{}]={}", Index1Value(u16))) |r| {
-        if (game.hms.len <= r.index1)
-            return error.OutOfBound;
-
-        game.hms[r.index1] = lu16.init(r.value);
-    } else |_| if (sscan(str, ".items[{}].id={}", Index1Value(u16))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].id = lu16.init(r.value);
-    } else |_| if (sscan(str, ".items[{}].price={}", Index1Value(u16))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].price = lu16.init(r.value);
-    } else |_| if (sscan(str, ".items[{}].hold_effect={}", Index1Value(u8))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].hold_effect = r.value;
-    } else |_| if (sscan(str, ".items[{}].hold_effect_param={}", Index1Value(u8))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].hold_effect_param = r.value;
-    } else |_| if (sscan(str, ".items[{}].importance={}", Index1Value(u8))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].importance = r.value;
-    } else |_| if (sscan(str, ".items[{}].pocked={}", Index1Value(u8))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].pocked = r.value;
-    } else |_| if (sscan(str, ".items[{}].type={}", Index1Value(u8))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].@"type" = r.value;
-    } else |_| if (sscan(str, ".items[{}].battle_usage={}", Index1Value(u32))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].battle_usage = lu32.init(r.value);
-    } else |_| if (sscan(str, ".items[{}].secondary_id={}", Index1Value(u32))) |r| {
-        if (game.items.len <= r.index1)
-            return error.OutOfBound;
-
-        game.items[r.index1].secondary_id = lu32.init(r.value);
-    } else |_| success: {
         inline for ([][]const u8{
             "land",
             "surf",
             "rock_smash",
             "fishing",
         }) |area_name| {
-            if (sscan(str, ".zones[{}].wild." ++ area_name ++ ".encounter_rate={}", Index1Value(u8))) |r| {
-                if (game.wild_pokemon_headers.len <= r.index1)
-                    return error.OutOfBound;
+            if (parser.eatStr(area_name ++ ".")) |_| {
+                const area = try @field(header, area_name).toSingle(game.data);
 
-                const area = try @field(game.wild_pokemon_headers[r.index1], area_name).toSingle(game.data);
-                area.encounter_rate = r.value;
-                break :success;
-            } else |_| if (sscan(str, ".zones[{}].wild." ++ area_name ++ ".pokemons[{}].min_level={}", Index2Value(u8))) |r| {
-                if (game.wild_pokemon_headers.len <= r.index1)
-                    return error.OutOfBound;
+                if (parser.eatStr("encounter_rate=")) |_| {
+                    area.encounter_rate = try parser.eatUnsigned(u8, 10);
+                } else |_| if (parser.eatStr("pokemons[")) |_| {
+                    const wilds = try area.wild_pokemons.toSingle(game.data);
+                    const wild_index = try parser.eatUnsignedMax(usize, 10, wilds.len);
+                    const wild = &wilds[wild_index];
+                    try parser.eatStr("].");
 
-                const area = try @field(game.wild_pokemon_headers[r.index1], area_name).toSingle(game.data);
-                const wilds = try area.wild_pokemons.toSingle(game.data);
-                if (wilds.len <= r.index2)
-                    return error.OutOfBound;
-
-                wilds[r.index2].min_level = r.value;
-                break :success;
-            } else |_| if (sscan(str, ".zones[{}].wild." ++ area_name ++ ".pokemons[{}].max_level={}", Index2Value(u8))) |r| {
-                if (game.wild_pokemon_headers.len <= r.index1)
-                    return error.OutOfBound;
-
-                const area = try @field(game.wild_pokemon_headers[r.index1], area_name).toSingle(game.data);
-                const wilds = try area.wild_pokemons.toSingle(game.data);
-                if (wilds.len <= r.index2)
-                    return error.OutOfBound;
-
-                wilds[r.index2].max_level = r.value;
-                break :success;
-            } else |_| if (sscan(str, ".zones[{}].wild." ++ area_name ++ ".pokemons[{}].species={}", Index2Value(u16))) |r| {
-                if (game.wild_pokemon_headers.len <= r.index1)
-                    return error.OutOfBound;
-
-                const area = try @field(game.wild_pokemon_headers[r.index1], area_name).toSingle(game.data);
-                const wilds = try area.wild_pokemons.toSingle(game.data);
-                if (wilds.len <= r.index2)
-                    return error.OutOfBound;
-
-                wilds[r.index2].species = lu16.init(r.value);
-                break :success;
+                    if (parser.eatStr("min_level=")) |_| {
+                        wild.min_level = try parser.eatUnsigned(u8, 10);
+                    } else |_| if (parser.eatStr("max_level=")) |_| {
+                        wild.max_level = try parser.eatUnsigned(u8, 10);
+                    } else |_| if (parser.eatStr("species=")) |_| {
+                        wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
+                    } else |_| {
+                        return error.NoField;
+                    }
+                } else |_| {
+                    return error.NoField;
+                }
             } else |_| {}
         }
-
+    } else |_| {
         return error.NoField;
     }
+}
+
+fn stringToBool(str: []const u8) ?bool {
+    if (mem.eql(u8, "true", str))
+        return true;
+    if (mem.eql(u8, "false", str))
+        return false;
+
+    return null;
 }
 
 fn warning(line: usize, col: usize, comptime f: []const u8, a: ...) void {
     debug.warn("(stdin):{}:{}: warning: ", line, col);
     debug.warn(f, a);
-}
-
-const Index1 = struct {
-    index1: usize,
-};
-
-const Index2 = struct {
-    index1: usize,
-    index2: usize,
-};
-
-const Index3 = struct {
-    index1: usize,
-    index2: usize,
-    index3: usize,
-};
-
-fn Index1Value(comptime V: type) type {
-    return struct {
-        index1: usize,
-        value: V,
-    };
-}
-
-fn Index2Value(comptime V: type) type {
-    return struct {
-        index1: usize,
-        index2: usize,
-        value: V,
-    };
-}
-
-fn Index3Value(comptime V: type) type {
-    return struct {
-        index1: usize,
-        index2: usize,
-        index3: usize,
-        value: V,
-    };
 }
