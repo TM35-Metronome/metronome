@@ -8,6 +8,7 @@ const std = @import("std");
 
 const bits = fun.bits;
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
@@ -39,58 +40,43 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const unbuf_stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
+pub fn main() !void {
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
     var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
-    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
     const stdout = &buf_stdout.stream;
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const direct_allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
+    var direct_allocator = heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
 
-    // TODO: Other allocator?
-    const allocator = direct_allocator;
+    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    defer arena.deinit();
+
+    const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
         usage(stderr) catch {};
-        return 1;
+        return err;
     };
-    defer args.deinit();
+
+    if (args.flag("--help"))
+        return try usage(stdout);
 
     const file_name = blk: {
         const poss = args.positionals();
         if (poss.len == 0) {
-            debug.warn("error: No file specified.");
             usage(stderr) catch {};
-            return 1;
+            return error.NoFileProvided;
         }
 
         break :blk poss[0];
     };
-
-    main2(allocator, args, file_name, stdout) catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-    buf_stdout.flush() catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-
-    return 0;
-}
-
-pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, stream: var) !void {
-    if (args.flag("--help"))
-        return try usage(stream);
 
     var game = blk: {
         var file = os.File.openRead(file_name) catch |err| {
@@ -101,8 +87,12 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
 
         break :blk try gen3.Game.fromFile(file, allocator);
     };
-    defer game.deinit();
 
+    try outputGameData(game, stdout);
+}
+
+
+fn outputGameData(game: gen3.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
     try stream.print(".game_title={}\n", game.header.game_title);
     try stream.print(".gamecode={}\n", game.header.gamecode);
