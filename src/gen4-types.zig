@@ -62,6 +62,10 @@ pub const PartyMemberBase = packed struct {
     level: lu16,
     species: u10,
     form: u6,
+
+    pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
+        return @fieldParentPtr(Parent, "base", base);
+    }
 };
 
 pub const PartyMemberNone = packed struct {

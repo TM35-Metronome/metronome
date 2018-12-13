@@ -3,7 +3,10 @@ const Builder = @import("std").build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
-    inline for ([][]const u8{"tm35-gen4-load"}) |exe_name| {
+    inline for ([][]const u8{
+        "tm35-gen4-load",
+        "tm35-gen4-apply",
+    }) |exe_name| {
         const exe = b.addExecutable(exe_name, "src/" ++ exe_name ++ ".zig");
         exe.setBuildMode(mode);
         exe.addPackagePath("fun-with-zig", "lib/fun-with-zig/index.zig");
