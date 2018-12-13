@@ -131,7 +131,7 @@ pub fn main() !void {
 fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
     var parser = format.StrParser.init(str);
 
-    if (parser.eatStr(".version=")) |_| {
+    if (parser.eatStr(".version=")) {
         const version = meta.stringToEnum(common.Version, parser.str) orelse return error.SyntaxError;
         if (version != game.version)
             return error.VersionDontMatch;
@@ -141,44 +141,44 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
     } else |_| if (parser.eatStr(".gamecode=")) {
         if (!mem.eql(u8, parser.str, game.header.gamecode))
             return error.GameCodeDontMatch;
-    } else |_| if (parser.eatStr(".trainers[")) |_| {
+    } else |_| if (parser.eatStr(".trainers[")) {
         const trainer_index = try parser.eatUnsignedMax(usize, 10, game.trainers.len);
         const trainer = &game.trainers[trainer_index];
         try parser.eatStr("].");
 
-        if (parser.eatStr("class=")) |_| {
+        if (parser.eatStr("class=")) {
             trainer.class = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("encounter_music=")) |_| {
+        } else |_| if (parser.eatStr("encounter_music=")) {
             trainer.encounter_music = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("trainer_picture=")) |_| {
+        } else |_| if (parser.eatStr("trainer_picture=")) {
             trainer.trainer_picture = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("items[")) |_| {
+        } else |_| if (parser.eatStr("items[")) {
             const item_index = try parser.eatUnsignedMax(usize, 10, trainer.items.len);
             try parser.eatStr("]=");
             trainer.items[item_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.items.len));
-        } else |_| if (parser.eatStr("is_double=")) |_| {
+        } else |_| if (parser.eatStr("is_double=")) {
             trainer.is_double = lu32.init(try parser.eatUnsigned(u32, 10));
-        } else |_| if (parser.eatStr("ai=")) |_| {
+        } else |_| if (parser.eatStr("ai=")) {
             trainer.ai = lu32.init(try parser.eatUnsigned(u32, 10));
-        } else |_| if (parser.eatStr("party[")) |_| {
+        } else |_| if (parser.eatStr("party[")) {
             const party_index = try parser.eatUnsignedMax(usize, 10, trainer.partyLen());
             const member = try trainer.partyAt(party_index, game.data);
             try parser.eatStr("].");
 
-            if (parser.eatStr("iv=")) |_| {
+            if (parser.eatStr("iv=")) {
                 member.iv = lu16.init(try parser.eatUnsigned(u16, 10));
-            } else |_| if (parser.eatStr("level=")) |_| {
+            } else |_| if (parser.eatStr("level=")) {
                 member.level = lu16.init(try parser.eatUnsigned(u16, 10));
-            } else |_| if (parser.eatStr("species=")) |_| {
+            } else |_| if (parser.eatStr("species=")) {
                 member.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
-            } else |_| if (parser.eatStr("item=")) |_| {
+            } else |_| if (parser.eatStr("item=")) {
                 const item = try parser.eatUnsignedMax(u16, 10, game.items.len);
                 switch (trainer.party_type) {
                     gen3.PartyType.Item => member.toParent(gen3.PartyMemberItem).item = lu16.init(item),
                     gen3.PartyType.Both => member.toParent(gen3.PartyMemberBoth).item = lu16.init(item),
                     else => return error.NoField,
                 }
-            } else |_| if (parser.eatStr("moves[")) |_| {
+            } else |_| if (parser.eatStr("moves[")) {
                 const mv_ptr = switch (trainer.party_type) {
                     gen3.PartyType.Moves => blk: {
                         const move_member = member.toParent(gen3.PartyMemberMoves);
@@ -201,28 +201,28 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatStr(".moves[")) |_| {
+    } else |_| if (parser.eatStr(".moves[")) {
         const move_index = try parser.eatUnsignedMax(usize, 10, game.moves.len);
         const move = &game.moves[move_index];
         try parser.eatStr("].");
 
-        if (parser.eatStr("effect=")) |_| {
+        if (parser.eatStr("effect=")) {
             move.effect = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("power=")) |_| {
+        } else |_| if (parser.eatStr("power=")) {
             move.power = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("type=")) |_| {
+        } else |_| if (parser.eatStr("type=")) {
             move.@"type" = meta.stringToEnum(gen3.Type, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("accuracy=")) |_| {
+        } else |_| if (parser.eatStr("accuracy=")) {
             move.accuracy = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("pp=")) |_| {
+        } else |_| if (parser.eatStr("pp=")) {
             move.pp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("side_effect_chance=")) |_| {
+        } else |_| if (parser.eatStr("side_effect_chance=")) {
             move.side_effect_chance = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("target=")) |_| {
+        } else |_| if (parser.eatStr("target=")) {
             move.target = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("priority=")) |_| {
+        } else |_| if (parser.eatStr("priority=")) {
             move.priority = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("flags=")) |_| {
+        } else |_| if (parser.eatStr("flags=")) {
             move.flags = lu32.init(try parser.eatUnsigned(u32, 10));
         } else |_| {
             return error.NoField;
@@ -232,53 +232,53 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         const pokemon = &game.pokemons[pokemon_index];
         try parser.eatStr("].");
 
-        if (parser.eatStr("stats.hp=")) |_| {
+        if (parser.eatStr("stats.hp=")) {
             pokemon.stats.hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.attack=")) |_| {
+        } else |_| if (parser.eatStr("stats.attack=")) {
             pokemon.stats.attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.defense=")) |_| {
+        } else |_| if (parser.eatStr("stats.defense=")) {
             pokemon.stats.defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.speed=")) |_| {
+        } else |_| if (parser.eatStr("stats.speed=")) {
             pokemon.stats.speed = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_attack=")) |_| {
+        } else |_| if (parser.eatStr("stats.sp_attack=")) {
             pokemon.stats.sp_attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_defense=")) |_| {
+        } else |_| if (parser.eatStr("stats.sp_defense=")) {
             pokemon.stats.sp_defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("types[")) |_| {
+        } else |_| if (parser.eatStr("types[")) {
             const type_index = try parser.eatUnsignedMax(usize, 10, pokemon.types.len);
             try parser.eatStr("]=");
 
             pokemon.types[type_index] = meta.stringToEnum(gen3.Type, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("catch_rate=")) |_| {
+        } else |_| if (parser.eatStr("catch_rate=")) {
             pokemon.catch_rate = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("base_exp_yield=")) |_| {
+        } else |_| if (parser.eatStr("base_exp_yield=")) {
             pokemon.base_exp_yield = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("ev_yield.hp=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.hp=")) {
             pokemon.ev_yield.hp = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("ev_yield.attack=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.attack=")) {
             pokemon.ev_yield.attack = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("ev_yield.defense=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.defense=")) {
             pokemon.ev_yield.defense = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("ev_yield.speed=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.speed=")) {
             pokemon.ev_yield.speed = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("ev_yield.sp_attack=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.sp_attack=")) {
             pokemon.ev_yield.sp_attack = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("ev_yield.sp_defense=")) |_| {
+        } else |_| if (parser.eatStr("ev_yield.sp_defense=")) {
             pokemon.ev_yield.sp_defense = try parser.eatUnsigned(u2, 10);
-        } else |_| if (parser.eatStr("items[")) |_| {
+        } else |_| if (parser.eatStr("items[")) {
             const item_index = try parser.eatUnsignedMax(usize, 10, pokemon.items.len);
             try parser.eatStr("]=");
 
             pokemon.items[item_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.items.len));
-        } else |_| if (parser.eatStr("gender_ratio=")) |_| {
+        } else |_| if (parser.eatStr("gender_ratio=")) {
             pokemon.gender_ratio = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("egg_cycles=")) |_| {
+        } else |_| if (parser.eatStr("egg_cycles=")) {
             pokemon.egg_cycles = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("base_friendship=")) |_| {
+        } else |_| if (parser.eatStr("base_friendship=")) {
             pokemon.base_friendship = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("growth_rate=")) |_| {
+        } else |_| if (parser.eatStr("growth_rate=")) {
             pokemon.growth_rate = meta.stringToEnum(common.GrowthRate, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("egg_groups[")) |_| {
+        } else |_| if (parser.eatStr("egg_groups[")) {
             const egg_index = try parser.eatUnsignedMax(usize, 10, 2);
             try parser.eatStr("]=");
 
@@ -288,19 +288,19 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 1 => pokemon.egg_group2 = egg_group,
                 else => return error.OutOfBound,
             }
-        } else |_| if (parser.eatStr("abilities[")) |_| {
+        } else |_| if (parser.eatStr("abilities[")) {
             const ability_index = try parser.eatUnsignedMax(usize, 10, pokemon.abilities.len);
             try parser.eatStr("]=");
 
             // TODO: Check on max number of abilities
             pokemon.abilities[ability_index] = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("safari_zone_rate=")) |_| {
+        } else |_| if (parser.eatStr("safari_zone_rate=")) {
             pokemon.safari_zone_rate = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("color=")) |_| {
+        } else |_| if (parser.eatStr("color=")) {
             pokemon.color = meta.stringToEnum(common.Color, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("flip=")) |_| {
+        } else |_| if (parser.eatStr("flip=")) {
             pokemon.flip = stringToBool(parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("tms[")) |_| {
+        } else |_| if (parser.eatStr("tms[")) {
             const tm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
             try parser.eatStr("]=");
 
@@ -312,7 +312,7 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 else => unreachable,
             };
             learnset.* = lu64.init(new);
-        } else |_| if (parser.eatStr("hms[")) |_| {
+        } else |_| if (parser.eatStr("hms[")) {
             const hm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
             try parser.eatStr("]=");
 
@@ -324,22 +324,22 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 else => unreachable,
             };
             learnset.* = lu64.init(new);
-        } else |_| if (parser.eatStr("evos[")) |_| {
+        } else |_| if (parser.eatStr("evos[")) {
             const evos = &game.evolutions[pokemon_index];
             const evo_index = try parser.eatUnsignedMax(usize, 10, evos.len);
             const evo = &evos[evo_index];
             try parser.eatStr("].");
 
-            if (parser.eatStr("method=")) |_| {
+            if (parser.eatStr("method=")) {
                 evo.method = meta.stringToEnum(common.Evolution.Method, parser.str) orelse return error.SyntaxError;
-            } else |_| if (parser.eatStr("param=")) |_| {
+            } else |_| if (parser.eatStr("param=")) {
                 evo.param = lu16.init(try parser.eatUnsigned(u16, 10));
-            } else |_| if (parser.eatStr("target=")) |_| {
+            } else |_| if (parser.eatStr("target=")) {
                 evo.target = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
             } else |_| {
                 return error.NoField;
             }
-        } else |_| if (parser.eatStr("moves[")) |_| {
+        } else |_| if (parser.eatStr("moves[")) {
             const lvl_up_moves = try game.level_up_learnset_pointers[pokemon_index].toMany(game.data);
 
             // TODO: Bounds check
@@ -347,9 +347,9 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             const lvl_up_move = &lvl_up_moves[lvl_up_index];
             try parser.eatStr("].");
 
-            if (parser.eatStr("id=")) |_| {
+            if (parser.eatStr("id=")) {
                 lvl_up_move.id = try parser.eatUnsigned(u9, 10);
-            } else |_| if (parser.eatStr("level=")) |_| {
+            } else |_| if (parser.eatStr("level=")) {
                 lvl_up_move.level = try parser.eatUnsigned(u7, 10);
             } else |_| {
                 return error.NoField;
@@ -372,23 +372,23 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         const item = &game.items[item_index];
         try parser.eatStr("].");
 
-        if (parser.eatStr("id=")) |_| {
+        if (parser.eatStr("id=")) {
             item.id = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("price=")) |_| {
+        } else |_| if (parser.eatStr("price=")) {
             item.price = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("hold_effect=")) |_| {
+        } else |_| if (parser.eatStr("hold_effect=")) {
             item.hold_effect = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("hold_effect_param=")) |_| {
+        } else |_| if (parser.eatStr("hold_effect_param=")) {
             item.hold_effect_param = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("importance=")) |_| {
+        } else |_| if (parser.eatStr("importance=")) {
             item.importance = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("pocked=")) |_| {
+        } else |_| if (parser.eatStr("pocked=")) {
             item.pocked = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("type=")) |_| {
+        } else |_| if (parser.eatStr("type=")) {
             item.@"type" = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("battle_usage=")) |_| {
+        } else |_| if (parser.eatStr("battle_usage=")) {
             item.battle_usage = lu32.init(try parser.eatUnsigned(u32, 10));
-        } else |_| if (parser.eatStr("secondary_id=")) |_| {
+        } else |_| if (parser.eatStr("secondary_id=")) {
             item.secondary_id = lu32.init(try parser.eatUnsigned(u32, 10));
         } else |_| {
             return error.NoField;
@@ -404,22 +404,22 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
             "rock_smash",
             "fishing",
         }) |area_name| {
-            if (parser.eatStr(area_name ++ ".")) |_| {
+            if (parser.eatStr(area_name ++ ".")) {
                 const area = try @field(header, area_name).toSingle(game.data);
 
-                if (parser.eatStr("encounter_rate=")) |_| {
+                if (parser.eatStr("encounter_rate=")) {
                     area.encounter_rate = try parser.eatUnsigned(u8, 10);
-                } else |_| if (parser.eatStr("pokemons[")) |_| {
+                } else |_| if (parser.eatStr("pokemons[")) {
                     const wilds = try area.wild_pokemons.toSingle(game.data);
                     const wild_index = try parser.eatUnsignedMax(usize, 10, wilds.len);
                     const wild = &wilds[wild_index];
                     try parser.eatStr("].");
 
-                    if (parser.eatStr("min_level=")) |_| {
+                    if (parser.eatStr("min_level=")) {
                         wild.min_level = try parser.eatUnsigned(u8, 10);
-                    } else |_| if (parser.eatStr("max_level=")) |_| {
+                    } else |_| if (parser.eatStr("max_level=")) {
                         wild.max_level = try parser.eatUnsigned(u8, 10);
-                    } else |_| if (parser.eatStr("species=")) |_| {
+                    } else |_| if (parser.eatStr("species=")) {
                         wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.len));
                     } else |_| {
                         return error.NoField;
