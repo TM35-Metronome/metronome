@@ -124,49 +124,37 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
             try stream.print(".trainers[{}].items[{}]={}\n", i, j, item.value());
         }
 
-        const parties = game.trainers.nodes.toSlice();
+        const parties = game.parties.nodes.toSlice();
         if (parties.len <= i)
             continue;
 
         const party_file = nodeAsFile(parties[i]) catch continue;
         const party_data = party_file.data;
-        switch (trainer.party_type) {
-            gen4.PartyType.None => {
-                var j: usize = 0;
-                while (j < trainer.party_size) : (j += 1) {
-                    const member = getMember(gen4.PartyMemberNone, party_data, game.version, j) orelse break;
-                    try printMemberBase(stream, i, j, member.base);
-                }
-            },
-            gen4.PartyType.Item => {
-                var j: usize = 0;
-                while (j < trainer.party_size) : (j += 1) {
-                    const member = getMember(gen4.PartyMemberItem, party_data, game.version, j) orelse break;
-                    try printMemberBase(stream, i, j, member.base);
+        var j: usize = 0;
+        while (j < trainer.party_size) : (j += 1) {
+            const base = getMemberBase(trainer.party_type, party_data, game.version, j) orelse break;
+            try printMemberBase(stream, i, j, base.*);
+
+            switch (trainer.party_type) {
+                gen4.PartyType.None => {},
+                gen4.PartyType.Item => {
+                    const member = base.toParent(gen4.PartyMemberItem);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
-                }
-            },
-            gen4.PartyType.Moves => {
-                var j: usize = 0;
-                while (j < trainer.party_size) : (j += 1) {
-                    const member = getMember(gen4.PartyMemberMoves, party_data, game.version, j) orelse break;
-                    try printMemberBase(stream, i, j, member.base);
+                },
+                gen4.PartyType.Moves => {
+                    const member = base.toParent(gen4.PartyMemberMoves);
                     for (member.moves) |move, k| {
                         try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
-                }
-            },
-            gen4.PartyType.Both => {
-                var j: usize = 0;
-                while (j < trainer.party_size) : (j += 1) {
-                    const member = getMember(gen4.PartyMemberBoth, party_data, game.version, j) orelse break;
-                    try printMemberBase(stream, i, j, member.base);
+                },
+                gen4.PartyType.Both => {
+                    const member = base.toParent(gen4.PartyMemberBoth);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                     for (member.moves) |move, k| {
                         try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
-                }
-            },
+                },
+            }
         }
     }
 
@@ -250,7 +238,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
             for (wild_mons.grass) |grass, j| {
                 try stream.print(".zones[{}].wild.grass.pokemons[{}].min_level={}\n", i, j, grass.level);
                 try stream.print(".zones[{}].wild.grass.pokemons[{}].max_level={}\n", i, j, grass.level);
-                try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", i, j, grass.species.value());
+                try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", i, j, grass.species.species());
+                try stream.print(".zones[{}].wild.grass.pokemons[{}].form={}\n", i, j, grass.species.form());
             }
 
             inline for ([][]const u8{
@@ -262,7 +251,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                 "gba_replacements",
             }) |area_name| {
                 for (@field(wild_mons, area_name)) |replacement, k| {
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, replacement.species.value());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, replacement.species.species());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, replacement.species.form());
                 }
             }
 
@@ -273,10 +263,12 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                 "good_rod",
                 "super_rod",
             }) |area_name| {
+                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", i, area_name, @field(wild_mons, area_name ++ "_rate").value());
                 for (@field(wild_mons, area_name)) |sea, k| {
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.species());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, sea.species.form());
                 }
             }
         },
@@ -294,7 +286,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                 for (@field(wild_mons, area_name)) |species, j| {
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, j, species.value());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, j, species.species());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, j, species.form());
                 }
             }
 
@@ -309,7 +302,8 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
                 for (@field(wild_mons, area_name)) |sea, k| {
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.species());
+                    try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, sea.species.form());
                 }
             }
 
@@ -325,11 +319,20 @@ fn printMemberBase(stream: var, i: usize, j: usize, member: gen4.PartyMemberBase
     try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, member.gender);
     try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, member.ability);
     try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.level.value());
-    try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.species);
-    try stream.print(".trainers[{}].party[{}].form={}\n", i, j, member.form);
+    try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.species.species());
+    try stream.print(".trainers[{}].party[{}].form={}\n", i, j, member.species.form());
 }
 
-fn getMember(comptime T: type, data: []const u8, version: common.Version, i: usize) ?T {
+fn getMemberBase(party_type: gen4.PartyType, data: []u8, version: common.Version, i: usize) ?*gen4.PartyMemberBase {
+    return switch (party_type) {
+        gen4.PartyType.None => &(getMember(gen4.PartyMemberNone, data, version, i) orelse return null).base,
+        gen4.PartyType.Item => &(getMember(gen4.PartyMemberItem, data, version, i) orelse return null).base,
+        gen4.PartyType.Moves => &(getMember(gen4.PartyMemberMoves, data, version, i) orelse return null).base,
+        gen4.PartyType.Both => &(getMember(gen4.PartyMemberBoth, data, version, i) orelse return null).base,
+    };
+}
+
+fn getMember(comptime T: type, data: []u8, version: common.Version, i: usize) ?*T {
     switch (version) {
         common.Version.Diamond,
         common.Version.Pearl,
@@ -338,7 +341,7 @@ fn getMember(comptime T: type, data: []const u8, version: common.Version, i: usi
             if (party.len <= i)
                 return null;
 
-            return party[i];
+            return &party[i];
         },
 
         common.Version.Platinum,
@@ -349,7 +352,7 @@ fn getMember(comptime T: type, data: []const u8, version: common.Version, i: usi
             if (party.len <= i)
                 return null;
 
-            return party[i].member;
+            return &party[i].member;
         },
 
         else => unreachable,

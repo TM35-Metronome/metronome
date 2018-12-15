@@ -10,6 +10,7 @@ const std = @import("std");
 const bits = fun.bits;
 const debug = std.debug;
 const fmt = std.fmt;
+const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
@@ -30,6 +31,10 @@ const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
 const params = []Param{
+    Param.flag(
+        "abort execution on the first warning emitted",
+        Names.long("abort-on-first-warning"),
+    ),
     Param.flag(
         "display this help text and exit",
         Names.both("help"),
@@ -52,39 +57,31 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const unbuf_stdin = &(std.io.getStdIn() catch return 1).inStream().stream;
+pub fn main() !void {
+    const unbuf_stdin = &(try std.io.getStdIn()).inStream().stream;
     var buf_stdin = BufInStream.init(unbuf_stdin);
 
-    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
-    const stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
+    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stdout = &(try std.io.getStdOut()).outStream().stream;
     const stdin = &buf_stdin.stream;
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const direct_allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
+    var direct_allocator = std.heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
 
-    // TODO: Other allocator?
-    const allocator = direct_allocator;
+    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    defer arena.deinit();
+
+    const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
         usage(stderr) catch {};
-        return 1;
+        return err;
     };
-    defer args.deinit();
 
-    main2(allocator, args, stdin, stdout, stderr) catch |err| return 1;
-
-    return 0;
-}
-
-pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, stderr: var) !void {
     if (args.flag("--help"))
         return try usage(stdout);
 
@@ -93,12 +90,10 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
         return try usage(stderr);
     };
 
-    var free_out = false;
+    const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const out = args.option("--output") orelse blk: {
-        free_out = true;
         break :blk try fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
     };
-    defer if (free_out) allocator.free(out);
 
     var rom = blk: {
         var file = os.File.openRead(file_name) catch |err| {
@@ -109,15 +104,18 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stdin: var, stdout: var, std
 
         break :blk try nds.Rom.fromFile(file, allocator);
     };
-    defer rom.deinit();
 
     const game = try gen4.Game.fromRom(rom);
 
     var line: usize = 1;
     var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
+
     while (stdin.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
-        apply(rom, game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch {};
+        apply(rom, game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch |err| {
+            warning(line, 1, "{}\n", @errorName(err));
+            if (abort_on_first_warning)
+                return err;
+        };
         line_buf.shrink(0);
     } else |err| switch (err) {
         error.EndOfStream => {
@@ -172,7 +170,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
         } else |_| if (parser.eatStr("ai=")) {
             trainer.ai = lu32.init(try parser.eatUnsigned(u32, 10));
         } else |_| if (parser.eatStr("party[")) {
-            const parties = game.trainers.nodes.toSlice();
+            const parties = game.parties.nodes.toSlice();
             const party_index = try parser.eatUnsignedMax(usize, 10, trainer.party_size);
             const party_file = try nodeAsFile(parties[trainer_index]);
             const member = getMemberBase(trainer.party_type, party_file.data, game.version, party_index) orelse return error.OutOfBound;
@@ -187,9 +185,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             } else |_| if (parser.eatStr("level=")) {
                 member.level = lu16.init(try parser.eatUnsigned(u16, 10));
             } else |_| if (parser.eatStr("species=")) {
-                member.species = try parser.eatUnsigned(u10, 10);
+                member.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
             } else |_| if (parser.eatStr("form=")) {
-                member.form = try parser.eatUnsigned(u6, 10);
+                member.species.setForm(try parser.eatUnsigned(u6, 10));
             } else |_| if (parser.eatStr("item=")) {
                 const item = try parser.eatUnsigned(u16, 10);
                 switch (trainer.party_type) {
@@ -372,10 +370,13 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                     } else |_| if (parser.eatStr("max_level=")) {
                         wild.level = try parser.eatUnsigned(u8, 10);
                     } else |_| if (parser.eatStr("species=")) {
-                        wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
+                        wild.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
+                    } else |_| if (parser.eatStr("form=")) {
+                        wild.species.setForm(try parser.eatUnsigned(u6, 10));
                     } else |_| {
                         return error.NoField;
                     }
+                    break :done;
                 } else |_| {}
 
                 inline for ([][]const u8{
@@ -393,7 +394,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                         try parser.eatStr("].");
 
                         if (parser.eatStr("species=")) {
-                            wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
+                            wild.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
+                        } else |_| if (parser.eatStr("form=")) {
+                            wild.species.setForm(try parser.eatUnsigned(u6, 10));
                         } else |_| {
                             return error.NoField;
                         }
@@ -408,7 +411,10 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                     "good_rod",
                     "super_rod",
                 }) |area_name| {
-                    if (parser.eatStr(area_name ++ ".pokemons[")) {
+                    if (parser.eatStr(area_name ++ ".encounter_rate=")) {
+                        @field(wilds, area_name ++ "_rate") = lu32.init(try parser.eatUnsigned(u32, 10));
+                        break :done;
+                    } else |_| if (parser.eatStr(area_name ++ ".pokemons[")) {
                         const area = &@field(wilds, area_name);
                         const wild_index = try parser.eatUnsignedMax(usize, 10, area.len);
                         const wild = &area[wild_index];
@@ -419,7 +425,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                         } else |_| if (parser.eatStr("max_level=")) {
                             wild.max_level = try parser.eatUnsigned(u8, 10);
                         } else |_| if (parser.eatStr("species=")) {
-                            wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
+                            wild.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
+                        } else |_| if (parser.eatStr("form=")) {
+                            wild.species.setForm(try parser.eatUnsigned(u6, 10));
                         } else |_| {
                             return error.NoField;
                         }
@@ -453,7 +461,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                         } else |_| if (parser.eatStr("max_level=")) {
                             wilds.grass_levels[wild_index] = try parser.eatUnsigned(u8, 10);
                         } else |_| if (parser.eatStr("species=")) {
-                            wild.* = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
+                            wild.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
+                        } else |_| if (parser.eatStr("form=")) {
+                            wild.setForm(try parser.eatUnsigned(u6, 10));
                         } else |_| {
                             return error.NoField;
                         }
@@ -482,7 +492,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                         } else |_| if (parser.eatStr("max_level=")) {
                             wild.max_level = try parser.eatUnsigned(u8, 10);
                         } else |_| if (parser.eatStr("species=")) {
-                            wild.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
+                            wild.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
+                        } else |_| if (parser.eatStr("form=")) {
+                            wild.species.setForm(try parser.eatUnsigned(u6, 10));
                         } else |_| {
                             return error.NoField;
                         }
@@ -495,7 +507,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             },
             else => unreachable,
         }
-    } else |_| {
+    } else |err| {
         return error.NoField;
     }
 }

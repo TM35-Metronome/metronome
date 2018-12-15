@@ -55,13 +55,32 @@ pub const PartyType = enum(u8) {
     Both = 0b11,
 };
 
+pub const Species = packed struct {
+    value: lu16,
+
+    pub fn species(s: Species) u10 {
+        return @truncate(u10, s.value.value());
+    }
+
+    pub fn setSpecies(s: *Species, spe: u10) void {
+        s.value = lu16.init((u16(s.form()) << u4(10)) | spe);
+    }
+
+    pub fn form(s: Species) u6 {
+        return @truncate(u6, s.value.value() >> 10);
+    }
+
+    pub fn setForm(s: *Species, f: u10) void {
+        s.value = lu16.init((u16(f) << u4(10)) | s.species());
+    }
+};
+
 pub const PartyMemberBase = packed struct {
     iv: u8,
     gender: u4,
     ability: u4,
     level: lu16,
-    species: u10,
-    form: u6,
+    species: Species,
 
     pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
         return @fieldParentPtr(Parent, "base", base);
@@ -162,29 +181,39 @@ pub const DpptWildPokemons = packed struct {
     radar_replacements: [4]Replacement, // Replaces grass[4, 5, 10, 11]
     unknown_replacements: [6]Replacement, // ???
     gba_replacements: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
+
+    surf_rate: lu32,
     surf: [5]Sea,
+
+    sea_unknown_rate: lu32,
     sea_unknown: [5]Sea,
+
+    old_rod_rate: lu32,
     old_rod: [5]Sea,
+
+    good_rod_rate: lu32,
     good_rod: [5]Sea,
+
+    super_rod_rate: lu32,
     super_rod: [5]Sea,
 
     pub const Grass = packed struct {
         level: u8,
         pad1: [3]u8,
-        species: lu16,
+        species: Species,
         pad2: [2]u8,
     };
 
     pub const Sea = packed struct {
-        min_level: u8,
         max_level: u8,
+        min_level: u8,
         pad1: [2]u8,
-        species: lu16,
+        species: Species,
         pad2: [2]u8,
     };
 
     pub const Replacement = packed struct {
-        species: lu16,
+        species: Species,
         pad: [2]u8,
     };
 };
@@ -194,21 +223,21 @@ pub const HgssWildPokemons = packed struct {
     sea_rates: [5]u8,
     unknown: [2]u8,
     grass_levels: [12]u8,
-    grass_morning: [12]lu16,
-    grass_day: [12]lu16,
-    grass_night: [12]lu16,
-    radio: [4]lu16,
+    grass_morning: [12]Species,
+    grass_day: [12]Species,
+    grass_night: [12]Species,
+    radio: [4]Species,
     surf: [5]Sea,
     sea_unknown: [2]Sea,
     old_rod: [5]Sea,
     good_rod: [5]Sea,
     super_rod: [5]Sea,
-    swarm: [4]lu16,
+    swarm: [4]Species,
 
     pub const Sea = packed struct {
         min_level: u8,
         max_level: u8,
-        species: lu16,
+        species: Species,
     };
 };
 
