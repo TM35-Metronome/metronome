@@ -37,39 +37,25 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
-    const stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
+pub fn main() !void {
+    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stdout = &(try std.io.getStdOut()).outStream().stream;
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
+    var direct_allocator = std.heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
+
+    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    const allocator = &arena.allocator;
+    defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
         usage(stderr) catch {};
-        return 1;
+        return err;
     };
-    defer args.deinit();
-
-    main2(allocator, args, stdout, stderr) catch |err| {
-        debug.warn("error: {}\n", err);
-        debug.dumpStackTrace(@errorReturnTrace().?);
-        return 1;
-    };
-
-    return 0;
-}
-
-pub fn main2(child_allocator: *mem.Allocator, args: Clap, stdout: var, stderr: var) !void {
-    var arena = heap.ArenaAllocator.init(child_allocator);
-    const allocator = &arena.allocator;
-    defer arena.deinit();
 
     if (args.flag("--help"))
         return try usage(stdout);
@@ -85,8 +71,7 @@ pub fn main2(child_allocator: *mem.Allocator, args: Clap, stdout: var, stderr: v
 
     var rom_file = try os.File.openRead(file_name);
     defer rom_file.close();
-    var rom = try nds.Rom.fromFile(rom_file, child_allocator);
-    defer rom.deinit();
+    var rom = try nds.Rom.fromFile(rom_file, allocator);
 
     try os.makePath(allocator, out);
     try write(try path.join(allocator, out, "arm9"), rom.arm9);
@@ -106,7 +91,6 @@ pub fn main2(child_allocator: *mem.Allocator, args: Clap, stdout: var, stderr: v
     const root_folder = try path.join(allocator, out, "root");
     try os.makePath(allocator, root_folder);
     try writeFs(allocator, nds.fs.Nitro, root_folder, rom.root);
-
 }
 
 fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: *Fs) !void {
