@@ -43,7 +43,7 @@ const ss_info = blk: {
     res.game_title = "POKEMON SS\x00\x00";
     res.gamecode = "IPGE";
     res.version = common.Version.SoulSilver;
-    res.wild_pokemons = "a/0/3/6";
+    res.wild_pokemons = "a/1/3/6";
 
     break :blk res;
 };
