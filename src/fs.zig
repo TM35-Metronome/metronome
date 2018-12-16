@@ -394,7 +394,7 @@ fn readHelper(comptime F: type, file: os.File, allocator: *mem.Allocator, fnt: [
                 }) catch unreachable;
             },
             Kind.Folder => {
-                const id = try stream.readIntLe(u16);
+                const id = try stream.readIntLittle(u16);
                 if (id < 0xF001 or id > 0xFFFF)
                     return error.InvalidSubDirectoryId;
 

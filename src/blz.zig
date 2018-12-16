@@ -18,16 +18,16 @@ const default_mask = 0x80;
 // TODO: Figure out if it's possible to make these encode and decode functions use streams.
 pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
     const Lengths = struct {
-        enc: usize,
-        dec: usize,
-        pak: usize,
-        raw: usize,
+        enc: u32,
+        dec: u32,
+        pak: u32,
+        raw: u32,
     };
 
     if (data.len < 8)
         return error.BadHeader;
 
-    const inc_len = mem.readIntLE(u32, data[data.len - 4 ..]);
+    const inc_len = mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 4 ..][0..4].ptr));
     const lengths = blk: {
         if (inc_len == 0) {
             return error.BadHeaderLength;
@@ -36,12 +36,13 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
             if (hdr_len < 8 or hdr_len > 0xB) return error.BadHeaderLength;
             if (data.len <= hdr_len) return error.BadLength;
 
-            const enc_len = mem.readIntLE(usize, data[data.len - 8 ..]) & 0x00FFFFFF;
-            const dec_len = try math.sub(usize, data.len, enc_len);
-            const pak_len = try math.sub(usize, enc_len, hdr_len);
+            const enc_len =  mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 8 ..][0..4].ptr)) & 0x00FFFFFF;
+            const dec_len = try math.sub(u32, try math.cast(u32, data.len), enc_len);
+            const pak_len = try math.sub(u32, enc_len, hdr_len);
             const raw_len = dec_len + enc_len + inc_len;
 
-            if (raw_len > 0x00FFFFFF) return error.BadLength;
+            if (raw_len > 0x00FFFFFF)
+                return error.BadLength;
 
             break :blk Lengths{
                 .enc = enc_len,

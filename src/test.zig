@@ -468,7 +468,11 @@ test "nds.Rom" {
         },
         .arm9 = []u8{},
         .arm7 = []u8{},
-        .nitro_footer = []lu32{comptime lu32.init(0)} ** 3,
+        .nitro_footer = []lu32{
+            lu32.init(0),
+            lu32.init(0),
+            lu32.init(0),
+        },
         .arm9_overlay_table = []nds.Overlay{},
         .arm9_overlay_files = [][]u8{},
         .arm7_overlay_table = []nds.Overlay{},
