@@ -8,7 +8,4 @@ git:
   depth: false
 script:
   - zig-linux-*/zig version
-  - zig-linux-*/zig test src/index.zig
-  - zig-linux-*/zig test src/index.zig --release-fast
-  - zig-linux-*/zig test src/index.zig --release-safe
-  - zig-linux-*/zig test src/index.zig --release-small
+  - zig-linux-*/zig build
