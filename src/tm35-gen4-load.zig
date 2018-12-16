@@ -8,12 +8,15 @@ const std = @import("std");
 
 const bits = fun.bits;
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const slice = fun.generic.slice;
 
+const BufInStream = io.BufferedInStream(os.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
@@ -38,60 +41,43 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const stdout_file = std.io.getStdOut() catch return 1;
-    const stderr_file = std.io.getStdErr() catch return 1;
-    var stdout_out_stream = stdout_file.outStream();
-    var stderr_out_stream = stderr_file.outStream();
-    const stdout = &stdout_out_stream.stream;
-    const stderr = &stderr_out_stream.stream;
+pub fn main() !void {
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const direct_allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
+    const stderr = &(try io.getStdErr()).outStream().stream;
+    const stdout = &buf_stdout.stream;
 
-    // TODO: Other allocator?
-    const allocator = direct_allocator;
+    var direct_allocator = heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
+
+    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    defer arena.deinit();
+
+    const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     const iter = &arg_iter.iter;
-    defer arg_iter.deinit();
     _ = iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
         usage(stderr) catch {};
-        return 1;
+        return err;
     };
-    defer args.deinit();
+
+    if (args.flag("--help"))
+        return try usage(stdout);
 
     const file_name = blk: {
         const poss = args.positionals();
         if (poss.len == 0) {
-            debug.warn("error: No file specified.");
             usage(stderr) catch {};
-            return 1;
+            return error.NoFileProvided;
         }
 
         break :blk poss[0];
     };
-
-    var buf_out_stream = io.BufferedOutStream(os.File.OutStream.Error).init(stdout);
-    main2(allocator, args, file_name, &buf_out_stream.stream) catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-    buf_out_stream.flush() catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-
-    return 0;
-}
-
-pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, stream: var) !void {
-    if (args.flag("--help"))
-        return try usage(stream);
 
     var rom = blk: {
         var file = os.File.openRead(file_name) catch |err| {
@@ -102,10 +88,13 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, file_name: []const u8, strea
 
         break :blk try nds.Rom.fromFile(file, allocator);
     };
-    defer rom.deinit();
 
     const game = try gen4.Game.fromRom(rom);
 
+    try outputGameData(rom, game, stdout);
+}
+
+pub fn outputGameData(rom: nds.Rom, game: gen4.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
 
     const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
