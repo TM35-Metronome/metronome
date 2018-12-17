@@ -8,4 +8,4 @@ tm35-genx-load game | tm35-rand-wild | tm35-genx-apply game -o game.rand
 
 ## Demo
 
-* [Demo: Tools for modifying Pokemon games (Tm35-Metronome)](https://youtu.be/4NwW_3MtlnQ)
+* [Demo: Randomizing wild Pokemons of gen 4 games (TM35-Metronome)](https://youtu.be/dbcLcEAEw-A)
