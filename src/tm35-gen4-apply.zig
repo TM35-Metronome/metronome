@@ -48,8 +48,8 @@ const params = []Param{
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-gen3-apply [OPTION]... FILE
-        \\Reads the tm35 format from stdin and applies it to a generation 3 Pokemon rom.
+        \\Usage: tm35-gen4-apply [OPTION]... FILE
+        \\Reads the tm35 format from stdin and applies it to a generation 4 Pokemon rom.
         \\
         \\Options:
         \\
