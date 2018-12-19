@@ -408,10 +408,30 @@ pub const Type = enum(u8) {
     Unknown_0xFF = 0xFF,
 };
 
+pub const Species = packed struct {
+    value: lu16,
+
+    pub fn species(s: Species) u10 {
+        return @truncate(u10, s.value.value());
+    }
+
+    pub fn setSpecies(s: *Species, spe: u10) void {
+        s.value = lu16.init((u16(s.form()) << u4(10)) | spe);
+    }
+
+    pub fn form(s: Species) u6 {
+        return @truncate(u6, s.value.value() >> 10);
+    }
+
+    pub fn setForm(s: *Species, f: u10) void {
+        s.value = lu16.init((u16(f) << u4(10)) | s.species());
+    }
+};
+
 pub const WildPokemon = packed struct {
-    species: lu16,
-    level_min: u8,
-    level_max: u8,
+    species: Species,
+    min_level: u8,
+    max_level: u8,
 };
 
 pub const WildPokemons = packed struct {

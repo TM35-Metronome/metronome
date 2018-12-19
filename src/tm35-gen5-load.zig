@@ -101,7 +101,6 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
     try stream.print(".gamecode={}\n", rom.header.gamecode);
 
-
     for (game.trainers.nodes.toSlice()) |node, i| {
         const trainer = nodeAsType(gen5.Trainer, node) catch continue;
 
@@ -189,10 +188,8 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".pokemons[{}].stats.sp_attack={}\n", i, pokemon.stats.sp_attack);
         try stream.print(".pokemons[{}].stats.sp_defense={}\n", i, pokemon.stats.sp_defense);
 
-        for (pokemon.types) |t, j| {
-            debug.warn("{}\n", @enumToInt(t));
+        for (pokemon.types) |t, j|
             try stream.print(".pokemons[{}].types[{}]={}\n", i, j, @tagName(t));
-        }
 
         try stream.print(".pokemons[{}].catch_rate={}\n", i, pokemon.catch_rate);
 
@@ -220,7 +217,6 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         // form_sprites_start: [2]u8,
         // form_count: u8,
 
-        debug.warn("{}\n", i);
         try stream.print(".pokemons[{}].color={}\n", i, @tagName(pokemon.color));
         try stream.print(".pokemons[{}].height={}\n", i, pokemon.height.value());
         try stream.print(".pokemons[{}].weight={}\n", i, pokemon.weight.value());
@@ -247,23 +243,23 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     for (game.hms) |hm, i|
         try stream.print(".hms[{}]={}\n", i, hm.value());
 
-
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         const wild_mons = nodeAsType(gen5.WildPokemons, node) catch continue;
         inline for ([][]const u8{
             "grass",
-            "dark_grass" ,
-            "rustling_grass" ,
-            "surf" ,
-            "ripple_surf" ,
-            "fishing" ,
-            "ripple_fishing" ,
+            "dark_grass",
+            "rustling_grass",
+            "surf",
+            "ripple_surf",
+            "fishing",
+            "ripple_fishing",
         }) |area_name, j| {
-            try stream.print(".zones[{}].{}.encounter_rate={}\n", i, area_name, wild_mons.rates[j]);
+            try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", i, area_name, wild_mons.rates[j]);
             for (@field(wild_mons, area_name)) |wild, k| {
-                try stream.print(".zones[{}].{}.pokemons[{}].species={}\n", i, area_name, k, wild.species.value());
-                try stream.print(".zones[{}].{}.pokemons[{}].level_min={}\n", i, area_name, k, wild.level_min);
-                try stream.print(".zones[{}].{}.pokemons[{}].level_max={}\n", i, area_name, k, wild.level_max);
+                try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, wild.species.species());
+                try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, wild.species.form());
+                try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, wild.min_level);
+                try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, wild.max_level);
             }
         }
     }
