@@ -160,8 +160,6 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             trainer.battle_type = try parser.eatUnsigned(u8, 10);
         } else |_| if (parser.eatStr("battle_type2=")) {
             trainer.battle_type2 = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("party_size=")) {
-            trainer.party_size = try parser.eatUnsigned(u8, 10);
         } else |_| if (parser.eatStr("items[")) {
             const item_index = try parser.eatUnsignedMax(usize, 10, trainer.items.len);
             try parser.eatStr("]=");
