@@ -320,7 +320,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             };
             learnset.* = lu128.init(new);
         } else |_| if (parser.eatStr("hms[")) {
-            const hm_index = try parser.eatUnsignedMax(usize, 10, game.tms.len);
+            const hm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
             try parser.eatStr("]=");
 
             const value = stringToBool(parser.str) orelse return error.SyntaxError;
@@ -340,10 +340,10 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
         game.tms[tm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
     } else |_| if (parser.eatStr(".hms[")) {
-        const tm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
+        const hm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
         try parser.eatStr("]=");
 
-        game.hms[tm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
+        game.hms[hm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
     } else |_| if (parser.eatStr(".zones[")) {
         const wild_pokemons = game.wild_pokemons.nodes.toSlice();
         const zone_index = try parser.eatUnsignedMax(usize, 10, wild_pokemons.len);
