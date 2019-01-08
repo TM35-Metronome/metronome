@@ -7,6 +7,7 @@ const offsets = @import("gen3-offsets.zig");
 const std = @import("std");
 
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
@@ -42,58 +43,38 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() u8 {
-    const unbuf_stdout = &(std.io.getStdOut() catch return 1).outStream().stream;
-    var buf_stdout = BufOutStream.init(unbuf_stdout);
+pub fn main() !void {
+    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stdout = &(try std.io.getStdOut()).outStream().stream;
 
-    const stderr = &(std.io.getStdErr() catch return 1).outStream().stream;
-    const stdout = &buf_stdout.stream;
+    var direct_allocator = std.heap.DirectAllocator.init();
+    defer direct_allocator.deinit();
 
-    var direct_allocator_state = std.heap.DirectAllocator.init();
-    const direct_allocator = &direct_allocator_state.allocator;
-    defer direct_allocator_state.deinit();
-
-    // TODO: Other allocator?
-    const allocator = direct_allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
-    const iter = &arg_iter.iter;
+    var arg_iter = clap.args.OsIterator.init(&direct_allocator.allocator);
     defer arg_iter.deinit();
+    const iter = &arg_iter.iter;
     _ = iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
-        debug.warn("error: {}\n", err);
+    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator.Error, iter) catch |err| {
         usage(stderr) catch {};
-        return 1;
+        return err;
     };
     defer args.deinit();
 
-    main2(allocator, args, stdout) catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-    buf_stdout.flush() catch |err| {
-        debug.warn("error: {}\n", err);
-        return 1;
-    };
-
-    return 0;
-}
-
-pub fn main2(allocator: *mem.Allocator, args: Clap, stream: *io.OutStream(os.File.OutStream.Error)) !void {
     if (args.flag("--help"))
-        return try usage(stream);
+        return try usage(stdout);
 
     for (args.positionals()) |file_name, i| {
-        var file = os.File.openRead(file_name) catch |err| {
-            debug.warn("Couldn't open {}.\n", file_name);
-            return err;
-        };
+        var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+        defer arena.deinit();
+
+        const allocator = &arena.allocator;
+
+        var file = try os.File.openRead(file_name);
         defer file.close();
 
         var file_stream = file.inStream();
         const data = try file_stream.stream.readAllAlloc(allocator, 1024 * 1024 * 32);
-        defer allocator.free(data);
 
         const gamecode = getGamecode(data);
         const game_title = getGameTitle(data);
@@ -103,29 +84,31 @@ pub fn main2(allocator: *mem.Allocator, args: Clap, stream: *io.OutStream(os.Fil
         };
 
         const info = try getInfo(data, version, gamecode, game_title);
-        try stream.print(".game[{}].game_title={}\n", i, game_title);
-        try stream.print(".game[{}].gamecode={}\n", i, gamecode);
-        try stream.print(".game[{}].version={}\n", i, @tagName(version));
-        try stream.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
-        try stream.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
-        try stream.print(".game[{}].moves.start={}\n", i, info.moves.start);
-        try stream.print(".game[{}].moves.len={}\n", i, info.moves.len);
-        try stream.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
-        try stream.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-        try stream.print(".game[{}].pokemons.start={}\n", i, info.machine_learnsets.start);
-        try stream.print(".game[{}].pokemons.len={}\n", i, info.machine_learnsets.len);
-        try stream.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
-        try stream.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
-        try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
-        try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
-        try stream.print(".game[{}].hms.start={}\n", i, info.hms.start);
-        try stream.print(".game[{}].hms.len={}\n", i, info.hms.len);
-        try stream.print(".game[{}].tms.start={}\n", i, info.tms.start);
-        try stream.print(".game[{}].tms.len={}\n", i, info.tms.len);
-        try stream.print(".game[{}].items.start={}\n", i, info.items.start);
-        try stream.print(".game[{}].items.len={}\n", i, info.items.len);
-        try stream.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
-        try stream.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
+        try stdout.print(".game[{}].game_title={}\n", i, game_title);
+        try stdout.print(".game[{}].gamecode={}\n", i, gamecode);
+        try stdout.print(".game[{}].version={}\n", i, @tagName(version));
+        try stdout.print(".game[{}].starters.start={}\n", i, info.starters.start);
+        try stdout.print(".game[{}].starters.len={}\n", i, info.starters.len);
+        try stdout.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
+        try stdout.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
+        try stdout.print(".game[{}].moves.start={}\n", i, info.moves.start);
+        try stdout.print(".game[{}].moves.len={}\n", i, info.moves.len);
+        try stdout.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
+        try stdout.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
+        try stdout.print(".game[{}].pokemons.start={}\n", i, info.machine_learnsets.start);
+        try stdout.print(".game[{}].pokemons.len={}\n", i, info.machine_learnsets.len);
+        try stdout.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
+        try stdout.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
+        try stdout.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
+        try stdout.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
+        try stdout.print(".game[{}].hms.start={}\n", i, info.hms.start);
+        try stdout.print(".game[{}].hms.len={}\n", i, info.hms.len);
+        try stdout.print(".game[{}].tms.start={}\n", i, info.tms.start);
+        try stdout.print(".game[{}].tms.len={}\n", i, info.tms.len);
+        try stdout.print(".game[{}].items.start={}\n", i, info.items.start);
+        try stdout.print(".game[{}].items.len={}\n", i, info.items.len);
+        try stdout.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
+        try stdout.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
     }
 }
 
@@ -154,7 +137,14 @@ fn getVersion(gamecode: []const u8) !common.Version {
     return error.UnknownPokemonVersion;
 }
 
-pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_title: [12]u8) !offsets.Info {
+fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_title: [12]u8) !offsets.Info {
+    const starter_searcher = Searcher(lu16, [][]const []const u8{}).init(data);
+    const starters = switch (version) {
+        common.Version.Emerald, common.Version.Ruby, common.Version.Sapphire => starter_searcher.findSlice(rse_starters),
+        common.Version.FireRed, common.Version.LeafGreen => starter_searcher.findSlice(frlg_starters),
+        else => null,
+    } orelse return error.UnableToFindStarterOffset;
+
     const trainer_searcher = Searcher(gen3.Trainer, [][]const []const u8{
         [][]const u8{ "party" },
         [][]const u8{ "name" },
@@ -285,6 +275,7 @@ pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_
         .game_title = undefined,
         .gamecode = undefined,
         .version = version,
+        .starters = offsets.StarterSection.init(data, starters),
         .trainers = offsets.TrainerSection.init(data, trainers),
         .moves = offsets.MoveSection.init(data, moves),
         .machine_learnsets = offsets.MachineLearnsetSection.init(data, machine_learnset),
@@ -298,7 +289,19 @@ pub fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_
     };
 }
 
-pub const em_first_trainers = []gen3.Trainer{
+const rse_starters = []lu16{
+    lu16.init(277),
+    lu16.init(280),
+    lu16.init(283),
+};
+
+const frlg_starters = []lu16{
+    lu16.init(1),
+    lu16.init(4),
+    lu16.init(7),
+};
+
+const em_first_trainers = []gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
@@ -323,7 +326,7 @@ pub const em_first_trainers = []gen3.Trainer{
     },
 };
 
-pub const em_last_trainers = []gen3.Trainer{gen3.Trainer{
+const em_last_trainers = []gen3.Trainer{gen3.Trainer{
     .party_type = gen3.PartyType.None,
     .class = 0x41,
     .encounter_music = 0x80,
@@ -335,7 +338,7 @@ pub const em_last_trainers = []gen3.Trainer{gen3.Trainer{
     .party = undefined,
 }};
 
-pub const rs_first_trainers = []gen3.Trainer{
+const rs_first_trainers = []gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
@@ -360,7 +363,7 @@ pub const rs_first_trainers = []gen3.Trainer{
     },
 };
 
-pub const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
+const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
     .party_type = gen3.PartyType.None,
     .class = 0x21,
     .encounter_music = 0x0B,
@@ -372,7 +375,7 @@ pub const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
     .party = undefined,
 }};
 
-pub const frls_first_trainers = []gen3.Trainer{
+const frls_first_trainers = []gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
@@ -407,7 +410,7 @@ pub const frls_first_trainers = []gen3.Trainer{
     },
 };
 
-pub const frls_last_trainers = []gen3.Trainer{
+const frls_last_trainers = []gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.Both,
         .class = 90,
@@ -442,7 +445,7 @@ pub const frls_last_trainers = []gen3.Trainer{
     },
 };
 
-pub const first_moves = []gen3.Move{
+const first_moves = []gen3.Move{
     // Dummy
     gen3.Move{
         .effect = 0,
@@ -469,7 +472,7 @@ pub const first_moves = []gen3.Move{
     },
 };
 
-pub const last_moves = []gen3.Move{
+const last_moves = []gen3.Move{
 // Psycho Boost
 gen3.Move{
     .effect = 204,
@@ -483,21 +486,21 @@ gen3.Move{
     .flags = lu32.init(0x32),
 }};
 
-pub const first_machine_learnsets = []lu64{
+const first_machine_learnsets = []lu64{
     lu64.init(0x0000000000000000), // Dummy Pokemon
     lu64.init(0x00e41e0884350720), // Bulbasaur
     lu64.init(0x00e41e0884350720), // Ivysaur
     lu64.init(0x00e41e0886354730), // Venusaur
 };
 
-pub const last_machine_learnsets = []lu64{
+const last_machine_learnsets = []lu64{
     lu64.init(0x035c5e93b7bbd63e), // Latios
     lu64.init(0x00408e93b59bc62c), // Jirachi
     lu64.init(0x00e58fc3f5bbde2d), // Deoxys
     lu64.init(0x00419f03b41b8e28), // Chimecho
 };
 
-pub const first_pokemons = []gen3.BasePokemon{
+const first_pokemons = []gen3.BasePokemon{
     // Dummy
     gen3.BasePokemon{
         .stats = common.Stats{
@@ -594,7 +597,7 @@ pub const first_pokemons = []gen3.BasePokemon{
     },
 };
 
-pub const last_pokemons = []gen3.BasePokemon{
+const last_pokemons = []gen3.BasePokemon{
 // Chimecho
 gen3.BasePokemon{
     .stats = common.Stats{
@@ -655,7 +658,7 @@ const unused_evo = common.Evolution{
 };
 const unused_evo5 = []common.Evolution{unused_evo} ** 5;
 
-pub const first_evolutions = [][5]common.Evolution{
+const first_evolutions = [][5]common.Evolution{
     // Dummy
     unused_evo5,
 
@@ -688,7 +691,7 @@ pub const first_evolutions = [][5]common.Evolution{
     },
 };
 
-pub const last_evolutions = [][5]common.Evolution{
+const last_evolutions = [][5]common.Evolution{
     // Beldum
     []common.Evolution{
         common.Evolution{
@@ -733,7 +736,7 @@ pub const last_evolutions = [][5]common.Evolution{
     unused_evo5,
 };
 
-pub const first_levelup_learnsets = [][]const u8{
+const first_levelup_learnsets = [][]const u8{
     // Dummy mon have same moves as Bulbasaur
     []u8{
         0x21, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E,
@@ -758,7 +761,7 @@ pub const first_levelup_learnsets = [][]const u8{
     },
 };
 
-pub const last_levelup_learnsets = [][]const u8{
+const last_levelup_learnsets = [][]const u8{
     // TODO: Figure out if only having Chimechos level up learnset is enough.
     // Chimecho
     []u8{
@@ -767,7 +770,7 @@ pub const last_levelup_learnsets = [][]const u8{
     },
 };
 
-pub const hms = []lu16{
+const hms = []lu16{
     lu16.init(0x000f),
     lu16.init(0x0013),
     lu16.init(0x0039),
@@ -778,7 +781,7 @@ pub const hms = []lu16{
     lu16.init(0x0123),
 };
 
-pub const tms = []lu16{
+const tms = []lu16{
     lu16.init(0x0108),
     lu16.init(0x0151),
     lu16.init(0x0160),
@@ -831,7 +834,7 @@ pub const tms = []lu16{
     lu16.init(0x013b),
 };
 
-pub const em_first_items = []gen3.Item{
+const em_first_items = []gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
@@ -868,7 +871,7 @@ pub const em_first_items = []gen3.Item{
     },
 };
 
-pub const em_last_items = []gen3.Item{
+const em_last_items = []gen3.Item{
     // MAGMA EMBLEM
     gen3.Item{
         .name = undefined,
@@ -905,7 +908,7 @@ pub const em_last_items = []gen3.Item{
     },
 };
 
-pub const rs_first_items = []gen3.Item{
+const rs_first_items = []gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
@@ -942,7 +945,7 @@ pub const rs_first_items = []gen3.Item{
     },
 };
 
-pub const rs_last_items = []gen3.Item{
+const rs_last_items = []gen3.Item{
     // HM08
     gen3.Item{
         .name = undefined,
@@ -996,7 +999,7 @@ pub const rs_last_items = []gen3.Item{
     },
 };
 
-pub const frlg_first_items = []gen3.Item{
+const frlg_first_items = []gen3.Item{
     gen3.Item{
         .name = undefined,
         .id = lu16.init(0),
@@ -1031,7 +1034,7 @@ pub const frlg_first_items = []gen3.Item{
     },
 };
 
-pub const frlg_last_items = []gen3.Item{
+const frlg_last_items = []gen3.Item{
     gen3.Item{
         .name = undefined,
         .id = lu16.init(372),
@@ -1078,38 +1081,38 @@ fn wildHeader(map_group: u8, map_num: u8) gen3.WildPokemonHeader {
     };
 }
 
-pub const em_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const em_first_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(0, 16),
     wildHeader(0, 17),
     wildHeader(0, 18),
 };
 
-pub const em_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const em_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(24, 106),
     wildHeader(24, 106),
     wildHeader(24, 107),
 };
 
-pub const rs_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const rs_first_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(0, 0),
     wildHeader(0, 1),
     wildHeader(0, 5),
     wildHeader(0, 6),
 };
 
-pub const rs_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const rs_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(0, 15),
     wildHeader(0, 50),
     wildHeader(0, 51),
 };
 
-pub const frlg_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const frlg_first_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(2, 27),
     wildHeader(2, 28),
     wildHeader(2, 29),
 };
 
-pub const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(1, 122),
     wildHeader(1, 122),
     wildHeader(1, 122),
