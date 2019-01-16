@@ -30,6 +30,7 @@ const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
+// This is a comment
 const params = []Param{
     Param.flag(
         "abort execution on the first warning emitted",
@@ -50,7 +51,7 @@ fn usage(stream: var) !void {
     try stream.write(
         \\Usage: tm35-gen3-apply [OPTION]... FILE
         \\Reads the tm35 format from stdin and applies it to a generation 3 Pokemon rom.
-        \\
+        \\https://google.com
         \\Options:
         \\
     );
@@ -141,6 +142,12 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
     } else |_| if (parser.eatStr(".gamecode=")) {
         if (!mem.eql(u8, parser.str, game.header.gamecode))
             return error.GameCodeDontMatch;
+    } else |_| if (parser.eatStr(".starters[")) {
+        const starter_index = try parser.eatUnsignedMax(usize, 10, game.starters.len);
+        try parser.eatStr("]=");
+        const value = lu16.init(try parser.eatUnsigned(u16, 10));
+        game.starters[starter_index].* = value;
+        game.starters_repeat[starter_index].* = value;
     } else |_| if (parser.eatStr(".trainers[")) {
         const trainer_index = try parser.eatUnsignedMax(usize, 10, game.trainers.len);
         const trainer = &game.trainers[trainer_index];

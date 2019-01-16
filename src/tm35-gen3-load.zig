@@ -91,11 +91,17 @@ pub fn main() !void {
     try outputGameData(game, stdout);
 }
 
-
 fn outputGameData(game: gen3.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
     try stream.print(".game_title={}\n", game.header.game_title);
     try stream.print(".gamecode={}\n", game.header.gamecode);
+
+    for (game.starters) |starter, i| {
+        if (starter.value() != game.starters_repeat[i].value())
+            debug.warn("warning: repeated starters don't match.\n");
+
+        try stream.print(".starters[{}]={}\n", i, starter.value());
+    }
 
     for (game.trainers) |trainer, i| {
         // The party type is infered from the party data.

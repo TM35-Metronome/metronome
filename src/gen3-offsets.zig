@@ -10,36 +10,53 @@ const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 
+pub fn Offset(comptime T: type) type {
+    return struct {
+        offset: usize,
+
+        pub fn init(data_slice: []const u8, ptr: *const T) @This() {
+            const data_ptr = @ptrToInt(data_slice.ptr);
+            const item_ptr = @ptrToInt(items.ptr);
+            debug.assert(data_ptr <= item_ptr);
+            debug.assert(item_ptr + @sizeOf(Item) <= data_ptr + data_slice.len);
+
+            return @This(){ .offset = item_ptr - data_ptr };
+        }
+
+        pub fn ptr(offset: @This(), data: []u8) *T {
+            return &@bytesToSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
+        }
+    };
+}
+
 pub fn Section(comptime Item: type) type {
     return struct {
-        const Self = @This();
-
         start: usize,
         len: usize,
 
-        pub fn init(data_slice: []const u8, items: []const Item) Self {
+        pub fn init(data_slice: []const u8, items: []const Item) @This() {
             const data_ptr = @ptrToInt(data_slice.ptr);
             const item_ptr = @ptrToInt(items.ptr);
             debug.assert(data_ptr <= item_ptr);
             debug.assert(item_ptr + items.len * @sizeOf(Item) <= data_ptr + data_slice.len);
 
-            return Self{
+            return @This(){
                 .start = item_ptr - data_ptr,
                 .len = items.len,
             };
         }
 
-        pub fn end(offset: Self) usize {
-            return offset.start + @sizeOf(Item) * offset.len;
+        pub fn end(sec: @This()) usize {
+            return sec.start + @sizeOf(Item) * sec.len;
         }
 
-        pub fn slice(offset: Self, data: []u8) []Item {
-            return @bytesToSlice(Item, data[offset.start..offset.end()]);
+        pub fn slice(sec: @This(), data: []u8) []Item {
+            return @bytesToSlice(Item, data[sec.start..sec.end()]);
         }
     };
 }
 
-pub const StarterSection = Section(lu16);
+pub const StarterOffset = Offset(lu16);
 pub const TrainerSection = Section(gen3.Trainer);
 pub const MoveSection = Section(gen3.Move);
 pub const MachineLearnsetSection = Section(lu64);
@@ -56,7 +73,12 @@ pub const Info = struct {
     gamecode: [4]u8,
     version: common.Version,
 
-    starters: StarterSection,
+    starters: [3]StarterOffset,
+
+    // In some games, the starters are repeated in multible places.
+    // For games where this isn't true, we just repeat the same offsets
+    // twice
+    starters_repeat: [3]StarterOffset,
     trainers: TrainerSection,
     moves: MoveSection,
     machine_learnsets: MachineLearnsetSection,
@@ -73,20 +95,23 @@ pub const infos = []Info{
     emerald_us_info,
     ruby_us_info,
     sapphire_us_info,
-    // TODO: FR/LG have weird starter layouts. We need to find a way to
-    //       extract that layout in a way that this info system can use
-    //       easily.
-    //  fire_us_info,
-    //  leaf_us_info,
+    fire_us_info,
+    leaf_us_info,
 };
 
 const emerald_us_info = Info{
     .game_title = "POKEMON EMER",
     .gamecode = "BPEE",
     .version = common.Version.Emerald,
-    .starters = StarterSection{
-        .start = 0x005B1DF8,
-        .len = 3,
+    .starters = []StarterOffset{
+        StarterOffset{ .offset = 0x005B1DF8 },
+        StarterOffset{ .offset = 0x005B1DFA },
+        StarterOffset{ .offset = 0x005B1DFC },
+    },
+    .starters_repeat = []StarterOffset{
+        StarterOffset{ .offset = 0x005B1DF8 },
+        StarterOffset{ .offset = 0x005B1DFA },
+        StarterOffset{ .offset = 0x005B1DFC },
     },
     .trainers = TrainerSection{
         .start = 0x00310030,
@@ -134,9 +159,15 @@ pub const ruby_us_info = Info{
     .game_title = "POKEMON RUBY",
     .gamecode = "AXVE",
     .version = common.Version.Ruby,
-    .starters = StarterSection{
-        .start = 0x003F76E0,
-        .len = 3,
+    .starters = []StarterOffset{
+        StarterOffset{ .offset = 0x003F76E0 },
+        StarterOffset{ .offset = 0x003F76E2 },
+        StarterOffset{ .offset = 0x003F76E4 },
+    },
+    .starters_repeat = []StarterOffset{
+        StarterOffset{ .offset = 0x003F76E0 },
+        StarterOffset{ .offset = 0x003F76E2 },
+        StarterOffset{ .offset = 0x003F76E4 },
     },
     .trainers = TrainerSection{
         .start = 0x001F0514,
@@ -184,9 +215,15 @@ pub const sapphire_us_info = Info{
     .game_title = "POKEMON SAPP",
     .gamecode = "AXPE",
     .version = common.Version.Sapphire,
-    .starters = StarterSection{
-        .start = 0x003F773C,
-        .len = 3,
+    .starters = []StarterOffset{
+        StarterOffset{ .offset = 0x003F773C },
+        StarterOffset{ .offset = 0x003F773E },
+        StarterOffset{ .offset = 0x003F7740 },
+    },
+    .starters_repeat = []StarterOffset{
+        StarterOffset{ .offset = 0x003F773C },
+        StarterOffset{ .offset = 0x003F773E },
+        StarterOffset{ .offset = 0x003F7740 },
     },
     .trainers = TrainerSection{
         .start = 0x001F04A4,
@@ -234,6 +271,16 @@ pub const fire_us_info = Info{
     .game_title = "POKEMON FIRE",
     .gamecode = "BPRE",
     .version = common.Version.FireRed,
+    .starters = []StarterOffset{
+        StarterOffset{ .offset = 0x00169C2D },
+        StarterOffset{ .offset = 0x00169C2D + 515 },
+        StarterOffset{ .offset = 0x00169C2D + 461 },
+    },
+    .starters_repeat = []StarterOffset{
+        StarterOffset{ .offset = 0x00169C2D + 5 + 461 },
+        StarterOffset{ .offset = 0x00169C2D + 5 },
+        StarterOffset{ .offset = 0x00169C2D + 5 + 515 },
+    },
     .trainers = TrainerSection{
         .start = 0x0023EB38,
         .len = 743,
@@ -280,6 +327,16 @@ pub const leaf_us_info = Info{
     .game_title = "POKEMON LEAF",
     .gamecode = "BPGE",
     .version = common.Version.LeafGreen,
+    .starters = []StarterOffset{
+        StarterOffset{ .offset = 0x00169C09 },
+        StarterOffset{ .offset = 0x00169C09 + 515 },
+        StarterOffset{ .offset = 0x00169C09 + 461 },
+    },
+    .starters_repeat = []StarterOffset{
+        StarterOffset{ .offset = 0x00169C09 + 5 + 461 },
+        StarterOffset{ .offset = 0x00169C09 + 5 },
+        StarterOffset{ .offset = 0x00169C09 + 5 + 515 },
+    },
     .trainers = TrainerSection{
         .start = 0x0023EB14,
         .len = 743,
