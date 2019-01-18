@@ -1,10 +1,21 @@
 const common = @import("tm35-common");
 
+pub const StarterLocation = union(enum) {
+    Arm9: usize,
+    Overlay9: Overlay,
+
+    pub const Overlay = struct {
+        offset: usize,
+        file:usize,
+    };
+};
+
 pub const Info = struct {
     game_title: [12]u8,
     gamecode: [4]u8,
     version: common.Version,
 
+    starters: StarterLocation,
     hm_tm_prefix: []const u8,
     pokemons: []const u8,
     level_up_moves: []const u8,
@@ -28,6 +39,9 @@ const hg_info = Info{
     .gamecode = "IPKE",
     .version = common.Version.HeartGold,
 
+    .starters = StarterLocation{
+        .Arm9 = 0x00108514
+    },
     .hm_tm_prefix = "\x1E\x00\x32\x00",
     .pokemons = "/a/0/0/2",
     .level_up_moves = "/a/0/3/3",
@@ -52,8 +66,14 @@ const diamond_info = Info{
     .game_title = "POKEMON D\x00\x00\x00",
     .gamecode = "ADAE",
     .version = common.Version.Diamond,
-    .hm_tm_prefix = "\xD1\x00\xD2\x00\xD3\x00\xD4\x00",
 
+    .starters = StarterLocation{
+        .Overlay9 = StarterLocation.Overlay{
+            .offset = 0x1B88,
+            .file = 64,
+        }
+    },
+    .hm_tm_prefix = "\xD1\x00\xD2\x00\xD3\x00\xD4\x00",
     .pokemons = "/poketool/personal/personal.narc",
     .level_up_moves = "/poketool/personal/wotbl.narc",
     .moves = "/poketool/waza/waza_tbl.narc",
@@ -78,6 +98,12 @@ const platinum_info = blk: {
     res.game_title = "POKEMON PL\x00\x00";
     res.gamecode = "CPUE";
     res.version = common.Version.Platinum;
+    res.starters = StarterLocation{
+        .Overlay9 = StarterLocation.Overlay{
+            .offset = 0x1BC0,
+            .file = 78,
+        }
+    };
     res.pokemons = "/poketool/personal/pl_personal.narc";
     res.moves = "/poketool/waza/pl_waza_tbl.narc";
     res.wild_pokemons = "fielddata/encountdata/pl_enc_data.narc";
@@ -86,3 +112,4 @@ const platinum_info = blk: {
 
 pub const tm_count = 92;
 pub const hm_count = 8;
+pub const starters_len = 12;

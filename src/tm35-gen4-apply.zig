@@ -148,6 +148,11 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
     } else |_| if (parser.eatStr(".gamecode=")) {
         if (!mem.eql(u8, parser.str, rom.header.gamecode))
             return error.GameCodeDontMatch;
+    } else |_| if (parser.eatStr(".starters[")) {
+        const starter_index = try parser.eatUnsignedMax(usize, 10, game.starters.len);
+        try parser.eatStr("]=");
+        const value = lu16.init(try parser.eatUnsigned(u16, 10));
+        game.starters[starter_index].* = value;
     } else |_| if (parser.eatStr(".trainers[")) {
         const trainers = game.trainers.nodes.toSlice();
         const trainer_index = try parser.eatUnsignedMax(usize, 10, trainers.len);

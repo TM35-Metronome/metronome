@@ -101,6 +101,10 @@ pub fn outputGameData(rom: nds.Rom, game: gen4.Game, stream: var) !void {
     try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
     try stream.print(".gamecode={}\n", rom.header.gamecode);
 
+    for (game.starters) |starter, i| {
+        try stream.print(".starters[{}]={}\n", i, starter.value());
+    }
+
     for (game.trainers.nodes.toSlice()) |node, i| {
         const trainer = nodeAsType(gen4.Trainer, node) catch continue;
 

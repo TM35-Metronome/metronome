@@ -243,6 +243,7 @@ pub const HgssWildPokemons = packed struct {
 
 pub const Game = struct {
     version: common.Version,
+    starters: [3]*lu16,
     pokemons: *const nds.fs.Narc,
     moves: *const nds.fs.Narc,
     level_up_moves: *const nds.fs.Narc,
@@ -261,6 +262,25 @@ pub const Game = struct {
 
         return Game{
             .version = info.version,
+            .starters = switch (info.starters) {
+                offsets.StarterLocation.Arm9 => |offset| blk: {
+                    const starters_section = @bytesToSlice(lu16, rom.arm9[offset..][0..offsets.starters_len]);
+                    break :blk []*lu16{
+                        &starters_section[0],
+                        &starters_section[2],
+                        &starters_section[4],
+                    };
+                },
+                offsets.StarterLocation.Overlay9 => |overlay| blk: {
+                    const file = rom.arm9_overlay_files[overlay.file];
+                    const starters_section = @bytesToSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
+                    break :blk []*lu16{
+                        &starters_section[0],
+                        &starters_section[2],
+                        &starters_section[4],
+                    };
+                },
+            },
             .pokemons = try getNarc(rom.root, info.pokemons),
             .level_up_moves = try getNarc(rom.root, info.level_up_moves),
             .moves = try getNarc(rom.root, info.moves),
