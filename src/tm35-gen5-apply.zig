@@ -105,7 +105,7 @@ pub fn main() !void {
         break :blk try nds.Rom.fromFile(file, allocator);
     };
 
-    const game = try gen5.Game.fromRom(rom);
+    const game = try gen5.Game.fromRom(allocator, rom);
 
     var line: usize = 1;
     var line_buf = try std.Buffer.initSize(allocator, 0);
@@ -148,6 +148,12 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
     } else |_| if (parser.eatStr(".gamecode=")) {
         if (!mem.eql(u8, parser.str, rom.header.gamecode))
             return error.GameCodeDontMatch;
+    } else |_| if (parser.eatStr(".starters[")) {
+        const starter_index = try parser.eatUnsignedMax(usize, 10, game.starters.len);
+        try parser.eatStr("]=");
+        const value = lu16.init(try parser.eatUnsigned(u16, 10));
+        for (game.starters[starter_index]) |starter|
+            starter.* = value;
     } else |_| if (parser.eatStr(".trainers[")) {
         const trainers = game.trainers.nodes.toSlice();
         const trainer_index = try parser.eatUnsignedMax(usize, 10, trainers.len);

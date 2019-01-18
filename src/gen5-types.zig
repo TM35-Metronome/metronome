@@ -448,6 +448,10 @@ pub const WildPokemons = packed struct {
 
 pub const Game = struct {
     version: common.Version,
+    allocator: *mem.Allocator,
+
+    starters: [3][]*lu16,
+    scripts: *const nds.fs.Narc,
     pokemons: *const nds.fs.Narc,
     moves: *const nds.fs.Narc,
     level_up_moves: *const nds.fs.Narc,
@@ -458,15 +462,37 @@ pub const Game = struct {
     hms: []lu16,
     tms2: []lu16,
 
-    pub fn fromRom(rom: nds.Rom) !Game {
+    pub fn fromRom(allocator: *mem.Allocator, rom: nds.Rom) !Game {
         const info = try getInfo(rom.header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, rom.arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = @bytesToSlice(lu16, rom.arm9[hm_tm_index..][0..hm_tm_len]);
+        const scripts = try getNarc(rom.root, info.scripts);
 
         return Game{
             .version = info.version,
+            .allocator = allocator,
+            .starters = blk: {
+                var res: [3][]*lu16 = undefined;
+                var filled: usize = 0;
+                errdefer for (res[0..filled]) |item|
+                    allocator.free(item);
+
+                for (info.starters) |offs, i| {
+                    res[i] = try allocator.alloc(*lu16, offs.len);
+                    filled += 1;
+
+                    for (offs) |offset, j| {
+                        const node = scripts.nodes.toSlice()[offset.file];
+                        const file = try nodeAsFile(node);
+                        res[i][j] = &@bytesToSlice(lu16, file.data[offset.offset..][0..2])[0];
+                    }
+                }
+
+                break :blk res;
+            },
+            .scripts = scripts,
             .pokemons = try getNarc(rom.root, info.pokemons),
             .level_up_moves = try getNarc(rom.root, info.level_up_moves),
             .moves = try getNarc(rom.root, info.moves),
@@ -477,6 +503,18 @@ pub const Game = struct {
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
         };
+    }
+
+    pub fn deinit(game: *@This()) void {
+        for (game.starters) |starter_ptrs|
+            game.allocator.free(starter_ptrs);
+    }
+
+    fn nodeAsFile(node: nds.fs.Narc.Node) !*nds.fs.Narc.File {
+        switch (node.kind) {
+            nds.fs.Narc.Node.Kind.File => |file| return file,
+            nds.fs.Narc.Node.Kind.Folder => return error.NotFile,
+        }
     }
 
     fn getInfo(gamecode: []const u8) !offsets.Info {
@@ -492,7 +530,7 @@ pub const Game = struct {
         return error.NotGen5Game;
     }
 
-    pub fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
+    fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
         const file = file_system.getFile(path) orelse return error.FileNotFound;
 
         const Tag = @TagType(nds.fs.Nitro.File);

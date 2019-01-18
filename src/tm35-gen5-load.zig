@@ -89,7 +89,7 @@ pub fn main() !void {
         break :blk try nds.Rom.fromFile(file, allocator);
     };
 
-    const game = try gen5.Game.fromRom(rom);
+    const game = try gen5.Game.fromRom(allocator, rom);
 
     try outputGameData(rom, game, stdout);
 }
@@ -100,6 +100,16 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
     try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
     try stream.print(".gamecode={}\n", rom.header.gamecode);
+
+    for (game.starters) |starter_ptrs, i| {
+        const first = starter_ptrs[0];
+        for (starter_ptrs[1..]) |starter| {
+            if (first.value() != starter.value())
+                debug.warn("warning: all starter positions are not the same.\n");
+        }
+
+        try stream.print(".starters[{}]={}\n", i, first.value());
+    }
 
     for (game.trainers.nodes.toSlice()) |node, i| {
         const trainer = nodeAsType(gen5.Trainer, node) catch continue;
