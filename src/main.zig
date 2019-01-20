@@ -64,9 +64,9 @@ pub fn main() !void {
     const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    _ = arg_iter.iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator.Error, &arg_iter.iter) catch |err| {
+    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -79,7 +79,7 @@ pub fn main() !void {
         const seed_str = args.option("--seed") orelse {
             var buf: [8]u8 = undefined;
             try std.os.getRandomBytes(buf[0..]);
-            break :blk mem.readInt(buf[0..8], u64, builtin.Endian.Little);
+            break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
         };
 
         break :blk try fmt.parseUnsigned(u64, seed_str, 10);
