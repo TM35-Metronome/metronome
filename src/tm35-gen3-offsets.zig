@@ -52,10 +52,9 @@ pub fn main() !void {
 
     var arg_iter = clap.args.OsIterator.init(&direct_allocator.allocator);
     defer arg_iter.deinit();
-    const iter = &arg_iter.iter;
-    _ = iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
