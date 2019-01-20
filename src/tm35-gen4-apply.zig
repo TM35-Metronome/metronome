@@ -74,10 +74,9 @@ pub fn main() !void {
     const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    const iter = &arg_iter.iter;
-    _ = iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
