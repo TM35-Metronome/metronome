@@ -208,6 +208,16 @@ pub fn outputGameData(rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
         }
+
+        const evos_file = try nodeAsFile(game.evolutions.nodes.toSlice()[i]);
+        const evos = slice.bytesToSliceTrim(gen4.Evolution, evos_file.data);
+        for (evos) |evo, j| {
+            if (evo.method == gen4.Evolution.Method.Unused)
+                continue;
+            try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
+            try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
+            try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
+        }
     }
 
     for (game.tms) |tm, i| {

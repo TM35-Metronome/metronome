@@ -6,7 +6,7 @@ pub const StarterLocation = union(enum) {
 
     pub const Overlay = struct {
         offset: usize,
-        file:usize,
+        file: usize,
     };
 };
 
@@ -39,9 +39,7 @@ const hg_info = Info{
     .gamecode = "IPKE",
     .version = common.Version.HeartGold,
 
-    .starters = StarterLocation{
-        .Arm9 = 0x00108514
-    },
+    .starters = StarterLocation{ .Arm9 = 0x00108514 },
     .hm_tm_prefix = "\x1E\x00\x32\x00",
     .pokemons = "/a/0/0/2",
     .level_up_moves = "/a/0/3/3",
@@ -71,7 +69,7 @@ const diamond_info = Info{
         .Overlay9 = StarterLocation.Overlay{
             .offset = 0x1B88,
             .file = 64,
-        }
+        },
     },
     .hm_tm_prefix = "\xD1\x00\xD2\x00\xD3\x00\xD4\x00",
     .pokemons = "/poketool/personal/personal.narc",
@@ -102,7 +100,7 @@ const platinum_info = blk: {
         .Overlay9 = StarterLocation.Overlay{
             .offset = 0x1BC0,
             .file = 78,
-        }
+        },
     };
     res.pokemons = "/poketool/personal/pl_personal.narc";
     res.moves = "/poketool/waza/pl_waza_tbl.narc";

@@ -335,6 +335,22 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                 else => unreachable,
             };
             learnset.* = lu128.init(new);
+        } else |_| if (parser.eatStr("evos[")) {
+            const evos_file = try nodeAsFile(game.evolutions.nodes.toSlice()[pokemon_index]);
+            const evos = slice.bytesToSliceTrim(gen4.Evolution, evos_file.data);
+            const evo_index = try parser.eatUnsignedMax(usize, 10, evos.len);
+            const evo = &evos[evo_index];
+            try parser.eatStr("].");
+
+            if (parser.eatStr("method=")) {
+                evo.method = meta.stringToEnum(gen4.Evolution.Method, parser.str) orelse return error.SyntaxError;
+            } else |_| if (parser.eatStr("param=")) {
+                evo.param = lu16.init(try parser.eatUnsigned(u16, 10));
+            } else |_| if (parser.eatStr("target=")) {
+                evo.target = lu16.init(try parser.eatUnsignedMax(u16, 10, pokemons.len));
+            } else |_| {
+                return error.NoField;
+            }
         } else |_| {
             return error.NoField;
         }
