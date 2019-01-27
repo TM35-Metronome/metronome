@@ -126,22 +126,20 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     var parser = format.StrParser.init(str);
     const allocator = data.starters.allocator;
 
-    if (parser.eatStr(".starters[")) |_| {
-        const starter_index = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("]=");
-        const starter = try parser.eatUnsigned(usize, 10);
-
+    if (parser.eatField("starters")) |_| {
+        const starter_index = try parser.eatIndex();
+        const starter = try parser.eatUnsignedValue(usize, 10);
         const get_or_put_result = try data.starters.getOrPut(starter_index);
         get_or_put_result.kv.value = starter;
         return false;
-    } else |_| if (parser.eatStr(".pokemons[")) |_| {
-        const evolves_from = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].evos[");
+    } else |_| if (parser.eatField("pokemons")) |_| {
+        const evolves_from = try parser.eatIndex();
+        try parser.eatField("evos");
 
         // We don't care about the evolution index.
-        _ = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].target=");
-        const evolves_to = try parser.eatUnsigned(usize, 10);
+        _ = try parser.eatIndex();
+        try parser.eatField("target");
+        const evolves_to = try parser.eatUnsignedValue(usize, 10);
         _ = try data.pokemons.put(evolves_from, {});
         _ = try data.pokemons.put(evolves_to, {});
 
