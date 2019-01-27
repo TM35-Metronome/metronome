@@ -968,6 +968,29 @@ pub const StrParser = struct {
         return reset.str[0..len];
     }
 
+    pub fn eatField(parser: *@This(), field: []const u8) !void {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+        try parser.eatChar('.');
+        const f = try parser.eatAnyField();
+        if (!mem.eql(u8, f, field))
+            return error.InvalidField;
+    }
+
+    pub fn eatAnyField(parser: *@This()) ![]const u8 {
+        for (parser.str) |c, i| {
+            switch (c) {
+                'a'...'z', 'A'...'Z', '0'...'9', '_' => {},
+                else => {
+                    defer parser.str = parser.str[i..];
+                    return parser.str[0..i];
+                },
+            }
+        }
+
+        return error.EndOfString;
+    }
+
     pub fn eatIndex(parser: *@This()) !usize {
         const reset = parser.*;
         errdefer parser.* = reset;
@@ -983,11 +1006,63 @@ pub const StrParser = struct {
         const reset = parser.*;
         errdefer parser.* = reset;
 
-        const res = try parser.eatIndex(Int, base);
+        const res = try parser.eatIndex();
         if (max <= res)
             return error.Overflow;
 
         return res;
+    }
+
+    pub fn eatValue(parser: *@This()) ![]const u8 {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+        try parser.eatChar('=');
+
+        const res = parser.str;
+        parser.str = res[res.len..];
+        return res;
+    }
+
+    pub fn eatUnsignedValue(parser: *@This(), comptime Int: type, base: u8) !Int {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        try parser.eatChar('=');
+        const res = try parser.eatUnsigned(Int, base);
+
+        if (parser.str.len != 0)
+            return error.InvalidCharacter;
+
+        return res;
+    }
+
+    pub fn eatUnsignedValueMax(parser: *@This(), comptime Int: type, base: u8, max: var) !Int {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        const res = parser.eatUnsignedValue(Int, base);
+        if (max <= res)
+            return error.Overflow;
+
+        return res;
+    }
+
+    pub fn eatEnumValue(parser: *@This(), comptime Enum: type) !Enum {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        const str = try parser.eatValue();
+        const res = std.meta.stringToEnum(Enum, str) orelse return error.InvalidValue;
+        return res;
+    }
+
+    pub fn eatBoolValue(parser: *@This()) !bool {
+        const Bool = enum {
+            @"true",
+            @"false",
+        };
+        const res = try parser.eatEnumValue(Bool);
+        return res == Bool.@"true";
     }
 
     fn charToDigit(c: u8, base: u8) !u8 {
@@ -1131,6 +1206,56 @@ test "Matcher.benchmark" {
                 try parser.eatChar('=');
                 const d = try parser.eatUnsigned(u64, 10);
                 return u128(a) + b + c + d;
+            } else |err| {
+                return err;
+            }
+        }
+
+        pub fn StrParserSimplerSwitch(str: []const u8) !u128 {
+            var parser = StrParser.init(str);
+
+            if (parser.eatField("foo")) |_| {
+                if (parser.eatUnsignedValue(u64, 10)) |value| {
+                    return u128(value);
+                } else |_| if (parser.eatField("bar")) {
+                    if (parser.eatUnsignedValue(u64, 10)) |value| {
+                        return u128(value);
+                    } else |_| if (parser.eatField("baz")) {
+                        return u128(try parser.eatUnsignedValue(u64, 10));
+                    } else |err| {
+                        return err;
+                    }
+                } else |_| if (parser.eatIndex()) |a| {
+                    try parser.eatField("bar");
+                    const b = try parser.eatIndex();
+                    try parser.eatField("baz");
+                    const c = try parser.eatIndex();
+                    const d = try parser.eatUnsignedValue(u64, 10);
+                    return u128(a) + b + c + d;
+                } else |err| {
+                    return err;
+                }
+            } else |_| if (parser.eatField("baz")) |_| {
+                if (parser.eatUnsignedValue(u64, 10)) |value| {
+                    return u128(value);
+                } else |_| if (parser.eatField("bar")) {
+                    if (parser.eatUnsignedValue(u64, 10)) |value| {
+                        return u128(value);
+                    } else |_| if (parser.eatField("foo")) {
+                        return u128(try parser.eatUnsignedValue(u64, 10));
+                    } else |err| {
+                        return err;
+                    }
+                } else |_| if (parser.eatIndex()) |a| {
+                    try parser.eatField("bar");
+                    const b = try parser.eatIndex();
+                    try parser.eatField("foo");
+                    const c = try parser.eatIndex();
+                    const d = try parser.eatUnsignedValue(u64, 10);
+                    return u128(a) + b + c + d;
+                } else |err| {
+                    return err;
+                }
             } else |err| {
                 return err;
             }
