@@ -125,35 +125,34 @@ fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Pok
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
     var parser = format.StrParser.init(str);
 
-    try parser.eatStr(".pokemons[");
-    const pokemon_index = try parser.eatUnsigned(usize, 10);
-    try parser.eatStr("].");
+    try parser.eatField("pokemons");
+    const pokemon_index = try parser.eatIndex();
 
-    if (parser.eatStr("stats.")) |_| {
+    if (parser.eatField("stats")) |_| {
         const entry = try pokemons.getOrPutValue(pokemon_index, Pokemon.init(pokemons.allocator));
         const pokemon = &entry.value;
 
-        if (parser.eatStr("hp=")) |_| {
-            pokemon.hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("attack=")) |_| {
-            pokemon.attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("defense=")) |_| {
-            pokemon.defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("speed=")) |_| {
-            pokemon.speed = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("sp_attack=")) |_| {
-            pokemon.sp_attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("sp_defense=")) |_| {
-            pokemon.sp_defense = try parser.eatUnsigned(u8, 10);
+        if (parser.eatField("hp")) |_| {
+            pokemon.hp = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("attack")) |_| {
+            pokemon.attack = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("defense")) |_| {
+            pokemon.defense = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("speed")) |_| {
+            pokemon.speed = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("sp_attack")) |_| {
+            pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("sp_defense")) |_| {
+            pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
         } else |_| {
             return true;
         }
 
         return false;
-    } else |_| if (parser.eatStr("evos[")) |_| {
-        _ = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].target=");
-        const evo_from_i = try parser.eatUnsigned(usize, 10);
+    } else |_| if (parser.eatField("evos")) |_| {
+        _ = try parser.eatIndex();
+        try parser.eatField("target");
+        const evo_from_i = try parser.eatUnsignedValue(usize, 10);
 
         const evo_entry = try pokemons.getOrPutValue(evo_from_i, Pokemon.init(pokemons.allocator));
         const evo_from = &evo_entry.value;
