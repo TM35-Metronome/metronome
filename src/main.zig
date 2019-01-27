@@ -165,30 +165,30 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
     var parser = format.StrParser.init(str);
 
-    if (parser.eatStr(".pokemons[")) |_| {
-        const poke_index = try parser.eatUnsigned(usize, 10);
+    if (parser.eatField("pokemons")) |_| {
+        const poke_index = try parser.eatIndex();
         const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
         const pokemon = &poke_entry.value;
-        try parser.eatStr("].");
 
-        if (parser.eatStr("stats.hp=")) |_| {
-            pokemon.hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.attack=")) |_| {
-            pokemon.attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.defense=")) |_| {
-            pokemon.defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.speed=")) |_| {
-            pokemon.speed = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_attack=")) |_| {
-            pokemon.sp_attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_defense=")) |_| {
-            pokemon.sp_defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("types[")) |_| {
-            _ = try parser.eatUnsigned(usize, 10);
-            try parser.eatStr("]=");
+        if (parser.eatField("stats")) |_| {
+            if (parser.eatField("hp=")) |_| {
+                pokemon.hp = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("attack")) |_| {
+                pokemon.attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("defense")) |_| {
+                pokemon.defense = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("speed")) |_| {
+                pokemon.speed = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_attack")) |_| {
+                pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_defense")) |_| {
+                pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
+            } else |_| {}
+        } else |_| if (parser.eatField("types")) |_| {
+            _ = try parser.eatIndex();
 
             // To keep it simple, we just leak a shit ton of type names here.
-            const type_name = try mem.dupe(allocator, u8, parser.str);
+            const type_name = try mem.dupe(allocator, u8, try parser.eatValue());
             const by_type_entry = try data.pokemons_by_types.getOrPut(type_name);
             if (!by_type_entry.found_existing) {
                 by_type_entry.kv.value = std.ArrayList(usize).init(allocator);
@@ -197,26 +197,24 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
             try pokemon.types.append(type_name);
             try by_type_entry.kv.value.append(poke_index);
-        } else |_| if (parser.eatStr("moves[")) |_| {
-            const move_index = try parser.eatUnsigned(usize, 10);
+        } else |_| if (parser.eatField("moves")) |_| {
+            const move_index = try parser.eatIndex();
             const move_entry = try pokemon.lvl_up_moves.getOrPutValue(move_index, LvlUpMove{
                 .level = null,
                 .id = null,
             });
             const move = &move_entry.value;
-            try parser.eatStr("].");
 
-            if (parser.eatStr("id=")) |_| {
-                move.id = try parser.eatUnsigned(usize, 10);
-            } else |_| if (parser.eatStr("level=")) |_| {
-                move.level = try parser.eatUnsigned(u16, 10);
+            if (parser.eatField("id")) |_| {
+                move.id = try parser.eatUnsignedValue(usize, 10);
+            } else |_| if (parser.eatField("level")) |_| {
+                move.level = try parser.eatUnsignedValue(u16, 10);
             } else |_| {}
         } else |_| {}
-    } else |_| if (parser.eatStr(".trainers[")) |_| {
-        const trainer_index = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].party[");
-        const party_index = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].");
+    } else |_| if (parser.eatField("trainers")) |_| {
+        const trainer_index = try parser.eatIndex();
+        try parser.eatField("party");
+        const party_index = try parser.eatIndex();
 
         const trainer_entry = try data.trainers.getOrPutValue(trainer_index, Trainer.init(allocator));
         const trainer = &trainer_entry.value;
@@ -224,22 +222,20 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         const member_entry = try trainer.party.getOrPutValue(party_index, PartyMember.init(allocator));
         const member = &member_entry.value;
 
-        if (parser.eatStr("species=")) |_| {
-            member.species = try parser.eatUnsigned(usize, 10);
-        } else |_| if (parser.eatStr("level=")) |_| {
-            member.level = try parser.eatUnsigned(u16, 10);
-        } else |_| if (parser.eatStr("moves[")) |_| {
-            const move_index = try parser.eatUnsigned(usize, 10);
-            try parser.eatStr("]=");
-
-            _ = try member.moves.put(move_index, try parser.eatUnsigned(usize, 10));
+        if (parser.eatField("species")) |_| {
+            member.species = try parser.eatUnsignedValue(usize, 10);
+        } else |_| if (parser.eatField("level")) |_| {
+            member.level = try parser.eatUnsignedValue(u16, 10);
+        } else |_| if (parser.eatField("moves")) |_| {
+            const move_index = try parser.eatIndex();
+            _ = try member.moves.put(move_index, try parser.eatUnsignedValue(usize, 10));
         } else |_| {
             return true;
         }
 
         return false;
-    } else |_| if (parser.eatStr(".moves[")) |_| {
-        const index = try parser.eatUnsigned(usize, 10);
+    } else |_| if (parser.eatField("moves")) |_| {
+        const index = try parser.eatIndex();
         const entry = try data.moves.getOrPutValue(index, Move{
             .power = null,
             .accuracy = null,
@@ -247,16 +243,15 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             .@"type" = null,
         });
         const move = &entry.value;
-        try parser.eatStr("].");
 
-        if (parser.eatStr("power=")) |_| {
-            move.power = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("type=")) |_| {
-            move.@"type" = try mem.dupe(allocator, u8, parser.str);
-        } else |_| if (parser.eatStr("pp=")) |_| {
-            move.pp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("accuracy=")) |_| {
-            move.accuracy = try parser.eatUnsigned(u8, 10);
+        if (parser.eatField("power")) |_| {
+            move.power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("type")) |_| {
+            move.@"type" = try mem.dupe(allocator, u8, try parser.eatValue());
+        } else |_| if (parser.eatField("pp")) |_| {
+            move.pp = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("accuracy")) |_| {
+            move.accuracy = try parser.eatUnsignedValue(u8, 10);
         } else |_| {}
     } else |_| {}
 
