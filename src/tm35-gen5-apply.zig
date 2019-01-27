@@ -111,7 +111,7 @@ pub fn main() !void {
 
     while (stdin.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
         apply(rom, game, line, mem.trimRight(u8, line_buf.toSlice(), "\r\n")) catch |err| {
-            warning(line, 1, "{}\n", @errorName(err));
+            debug.warn("(stdin):{}:1: warning: {}\n", line, @errorName(err));
             if (abort_on_first_warning)
                 return err;
         };
@@ -120,7 +120,7 @@ pub fn main() !void {
         error.EndOfStream => {
             const str = mem.trim(u8, line_buf.toSlice(), " \t");
             if (str.len != 0)
-                warning(line, 1, "none empty last line\n");
+                debug.warn("(stdin):{}:1: warning: {}\n", line, @errorName(err));
         },
         else => return err,
     }
@@ -136,218 +136,198 @@ pub fn main() !void {
 fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
     var parser = format.StrParser.init(str);
 
-    if (parser.eatStr(".version=")) {
-        const version = meta.stringToEnum(common.Version, parser.str) orelse return error.SyntaxError;
+    if (parser.eatField("version")) {
+        const version = try parser.eatEnumValue(common.Version);
         if (version != game.version)
             return error.VersionDontMatch;
-    } else |_| if (parser.eatStr(".game_title=")) {
+    } else |_| if (parser.eatField("game_title")) {
+        const value = try parser.eatValue();
         const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
-        if (!mem.eql(u8, parser.str, rom.header.game_title[0..null_index]))
+        if (!mem.eql(u8, value, rom.header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
-    } else |_| if (parser.eatStr(".gamecode=")) {
-        if (!mem.eql(u8, parser.str, rom.header.gamecode))
+    } else |_| if (parser.eatField("gamecode")) {
+        const value = try parser.eatValue();
+        if (!mem.eql(u8, value, rom.header.gamecode))
             return error.GameCodeDontMatch;
-    } else |_| if (parser.eatStr(".starters[")) {
-        const starter_index = try parser.eatUnsignedMax(usize, 10, game.starters.len);
-        try parser.eatStr("]=");
-        const value = lu16.init(try parser.eatUnsigned(u16, 10));
+    } else |_| if (parser.eatField("starters")) {
+        const starter_index = try parser.eatIndexMax(game.starters.len);
+        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
         for (game.starters[starter_index]) |starter|
             starter.* = value;
-    } else |_| if (parser.eatStr(".trainers[")) {
+    } else |_| if (parser.eatField("trainers")) {
         const trainers = game.trainers.nodes.toSlice();
-        const trainer_index = try parser.eatUnsignedMax(usize, 10, trainers.len);
+        const trainer_index = try parser.eatIndexMax(trainers.len);
         const trainer = try nodeAsType(gen5.Trainer, trainers[trainer_index]);
-        try parser.eatStr("].");
 
-        if (parser.eatStr("class=")) {
-            trainer.class = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("battle_type=")) {
-            trainer.battle_type = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("items[")) {
-            const item_index = try parser.eatUnsignedMax(usize, 10, trainer.items.len);
-            try parser.eatStr("]=");
-
-            trainer.items[item_index] = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("ai=")) {
-            trainer.ai = lu32.init(try parser.eatUnsigned(u32, 10));
-        } else |_| if (parser.eatStr("is_healer=")) {
-            trainer.healer = stringToBool(parser.str) orelse return error.OutOfBound;
-        } else |_| if (parser.eatStr("cash=")) {
-            trainer.cash = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("post_battle_item=")) {
-            trainer.post_battle_item = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("party[")) {
+        if (parser.eatField("class")) {
+            trainer.class = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("battle_type")) {
+            trainer.battle_type = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("items")) {
+            const item_index = try parser.eatIndexMax(trainer.items.len);
+            trainer.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("ai")) {
+            trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
+        } else |_| if (parser.eatField("is_healer")) {
+            trainer.healer = try parser.eatBoolValue();
+        } else |_| if (parser.eatField("cash")) {
+            trainer.cash = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("post_battle_item")) {
+            trainer.post_battle_item = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("party")) {
             const parties = game.parties.nodes.toSlice();
-            const party_index = try parser.eatUnsignedMax(usize, 10, trainer.party_size);
+            const party_index = try parser.eatIndexMax(trainer.party_size);
             const party_file = try nodeAsFile(parties[trainer_index]);
             const member = getMemberBase(trainer.party_type, party_file.data, party_index) orelse return error.OutOfBound;
-            try parser.eatStr("].");
 
-            if (parser.eatStr("iv=")) {
-                member.iv = try parser.eatUnsigned(u8, 10);
-            } else |_| if (parser.eatStr("gender=")) {
-                member.gender = try parser.eatUnsigned(u4, 10);
-            } else |_| if (parser.eatStr("ability=")) {
-                member.ability = try parser.eatUnsigned(u4, 10);
-            } else |_| if (parser.eatStr("level=")) {
-                member.level = try parser.eatUnsigned(u8, 10);
-            } else |_| if (parser.eatStr("species=")) {
-                member.species = lu16.init(try parser.eatUnsignedMax(u16, 10, game.pokemons.nodes.len));
-            } else |_| if (parser.eatStr("form=")) {
-                member.form = lu16.init(try parser.eatUnsigned(u16, 10));
-            } else |_| if (parser.eatStr("item=")) {
-                const item = try parser.eatUnsigned(u16, 10);
+            if (parser.eatField("iv")) {
+                member.iv = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("gender")) {
+                member.gender = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("ability")) {
+                member.ability = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("level")) {
+                member.level = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("species")) {
+                member.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            } else |_| if (parser.eatField("form")) {
+                member.form = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            } else |_| if (parser.eatField("item")) {
+                const item = try parser.eatUnsignedValue(u16, 10);
                 switch (trainer.party_type) {
                     gen5.PartyType.Item => member.toParent(gen5.PartyMemberItem).item = lu16.init(item),
                     gen5.PartyType.Both => member.toParent(gen5.PartyMemberBoth).item = lu16.init(item),
                     else => return error.NoField,
                 }
-            } else |_| if (parser.eatStr("moves[")) {
+            } else |_| if (parser.eatField("moves")) {
                 const mv_ptr = switch (trainer.party_type) {
                     gen5.PartyType.Moves => blk: {
                         const move_member = member.toParent(gen5.PartyMemberMoves);
-                        const move_index = try parser.eatUnsignedMax(usize, 10, move_member.moves.len);
+                        const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
                     },
                     gen5.PartyType.Both => blk: {
                         const move_member = member.toParent(gen5.PartyMemberBoth);
-                        const move_index = try parser.eatUnsignedMax(usize, 10, move_member.moves.len);
+                        const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
                     },
                     else => return error.NoField,
                 };
 
-                try parser.eatStr("]=");
-                mv_ptr.* = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
+                mv_ptr.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| {
                 return error.NoField;
             }
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatStr(".moves[")) {
+    } else |_| if (parser.eatField("moves")) {
         const moves = game.moves.nodes.toSlice();
-        const move_index = try parser.eatUnsignedMax(usize, 10, moves.len);
+        const move_index = try parser.eatIndexMax(moves.len);
         const move = try nodeAsType(gen5.Move, moves[move_index]);
-        try parser.eatStr("].");
 
-        if (parser.eatStr("type=")) {
-            move.@"type" = meta.stringToEnum(gen5.Type, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("effect_category=")) {
-            move.effect_category = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("category=")) {
-            move.category = meta.stringToEnum(common.MoveCategory, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("power=")) {
-            move.power = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("accuracy=")) {
-            move.accuracy = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("pp=")) {
-            move.pp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("priority=")) {
-            move.priority = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("hits=")) {
-            move.hits = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("min_hits=")) {
-            move.min_hits = try parser.eatUnsigned(u4, 10);
-        } else |_| if (parser.eatStr("max_hits=")) {
-            move.max_hits = try parser.eatUnsigned(u4, 10);
-        } else |_| if (parser.eatStr("crit_chance=")) {
-            move.crit_chance = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("flinch=")) {
-            move.flinch = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("effect=")) {
-            move.effect = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("target_hp=")) {
-            move.target_hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("user_hp=")) {
-            move.user_hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("target=")) {
-            move.target = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats_affected[")) {
-            const status_index = try parser.eatUnsignedMax(usize, 10, move.stats_affected.len);
-            try parser.eatStr("]=");
-
-            move.stats_affected[status_index] = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats_affected_magnetude[")) {
-            const status_index = try parser.eatUnsignedMax(usize, 10, move.stats_affected_magnetude.len);
-            try parser.eatStr("]=");
-
-            move.stats_affected_magnetude[status_index] = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats_affected_chance[")) {
-            const status_index = try parser.eatUnsignedMax(usize, 10, move.stats_affected_chance.len);
-            try parser.eatStr("]=");
-
-            move.stats_affected_chance[status_index] = try parser.eatUnsigned(u8, 10);
+        if (parser.eatField("type")) {
+            move.@"type" = try parser.eatEnumValue(gen5.Type);
+        } else |_| if (parser.eatField("effect_category")) {
+            move.effect_category = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("category")) {
+            move.category = try parser.eatEnumValue(common.MoveCategory);
+        } else |_| if (parser.eatField("power")) {
+            move.power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("accuracy")) {
+            move.accuracy = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pp")) {
+            move.pp = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("priority")) {
+            move.priority = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("hits")) {
+            move.hits = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("min_hits")) {
+            move.min_hits = try parser.eatUnsignedValue(u4, 10);
+        } else |_| if (parser.eatField("max_hits")) {
+            move.max_hits = try parser.eatUnsignedValue(u4, 10);
+        } else |_| if (parser.eatField("crit_chance")) {
+            move.crit_chance = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("flinch")) {
+            move.flinch = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("effect")) {
+            move.effect = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("target_hp")) {
+            move.target_hp = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("user_hp")) {
+            move.user_hp = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("target")) {
+            move.target = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("stats_affected")) {
+            const status_index = try parser.eatIndexMax(move.stats_affected.len);
+            move.stats_affected[status_index] = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("stats_affected_magnetude")) {
+            const status_index = try parser.eatIndexMax(move.stats_affected_magnetude.len);
+            move.stats_affected_magnetude[status_index] = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("stats_affected_chance")) {
+            const status_index = try parser.eatIndexMax(move.stats_affected_chance.len);
+            move.stats_affected_chance[status_index] = try parser.eatUnsignedValue(u8, 10);
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatStr(".pokemons[")) {
+    } else |_| if (parser.eatField("pokemons")) {
         const pokemons = game.pokemons.nodes.toSlice();
-        const pokemon_index = try parser.eatUnsignedMax(usize, 10, pokemons.len);
+        const pokemon_index = try parser.eatIndexMax(pokemons.len);
         const pokemon = try nodeAsType(gen5.BasePokemon, pokemons[pokemon_index]);
-        try parser.eatStr("].");
 
-        if (parser.eatStr("stats.hp=")) {
-            pokemon.stats.hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.attack=")) {
-            pokemon.stats.attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.defense=")) {
-            pokemon.stats.defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.speed=")) {
-            pokemon.stats.speed = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_attack=")) {
-            pokemon.stats.sp_attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_defense=")) {
-            pokemon.stats.sp_defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("types[")) {
-            const type_index = try parser.eatUnsignedMax(usize, 10, pokemon.types.len);
-            try parser.eatStr("]=");
-
-            pokemon.types[type_index] = meta.stringToEnum(gen5.Type, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("catch_rate=")) {
-            pokemon.catch_rate = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("items[")) {
-            const item_index = try parser.eatUnsignedMax(usize, 10, pokemon.items.len);
-            try parser.eatStr("]=");
-
-            pokemon.items[item_index] = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("gender_ratio=")) {
-            pokemon.gender_ratio = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("egg_cycles=")) {
-            pokemon.egg_cycles = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("base_friendship=")) {
-            pokemon.base_friendship = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("growth_rate=")) {
-            pokemon.growth_rate = meta.stringToEnum(common.GrowthRate, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("egg_groups[")) {
-            const egg_index = try parser.eatUnsignedMax(usize, 10, 2);
-            try parser.eatStr("]=");
-
-            const egg_group = meta.stringToEnum(common.EggGroup, parser.str) orelse return error.SyntaxError;
+        if (parser.eatField("stats")) {
+            if (parser.eatField("hp")) {
+                pokemon.stats.hp = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("attack")) {
+                pokemon.stats.attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("defense")) {
+                pokemon.stats.defense = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("speed")) {
+                pokemon.stats.speed = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_attack")) {
+                pokemon.stats.sp_attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_defense")) {
+                pokemon.stats.sp_defense = try parser.eatUnsignedValue(u8, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatField("types")) {
+            const type_index = try parser.eatIndexMax(pokemon.types.len);
+            pokemon.types[type_index] = try parser.eatEnumValue(gen5.Type);
+        } else |_| if (parser.eatField("catch_rate")) {
+            pokemon.catch_rate = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("items")) {
+            const item_index = try parser.eatIndexMax(pokemon.items.len);
+            pokemon.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("gender_ratio")) {
+            pokemon.gender_ratio = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("egg_cycles")) {
+            pokemon.egg_cycles = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("base_friendship")) {
+            pokemon.base_friendship = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("growth_rate")) {
+            pokemon.growth_rate = try parser.eatEnumValue(common.GrowthRate);
+        } else |_| if (parser.eatField("egg_groups")) {
+            const egg_index = try parser.eatIndexMax(2);
+            const egg_group = try parser.eatEnumValue(common.EggGroup);
             switch (egg_index) {
                 0 => pokemon.egg_group1 = egg_group,
                 1 => pokemon.egg_group2 = egg_group,
-                else => return error.OutOfBound,
+                else => unreachable,
             }
-        } else |_| if (parser.eatStr("abilities[")) {
-            const ability_index = try parser.eatUnsignedMax(usize, 10, pokemon.abilities.len);
-            try parser.eatStr("]=");
-
-            // TODO: Check on max number of abilities
-            pokemon.abilities[ability_index] = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("color=")) {
-            pokemon.color = meta.stringToEnum(common.Color, parser.str) orelse return error.SyntaxError;
-        } else |_| if (parser.eatStr("height=")) {
-            pokemon.height = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("weight=")) {
-            pokemon.weight = lu16.init(try parser.eatUnsigned(u16, 10));
-        } else |_| if (parser.eatStr("tms[")) {
-            const tm_index = try parser.eatUnsignedMax(usize, 10, game.tms1.len + game.tms2.len);
-            try parser.eatStr("]=");
-
+        } else |_| if (parser.eatField("abilities")) {
+            const ability_index = try parser.eatIndexMax(pokemon.abilities.len);
+            pokemon.abilities[ability_index] = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("color")) {
+            pokemon.color = try parser.eatEnumValue(common.Color);
+        } else |_| if (parser.eatField("height")) {
+            pokemon.height = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("weight")) {
+            pokemon.weight = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("tms")) {
+            const tm_index = try parser.eatIndexMax(game.tms1.len + game.tms2.len);
             const real_index = if (tm_index < game.tms1.len) tm_index else tm_index + game.hms.len;
-
-            const value = stringToBool(parser.str) orelse return error.SyntaxError;
+            const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
             const new = switch (value) {
                 true => bits.set(u128, learnset.value(), @intCast(u7, real_index)),
@@ -355,11 +335,9 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
                 else => unreachable,
             };
             learnset.* = lu128.init(new);
-        } else |_| if (parser.eatStr("hms[")) {
-            const hm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
-            try parser.eatStr("]=");
-
-            const value = stringToBool(parser.str) orelse return error.SyntaxError;
+        } else |_| if (parser.eatField("hms")) {
+            const hm_index = try parser.eatIndexMax(game.hms.len);
+            const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
             const new = switch (value) {
                 true => bits.set(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len)),
@@ -367,45 +345,40 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
                 else => unreachable,
             };
             learnset.* = lu128.init(new);
-        } else |_| if (parser.eatStr("evos[")) {
+        } else |_| if (parser.eatField("evos")) {
             const evos_file = try nodeAsFile(game.evolutions.nodes.toSlice()[pokemon_index]);
             const evos = slice.bytesToSliceTrim(gen5.Evolution, evos_file.data);
-            const evo_index = try parser.eatUnsignedMax(usize, 10, evos.len);
+            const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
-            try parser.eatStr("].");
 
-            if (parser.eatStr("method=")) {
-                evo.method = meta.stringToEnum(gen5.Evolution.Method, parser.str) orelse return error.SyntaxError;
-            } else |_| if (parser.eatStr("param=")) {
-                evo.param = lu16.init(try parser.eatUnsigned(u16, 10));
-            } else |_| if (parser.eatStr("target=")) {
-                evo.target = lu16.init(try parser.eatUnsignedMax(u16, 10, pokemons.len));
+            if (parser.eatField("method")) {
+                evo.method = try parser.eatEnumValue(gen5.Evolution.Method);
+            } else |_| if (parser.eatField("param")) {
+                evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            } else |_| if (parser.eatField("target")) {
+                evo.target = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| {
                 return error.NoField;
             }
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatStr(".tms[")) {
-        const tm_index = try parser.eatUnsignedMax(usize, 10, game.tms1.len + game.tms2.len);
-        try parser.eatStr("]=");
-
-        const value = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
+    } else |_| if (parser.eatField("tms")) {
+        const tm_index = try parser.eatIndexMax(game.tms1.len + game.tms2.len);
+        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
         if (tm_index < game.tms1.len) {
             game.tms1[tm_index] = value;
         } else {
             game.tms1[tm_index - game.tms1.len] = value;
         }
-    } else |_| if (parser.eatStr(".hms[")) {
-        const hm_index = try parser.eatUnsignedMax(usize, 10, game.hms.len);
-        try parser.eatStr("]=");
-
-        game.hms[hm_index] = lu16.init(try parser.eatUnsignedMax(u16, 10, game.moves.nodes.len));
-    } else |_| if (parser.eatStr(".zones[")) done: {
+    } else |_| if (parser.eatField("hms")) {
+        const hm_index = try parser.eatIndexMax(game.hms.len);
+        game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
+    } else |_| if (parser.eatField("zones")) done: {
         const wild_pokemons = game.wild_pokemons.nodes.toSlice();
-        const zone_index = try parser.eatUnsignedMax(usize, 10, wild_pokemons.len);
+        const zone_index = try parser.eatIndexMax(wild_pokemons.len);
         const wilds = try nodeAsType(gen5.WildPokemons, wild_pokemons[zone_index]);
-        try parser.eatStr("].wild.");
+        try parser.eatField("wild");
 
         inline for ([][]const u8{
             "grass",
@@ -415,24 +388,24 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
             "ripple_surf",
             "fishing",
             "ripple_fishing",
-        }) |area_name, j| {
-            if (parser.eatStr(area_name ++ ".encounter_rate=")) {
-                wilds.rates[j] = try parser.eatUnsigned(u8, 10);
+        }) |area_name, j| skip: {
+            parser.eatField(area_name) catch break :skip;
+            if (parser.eatField("encounter_rate")) {
+                wilds.rates[j] = try parser.eatUnsignedValue(u8, 10);
                 break :done;
-            } else |_| if (parser.eatStr(area_name ++ ".pokemons[")) {
+            } else |_| if (parser.eatField("pokemons")) {
                 const area = &@field(wilds, area_name);
-                const wild_index = try parser.eatUnsignedMax(usize, 10, area.len);
+                const wild_index = try parser.eatIndexMax(area.len);
                 const wild = &area[wild_index];
-                try parser.eatStr("].");
 
-                if (parser.eatStr("min_level=")) {
-                    wild.min_level = try parser.eatUnsigned(u8, 10);
-                } else |_| if (parser.eatStr("max_level=")) {
-                    wild.max_level = try parser.eatUnsigned(u8, 10);
-                } else |_| if (parser.eatStr("species=")) {
-                    wild.species.setSpecies(try parser.eatUnsignedMax(u10, 10, game.pokemons.nodes.len));
-                } else |_| if (parser.eatStr("form=")) {
-                    wild.species.setForm(try parser.eatUnsigned(u6, 10));
+                if (parser.eatField("min_level")) {
+                    wild.min_level = try parser.eatUnsignedValue(u8, 10);
+                } else |_| if (parser.eatField("max_level")) {
+                    wild.max_level = try parser.eatUnsignedValue(u8, 10);
+                } else |_| if (parser.eatField("species")) {
+                    wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                } else |_| if (parser.eatField("form")) {
+                    wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
                 } else |_| {
                     return error.NoField;
                 }
@@ -444,20 +417,6 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
     } else |_| {
         return error.NoField;
     }
-}
-
-fn warning(line: usize, col: usize, comptime f: []const u8, a: ...) void {
-    debug.warn("(stdin):{}:{}: warning: ", line, col);
-    debug.warn(f, a);
-}
-
-fn stringToBool(str: []const u8) ?bool {
-    if (mem.eql(u8, "true", str))
-        return true;
-    if (mem.eql(u8, "false", str))
-        return false;
-
-    return null;
 }
 
 fn nodeAsFile(node: nds.fs.Narc.Node) !*nds.fs.Narc.File {
