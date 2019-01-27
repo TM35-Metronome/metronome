@@ -144,52 +144,49 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
     var parser = format.StrParser.init(str);
 
-    if (parser.eatStr(".pokemons[")) |_| {
-        const poke_index = try parser.eatUnsigned(usize, 10);
+    if (parser.eatField("pokemons")) |_| {
+        const poke_index = try parser.eatIndex();
         const poke_entry = try data.pokemons.getOrPut(poke_index);
         if (!poke_entry.found_existing) {
             poke_entry.kv.value = Pokemon.init(allocator);
             try data.pokemon_list.append(poke_index);
         }
         const pokemon = &poke_entry.kv.value;
-        try parser.eatStr("].");
 
-        if (parser.eatStr("stats.hp=")) |_| {
-            pokemon.hp = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.attack=")) |_| {
-            pokemon.attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.defense=")) |_| {
-            pokemon.defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.speed=")) |_| {
-            pokemon.speed = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_attack=")) |_| {
-            pokemon.sp_attack = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("stats.sp_defense=")) |_| {
-            pokemon.sp_defense = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("types[")) |_| {
-            _ = try parser.eatUnsigned(usize, 10);
-            try parser.eatStr("]=");
+        if (parser.eatField("starts")) {
+            if (parser.eatField("hp")) |_| {
+                pokemon.hp = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("attack")) |_| {
+                pokemon.attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("defense")) |_| {
+                pokemon.defense = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("speed")) |_| {
+                pokemon.speed = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_attack")) |_| {
+                pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("sp_defense")) |_| {
+                pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
+            }  else |_| {}
+        } else |_| if (parser.eatField("types")) |_| {
+            _ = try parser.eatIndex();
 
             // To keep it simple, we just leak a shit ton of type names here.
-            const type_name = try mem.dupe(allocator, u8, parser.str);
+            const type_name = try mem.dupe(allocator, u8, try parser.eatValue());
             try pokemon.types.append(type_name);
         } else |_| {}
-    } else |_| if (parser.eatStr(".zones[")) |_| {
-        const zone_index = try parser.eatUnsigned(usize, 10);
+    } else |_| if (parser.eatField("zones")) |_| {
+        const zone_index = try parser.eatIndex();
         const zone_entry = try data.zones.getOrPutValue(zone_index, Zone.init(allocator));
         const zone = &zone_entry.value;
-        try parser.eatStr("].");
-
-        const area_name = try parser.eatUntil('.');
+        const area_name = try parser.eatAnyField();
 
         // To keep it simple, we just leak a shit ton of type names here.
         const area_name_dupe = try mem.dupe(allocator, u8, area_name);
         const area_entry = try zone.wild_areas.getOrPutValue(area_name_dupe, WildArea.init(allocator));
         const area = &area_entry.value;
 
-        try parser.eatStr("pokemons[");
-        const poke_index = try parser.eatUnsigned(usize, 10);
-        try parser.eatStr("].");
+        try parser.eatField("pokemons");
+        const poke_index = try parser.eatIndex();
         const poke_entry = try area.pokemons.getOrPutValue(poke_index, WildPokemon{
             .min_level = null,
             .max_level = null,
@@ -197,12 +194,12 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         });
         const pokemon = &poke_entry.value;
 
-        if (parser.eatStr("min_level=")) |_| {
-            pokemon.min_level = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("max_level=")) |_| {
-            pokemon.max_level = try parser.eatUnsigned(u8, 10);
-        } else |_| if (parser.eatStr("species=")) |_| {
-            pokemon.species = try parser.eatUnsigned(usize, 10);
+        if (parser.eatField("min_level")) |_| {
+            pokemon.min_level = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("max_level")) |_| {
+            pokemon.max_level = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("species")) |_| {
+            pokemon.species = try parser.eatUnsignedValue(usize, 10);
         } else |_| {
             return true;
         }
