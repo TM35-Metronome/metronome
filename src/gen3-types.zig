@@ -315,6 +315,8 @@ pub const Game = struct {
     // All these fields point into data
     header: *gba.Header,
 
+    starters: [3]*lu16,
+    starters_repeat: [3]*lu16,
     trainers: []Trainer,
     moves: []Move,
     machine_learnsets: []lu64,
@@ -350,6 +352,16 @@ pub const Game = struct {
             .allocator = allocator,
             .data = rom,
             .header = @ptrCast(*gba.Header, &rom[0]),
+            .starters = []*lu16{
+                info.starters[0].ptr(rom),
+                info.starters[1].ptr(rom),
+                info.starters[2].ptr(rom),
+            },
+            .starters_repeat = [3]*lu16{
+                info.starters_repeat[0].ptr(rom),
+                info.starters_repeat[1].ptr(rom),
+                info.starters_repeat[2].ptr(rom),
+            },
             .trainers = info.trainers.slice(rom),
             .moves = info.moves.slice(rom),
             .machine_learnsets = info.machine_learnsets.slice(rom),

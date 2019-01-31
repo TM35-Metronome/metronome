@@ -52,10 +52,9 @@ pub fn main() !void {
 
     var arg_iter = clap.args.OsIterator.init(&direct_allocator.allocator);
     defer arg_iter.deinit();
-    const iter = &arg_iter.iter;
-    _ = iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -87,8 +86,6 @@ pub fn main() !void {
         try stdout.print(".game[{}].game_title={}\n", i, game_title);
         try stdout.print(".game[{}].gamecode={}\n", i, gamecode);
         try stdout.print(".game[{}].version={}\n", i, @tagName(version));
-        try stdout.print(".game[{}].starters.start={}\n", i, info.starters.start);
-        try stdout.print(".game[{}].starters.len={}\n", i, info.starters.len);
         try stdout.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
         try stdout.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
         try stdout.print(".game[{}].moves.start={}\n", i, info.moves.start);
@@ -138,12 +135,7 @@ fn getVersion(gamecode: []const u8) !common.Version {
 }
 
 fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_title: [12]u8) !offsets.Info {
-    const starter_searcher = Searcher(lu16, [][]const []const u8{}).init(data);
-    const starters = switch (version) {
-        common.Version.Emerald, common.Version.Ruby, common.Version.Sapphire => starter_searcher.findSlice(rse_starters),
-        common.Version.FireRed, common.Version.LeafGreen => starter_searcher.findSlice(frlg_starters),
-        else => null,
-    } orelse return error.UnableToFindStarterOffset;
+    // TODO: A way to find starter pokemons
 
     const trainer_searcher = Searcher(gen3.Trainer, [][]const []const u8{
         [][]const u8{ "party" },
@@ -275,7 +267,9 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
         .game_title = undefined,
         .gamecode = undefined,
         .version = version,
-        .starters = offsets.StarterSection.init(data, starters),
+
+        .starters = undefined,
+        .starters_repeat = undefined,
         .trainers = offsets.TrainerSection.init(data, trainers),
         .moves = offsets.MoveSection.init(data, moves),
         .machine_learnsets = offsets.MachineLearnsetSection.init(data, machine_learnset),
@@ -288,18 +282,6 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
         .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
     };
 }
-
-const rse_starters = []lu16{
-    lu16.init(277),
-    lu16.init(280),
-    lu16.init(283),
-};
-
-const frlg_starters = []lu16{
-    lu16.init(1),
-    lu16.init(4),
-    lu16.init(7),
-};
 
 const em_first_trainers = []gen3.Trainer{
     gen3.Trainer{

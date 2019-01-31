@@ -57,10 +57,9 @@ pub fn main() !void {
     const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    const iter = &arg_iter.iter;
-    _ = iter.next() catch undefined;
+    _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator.Error, iter) catch |err| {
+    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -91,11 +90,17 @@ pub fn main() !void {
     try outputGameData(game, stdout);
 }
 
-
 fn outputGameData(game: gen3.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
     try stream.print(".game_title={}\n", game.header.game_title);
     try stream.print(".gamecode={}\n", game.header.gamecode);
+
+    for (game.starters) |starter, i| {
+        if (starter.value() != game.starters_repeat[i].value())
+            debug.warn("warning: repeated starters don't match.\n");
+
+        try stream.print(".starters[{}]={}\n", i, starter.value());
+    }
 
     for (game.trainers) |trainer, i| {
         // The party type is infered from the party data.
@@ -217,6 +222,8 @@ fn outputGameData(game: gen3.Game, stream: var) !void {
         }
 
         for (game.evolutions[i]) |evo, j| {
+            if (evo.method == common.Evolution.Method.Unused)
+                continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
             try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
