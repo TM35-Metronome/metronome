@@ -59,7 +59,9 @@ pub fn Folder(comptime TFile: type) type {
 
         /// Allocate and initialize a new filesystem.
         pub fn create(a: *mem.Allocator) !*Self {
-            return try a.create(Self.init(a));
+            const res = try a.create(Self);
+            res.* = Self.init(a);
+            return res;
         }
 
         /// Deinitialize and free the filesystem.
@@ -174,7 +176,8 @@ pub fn Folder(comptime TFile: type) type {
         /// Create a file in the current folder.
         pub fn createFile(folder: *Self, name: []const u8, file: File) !*File {
             const res = try folder.createNode(name);
-            res.kind = Node.Kind{ .File = try folder.allocator().create(file) };
+            res.kind = Node.Kind{ .File = try folder.allocator().create(File) };
+            res.kind.File.* = file;
 
             return res.kind.File;
         }
