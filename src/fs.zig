@@ -151,7 +151,7 @@ pub fn Folder(comptime TFile: type) type {
 
         fn get(folder: *Self, path: []const u8) ?Node.Kind {
             var res = Node.Kind{ .Folder = folder.startFolder(path) };
-            var it = mem.split(path, "/");
+            var it = mem.tokenize(path, "/");
             while (it.next()) |name| {
                 switch (res) {
                     Node.Kind.File => return null,
@@ -195,7 +195,7 @@ pub fn Folder(comptime TFile: type) type {
         /// Create all none existing folders in `path`.
         pub fn createPath(folder: *Self, path: []const u8) !*Self {
             var res = folder.startFolder(path);
-            var it = mem.split(path, "/");
+            var it = mem.tokenize(path, "/");
             while (it.next()) |name| {
                 if (res.indexs.get(name)) |entry| {
                     const node = res.nodes.toSliceConst()[entry.value];
