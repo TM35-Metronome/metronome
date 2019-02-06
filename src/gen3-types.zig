@@ -307,6 +307,22 @@ pub const WildPokemonHeader = packed struct {
     fishing: Ref(WildPokemonInfo(10)),
 };
 
+pub const MapHeader = packed struct {
+    layout: Ref(c_void),  
+    events: Ref(c_void),
+    scripts: Ref(c_void),
+    connections: Ref(c_void),
+    unknown1: lu16,
+    unknown2: lu16,
+    map_sec: u8,
+    unknown3: u8,
+    weather: u8,
+    map_type: u8,
+    unknown4: lu16,
+    flags: u8,
+    map_battle_scene: u8,
+};
+
 pub const Game = struct {
     allocator: *mem.Allocator,
     version: common.Version,
@@ -327,6 +343,7 @@ pub const Game = struct {
     tms: []lu16,
     items: []Item,
     wild_pokemon_headers: []WildPokemonHeader,
+    map_headers: []MapHeader,
 
     pub fn fromFile(file: os.File, allocator: *mem.Allocator) !Game {
         var file_in_stream = file.inStream();

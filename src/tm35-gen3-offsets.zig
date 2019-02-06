@@ -106,6 +106,8 @@ pub fn main() !void {
         try stdout.print(".game[{}].items.len={}\n", i, info.items.len);
         try stdout.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
         try stdout.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
+        try stdout.print(".game[{}].map_headers.start={}\n", i, info.map_headers.start);
+        try stdout.print(".game[{}].map_headers.len={}\n", i, info.map_headers.len);
     }
 }
 
@@ -263,6 +265,27 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
     };
     const wild_pokemon_headers = maybe_wild_pokemon_headers orelse return error.UnableToFindWildPokemonHeaders;
 
+    const map_header_searcher = Searcher(gen3.MapHeader, [][]const []const u8{
+        [][]const u8{ "layout" },
+        [][]const u8{ "events" },
+        [][]const u8{ "scripts" },
+        [][]const u8{ "connections"},
+        [][]const u8{ "unknown1"},
+        [][]const u8{ "unknown2"},
+        [][]const u8{ "unknown3"},
+        [][]const u8{ "unknown4"},
+    }).init(data);
+    const maybe_map_headers = switch (version) {
+        common.Version.Emerald => map_header_searcher.findSlice3(
+            em_first_map_headers,
+            em_last_map_headers,
+        ),
+        common.Version.Ruby, common.Version.Sapphire => unreachable,
+        common.Version.FireRed, common.Version.LeafGreen => unreachable,
+        else => null,
+    };
+    const map_headers = maybe_map_headers orelse return error.UnableToFindMapHeaders;
+
     return offsets.Info{
         .game_title = undefined,
         .gamecode = undefined,
@@ -280,6 +303,7 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
         .tms = offsets.TmSection.init(data, tms_slice),
         .items = offsets.ItemSection.init(data, items),
         .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
+        .map_headers = offsets.MapHeaderSection.init(data, map_headers),
     };
 }
 
@@ -1104,4 +1128,40 @@ const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(1, 122),
     wildHeader(1, 122),
     wildHeader(1, 122),
+};
+
+const em_first_map_headers = []gen3.MapHeader{
+    gen3.MapHeader{
+        .layout = undefined,  
+        .events = undefined,  
+        .scripts = undefined, 
+        .connections = undefined, 
+        .unknown1 = undefined,
+        .unknown2 = undefined,
+        .map_sec = 0x07,
+        .unknown3 = undefined,
+        .weather = 2,
+        .map_type = 2,
+        .unknown4 = undefined,
+        .flags = 0b00001101,
+        .map_battle_scene = 0,
+    },
+};
+
+const em_last_map_headers = []gen3.MapHeader{
+    gen3.MapHeader{
+        .layout = undefined,  
+        .events = undefined,  
+        .scripts = undefined, 
+        .connections = undefined, 
+        .unknown1 = undefined,
+        .unknown2 = undefined,
+        .map_sec = 0x27,
+        .unknown3 = undefined,
+        .weather = 0,
+        .map_type = 8,
+        .unknown4 = undefined,
+        .flags = 0b00000000,
+        .map_battle_scene = 0,
+    },
 };

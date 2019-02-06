@@ -4,8 +4,8 @@ pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
     inline for ([][]const u8{
-        "tm35-gen3-load",
-        "tm35-gen3-apply",
+        //"tm35-gen3-load",
+        //"tm35-gen3-apply",
         "tm35-gen3-offsets",
     }) |exe_name| {
         const exe = b.addExecutable(exe_name, "src/" ++ exe_name ++ ".zig");

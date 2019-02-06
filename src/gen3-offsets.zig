@@ -67,6 +67,7 @@ pub const HmSection = Section(lu16);
 pub const TmSection = Section(lu16);
 pub const ItemSection = Section(gen3.Item);
 pub const WildPokemonHeaderSection = Section(gen3.WildPokemonHeader);
+pub const MapHeaderSection = Section(gen3.MapHeader);
 
 pub const Info = struct {
     game_title: [12]u8,
@@ -89,6 +90,7 @@ pub const Info = struct {
     tms: TmSection,
     items: ItemSection,
     wild_pokemon_headers: WildPokemonHeaderSection,
+    map_headers: MapHeaderSection,
 };
 
 pub const infos = []Info{
