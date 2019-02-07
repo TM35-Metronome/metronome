@@ -414,6 +414,7 @@ pub const Game = struct {
             .tms = info.tms.slice(rom),
             .items = info.items.slice(rom),
             .wild_pokemon_headers = info.wild_pokemon_headers.slice(rom),
+            .map_headers = info.map_headers.slice(rom),
         };
     }
 

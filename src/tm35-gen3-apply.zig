@@ -335,10 +335,13 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 return error.NoField;
             }
         } else |_| if (parser.eatField("moves")) {
-            const lvl_up_moves = try game.level_up_learnset_pointers[pokemon_index].toMany(game.data);
+            const lvl_up_moves = try game.level_up_learnset_pointers[pokemon_index].toSliceEnd(game.data);
+            const len = loop: for (lvl_up_moves) |lvl_up_move, i| {
+                if (lvl_up_move.id == math.maxInt(u9) and lvl_up_move.level == math.maxInt(u7))
+                    break :loop i;
+            } else lvl_up_moves.len;
 
-            // TODO: Bounds check
-            const lvl_up_index = try parser.eatIndex();
+            const lvl_up_index = try parser.eatIndexMax(len);
             const lvl_up_move = &lvl_up_moves[lvl_up_index];
             if (parser.eatField("id")) {
                 lvl_up_move.id = try parser.eatUnsignedValue(u9, 10);

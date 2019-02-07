@@ -106,6 +106,52 @@ const emerald_us_info = Info{
     .game_title = "POKEMON EMER",
     .gamecode = "BPEE",
     .version = common.Version.Emerald,
+    .software_version = 0,
+    .trainers = TrainerSection{
+        .start = 3211312,
+        .len = 855,
+    },
+    .moves = MoveSection{
+        .start = 3262616,
+        .len = 355,
+    },
+    .machine_learnsets = MachineLearnsetSection{
+        .start = 3270808,
+        .len = 412,
+    },
+    .pokemons = BaseStatsSection{
+        .start = 3270808,
+        .len = 412,
+    },
+    .evolutions = EvolutionSection{
+        .start = 3298076,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
+        .start = 3314556,
+        .len = 412,
+    },
+    .hms = HmSection{
+        .start = 3317482,
+        .len = 8,
+    },
+    .tms = TmSection{
+        .start = 6380436,
+        .len = 50,
+    },
+    .items = ItemSection{
+        .start = 5781920,
+        .len = 377,
+    },
+    .wild_pokemon_headers = WildPokemonHeaderSection{
+        .start = 5582152,
+        .len = 124,
+    },
+    .map_headers = MapHeaderSection{
+        .start = 4727992,
+        .len = 518,
+    },
+
     .starters = []StarterOffset{
         StarterOffset{ .offset = 0x005B1DF8 },
         StarterOffset{ .offset = 0x005B1DFA },
@@ -115,46 +161,6 @@ const emerald_us_info = Info{
         StarterOffset{ .offset = 0x005B1DF8 },
         StarterOffset{ .offset = 0x005B1DFA },
         StarterOffset{ .offset = 0x005B1DFC },
-    },
-    .trainers = TrainerSection{
-        .start = 0x00310030,
-        .len = 855,
-    },
-    .moves = MoveSection{
-        .start = 0x0031C898,
-        .len = 355,
-    },
-    .machine_learnsets = MachineLearnsetSection{
-        .start = 0x0031E898,
-        .len = 412,
-    },
-    .pokemons = BaseStatsSection{
-        .start = 0x003203CC,
-        .len = 412,
-    },
-    .evolutions = EvolutionSection{
-        .start = 0x0032531C,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
-        .start = 0x0032937C,
-        .len = 412,
-    },
-    .hms = HmSection{
-        .start = 0x00329EEA,
-        .len = 8,
-    },
-    .tms = TmSection{
-        .start = 0x00615B94,
-        .len = 50,
-    },
-    .items = ItemSection{
-        .start = 0x005839A0,
-        .len = 377,
-    },
-    .wild_pokemon_headers = WildPokemonHeaderSection{
-        .start = 0x00552D48,
-        .len = 124,
     },
 };
 
@@ -162,6 +168,52 @@ pub const ruby_us_info = Info{
     .game_title = "POKEMON RUBY",
     .gamecode = "AXVE",
     .version = common.Version.Ruby,
+    .software_version = 1,
+    .trainers = TrainerSection{
+        .start = 2032916,
+        .len = 337,
+    },
+    .moves = MoveSection{
+        .start = 2076996,
+        .len = 355,
+    },
+    .machine_learnsets = MachineLearnsetSection{
+        .start = 2085128,
+        .len = 412,
+    },
+    .pokemons = BaseStatsSection{
+        .start = 2085128,
+        .len = 412,
+    },
+    .evolutions = EvolutionSection{
+        .start = 2112384,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
+        .start = 2128864,
+        .len = 412,
+    },
+    .hms = HmSection{
+        .start = 2130738,
+        .len = 8,
+    },
+    .tms = TmSection{
+        .start = 3630364,
+        .len = 50,
+    },
+    .items = ItemSection{
+        .start = 3954048,
+        .len = 349,
+    },
+    .wild_pokemon_headers = WildPokemonHeaderSection{
+        .start = 3789932,
+        .len = 97,
+    },
+    .map_headers = MapHeaderSection{
+        .start = 3167328,
+        .len = 394,
+    },
+
     .starters = []StarterOffset{
         StarterOffset{ .offset = 0x003F76E0 },
         StarterOffset{ .offset = 0x003F76E2 },
@@ -171,46 +223,6 @@ pub const ruby_us_info = Info{
         StarterOffset{ .offset = 0x003F76E0 },
         StarterOffset{ .offset = 0x003F76E2 },
         StarterOffset{ .offset = 0x003F76E4 },
-    },
-    .trainers = TrainerSection{
-        .start = 0x001F0514,
-        .len = 337,
-    },
-    .moves = MoveSection{
-        .start = 0x001FB144,
-        .len = 355,
-    },
-    .machine_learnsets = MachineLearnsetSection{
-        .start = 0x001FD108,
-        .len = 412,
-    },
-    .pokemons = BaseStatsSection{
-        .start = 0x001FEC30,
-        .len = 412,
-    },
-    .evolutions = EvolutionSection{
-        .start = 0x00203B80,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
-        .start = 0x00207BE0,
-        .len = 412,
-    },
-    .hms = HmSection{
-        .start = 0x00208332,
-        .len = 8,
-    },
-    .tms = TmSection{
-        .start = 0x0037651C,
-        .len = 50,
-    },
-    .items = ItemSection{
-        .start = 0x003C5580,
-        .len = 349,
-    },
-    .wild_pokemon_headers = WildPokemonHeaderSection{
-        .start = 0x0039D46C,
-        .len = 97,
     },
 };
 
@@ -218,6 +230,52 @@ pub const sapphire_us_info = Info{
     .game_title = "POKEMON SAPP",
     .gamecode = "AXPE",
     .version = common.Version.Sapphire,
+    .software_version = 1,
+    .trainers = TrainerSection{
+        .start = 2032804,
+        .len = 337,
+    },
+    .moves = MoveSection{
+        .start = 2076884,
+        .len = 355,
+    },
+    .machine_learnsets = MachineLearnsetSection{
+        .start = 2085016,
+        .len = 412,
+    },
+    .pokemons = BaseStatsSection{
+        .start = 2085016,
+        .len = 412,
+    },
+    .evolutions = EvolutionSection{
+        .start = 2112272,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
+        .start = 2128752,
+        .len = 412,
+    },
+    .hms = HmSection{
+        .start = 2130626,
+        .len = 8,
+    },
+    .tms = TmSection{
+        .start = 3630252,
+        .len = 50,
+    },
+    .items = ItemSection{
+        .start = 3954140,
+        .len = 349,
+    },
+    .wild_pokemon_headers = WildPokemonHeaderSection{
+        .start = 3789492,
+        .len = 97,
+    },
+    .map_headers = MapHeaderSection{
+        .start = 3167216,
+        .len = 394,
+    },
+
     .starters = []StarterOffset{
         StarterOffset{ .offset = 0x003F773C },
         StarterOffset{ .offset = 0x003F773E },
@@ -228,52 +286,58 @@ pub const sapphire_us_info = Info{
         StarterOffset{ .offset = 0x003F773E },
         StarterOffset{ .offset = 0x003F7740 },
     },
-    .trainers = TrainerSection{
-        .start = 0x001F04A4,
-        .len = 337,
-    },
-    .moves = MoveSection{
-        .start = 0x001FB0D4,
-        .len = 355,
-    },
-    .machine_learnsets = MachineLearnsetSection{
-        .start = 0x001FD098,
-        .len = 412,
-    },
-    .pokemons = BaseStatsSection{
-        .start = 0x001FEBC0,
-        .len = 412,
-    },
-    .evolutions = EvolutionSection{
-        .start = 0x00203B10,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
-        .start = 0x00207B70,
-        .len = 412,
-    },
-    .hms = HmSection{
-        .start = 0x002082C2,
-        .len = 8,
-    },
-    .tms = TmSection{
-        .start = 0x003764AC,
-        .len = 50,
-    },
-    .items = ItemSection{
-        .start = 0x003C55DC,
-        .len = 349,
-    },
-    .wild_pokemon_headers = WildPokemonHeaderSection{
-        .start = 0x0039D2B4,
-        .len = 97,
-    },
 };
 
 pub const fire_us_info = Info{
     .game_title = "POKEMON FIRE",
     .gamecode = "BPRE",
     .version = common.Version.FireRed,
+    .software_version = 1,
+    .trainers = TrainerSection{
+        .start = 2353976,
+        .len = 743,
+    },
+    .moves = MoveSection{
+        .start = 2428020,
+        .len = 355,
+    },
+    .machine_learnsets = MachineLearnsetSection{
+        .start = 2436152,
+        .len = 412,
+    },
+    .pokemons = BaseStatsSection{
+        .start = 2436152,
+        .len = 412,
+    },
+    .evolutions = EvolutionSection{
+        .start = 2463684,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
+        .start = 2480164,
+        .len = 412,
+    },
+    .hms = HmSection{
+        .start = 2482308,
+        .len = 8,
+    },
+    .tms = TmSection{
+        .start = 4564484,
+        .len = 50,
+    },
+    .items = ItemSection{
+        .start = 4042904,
+        .len = 374,
+    },
+    .wild_pokemon_headers = WildPokemonHeaderSection{
+        .start = 3972392,
+        .len = 132,
+    },
+    .map_headers = MapHeaderSection{
+        .start = 3469816,
+        .len = 425,
+    },
+
     .starters = []StarterOffset{
         StarterOffset{ .offset = 0x00169C2D },
         StarterOffset{ .offset = 0x00169C2D + 515 },
@@ -284,52 +348,58 @@ pub const fire_us_info = Info{
         StarterOffset{ .offset = 0x00169C2D + 5 },
         StarterOffset{ .offset = 0x00169C2D + 5 + 515 },
     },
-    .trainers = TrainerSection{
-        .start = 0x0023EB38,
-        .len = 743,
-    },
-    .moves = MoveSection{
-        .start = 0x00250C74,
-        .len = 355,
-    },
-    .machine_learnsets = MachineLearnsetSection{
-        .start = 0x00252C38,
-        .len = 412,
-    },
-    .pokemons = BaseStatsSection{
-        .start = 0x002547F4,
-        .len = 412,
-    },
-    .evolutions = EvolutionSection{
-        .start = 0x002597C4,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
-        .start = 0x0025D824,
-        .len = 412,
-    },
-    .hms = HmSection{
-        .start = 0x0025E084,
-        .len = 8,
-    },
-    .tms = TmSection{
-        .start = 0x0045A604,
-        .len = 50,
-    },
-    .items = ItemSection{
-        .start = 0x003DB098,
-        .len = 374,
-    },
-    .wild_pokemon_headers = WildPokemonHeaderSection{
-        .start = 0x003C9D28,
-        .len = 132,
-    },
 };
 
 pub const leaf_us_info = Info{
     .game_title = "POKEMON LEAF",
     .gamecode = "BPGE",
     .version = common.Version.LeafGreen,
+    .software_version = 1,
+    .trainers = TrainerSection{
+        .start = 2353940,
+        .len = 743,
+    },
+    .moves = MoveSection{
+        .start = 2427984,
+        .len = 355,
+    },
+    .machine_learnsets = MachineLearnsetSection{
+        .start = 2436116,
+        .len = 412,
+    },
+    .pokemons = BaseStatsSection{
+        .start = 2436116,
+        .len = 412,
+    },
+    .evolutions = EvolutionSection{
+        .start = 2463652,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
+        .start = 2480132,
+        .len = 412,
+    },
+    .hms = HmSection{
+        .start = 2482276,
+        .len = 8,
+    },
+    .tms = TmSection{
+        .start = 4562996,
+        .len = 50,
+    },
+    .items = ItemSection{
+        .start = 4042452,
+        .len = 374,
+    },
+    .wild_pokemon_headers = WildPokemonHeaderSection{
+        .start = 3971940,
+        .len = 132,
+    },
+    .map_headers = MapHeaderSection{
+        .start = 3469784,
+        .len = 425,
+    },
+
     .starters = []StarterOffset{
         StarterOffset{ .offset = 0x00169C09 },
         StarterOffset{ .offset = 0x00169C09 + 515 },
@@ -339,45 +409,5 @@ pub const leaf_us_info = Info{
         StarterOffset{ .offset = 0x00169C09 + 5 + 461 },
         StarterOffset{ .offset = 0x00169C09 + 5 },
         StarterOffset{ .offset = 0x00169C09 + 5 + 515 },
-    },
-    .trainers = TrainerSection{
-        .start = 0x0023EB14,
-        .len = 743,
-    },
-    .moves = MoveSection{
-        .start = 0x00250C50,
-        .len = 355,
-    },
-    .machine_learnsets = MachineLearnsetSection{
-        .start = 0x00252C14,
-        .len = 412,
-    },
-    .pokemons = BaseStatsSection{
-        .start = 0x002547D0,
-        .len = 412,
-    },
-    .evolutions = EvolutionSection{
-        .start = 0x002597A4,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = LevelUpLearnsetPointerSection{
-        .start = 0x0025D804,
-        .len = 412,
-    },
-    .hms = HmSection{
-        .start = 0x0025E064,
-        .len = 8,
-    },
-    .tms = TmSection{
-        .start = 0x0045A034,
-        .len = 50,
-    },
-    .items = ItemSection{
-        .start = 0x003DAED4,
-        .len = 374,
-    },
-    .wild_pokemon_headers = WildPokemonHeaderSection{
-        .start = 0x003C9B64,
-        .len = 132,
     },
 };

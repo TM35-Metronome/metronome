@@ -278,11 +278,13 @@ fn getInfo(
     }).init(data);
     const maybe_map_headers = switch (version) {
         common.Version.Ruby,
-        common.Version.Sapphire,
-        common.Version.Emerald,
-        => map_header_searcher.findSlice3(
-            rse_first_map_headers,
-            rse_last_map_headers,
+        common.Version.Sapphire, =>map_header_searcher.findSlice3(
+            rs_first_map_headers,
+            rs_last_map_headers,
+        ),
+        common.Version.Emerald => map_header_searcher.findSlice3(
+            em_first_map_headers,
+            em_last_map_headers,
         ),
         common.Version.FireRed,
         common.Version.LeafGreen,
@@ -1139,7 +1141,7 @@ const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(1, 122),
 };
 
-const rse_first_map_headers = []gen3.MapHeader{
+const em_first_map_headers = []gen3.MapHeader{
     // Petalburg City
     gen3.MapHeader{
         .map_data = undefined,  
@@ -1159,7 +1161,7 @@ const rse_first_map_headers = []gen3.MapHeader{
     },
 };
 
-const rse_last_map_headers = []gen3.MapHeader{
+const em_last_map_headers = []gen3.MapHeader{
     // Route 124 - Diving Treasure Hunters House
     gen3.MapHeader{
         .map_data = undefined,  
@@ -1168,6 +1170,46 @@ const rse_last_map_headers = []gen3.MapHeader{
         .map_connections = undefined, 
         .music = lu16.init(408),
         .map_data_id = lu16.init(301),
+        .map_sec = 0x27,
+        .cave = 0,
+        .weather = 0,
+        .map_type = 8,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = 0b00000000,
+        .map_battle_scene = 0,
+    },
+};
+
+const rs_first_map_headers = []gen3.MapHeader{
+    // Petalburg City
+    gen3.MapHeader{
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(362),
+        .map_data_id = lu16.init(1),
+        .map_sec = 0x07,
+        .cave = 0,
+        .weather = 2,
+        .map_type = 2,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = 0b00000001,
+        .map_battle_scene = 0,
+    },
+};
+
+const rs_last_map_headers = []gen3.MapHeader{
+    // Route 124 - Diving Treasure Hunters House
+    gen3.MapHeader{
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(408),
+        .map_data_id = lu16.init(302),
         .map_sec = 0x27,
         .cave = 0,
         .weather = 0,

@@ -229,15 +229,12 @@ fn outputGameData(game: gen3.Game, stream: var) !void {
             try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
         }
 
-        {
-            const learnset = try game.level_up_learnset_pointers[i].toMany(game.data);
-            var j: usize = 0;
-
-            // UNSAFE: Bounds check on game data
-            while (learnset[j].id != math.maxInt(u9) or learnset[j].level != math.maxInt(u7)) : (j += 1) {
-                try stream.print(".pokemons[{}].moves[{}].id={}\n", i, j, learnset[j].id);
-                try stream.print(".pokemons[{}].moves[{}].level={}\n", i, j, learnset[j].level);
-            }
+        const learnset = try game.level_up_learnset_pointers[i].toSliceEnd(game.data);
+        for (learnset) |l, j| {
+            if (l.id == math.maxInt(u9) and l.level == math.maxInt(u7))
+                break;
+            try stream.print(".pokemons[{}].moves[{}].id={}\n", i, j, l.id);
+            try stream.print(".pokemons[{}].moves[{}].level={}\n", i, j, l.level);
         }
     }
 
