@@ -308,17 +308,18 @@ pub const WildPokemonHeader = packed struct {
 };
 
 pub const MapHeader = packed struct {
-    layout: Ref(c_void),  
-    events: Ref(c_void),
-    scripts: Ref(c_void),
-    connections: Ref(c_void),
-    unknown1: lu16,
-    unknown2: lu16,
+    map_data: Ref(c_void),
+    map_events: Ref(c_void),
+    map_scripts: Ref(c_void),
+    map_connections: Ref(c_void),
+    music: lu16,
+    map_data_id: lu16,
     map_sec: u8,
-    unknown3: u8,
+    cave: u8,
     weather: u8,
     map_type: u8,
-    unknown4: lu16,
+    pad: u8,
+    escape_rope: u8,
     flags: u8,
     map_battle_scene: u8,
 };

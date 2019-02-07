@@ -74,18 +74,26 @@ pub fn main() !void {
 
         var file_stream = file.inStream();
         const data = try file_stream.stream.readAllAlloc(allocator, 1024 * 1024 * 32);
+        if (data.len < @sizeOf(gba.Header))
+            return error.RomTooSmall;
 
-        const gamecode = getGamecode(data);
-        const game_title = getGameTitle(data);
-        const version = getVersion(gamecode) catch |err| {
+        const header = @bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
+        const version = getVersion(header.gamecode) catch |err| {
             debug.warn("{} is not a gen3 Pokemon rom.\n", file_name);
             return err;
         };
 
-        const info = try getInfo(data, version, gamecode, game_title);
-        try stdout.print(".game[{}].game_title={}\n", i, game_title);
-        try stdout.print(".game[{}].gamecode={}\n", i, gamecode);
-        try stdout.print(".game[{}].version={}\n", i, @tagName(version));
+        const info = try getInfo(
+            data,
+            version,
+            header.gamecode,
+            header.game_title,
+            header.software_version
+        );
+        try stdout.print(".game[{}].game_title={}\n", i, info.game_title);
+        try stdout.print(".game[{}].gamecode={}\n", i, info.gamecode);
+        try stdout.print(".game[{}].version={}\n", i, @tagName(info.version));
+        try stdout.print(".game[{}].software_version={}\n", i, info.software_version);
         try stdout.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
         try stdout.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
         try stdout.print(".game[{}].moves.start={}\n", i, info.moves.start);
@@ -111,16 +119,6 @@ pub fn main() !void {
     }
 }
 
-fn getGamecode(data: []const u8) [4]u8 {
-    const header = &@bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-    return header.gamecode;
-}
-
-fn getGameTitle(data: []const u8) [12]u8 {
-    const header = &@bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-    return header.game_title;
-}
-
 fn getVersion(gamecode: []const u8) !common.Version {
     if (mem.startsWith(u8, gamecode, "BPE"))
         return common.Version.Emerald;
@@ -136,7 +134,13 @@ fn getVersion(gamecode: []const u8) !common.Version {
     return error.UnknownPokemonVersion;
 }
 
-fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_title: [12]u8) !offsets.Info {
+fn getInfo(
+    data: []const u8,
+    version: common.Version,
+    gamecode: [4]u8,
+    game_title: [12]u8,
+    software_version: u8,
+) !offsets.Info {
     // TODO: A way to find starter pokemons
 
     const trainer_searcher = Searcher(gen3.Trainer, [][]const []const u8{
@@ -238,7 +242,7 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
             frlg_first_items,
             frlg_last_items,
         ),
-        else => null,
+          else => null,
     } orelse return error.UnableToFindItemsOffset;
 
     const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, [][]const []const u8{
@@ -266,22 +270,26 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
     const wild_pokemon_headers = maybe_wild_pokemon_headers orelse return error.UnableToFindWildPokemonHeaders;
 
     const map_header_searcher = Searcher(gen3.MapHeader, [][]const []const u8{
-        [][]const u8{ "layout" },
-        [][]const u8{ "events" },
-        [][]const u8{ "scripts" },
-        [][]const u8{ "connections"},
-        [][]const u8{ "unknown1"},
-        [][]const u8{ "unknown2"},
-        [][]const u8{ "unknown3"},
-        [][]const u8{ "unknown4"},
+        [][]const u8{ "map_data" },
+        [][]const u8{ "map_events" },
+        [][]const u8{ "map_scripts" },
+        [][]const u8{ "map_connections"},
+        [][]const u8{ "pad"},
     }).init(data);
     const maybe_map_headers = switch (version) {
-        common.Version.Emerald => map_header_searcher.findSlice3(
-            em_first_map_headers,
-            em_last_map_headers,
+        common.Version.Ruby,
+        common.Version.Sapphire,
+        common.Version.Emerald,
+        => map_header_searcher.findSlice3(
+            rse_first_map_headers,
+            rse_last_map_headers,
         ),
-        common.Version.Ruby, common.Version.Sapphire => unreachable,
-        common.Version.FireRed, common.Version.LeafGreen => unreachable,
+        common.Version.FireRed,
+        common.Version.LeafGreen,
+        => map_header_searcher.findSlice3(
+            frlg_first_map_headers,
+            frlg_last_map_headers,
+        ),
         else => null,
     };
     const map_headers = maybe_map_headers orelse return error.UnableToFindMapHeaders;
@@ -290,6 +298,7 @@ fn getInfo(data: []const u8, version: common.Version, gamecode: [4]u8, game_titl
         .game_title = undefined,
         .gamecode = undefined,
         .version = version,
+        .software_version = software_version,
 
         .starters = undefined,
         .starters_repeat = undefined,
@@ -1130,38 +1139,82 @@ const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(1, 122),
 };
 
-const em_first_map_headers = []gen3.MapHeader{
+const rse_first_map_headers = []gen3.MapHeader{
+    // Petalburg City
     gen3.MapHeader{
-        .layout = undefined,  
-        .events = undefined,  
-        .scripts = undefined, 
-        .connections = undefined, 
-        .unknown1 = undefined,
-        .unknown2 = undefined,
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(362),
+        .map_data_id = lu16.init(1),
         .map_sec = 0x07,
-        .unknown3 = undefined,
+        .cave = 0,
         .weather = 2,
         .map_type = 2,
-        .unknown4 = undefined,
+        .pad = undefined,
+        .escape_rope = 0,
         .flags = 0b00001101,
         .map_battle_scene = 0,
     },
 };
 
-const em_last_map_headers = []gen3.MapHeader{
+const rse_last_map_headers = []gen3.MapHeader{
+    // Route 124 - Diving Treasure Hunters House
     gen3.MapHeader{
-        .layout = undefined,  
-        .events = undefined,  
-        .scripts = undefined, 
-        .connections = undefined, 
-        .unknown1 = undefined,
-        .unknown2 = undefined,
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(408),
+        .map_data_id = lu16.init(301),
         .map_sec = 0x27,
-        .unknown3 = undefined,
+        .cave = 0,
         .weather = 0,
         .map_type = 8,
-        .unknown4 = undefined,
+        .pad = undefined,
+        .escape_rope = 0,
         .flags = 0b00000000,
         .map_battle_scene = 0,
+    },
+};
+
+const frlg_first_map_headers = []gen3.MapHeader{
+    // ???
+    gen3.MapHeader{
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(0x12F),
+        .map_data_id = lu16.init(0x2F),
+        .map_sec = 0xC4,
+        .cave = 0x0,
+        .weather = 0x0,
+        .map_type = 0x8,
+        .pad = undefined,
+        .escape_rope = 0x0,
+        .flags = 0x0,
+        .map_battle_scene = 0x8,
+    },
+};
+
+const frlg_last_map_headers = []gen3.MapHeader{
+    // ???
+    gen3.MapHeader{
+        .map_data = undefined,  
+        .map_events = undefined,  
+        .map_scripts = undefined, 
+        .map_connections = undefined, 
+        .music = lu16.init(0x151),
+        .map_data_id = lu16.init(0xB),
+        .map_sec = 0xA9,
+        .cave = 0x0,
+        .weather = 0x0,
+        .map_type = 0x8,
+        .pad = undefined,
+        .escape_rope = 0x0,
+        .flags = 0x0,
+        .map_battle_scene = 0x0,
     },
 };

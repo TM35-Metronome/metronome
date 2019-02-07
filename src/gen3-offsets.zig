@@ -73,6 +73,7 @@ pub const Info = struct {
     game_title: [12]u8,
     gamecode: [4]u8,
     version: common.Version,
+    software_version: u8,
 
     starters: [3]StarterOffset,
 
