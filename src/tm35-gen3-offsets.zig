@@ -295,8 +295,8 @@ fn getInfo(
     const map_headers = maybe_map_headers orelse return error.UnableToFindMapHeaders;
 
     return offsets.Info{
-        .game_title = undefined,
-        .gamecode = undefined,
+        .game_title = game_title,
+        .gamecode = gamecode,
         .version = version,
         .software_version = software_version,
 
