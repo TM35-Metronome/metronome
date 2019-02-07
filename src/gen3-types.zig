@@ -12,25 +12,28 @@ const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 
+/// A pointer to an unknown number of elements.
+/// In GBA games pointers are 32 bits and the game rom is loaded into address
+/// 0x8000000. This makes 0x8000000 the null pointer. This struct helps abstract
+/// this away and translate game pointers into real pointers.
 pub fn Ptr(comptime T: type) type {
     return packed struct {
         const Self = @This();
 
         v: lu32,
 
+        /// Initialize a 'null' 'Ptr'
         pub fn initNull() Self {
             return Self{ .v = lu32.init(0) };
         }
 
-        pub fn init(i: u32) !Self {
-            const v = math.add(u32, i, 0x8000000) catch return error.InvalidPointer;
+        /// Initialize a 'Ptr' with the address 'addr' (relative to the rom).
+        pub fn init(addr: u32) !Self {
+            const v = math.add(u32, addr, 0x8000000) catch return error.InvalidPointer;
             return Self{ .v = lu32.init(v) };
         }
 
-        pub fn toMany(ptr: Self, data: []u8) ![*]T {
-            return (try ptr.toSlice(data, 0)).ptr;
-        }
-
+        /// Slice 'data' from 'ptr' to 'ptr' + 'len'.
         pub fn toSlice(ptr: Self, data: []u8, len: u32) ![]T {
             if (ptr.isNull()) {
                 if (len == 0)
@@ -39,52 +42,72 @@ pub fn Ptr(comptime T: type) type {
                 return error.InvalidPointer;
             }
 
-            const start = try ptr.toInt();
-            const end = start + len * @sizeOf(T);
-            if (data.len < start or data.len < end)
+            const slice = try ptr.toSliceEnd(data);
+            if (slice.len < len)
                 return error.InvalidPointer;
 
-            return @bytesToSlice(T, data[start..end]);
+            return slice[0..len];
         }
 
+        /// Slice 'data' from 'ptr' to the maximum length allowed
+        /// within 'data'.
+        pub fn toSliceEnd(ptr: Self, data: []u8) ![]T {
+            if (ptr.isNull())
+                return error.InvalidPointer;
+
+            const start = try ptr.toInt();
+            const byte_len = data.len - start;
+            const len = byte_len - (byte_len % @sizeOf(T));
+            return @bytesToSlice(T, data[start..][0..len]);
+        }
+
+        /// Check if the pointer is 'null'.
         pub fn isNull(ptr: Self) bool {
             return ptr.v.value() == 0;
         }
 
+        /// Convert 'ptr' to its integer form (relative to the rom).
         pub fn toInt(ptr: Self) !u32 {
             return math.sub(u32, ptr.v.value(), 0x8000000) catch return error.InvalidPointer;
         }
     };
 }
 
+/// Like 'Ptr' but only to a single 'T'.
 pub fn Ref(comptime T: type) type {
     return packed struct {
         const Self = @This();
 
         ptr: Ptr(T),
 
+        /// Initialize a 'null' 'Ref'
         pub fn initNull() Self {
             return Self{ .ptr = Ptr(T).initNull() };
         }
 
-        pub fn init(i: u32) !Self {
-            return Self{ .ptr = try Ptr(T).init(i) };
+        /// Initialize a 'Ref' with the address 'addr' (relative to the rom).
+        pub fn init(addr: u32) !Self {
+            return Self{ .ptr = try Ptr(T).init(addr) };
         }
 
+        /// Convert to '*T' at the address of 'ref' inside 'data'.
         pub fn toSingle(ref: Self, data: []u8) !*T {
             return &(try ref.ptr.toSlice(data, 1))[0];
         }
 
+        /// Check if the pointer is 'null'.
         pub fn isNull(ref: Self) bool {
             return ref.ptr.isNull();
         }
 
+        /// Convert 'ptr' to its integer form (relative to the rom).
         pub fn toInt(ref: Self) !u32 {
             return try ref.ptr.toInt();
         }
     };
 }
 
+/// Like 'Ptr' but with a runtime known number of elements.
 pub fn Slice(comptime T: type) type {
     return packed struct {
         const Self = @This();
@@ -92,6 +115,7 @@ pub fn Slice(comptime T: type) type {
         l: lu32,
         ptr: Ptr(T),
 
+        /// Initialize an empty 'Slice'.
         pub fn initEmpty() Self {
             return Self{
                 .l = lu32.init(0),
@@ -99,17 +123,20 @@ pub fn Slice(comptime T: type) type {
             };
         }
 
-        pub fn init(ptr: u32, l: u32) !Self {
+        /// Initialize a 'Slice' from an 'addr' and a 'len'.
+        pub fn init(addr: u32, len: u32) !Self {
             return Self{
-                .l = lu32.init(l),
-                .ptr = try Ptr(T).init(ptr),
+                .l = lu32.init(len),
+                .ptr = try Ptr(T).init(addr),
             };
         }
 
+        /// Convert to a slice into 'data'.
         pub fn toSlice(slice: Self, data: []u8) ![]T {
             return slice.ptr.toSlice(data, slice.len());
         }
 
+        /// Get the length of 'slice'.
         pub fn len(slice: Self) u32 {
             return slice.l.value();
         }
@@ -148,9 +175,6 @@ pub const BasePokemon = packed struct {
 };
 
 pub const Trainer = packed struct {
-    const has_item = 0b10;
-    const has_moves = 0b01;
-
     party_type: PartyType,
     class: u8,
     encounter_music: u8,
