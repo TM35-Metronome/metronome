@@ -7,6 +7,7 @@ pub fn build(b: *Builder) void {
         "tm35-gen3-load",
         "tm35-gen3-apply",
         "tm35-gen3-offsets",
+        "tm35-gen3-disassemble-scripts",
     }) |exe_name| {
         const exe = b.addExecutable(exe_name, "src/" ++ exe_name ++ ".zig");
         exe.setBuildMode(mode);

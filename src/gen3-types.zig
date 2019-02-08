@@ -61,6 +61,18 @@ pub fn Ptr(comptime T: type) type {
             return @bytesToSlice(T, data[start..][0..len]);
         }
 
+        /// Slice 'data' from 'ptr' to the first item where 'isTerm'
+        /// return 'true'.
+        pub fn toSliceTerminated(ptr: Self, data: []u8, isTerm: fn (T) bool) ![]T {
+            const slice = try ptr.toSliceEnd(data);
+            for (slice) |item, len| {
+                if (isTerm(item))
+                    return slice[0..len];
+            }
+
+            return error.DidNotFindTerminator;
+        }
+
         /// Check if the pointer is 'null'.
         pub fn isNull(ptr: Self) bool {
             return ptr.v.value() == 0;
@@ -304,14 +316,12 @@ pub const LevelUpMove = packed struct {
     level: u7,
 };
 
-// TODO: Confirm layout
 pub const WildPokemon = packed struct {
     min_level: u8,
     max_level: u8,
     species: lu16,
 };
 
-// TODO: Confirm layout
 pub fn WildPokemonInfo(comptime len: usize) type {
     return packed struct {
         encounter_rate: u8,
@@ -320,7 +330,6 @@ pub fn WildPokemonInfo(comptime len: usize) type {
     };
 }
 
-// TODO: Confirm layout
 pub const WildPokemonHeader = packed struct {
     map_group: u8,
     map_num: u8,
@@ -333,8 +342,8 @@ pub const WildPokemonHeader = packed struct {
 
 pub const MapHeader = packed struct {
     map_data: Ref(c_void),
-    map_events: Ref(c_void),
-    map_scripts: Ref(c_void),
+    map_events: Ref(MapEvents),
+    map_scripts: Ptr(MapScript),
     map_connections: Ref(c_void),
     music: lu16,
     map_data_id: lu16,
@@ -346,6 +355,80 @@ pub const MapHeader = packed struct {
     escape_rope: u8,
     flags: u8,
     map_battle_scene: u8,
+};
+
+pub const MapEvents = packed struct {
+    obj_events_len: u8,
+    warps_len: u8,
+    coord_events_len: u8,
+    bg_events_len: u8,
+    obj_events: Ptr(ObjectEvent),
+    warps: Ptr(Warp),
+    coord_events: Ptr(CoordEvent),
+    bg_events: Ptr(BgEvent),
+};
+
+pub const ObjectEvent = packed struct {
+    index: u8,
+    gfx: u8,
+    replacement: u8,
+    pad1: u8,
+    x: lu16,
+    y: lu16,
+    evelavtion: u8,
+    movement_type: u8,
+    y_radius: u4,
+    x_radius: u4,
+    pad2: u8,
+    trainer_type: lu16,
+    sight_radius_tree_etc: lu16,
+    script: Ptr(u8),
+    event_flag: lu16,
+    pad3: [2]u8,
+};
+
+pub const Warp = packed struct {
+    x: lu16,
+    y: lu16,
+    byte: u8,
+    warp: u8,
+    map_num: u8,
+    map_group: u8,
+};
+
+pub const CoordEvent = packed struct {
+    x: lu16,
+    y: lu16,
+    elevation: u8,
+    pad1: u8,
+    trigger: lu16,
+    index: lu16,
+    pad2: [2]u8,
+    scripts: Ptr(u8),
+};
+
+pub const BgEvent = packed struct {
+    x: lu16,
+    y: lu16,
+    elevation: u8,
+    kind: u8,
+    pad: [2]u8,
+    unknown: [4]u8,
+};
+
+pub const MapScript = packed struct {
+    @"type": u8,
+    addr: packed union {
+        @"0": void,
+        @"2": Ptr(MapScript2),
+        Other: Ptr(u8),
+    },
+};
+
+pub const MapScript2 = packed struct {
+    word1: lu16,
+    word2: lu16,
+    addr: Ptr(u8),
 };
 
 pub const Game = struct {

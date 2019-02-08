@@ -1,7 +1,211 @@
-const Kind = @import("enum.zig").Kind;
+const fun = @import("fun-with-zig");
+const builtin = @import("builtin");
+const std = @import("std");
 
-const lu16 = u16;
-const lu32 = u32;
+const lu16 = fun.platform.lu16;
+const lu32 = fun.platform.lu32;
+
+const meta = std.meta;
+const trait = meta.trait;
+const mem = std.mem;
+const debug = std.debug;
+
+/// Find the field name which is most likly to be the tag of 'union_field'.
+/// This function looks at all fields declared before 'union_field'. If one
+/// of these field is an enum which has the same fields as the 'union_field's
+/// type, then that is assume to be the tag of 'union_field'.
+pub fn findTagFieldName(comptime Container: type, comptime union_field: []const u8) ?[]const u8 {
+    if (!trait.is(builtin.TypeId.Struct)(Container))
+        @compileError(@typeName(Container) ++ " is not a struct.");
+
+    const container_fields = meta.fields(Container);
+    const u_index = for (container_fields) |f, i| {
+        if (mem.eql(u8, f.name, union_field))
+            break i;
+    } else {
+        @compileError("No field called " ++ union_field ++ " in " ++ @typeName(Container));
+    };
+
+    const Union = container_fields[u_index].field_type;
+    if (!trait.is(builtin.TypeId.Union)(Union))
+        @compileError(union_field ++ " is not a union.");
+
+    // Check all fields before 'union_field'.
+    outer: for (container_fields[0..u_index]) |field| {
+        const Enum = field.field_type;
+        if (!trait.is(builtin.TypeId.Enum)(Enum))
+            continue;
+
+        // Check if 'Enum' and 'Union' have the same names
+        // of their fields.
+        const u_fields = meta.fields(Union);
+        const e_fields = meta.fields(Enum);
+        if (u_fields.len != e_fields.len)
+            continue;
+
+        // The 'Enum' and 'Union' have to have the same fields
+        // in the same order. It's too slow otherwise (an it keeps
+        // this impl simple)
+        for (u_fields) |u_field, i| {
+            const e_field = e_fields[i];
+            if (!mem.eql(u8, u_field.name, e_field.name))
+                continue :outer;
+        }
+
+        return field.name;
+    }
+
+    return null;
+}
+
+fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) void {
+    if (comptime findTagFieldName(Container, union_field)) |actual| {
+        debug.assertOrPanic(expect != null);
+        debug.assertOrPanic(mem.eql(u8, expect.?, actual));
+    } else {
+        debug.assertOrPanic(expect == null);
+    }
+}
+
+test "findTagFieldName" {
+    const Union = union {
+        A: void,
+        B: u8,
+        C: u16,
+    };
+
+    const Tag = enum {
+        A,
+        B,
+        C,
+    };
+    testFindTagFieldName(struct {
+        tag: Tag,
+        un: Union,
+    }, "un", "tag");
+    testFindTagFieldName(struct {
+        tag: Tag,
+        not_tag: u8,
+        un: Union,
+        not_tag2: struct {},
+        not_tag3: enum {
+            A,
+            B,
+            Q,
+        },
+    }, "un", "tag");
+    testFindTagFieldName(struct {
+        not_tag: u8,
+        un: Union,
+        not_tag2: struct {},
+        not_tag3: enum {
+            A,
+            B,
+            Q,
+        },
+    }, "un", null);
+}
+
+/// Calculates the packed size of 'value'. The packed size is the size 'value'
+/// would have if unions did not have to have the size of their biggest field.
+pub fn packedLength(value: var) error{InvalidTag}!usize {
+    const T = @typeOf(value);
+    switch (@typeInfo(T)) {
+        builtin.TypeId.Void => return 0,
+        builtin.TypeId.Int => |i| {
+            if (i.bits % 8 != 0)
+                @compileError("Does not support none power of two intergers");
+            return usize(i.bits / 8);
+        },
+        builtin.TypeId.Enum => |e| {
+            if (e.layout != builtin.TypeInfo.ContainerLayout.Packed)
+                @compileError(@typeName(T) ++ " is not packed");
+
+            return packedLength(@enumToInt(value)) catch unreachable;
+        },
+        builtin.TypeId.Array => |a| {
+            var res: usize = 0;
+            for (value) |item|
+                res += try packedLength(item);
+
+            return res;
+        },
+        builtin.TypeId.Struct => |s| {
+            if (s.layout != builtin.TypeInfo.ContainerLayout.Packed)
+                @compileError(@typeName(T) ++ " is not packed");
+
+            var res: usize = 0;
+            inline for (s.fields) |struct_field|
+                switch (@typeInfo(struct_field.field_type)) {
+                builtin.TypeId.Union => |u| next: {
+                    if (u.layout != builtin.TypeInfo.ContainerLayout.Packed)
+                        @compileError(@typeName(struct_field.field_type) ++ " is not packed");
+                    if (u.tag_type != null)
+                        @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
+
+                    // Find the field most likly to be this unions tag.
+                    const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
+                    const tag = @field(value, tag_field);
+                    const union_value = @field(value, struct_field.name);
+                    const TagEnum = @typeOf(tag);
+
+                    // Switch over all tags. 'TagEnum' have the same field names as
+                    // 'union' so if one member of 'TagEnum' matches 'tag', then
+                    // we can add the size of ''@field(union, tag_name)' to res and
+                    // break out.
+                    inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+                        if (@field(TagEnum, enum_field.name) == tag) {
+                            const union_field = @field(union_value, enum_field.name);
+                            res += try packedLength(union_field);
+                            break :next;
+                        }
+                    }
+
+                    // If no member of 'TagEnum' match, then 'tag' must be a value
+                    // it is not suppose to be.
+                    return error.InvalidTag;
+                },
+                else => res += try packedLength(@field(value, struct_field.name)),
+            };
+            return res;
+        },
+        else => @compileError(@typeName(T) ++ " not supported"),
+    }
+}
+
+fn testPackedLength(value: var, expect: error{InvalidTag}!usize) void {
+    if (packedLength(value)) |size| {
+        const expected_size = expect catch unreachable;
+        debug.assertOrPanic(size == expected_size);
+    } else |err| {
+        const expected_err = if (expect) |_| unreachable else |e| e;
+        debug.assertOrPanic(expected_err == err);
+    }
+}
+
+test "packedLength" {
+    const E = packed enum(u8) {
+        A,
+        B,
+        C,
+    };
+
+    const U = packed union {
+        A: void,
+        B: u8,
+        C: u16,
+    };
+
+    const S = packed struct {
+        tag: E,
+        pad: u8,
+        data: U,
+    };
+
+    testPackedLength(S{ .tag = E.A, .pad = 0, .data = U{ .A = {} } }, 2);
+    testPackedLength(S{ .tag = E.B, .pad = 0, .data = U{ .B = 0 } }, 3);
+    testPackedLength(S{ .tag = E.C, .pad = 0, .data = U{ .C = 0 } }, 4);
+}
 
 pub const Command = packed struct {
     tag: Kind,
@@ -617,24 +821,26 @@ pub const Command = packed struct {
             direction: u8,
         },
 
-        // TRAINER_BATTLE_SINGLE
-        // TRAINER_BATTLE_CONTINUE_SCRIPT_NO_MUSIC
-        // TRAINER_BATTLE_CONTINUE_SCRIPT
-        // TRAINER_BATTLE_SINGLE_NO_INTRO_TEXT
-        // TRAINER_BATTLE_DOUBLE
-        // TRAINER_BATTLE_REMATCH
-        // TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE
-        // TRAINER_BATTLE_REMATCH_DOUBLE
-        // TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE_NO_MUSIC
-        // TRAINER_BATTLE_PYRAMID
-        // TRAINER_BATTLE_SET_TRAINER_A
-        // TRAINER_BATTLE_SET_TRAINER_B
-        // TRAINER_BATTLE_12
+        pub const TrainerBattleType = packed enum(u8) {
+            TRAINER_BATTLE_SINGLE = 0,
+            TRAINER_BATTLE_CONTINUE_SCRIPT_NO_MUSIC = 1,
+            TRAINER_BATTLE_CONTINUE_SCRIPT = 2,
+            TRAINER_BATTLE_SINGLE_NO_INTRO_TEXT = 3,
+            TRAINER_BATTLE_DOUBLE = 4,
+            TRAINER_BATTLE_REMATCH = 5,
+            TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE = 6,
+            TRAINER_BATTLE_REMATCH_DOUBLE = 7,
+            TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE_NO_MUSIC = 8,
+            TRAINER_BATTLE_PYRAMID = 9,
+            TRAINER_BATTLE_SET_TRAINER_A = 10,
+            TRAINER_BATTLE_SET_TRAINER_B = 11,
+            TRAINER_BATTLE_12 = 12,
+        };
 
         // If the Trainer flag for Trainer index is not set, this command does absolutely nothing.
         trainerbattle: packed struct {
             // Tag was here. Any struct that doesnt have this comment should be removed
-            type: u8,
+            type: TrainerBattleType,
             trainer: lu16,
             local_id: lu16,
             pointers: packed union {
@@ -1529,4 +1735,234 @@ pub const Command = packed struct {
             quantity: lu16,
         },
     },
+
+    pub const Kind = packed enum(u8) {
+        nop = 0x00,
+        nop1 = 0x01,
+        end = 0x02,
+        @"return" = 0x03,
+        call = 0x04,
+        goto = 0x05,
+        goto_if = 0x06,
+        call_if = 0x07,
+        gotostd = 0x08,
+        callstd = 0x09,
+        gotostd_if = 0x0a,
+        callstd_if = 0x0b,
+        gotoram = 0x0c,
+        killscript = 0x0d,
+        setmysteryeventstatus = 0x0e,
+        loadword = 0x0f,
+        loadbyte = 0x10,
+        writebytetoaddr = 0x11,
+        loadbytefromaddr = 0x12,
+        setptrbyte = 0x13,
+        copylocal = 0x14,
+        copybyte = 0x15,
+        setvar = 0x16,
+        addvar = 0x17,
+        subvar = 0x18,
+        copyvar = 0x19,
+        setorcopyvar = 0x1a,
+        compare_local_to_local = 0x1b,
+        compare_local_to_value = 0x1c,
+        compare_local_to_addr = 0x1d,
+        compare_addr_to_local = 0x1e,
+        compare_addr_to_value = 0x1f,
+        compare_addr_to_addr = 0x20,
+        compare_var_to_value = 0x21,
+        compare_var_to_var = 0x22,
+        callnative = 0x23,
+        gotonative = 0x24,
+        special = 0x25,
+        specialvar = 0x26,
+        waitstate = 0x27,
+        delay = 0x28,
+        setflag = 0x29,
+        clearflag = 0x2a,
+        checkflag = 0x2b,
+        initclock = 0x2c,
+        dodailyevents = 0x2d,
+        gettime = 0x2e,
+        playse = 0x2f,
+        waitse = 0x30,
+        playfanfare = 0x31,
+        waitfanfare = 0x32,
+        playbgm = 0x33,
+        savebgm = 0x34,
+        fadedefaultbgm = 0x35,
+        fadenewbgm = 0x36,
+        fadeoutbgm = 0x37,
+        fadeinbgm = 0x38,
+        warp = 0x39,
+        warpsilent = 0x3a,
+        warpdoor = 0x3b,
+        warphole = 0x3c,
+        warpteleport = 0x3d,
+        setwarp = 0x3e,
+        setdynamicwarp = 0x3f,
+        setdivewarp = 0x40,
+        setholewarp = 0x41,
+        getplayerxy = 0x42,
+        getpartysize = 0x43,
+        giveitem = 0x44,
+        takeitem = 0x45,
+        checkitemspace = 0x46,
+        checkitem = 0x47,
+        checkitemtype = 0x48,
+        givepcitem = 0x49,
+        checkpcitem = 0x4a,
+        givedecoration = 0x4b,
+        takedecoration = 0x4c,
+        checkdecor = 0x4d,
+        checkdecorspace = 0x4e,
+        applymovement = 0x4f,
+        applymovementmap = 0x50,
+        waitmovement = 0x51,
+        waitmovementmap = 0x52,
+        removeobject = 0x53,
+        removeobjectmap = 0x54,
+        addobject = 0x55,
+        addobjectmap = 0x56,
+        setobjectxy = 0x57,
+        showobjectat = 0x58,
+        hideobjectat = 0x59,
+        faceplayer = 0x5a,
+        turnobject = 0x5b,
+        trainerbattle = 0x5c,
+        trainerbattlebegin = 0x5d,
+        gotopostbattlescript = 0x5e,
+        gotobeatenscript = 0x5f,
+        checktrainerflag = 0x60,
+        settrainerflag = 0x61,
+        cleartrainerflag = 0x62,
+        setobjectxyperm = 0x63,
+        moveobjectoffscreen = 0x64,
+        setobjectmovementtype = 0x65,
+        waitmessage = 0x66,
+        message = 0x67,
+        closemessage = 0x68,
+        lockall = 0x69,
+        lock = 0x6a,
+        releaseall = 0x6b,
+        release = 0x6c,
+        waitbuttonpress = 0x6d,
+        yesnobox = 0x6e,
+        multichoice = 0x6f,
+        multichoicedefault = 0x70,
+        multichoicegrid = 0x71,
+        drawbox = 0x72,
+        erasebox = 0x73,
+        drawboxtext = 0x74,
+        drawmonpic = 0x75,
+        erasemonpic = 0x76,
+        drawcontestwinner = 0x77,
+        braillemessage = 0x78,
+        givemon = 0x79,
+        giveegg = 0x7a,
+        setmonmove = 0x7b,
+        checkpartymove = 0x7c,
+        bufferspeciesname = 0x7d,
+        bufferleadmonspeciesname = 0x7e,
+        bufferpartymonnick = 0x7f,
+        bufferitemname = 0x80,
+        bufferdecorationname = 0x81,
+        buffermovename = 0x82,
+        buffernumberstring = 0x83,
+        bufferstdstring = 0x84,
+        bufferstring = 0x85,
+        pokemart = 0x86,
+        pokemartdecoration = 0x87,
+        pokemartdecoration2 = 0x88,
+        playslotmachine = 0x89,
+        setberrytree = 0x8a,
+        choosecontestmon = 0x8b,
+        startcontest = 0x8c,
+        showcontestresults = 0x8d,
+        contestlinktransfer = 0x8e,
+        random = 0x8f,
+        givemoney = 0x90,
+        takemoney = 0x91,
+        checkmoney = 0x92,
+        showmoneybox = 0x93,
+        hidemoneybox = 0x94,
+        updatemoneybox = 0x95,
+        getpricereduction = 0x96,
+        fadescreen = 0x97,
+        fadescreenspeed = 0x98,
+        setflashradius = 0x99,
+        animateflash = 0x9a,
+        messageautoscroll = 0x9b,
+        dofieldeffect = 0x9c,
+        setfieldeffectargument = 0x9d,
+        waitfieldeffect = 0x9e,
+        setrespawn = 0x9f,
+        checkplayergender = 0xa0,
+        playmoncry = 0xa1,
+        setmetatile = 0xa2,
+        resetweather = 0xa3,
+        setweather = 0xa4,
+        doweather = 0xa5,
+        setstepcallback = 0xa6,
+        setmaplayoutindex = 0xa7,
+        setobjectpriority = 0xa8,
+        resetobjectpriority = 0xa9,
+        createvobject = 0xaa,
+        turnvobject = 0xab,
+        opendoor = 0xac,
+        closedoor = 0xad,
+        waitdooranim = 0xae,
+        setdooropen = 0xaf,
+        setdoorclosed = 0xb0,
+        addelevmenuitem = 0xb1,
+        showelevmenu = 0xb2,
+        checkcoins = 0xb3,
+        givecoins = 0xb4,
+        takecoins = 0xb5,
+        setwildbattle = 0xb6,
+        dowildbattle = 0xb7,
+        setvaddress = 0xb8,
+        vgoto = 0xb9,
+        vcall = 0xba,
+        vgoto_if = 0xbb,
+        vcall_if = 0xbc,
+        vmessage = 0xbd,
+        vloadptr = 0xbe,
+        vbufferstring = 0xbf,
+        showcoinsbox = 0xc0,
+        hidecoinsbox = 0xc1,
+        updatecoinsbox = 0xc2,
+        incrementgamestat = 0xc3,
+        setescapewarp = 0xc4,
+        waitmoncry = 0xc5,
+        bufferboxname = 0xc6,
+        textcolor = 0xc7,
+        loadhelp = 0xc8,
+        unloadhelp = 0xc9,
+        signmsg = 0xca,
+        normalmsg = 0xcb,
+        comparehiddenvar = 0xcc,
+        setmonobedient = 0xcd,
+        checkmonobedience = 0xce,
+        execram = 0xcf,
+        setworldmapflag = 0xd0,
+        warpteleport2 = 0xd1,
+        setmonmetlocation = 0xd2,
+        mossdeepgym1 = 0xd3,
+        mossdeepgym2 = 0xd4,
+        mossdeepgym3 = 0xd5,
+        mossdeepgym4 = 0xd6,
+        warp7 = 0xd7,
+        cmdD8 = 0xd8,
+        cmdD9 = 0xd9,
+        hidebox2 = 0xda,
+        message3 = 0xdb,
+        fadescreenswapbuffers = 0xdc,
+        buffertrainerclassname = 0xdd,
+        buffertrainername = 0xde,
+        pokenavcall = 0xdf,
+        warp8 = 0xe0,
+        buffercontesttypestring = 0xe1,
+        bufferitemnameplural = 0xe2,
+    };
 };

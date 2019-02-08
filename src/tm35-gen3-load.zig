@@ -229,10 +229,12 @@ fn outputGameData(game: gen3.Game, stream: var) !void {
             try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
         }
 
-        const learnset = try game.level_up_learnset_pointers[i].toSliceEnd(game.data);
+        const learnset = try game.level_up_learnset_pointers[i].toSliceTerminated(game.data, struct {
+            fn isTerm(move: gen3.LevelUpMove) bool {
+                return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
+            }
+        }.isTerm);
         for (learnset) |l, j| {
-            if (l.id == math.maxInt(u9) and l.level == math.maxInt(u7))
-                break;
             try stream.print(".pokemons[{}].moves[{}].id={}\n", i, j, l.id);
             try stream.print(".pokemons[{}].moves[{}].level={}\n", i, j, l.level);
         }
