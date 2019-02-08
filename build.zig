@@ -14,8 +14,8 @@ pub fn build(b: *Builder) void {
     }
 }
 
-pub fn exes(b: *Builder, path: []const u8) [3]*LibExeObjStep {
-    var res: [3]*LibExeObjStep = undefined;
+pub fn exes(b: *Builder, path: []const u8) [4]*LibExeObjStep {
+    var res: [4]*LibExeObjStep = undefined;
     for ([][]const u8{
         "tm35-gen3-load",
         "tm35-gen3-apply",
