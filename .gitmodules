@@ -1,9 +1,12 @@
 [submodule "lib/zig-crc"]
 	path = lib/zig-crc
 	url = https://github.com/Hejsil/zig-crc.git
+	branch = master
 [submodule "lib/fun-with-zig"]
 	path = lib/fun-with-zig
 	url = https://github.com/Hejsil/fun-with-zig.git
+	branch = master
 [submodule "lib/zig-bench"]
 	path = lib/zig-bench
 	url = https://github.com/Hejsil/zig-bench.git
+	branch = master
