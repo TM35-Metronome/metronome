@@ -109,32 +109,9 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
 
             try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
             var script_data = try s.addr.Other.toSliceEnd(game.data);
-            while (true) {
-                var buf = []u8{0} ** @sizeOf(script.Command);
-                const len = math.min(script_data.len, buf.len);
-
-                // Copy the bytes to a buffer of size @sizeOf(Command).
-                // The reason this is done is that s.len might be smaller
-                // than @sizeOf(Command) but still contain a command because
-                // encoded commands can be smaller that @sizeOf(Command).
-                // If the command we are trying to decode is invalid this
-                // will be caught by the calculation of the commands length.
-                mem.copy(u8, &buf, script_data[0..len]);
-
-                const command = @bytesToSlice(script.Command, buf[0..])[0];
-                const command_len = try script.packedLength(command);
-                if (script_data.len < command_len)
-                    return error.InvalidCommand;
-
-                try printCommand(stream, command);
-
-                if (command.tag == script.Command.Kind.end)
-                    break;
-                if (command.tag == script.Command.Kind.@"return")
-                    break;
-
-                script_data = script_data[command_len..];
-            }
+            var decoder = script.CommandDecoder.init(script_data);
+            while (try decoder.next()) |command|
+                try printCommand(stream, command.*);
 
             try stream.write("\n");
         }
@@ -142,6 +119,7 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
 }
 
 pub fn printCommand(stream: var, command: script.Command) !void {
+    try stream.write("\t");
     try printCommandHelper(stream, command);
     try stream.write("\n");
 }
@@ -155,8 +133,8 @@ pub fn printCommandHelper(stream: var, value: var) !void {
     try stream.write("");
     switch (@typeInfo(T)) {
         builtin.TypeId.Void => {},
-        builtin.TypeId.Int => |i| try stream.print(" {}", value),
-        builtin.TypeId.Enum => |e| try stream.print(" {}", @tagName(value)),
+        builtin.TypeId.Int => |i| try stream.print("{}", value),
+        builtin.TypeId.Enum => |e| try stream.print("{}", @tagName(value)),
         builtin.TypeId.Struct => |s| {
             // lu16 and lu16 are seen as structs, but really they should be treated
             // the same as int values.
@@ -165,35 +143,38 @@ pub fn printCommandHelper(stream: var, value: var) !void {
             if (T == lu32)
                 return printCommandHelper(stream, value.value());
 
-            inline for (s.fields) |struct_field|
+            inline for (s.fields) |struct_field, i| {
                 switch (@typeInfo(struct_field.field_type)) {
-                builtin.TypeId.Union => |u| next: {
-                    if (u.tag_type != null)
-                        @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
+                    builtin.TypeId.Union => |u| next: {
+                        if (u.tag_type != null)
+                            @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
 
-                    // Find the field most likly to be this unions tag.
-                    const tag_field = (comptime script.findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
-                    const tag = @field(value, tag_field);
-                    const union_value = @field(value, struct_field.name);
-                    const TagEnum = @typeOf(tag);
+                        // Find the field most likly to be this unions tag.
+                        const tag_field = (comptime script.findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
+                        const tag = @field(value, tag_field);
+                        const union_value = @field(value, struct_field.name);
+                        const TagEnum = @typeOf(tag);
 
-                    // Switch over all tags. 'TagEnum' have the same field names as
-                    // 'union' so if one member of 'TagEnum' matches 'tag', then
-                    // we can add the size of ''@field(union, tag_name)' to res and
-                    // break out.
-                    inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
-                        if (@field(TagEnum, enum_field.name) == tag) {
-                            try printCommandHelper(stream, @field(union_value, enum_field.name));
-                            break :next;
+                        // Switch over all tags. 'TagEnum' have the same field names as
+                        // 'union' so if one member of 'TagEnum' matches 'tag', then
+                        // we can add the size of ''@field(union, tag_name)' to res and
+                        // break out.
+                        inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+                            if (@field(TagEnum, enum_field.name) == tag) {
+                                try printCommandHelper(stream, @field(union_value, enum_field.name));
+                                break :next;
+                            }
                         }
-                    }
 
-                    // If no member of 'TagEnum' match, then 'tag' must be a value
-                    // it is not suppose to be.
-                    return error.InvalidTag;
-                },
-                else => try printCommandHelper(stream, @field(value, struct_field.name)),
-            };
+                        // If no member of 'TagEnum' match, then 'tag' must be a value
+                        // it is not suppose to be.
+                        return error.InvalidTag;
+                    },
+                    else => try printCommandHelper(stream, @field(value, struct_field.name)),
+                }
+                if (i + 1 != s.fields.len)
+                    try stream.write(" ");
+            }
         },
         else => @compileError(@typeName(T) ++ " not supported"),
     }

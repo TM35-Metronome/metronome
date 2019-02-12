@@ -9,6 +9,7 @@ const meta = std.meta;
 const trait = meta.trait;
 const mem = std.mem;
 const debug = std.debug;
+const math = std.math;
 
 /// Find the field name which is most likly to be the tag of 'union_field'.
 /// This function looks at all fields declared before 'union_field'. If one
@@ -206,6 +207,44 @@ test "packedLength" {
     testPackedLength(S{ .tag = E.B, .pad = 0, .data = U{ .B = 0 } }, 3);
     testPackedLength(S{ .tag = E.C, .pad = 0, .data = U{ .C = 0 } }, 4);
 }
+
+pub const CommandDecoder = struct {
+    bytes: []u8,
+
+    pub fn init(bytes: []u8) CommandDecoder {
+        return CommandDecoder{ .bytes = bytes };
+    }
+
+    pub fn next(decoder: *CommandDecoder) !?*Command {
+        if (decoder.bytes.len == 0)
+            return null;
+
+        var buf = []u8{0} ** @sizeOf(Command);
+        const len = math.min(decoder.bytes.len, buf.len);
+
+        // Copy the bytes to a buffer of size @sizeOf(Command).
+        // The reason this is done is that s.len might be smaller
+        // than @sizeOf(Command) but still contain a command because
+        // encoded commands can be smaller that @sizeOf(Command).
+        // If the command we are trying to decode is invalid this
+        // will be caught by the calculation of the commands length.
+        mem.copy(u8, &buf, decoder.bytes[0..len]);
+
+        const command = @bytesToSlice(Command, buf[0..])[0];
+        const command_len = try packedLength(command);
+        if (decoder.bytes.len < command_len)
+            return error.InvalidCommand;
+
+        defer switch (command.tag) {
+            Command.Kind.end,
+            Command.Kind.@"return",
+            => decoder.bytes = decoder.bytes[0..0],
+            else => decoder.bytes = decoder.bytes[command_len..],
+        };
+
+        return @ptrCast(*Command, decoder.bytes.ptr);
+    }
+};
 
 pub const Command = packed struct {
     tag: Kind,
