@@ -73,21 +73,21 @@ pub fn main() !void {
     var rom = try nds.Rom.fromFile(rom_file, allocator);
 
     try os.makePath(allocator, out);
-    try write(try path.join(allocator, out, "arm9"), rom.arm9);
-    try write(try path.join(allocator, out, "arm7"), rom.arm7);
-    try write(try path.join(allocator, out, "banner"), mem.toBytes(rom.banner));
+    try write(try path.join(allocator, [][]const u8 {out, "arm9"}), rom.arm9);
+    try write(try path.join(allocator, [][]const u8 {out, "arm7"}), rom.arm7);
+    try write(try path.join(allocator, [][]const u8 {out, "banner" }), mem.toBytes(rom.banner));
 
     if (rom.hasNitroFooter())
-        try write(try path.join(allocator, out, "nitro_footer"), mem.toBytes(rom.nitro_footer));
+        try write(try path.join(allocator, [][]const u8 {out, "nitro_footer"}), mem.toBytes(rom.nitro_footer));
 
-    const arm9_overlay_folder = try path.join(allocator, out, "arm9_overlays");
-    const arm7_overlay_folder = try path.join(allocator, out, "arm7_overlays");
+    const arm9_overlay_folder = try path.join(allocator, [][]const u8 {out, "arm9_overlays"});
+    const arm7_overlay_folder = try path.join(allocator, [][]const u8 {out, "arm7_overlays"});
     try os.makePath(allocator, arm9_overlay_folder);
     try os.makePath(allocator, arm7_overlay_folder);
     try writeOverlays(allocator, arm9_overlay_folder, rom.arm9_overlay_table, rom.arm9_overlay_files);
     try writeOverlays(allocator, arm7_overlay_folder, rom.arm7_overlay_table, rom.arm7_overlay_files);
 
-    const root_folder = try path.join(allocator, out, "root");
+    const root_folder = try path.join(allocator, [][]const u8 {out, "root"});
     try os.makePath(allocator, root_folder);
     try writeFs(allocator, nds.fs.Nitro, root_folder, rom.root);
 }
@@ -110,7 +110,7 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
         defer allocator.free(state.path);
 
         for (state.folder.nodes.toSliceConst()) |node| {
-            const node_path = try path.join(allocator, state.path, node.name);
+            const node_path = try path.join(allocator, [][]const u8 {state.path, node.name});
             switch (node.kind) {
                 Fs.Node.Kind.File => |f| {
                     defer allocator.free(node_path);
@@ -152,13 +152,13 @@ fn writeOverlays(child_allocator: *mem.Allocator, folder: []const u8, overlays: 
     const allocator = &arena.allocator;
     defer arena.deinit();
 
-    const overlay_folder_path = try path.join(allocator, folder, "overlay");
+    const overlay_folder_path = try path.join(allocator, [][]const u8 {folder, "overlay"});
     for (overlays) |overlay, i| {
         const overlay_path = try fmt.allocPrint(allocator, "{}{}", overlay_folder_path, i);
         try write(overlay_path, mem.toBytes(overlay));
     }
 
-    const file_folder_path = try path.join(allocator, folder, "file");
+    const file_folder_path = try path.join(allocator, [][]const u8 {folder, "file"});
     for (files) |file, i| {
         const file_path = try fmt.allocPrint(allocator, "{}{}", file_folder_path, i);
         try write(file_path, file);
