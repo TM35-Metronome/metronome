@@ -107,9 +107,30 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
             if (s.@"type" == 2 or s.@"type" == 4)
                 continue;
 
-            try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
-            var script_data = try s.addr.Other.toSliceEnd(game.data);
+            const script_data = try s.addr.Other.toSliceEnd(game.data);
             var decoder = script.CommandDecoder.init(script_data);
+            try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
+            while (try decoder.next()) |command|
+                try printCommand(stream, command.*);
+
+            try stream.write("\n");
+        }
+
+        const events = try map_header.map_events.toSingle(game.data);
+        for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
+            const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
+            var decoder = script.CommandDecoder.init(script_data);
+            try stream.print("map_header[{}].obj_events[{}]:\n", map_id, script_id);
+            while (try decoder.next()) |command|
+                try printCommand(stream, command.*);
+
+            try stream.write("\n");
+        }
+
+        for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
+            const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
+            var decoder = script.CommandDecoder.init(script_data);
+            try stream.print("map_header[{}].coord_event[{}]:\n", map_id, script_id);
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*);
 

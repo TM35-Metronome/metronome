@@ -110,6 +110,7 @@ test "findTagFieldName" {
 /// Calculates the packed size of 'value'. The packed size is the size 'value'
 /// would have if unions did not have to have the size of their biggest field.
 pub fn packedLength(value: var) error{InvalidTag}!usize {
+    @setEvalBranchQuota(10000000);
     const T = @typeOf(value);
     switch (@typeInfo(T)) {
         builtin.TypeId.Void => return 0,
