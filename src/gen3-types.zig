@@ -2,6 +2,7 @@ const common = @import("tm35-common");
 const fun = @import("fun-with-zig");
 const gba = @import("gba.zig");
 const offsets = @import("gen3-offsets.zig");
+const script = @import("gen3-script.zig");
 const std = @import("std");
 
 const math = std.math;
@@ -452,6 +453,8 @@ pub const Game = struct {
     items: []Item,
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
+    static_pokemons: []*script.Command.setwildbattle,
+    given_items: []*script.Command.giveitem,
 
     pub fn fromFile(file: os.File, allocator: *mem.Allocator) !Game {
         var file_in_stream = file.inStream();
@@ -471,6 +474,64 @@ pub const Game = struct {
         errdefer allocator.free(rom);
 
         try in_stream.readNoEof(rom);
+
+        const map_headers = info.map_headers.slice(rom);
+        const ScriptData = struct {
+            static_pokemons: std.ArrayList(*script.Command.setwildbattle),
+            given_items: std.ArrayList(*script.Command.giveitem),
+
+            fn processCommand(data: *@This(), command: *script.Command) !void {
+                if (command.tag == script.Command.Kind.setwildbattle)
+                    try data.static_pokemons.append(&command.data.setwildbattle);
+                if (command.tag == script.Command.Kind.giveitem)
+                    try data.given_items.append(&command.data.giveitem);
+            }
+
+            fn deinit(data: *@This()) void {
+                data.static_pokemons.deinit();
+                data.given_items.deinit();
+                data.* = undefined;
+            }
+        };
+        var script_data = ScriptData{
+            .static_pokemons = std.ArrayList(*script.Command.setwildbattle).init(allocator),
+            .given_items = std.ArrayList(*script.Command.giveitem).init(allocator),
+        };
+        errdefer script_data.deinit();
+
+        @setEvalBranchQuota(100000);
+        for (map_headers) |map_header| {
+            const scripts = try map_header.map_scripts.toSliceTerminated(rom, struct {
+                fn isTerm(ms: MapScript) bool {
+                    return ms.@"type" == 0;
+                }
+            }.isTerm);
+
+            for (scripts) |s| {
+                if (s.@"type" == 2 or s.@"type" == 4)
+                    continue;
+
+                const script_bytes = try s.addr.Other.toSliceEnd(rom);
+                var decoder = script.CommandDecoder.init(script_bytes);
+                while (try decoder.next()) |command|
+                    try script_data.processCommand(command);
+            }
+
+            const events = try map_header.map_events.toSingle(rom);
+            for (try events.obj_events.toSlice(rom, events.obj_events_len)) |obj_event| {
+                const script_bytes = obj_event.script.toSliceEnd(rom) catch continue;
+                var decoder = script.CommandDecoder.init(script_bytes);
+                while (try decoder.next()) |command|
+                    try script_data.processCommand(command);
+            }
+
+            for (try events.coord_events.toSlice(rom, events.coord_events_len)) |coord_event| {
+                const script_bytes = coord_event.scripts.toSliceEnd(rom) catch continue;
+                var decoder = script.CommandDecoder.init(script_bytes);
+                while (try decoder.next()) |command|
+                    try script_data.processCommand(command);
+            }
+        }
 
         return Game{
             .version = info.version,
@@ -497,7 +558,9 @@ pub const Game = struct {
             .tms = info.tms.slice(rom),
             .items = info.items.slice(rom),
             .wild_pokemon_headers = info.wild_pokemon_headers.slice(rom),
-            .map_headers = info.map_headers.slice(rom),
+            .map_headers = map_headers,
+            .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
+            .given_items = script_data.given_items.toOwnedSlice(),
         };
     }
 
@@ -508,6 +571,8 @@ pub const Game = struct {
 
     pub fn deinit(game: *Game) void {
         game.allocator.free(game.data);
+        game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_items);
         game.* = undefined;
     }
 

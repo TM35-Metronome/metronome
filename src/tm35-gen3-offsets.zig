@@ -100,8 +100,8 @@ pub fn main() !void {
         try stdout.print(".game[{}].moves.len={}\n", i, info.moves.len);
         try stdout.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
         try stdout.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-        try stdout.print(".game[{}].pokemons.start={}\n", i, info.machine_learnsets.start);
-        try stdout.print(".game[{}].pokemons.len={}\n", i, info.machine_learnsets.len);
+        try stdout.print(".game[{}].pokemons.start={}\n", i, info.pokemons.start);
+        try stdout.print(".game[{}].pokemons.len={}\n", i, info.pokemons.len);
         try stdout.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
         try stdout.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
         try stdout.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);

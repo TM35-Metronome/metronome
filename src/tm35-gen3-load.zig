@@ -282,4 +282,15 @@ fn outputGameData(game: gen3.Game, stream: var) !void {
             } else |_| {}
         }
     }
+
+    for (game.static_pokemons) |static_mon, i| {
+        try stream.print(".static_pokemons[{}].species={}\n", i, static_mon.species.value());
+        try stream.print(".static_pokemons[{}].level={}\n", i, static_mon.level);
+        try stream.print(".static_pokemons[{}].item={}\n", i, static_mon.item.value());
+    }
+
+    for (game.given_items) |given_item, i| {
+        try stream.print(".given_items[{}].item={}\n", i, given_item.index.value());
+        try stream.print(".given_items[{}].quantity={}\n", i, given_item.quantity.value());
+    }
 }

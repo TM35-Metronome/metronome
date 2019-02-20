@@ -419,6 +419,30 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
                 }
             } else |_| {}
         }
+    } else |_| if (parser.eatField("static_pokemons")) {
+        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
+        const static_mon = game.static_pokemons[static_mon_index];
+
+        if (parser.eatField("species")) {
+            static_mon.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("level")) {
+            static_mon.level = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("item")) {
+            static_mon.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
+        }
+    } else |_| if (parser.eatField("given_items")) {
+        const given_index = try parser.eatIndexMax(game.given_items.len);
+        const given_item = game.given_items[given_index];
+
+        if (parser.eatField("item")) {
+            given_item.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("quantity")) {
+            given_item.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
+        }
     } else |_| {
         return error.NoField;
     }

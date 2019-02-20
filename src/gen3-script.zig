@@ -852,7 +852,7 @@ pub const Command = packed struct {
 
         // Writes the name of the specified (item) item to the specified buffer. If the specified item is a Berry (0x85 - 0xAE) or Poke Ball (0x4) and if the quantity is 2 or more, the buffered string will be pluralized ("IES" or "S" appended). If the specified item is the Enigma Berry, I have no idea what this command does (but testing showed no pluralization). If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
         bufferitemnameplural: bufferitemnameplural,
-        },
+    },
 
     pub const Kind = packed enum(u8) {
         nop = 0x00,

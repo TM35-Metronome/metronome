@@ -120,7 +120,7 @@ const emerald_us_info = Info{
         .len = 412,
     },
     .pokemons = BaseStatsSection{
-        .start = 3270808,
+        .start = 3277772,
         .len = 412,
     },
     .evolutions = EvolutionSection{
@@ -182,7 +182,7 @@ pub const ruby_us_info = Info{
         .len = 412,
     },
     .pokemons = BaseStatsSection{
-        .start = 2085128,
+        .start = 2092080,
         .len = 412,
     },
     .evolutions = EvolutionSection{
@@ -244,7 +244,7 @@ pub const sapphire_us_info = Info{
         .len = 412,
     },
     .pokemons = BaseStatsSection{
-        .start = 2085016,
+        .start = 2091968,
         .len = 412,
     },
     .evolutions = EvolutionSection{
@@ -306,7 +306,7 @@ pub const fire_us_info = Info{
         .len = 412,
     },
     .pokemons = BaseStatsSection{
-        .start = 2436152,
+        .start = 2443252,
         .len = 412,
     },
     .evolutions = EvolutionSection{
@@ -368,7 +368,7 @@ pub const leaf_us_info = Info{
         .len = 412,
     },
     .pokemons = BaseStatsSection{
-        .start = 2436116,
+        .start = 2443216,
         .len = 412,
     },
     .evolutions = EvolutionSection{
