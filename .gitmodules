@@ -6,6 +6,10 @@
 	path = lib/zig-clap
 	url = https://github.com/Hejsil/zig-clap.git
 	branch = master
+[submodule "lib/tm35-nds"]
+	path = lib/tm35-nds
+	url = https://github.com/TM35-Metronome/tm35-nds.git
+	branch = master
 [submodule "lib/tm35-common"]
 	path = lib/tm35-common
 	url = https://github.com/TM35-Metronome/tm35-common.git
