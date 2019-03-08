@@ -1,3 +1,3 @@
-# tm35-metronome
+# metronome
 
-The mono repo for all tm35 tools
+The mono repo for all metronome tools
