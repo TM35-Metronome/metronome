@@ -6,11 +6,13 @@ const Mode = builtin.Mode;
 
 pub fn build(b: *Builder) void {
     const test_all_step = b.step("test", "Run all tests in all modes.");
-    inline for ([]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
+    inline for ([_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
         const mode_str = comptime modeToString(test_mode);
 
         const t = b.addTest("src/test.zig");
-        t.addPackagePath("bench", "lib/zig-bench/src/index.zig");
+        t.addPackagePath("bench", "lib/zig-bench/bench.zig");
+        t.addPackagePath("fun", "lib/fun-with-zig/fun.zig");
+        t.addPackagePath("crc", "lib/zig-crc/crc.zig");
         t.setBuildMode(test_mode);
         t.setNamePrefix(mode_str ++ " ");
 
@@ -19,6 +21,11 @@ pub fn build(b: *Builder) void {
         test_all_step.dependOn(test_step);
     }
 
+    const fmt_step = b.addFmt([_][]const u8{
+        "build.zig",
+        "src",
+    });
+    b.default_step.dependOn(&fmt_step.step);
     b.default_step.dependOn(test_all_step);
 }
 

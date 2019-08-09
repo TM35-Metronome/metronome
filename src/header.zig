@@ -1,6 +1,6 @@
 // TODO: We can't have packages in tests
-const crc = @import("../lib/zig-crc/crc.zig");
-const fun = @import("../lib/fun-with-zig/src/index.zig");
+const crc = @import("crc");
+const fun = @import("fun");
 const std = @import("std");
 
 const ascii = fun.ascii;
@@ -24,7 +24,7 @@ test "nds.crc_modbus" {
 }
 
 // http://problemkaputt.de/gbatek.htm#dscartridgeheader
-pub const Header = packed struct {
+pub const Header = extern struct {
     game_title: [12]u8,
     gamecode: [4]u8,
     makercode: [2]u8,
@@ -285,11 +285,11 @@ pub const Header = packed struct {
             //       Does that mean that it also always 0x4000?
             if (header.digest_ntr_region_offset.value() != 0x4000)
                 return error.InvalidDigestNtrRegionOffset;
-            if (!mem.eql(u8, header.reserved8, []u8{ 0x00, 0x00, 0x01, 0x00 }))
+            if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
                 return error.InvalidReserved8;
             if (!slice.all(header.reserved9[0..], isZero))
                 return error.InvalidReserved9;
-            if (!mem.eql(u8, header.title_id_rest, []u8{ 0x00, 0x03, 0x00 }))
+            if (!mem.eql(u8, header.title_id_rest, [_]u8{ 0x00, 0x03, 0x00 }))
                 return error.InvalidTitleIdRest;
             if (!slice.all(header.reserved12[0..], isZero))
                 return error.InvalidReserved12;

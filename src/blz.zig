@@ -36,7 +36,7 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
             if (hdr_len < 8 or hdr_len > 0xB) return error.BadHeaderLength;
             if (data.len <= hdr_len) return error.BadLength;
 
-            const enc_len =  mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 8 ..][0..4].ptr)) & 0x00FFFFFF;
+            const enc_len = mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 8 ..][0..4].ptr)) & 0x00FFFFFF;
             const dec_len = try math.sub(u32, try math.cast(u32, data.len), enc_len);
             const pak_len = try math.sub(u32, enc_len, hdr_len);
             const raw_len = dec_len + enc_len + inc_len;

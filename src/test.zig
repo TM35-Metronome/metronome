@@ -1,4 +1,4 @@
-const fun = @import("../lib/fun-with-zig/src/index.zig");
+const fun = @import("fun");
 const nds = @import("index.zig");
 const std = @import("std");
 
@@ -302,10 +302,10 @@ test "nds.fs.read/writeNitro" {
     var fat = std.ArrayList(fs.FatEntry).init(allocator);
 
     const test_file = "__nds.fs.test.read.write__";
-    defer os.deleteFile(test_file) catch unreachable;
+    defer std.fs.deleteFile(test_file) catch unreachable;
 
     {
-        var file = try os.File.openWrite(test_file);
+        var file = try std.fs.File.openWrite(test_file);
         defer file.close();
 
         for (files) |f| {
@@ -316,7 +316,7 @@ test "nds.fs.read/writeNitro" {
     }
 
     const fs2 = blk: {
-        var file = try os.File.openRead(test_file);
+        var file = try std.fs.File.openRead(test_file);
         defer file.close();
         break :blk try fs.readNitro(file, allocator, fnt, fat.toSlice());
     };
@@ -331,7 +331,7 @@ test "nds.Rom" {
 
     const allocator = &fix_buf_alloc.allocator;
 
-    const rom1 = nds.Rom{
+    var rom1 = nds.Rom{
         .allocator = allocator,
         .header = nds.Header{
             .game_title = "A" ** 12,
@@ -340,7 +340,7 @@ test "nds.Rom" {
             .unitcode = 0x00,
             .encryption_seed_select = 0x00,
             .device_capacity = 0x00,
-            .reserved1 = []u8{0} ** 7,
+            .reserved1 = [_]u8{0} ** 7,
             .reserved2 = 0x00,
             .nds_region = 0x00,
             .rom_version = 0x00,
@@ -361,8 +361,8 @@ test "nds.Rom" {
             .arm9_overlay_size = lu32.init(0x00),
             .arm7_overlay_offset = lu32.init(0x00),
             .arm7_overlay_size = lu32.init(0x00),
-            .port_40001A4h_setting_for_normal_commands = []u8{0} ** 4,
-            .port_40001A4h_setting_for_key1_commands = []u8{0} ** 4,
+            .port_40001A4h_setting_for_normal_commands = [_]u8{0} ** 4,
+            .port_40001A4h_setting_for_key1_commands = [_]u8{0} ** 4,
             .banner_offset = lu32.init(0x00),
             .secure_area_checksum = lu16.init(0x00),
             .secure_area_delay = lu16.init(0x051E),
@@ -371,27 +371,27 @@ test "nds.Rom" {
             .secure_area_disable = lu64.init(0x00),
             .total_used_rom_size = lu32.init(0x00),
             .rom_header_size = lu32.init(0x4000),
-            .reserved3 = []u8{0x00} ** 0x38,
-            .nintendo_logo = []u8{0x00} ** 0x9C,
+            .reserved3 = [_]u8{0x00} ** 0x38,
+            .nintendo_logo = [_]u8{0x00} ** 0x9C,
             .nintendo_logo_checksum = lu16.init(0x00),
             .header_checksum = lu16.init(0x00),
             .debug_rom_offset = lu32.init(0x00),
             .debug_size = lu32.init(0x00),
             .debug_ram_address = lu32.init(0x00),
-            .reserved4 = []u8{0x00} ** 4,
-            .reserved5 = []u8{0x00} ** 0x10,
-            .wram_slots = []u8{0x00} ** 20,
-            .arm9_wram_areas = []u8{0x00} ** 12,
-            .arm7_wram_areas = []u8{0x00} ** 12,
-            .wram_slot_master = []u8{0x00} ** 3,
+            .reserved4 = [_]u8{0x00} ** 4,
+            .reserved5 = [_]u8{0x00} ** 0x10,
+            .wram_slots = [_]u8{0x00} ** 20,
+            .arm9_wram_areas = [_]u8{0x00} ** 12,
+            .arm7_wram_areas = [_]u8{0x00} ** 12,
+            .wram_slot_master = [_]u8{0x00} ** 3,
             .unknown = 0,
-            .region_flags = []u8{0x00} ** 4,
-            .access_control = []u8{0x00} ** 4,
-            .arm7_scfg_ext_setting = []u8{0x00} ** 4,
-            .reserved6 = []u8{0x00} ** 3,
+            .region_flags = [_]u8{0x00} ** 4,
+            .access_control = [_]u8{0x00} ** 4,
+            .arm7_scfg_ext_setting = [_]u8{0x00} ** 4,
+            .reserved6 = [_]u8{0x00} ** 3,
             .unknown_flags = 0,
             .arm9i_rom_offset = lu32.init(0x00),
-            .reserved7 = []u8{0x00} ** 4,
+            .reserved7 = [_]u8{0x00} ** 4,
             .arm9i_ram_load_address = lu32.init(0x00),
             .arm9i_size = lu32.init(0x00),
             .arm7i_rom_offset = lu32.init(0x00),
@@ -409,21 +409,21 @@ test "nds.Rom" {
             .digest_sector_size = lu32.init(0x00),
             .digest_block_sectorcount = lu32.init(0x00),
             .banner_size = lu32.init(0x00),
-            .reserved8 = []u8{0x00} ** 4,
+            .reserved8 = [_]u8{0x00} ** 4,
             .total_used_rom_size_including_dsi_area = lu32.init(0x00),
-            .reserved9 = []u8{0x00} ** 4,
-            .reserved10 = []u8{0x00} ** 4,
-            .reserved11 = []u8{0x00} ** 4,
+            .reserved9 = [_]u8{0x00} ** 4,
+            .reserved10 = [_]u8{0x00} ** 4,
+            .reserved11 = [_]u8{0x00} ** 4,
             .modcrypt_area_1_offset = lu32.init(0x00),
             .modcrypt_area_1_size = lu32.init(0x00),
             .modcrypt_area_2_offset = lu32.init(0x00),
             .modcrypt_area_2_size = lu32.init(0x00),
-            .title_id_emagcode = []u8{0x00} ** 4,
+            .title_id_emagcode = [_]u8{0x00} ** 4,
             .title_id_filetype = 0,
-            .title_id_rest = []u8{ 0x00, 0x03, 0x00 },
+            .title_id_rest = [_]u8{ 0x00, 0x03, 0x00 },
             .public_sav_filesize = lu32.init(0x00),
             .private_sav_filesize = lu32.init(0x00),
-            .reserved12 = []u8{0x00} ** 176,
+            .reserved12 = [_]u8{0x00} ** 176,
             .cero_japan = 0,
             .esrb_us_canada = 0,
             .reserved13 = 0,
@@ -434,49 +434,47 @@ test "nds.Rom" {
             .pegi_and_bbfc_uk = 0,
             .agcb_australia = 0,
             .grb_south_korea = 0,
-            .reserved15 = []u8{0x00} ** 6,
-            .arm9_hash_with_secure_area = []u8{0x00} ** 20,
-            .arm7_hash = []u8{0x00} ** 20,
-            .digest_master_hash = []u8{0x00} ** 20,
-            .icon_title_hash = []u8{0x00} ** 20,
-            .arm9i_hash = []u8{0x00} ** 20,
-            .arm7i_hash = []u8{0x00} ** 20,
-            .reserved16 = []u8{0x00} ** 40,
-            .arm9_hash_without_secure_area = []u8{0x00} ** 20,
-            .reserved17 = []u8{0x00} ** 2636,
-            .reserved18 = []u8{0x00} ** 0x180,
-            .signature_across_header_entries = []u8{0x00} ** 0x80,
+            .reserved15 = [_]u8{0x00} ** 6,
+            .arm9_hash_with_secure_area = [_]u8{0x00} ** 20,
+            .arm7_hash = [_]u8{0x00} ** 20,
+            .digest_master_hash = [_]u8{0x00} ** 20,
+            .icon_title_hash = [_]u8{0x00} ** 20,
+            .arm9i_hash = [_]u8{0x00} ** 20,
+            .arm7i_hash = [_]u8{0x00} ** 20,
+            .reserved16 = [_]u8{0x00} ** 40,
+            .arm9_hash_without_secure_area = [_]u8{0x00} ** 20,
+            .reserved17 = [_]u8{0x00} ** 2636,
+            .reserved18 = [_]u8{0x00} ** 0x180,
+            .signature_across_header_entries = [_]u8{0x00} ** 0x80,
         },
         .banner = nds.Banner{
-            .version = nds.Banner.Version.Original,
-            .version_padding = 0,
-            .has_animated_dsi_icon = false,
-            .has_animated_dsi_icon_padding = 0,
+            .version = 0x1,
+            .has_animated_dsi_icon = 0,
             .crc16_across_0020h_083Fh = lu16.init(0x00),
             .crc16_across_0020h_093Fh = lu16.init(0x00),
             .crc16_across_0020h_0A3Fh = lu16.init(0x00),
             .crc16_across_1240h_23BFh = lu16.init(0x00),
-            .reserved1 = []u8{0x00} ** 0x16,
-            .icon_bitmap = []u8{0x00} ** 0x200,
-            .icon_palette = []u8{0x00} ** 0x20,
-            .title_japanese = []u8{0x00} ** 0x100,
-            .title_english = []u8{0x00} ** 0x100,
-            .title_french = []u8{0x00} ** 0x100,
-            .title_german = []u8{0x00} ** 0x100,
-            .title_italian = []u8{0x00} ** 0x100,
-            .title_spanish = []u8{0x00} ** 0x100,
+            .reserved1 = [_]u8{0x00} ** 0x16,
+            .icon_bitmap = [_]u8{0x00} ** 0x200,
+            .icon_palette = [_]u8{0x00} ** 0x20,
+            .title_japanese = [_]u8{0x00} ** 0x100,
+            .title_english = [_]u8{0x00} ** 0x100,
+            .title_french = [_]u8{0x00} ** 0x100,
+            .title_german = [_]u8{0x00} ** 0x100,
+            .title_italian = [_]u8{0x00} ** 0x100,
+            .title_spanish = [_]u8{0x00} ** 0x100,
         },
-        .arm9 = []u8{},
-        .arm7 = []u8{},
-        .nitro_footer = []lu32{
+        .arm9 = [_]u8{},
+        .arm7 = [_]u8{},
+        .nitro_footer = [_]lu32{
             lu32.init(0),
             lu32.init(0),
             lu32.init(0),
         },
-        .arm9_overlay_table = []nds.Overlay{},
-        .arm9_overlay_files = [][]u8{},
-        .arm7_overlay_table = []nds.Overlay{},
-        .arm7_overlay_files = [][]u8{},
+        .arm9_overlay_table = [_]nds.Overlay{},
+        .arm9_overlay_files = [_][]u8{},
+        .arm7_overlay_table = [_]nds.Overlay{},
+        .arm7_overlay_files = [_][]u8{},
         .root = try randomFs(allocator, &random.random, fs.Nitro),
     };
 
@@ -484,16 +482,16 @@ test "nds.Rom" {
     errdefer allocator.free(name);
 
     {
-        const file = try os.File.openWrite(name);
-        errdefer os.deleteFile(name) catch {};
+        const file = try std.fs.File.openWrite(name);
+        errdefer std.fs.deleteFile(name) catch {};
         defer file.close();
 
         try rom1.writeToFile(file);
     }
-    defer os.deleteFile(name) catch {};
+    defer std.fs.deleteFile(name) catch {};
 
     var rom2 = blk: {
-        const file = try os.File.openRead(name);
+        const file = try std.fs.File.openRead(name);
         defer file.close();
         break :blk try nds.Rom.fromFile(file, allocator);
     };

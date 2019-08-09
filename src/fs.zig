@@ -1,7 +1,7 @@
 const std = @import("std");
 
 // TODO: We can't have packages in tests, so we have to import the fun-with-zig lib manually
-const fun = @import("../lib/fun-with-zig/src/index.zig");
+const fun = @import("fun");
 const common = @import("common.zig");
 const formats = @import("formats.zig");
 
@@ -42,7 +42,7 @@ pub fn Folder(comptime TFile: type) type {
             name: []const u8,
             kind: Kind,
 
-            const Kind = union(enum) {
+            pub const Kind = union(enum) {
                 File: *File,
                 Folder: *Self,
             };
@@ -285,7 +285,7 @@ pub const Nitro = Folder(union(enum) {
         file.* = undefined;
     }
 
-    const Binary = struct {
+    pub const Binary = struct {
         allocator: *mem.Allocator,
         data: []u8,
     };
@@ -301,31 +301,31 @@ pub const FntMainEntry = packed struct {
     parent_id: lu16,
 };
 
-pub const FatEntry = packed struct {
+pub const FatEntry = extern struct {
     start: lu32,
     end: lu32,
 
-    fn init(offset: u32, size: u32) FatEntry {
+    pub fn init(offset: u32, s: u32) FatEntry {
         return FatEntry{
             .start = lu32.init(offset),
-            .end = lu32.init(offset + size),
+            .end = lu32.init(offset + s),
         };
     }
 
-    fn getSize(entry: FatEntry) usize {
+    pub fn size(entry: FatEntry) usize {
         return entry.end.value() - entry.start.value();
     }
 };
 
-pub fn readNitro(file: os.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry) !*Nitro {
+pub fn readNitro(file: std.fs.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry) !*Nitro {
     return readHelper(Nitro, file, allocator, fnt, fat, 0);
 }
 
-pub fn readNarc(file: os.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry, img_base: usize) !*Narc {
+pub fn readNarc(file: std.fs.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry, img_base: usize) !*Narc {
     return readHelper(Narc, file, allocator, fnt, fat, img_base);
 }
 
-fn readHelper(comptime F: type, file: os.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry, img_base: usize) !*F {
+fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry, img_base: usize) !*F {
     const fnt_main_table = blk: {
         const fnt_mains = slice.bytesToSliceTrim(FntMainEntry, fnt);
         const first = slice.at(fnt_mains, 0) catch return error.InvalidFnt;
@@ -421,7 +421,7 @@ fn readHelper(comptime F: type, file: os.File, allocator: *mem.Allocator, fnt: [
     return root;
 }
 
-pub fn readNitroFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEntry, img_base: usize) !Nitro.File {
+pub fn readNitroFile(file: std.fs.File, allocator: *mem.Allocator, fat_entry: FatEntry, img_base: usize) !Nitro.File {
     var file_in_stream = file.inStream();
 
     narc_read: {
@@ -430,7 +430,7 @@ pub fn readNitroFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEnt
         try file.seekTo(fat_entry.start.value() + img_base);
         const file_start = try file.getPos();
 
-        var buffered_in_stream = io.BufferedInStream(os.File.InStream.Error).init(&file_in_stream.stream);
+        var buffered_in_stream = io.BufferedInStream(std.fs.File.InStream.Error).init(&file_in_stream.stream);
         const stream = &buffered_in_stream.stream;
 
         const header = stream.readStruct(formats.Header) catch break :narc_read;
@@ -478,9 +478,7 @@ pub fn readNitroFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEnt
 
         // Since we are using buffered input, be have to seek back to the narc_img_base,
         // when we start reading the file system
-        const narc_img_base = file_start + @sizeOf(formats.Header)
-            + fat_header.header.size.value() + fnt_header.size.value()
-            + @sizeOf(formats.Chunk);
+        const narc_img_base = file_start + @sizeOf(formats.Header) + fat_header.header.size.value() + fnt_header.size.value() + @sizeOf(formats.Chunk);
         try file.seekTo(narc_img_base);
 
         // If the first_fnt's offset points into it self, then there doesn't exist an
@@ -503,7 +501,7 @@ pub fn readNitroFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEnt
     }
 
     try file.seekTo(fat_entry.start.value() + img_base);
-    const data = try allocator.alloc(u8, fat_entry.getSize());
+    const data = try allocator.alloc(u8, fat_entry.size());
     errdefer allocator.free(data);
     try file_in_stream.stream.readNoEof(data);
 
@@ -515,12 +513,12 @@ pub fn readNitroFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEnt
     };
 }
 
-pub fn readNarcFile(file: os.File, allocator: *mem.Allocator, fat_entry: FatEntry, img_base: usize) !Narc.File {
+pub fn readNarcFile(file: std.fs.File, allocator: *mem.Allocator, fat_entry: FatEntry, img_base: usize) !Narc.File {
     var file_in_stream = file.inStream();
     const stream = &file_in_stream.stream;
 
     try file.seekTo(fat_entry.start.value() + img_base);
-    const data = try allocator.alloc(u8, fat_entry.getSize());
+    const data = try allocator.alloc(u8, fat_entry.size());
     errdefer allocator.free(data);
     try stream.readNoEof(data);
 
@@ -562,8 +560,8 @@ pub fn getFntAndFiles(comptime F: type, root: *F, allocator: *mem.Allocator) !Fn
         const state = states.toSliceConst()[current_state];
 
         try main_fnt.append(FntMainEntry{
-        // We don't know the exect offset yet, but we can save the offset from the sub tables
-        // base, and then calculate the real offset later.
+            // We don't know the exect offset yet, but we can save the offset from the sub tables
+            // base, and then calculate the real offset later.
             .offset_to_subtable = lu32.init(@intCast(u32, sub_fnt.len())),
             .first_file_id_in_subtable = lu16.init(@intCast(u16, files.len)),
             .parent_id = lu16.init(state.parent_id),
@@ -613,7 +611,7 @@ pub fn getFntAndFiles(comptime F: type, root: *F, allocator: *mem.Allocator) !Fn
     };
 }
 
-pub fn writeNitroFile(file: os.File, allocator: *mem.Allocator, fs_file: Nitro.File) !void {
+pub fn writeNitroFile(file: std.fs.File, allocator: *mem.Allocator, fs_file: Nitro.File) !void {
     const Tag = @TagType(Nitro.File);
     switch (fs_file) {
         Tag.Binary => |bin| {
@@ -646,7 +644,7 @@ pub fn writeNitroFile(file: os.File, allocator: *mem.Allocator, fs_file: Nitro.F
             };
 
             var file_out_stream = file.outStream();
-            var buffered_out_stream = io.BufferedOutStream(os.File.OutStream.Error).init(&file_out_stream.stream);
+            var buffered_out_stream = io.BufferedOutStream(std.fs.File.OutStream.Error).init(&file_out_stream.stream);
 
             const stream = &buffered_out_stream.stream;
 

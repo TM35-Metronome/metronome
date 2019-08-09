@@ -1,9 +1,9 @@
-const fun = @import("../lib/fun-with-zig/src/index.zig");
+const fun = @import("fun");
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 
-pub const Header = packed struct {
+pub const Header = extern struct {
     chunk_name: [4]u8,
     byte_order: lu16,
     version: lu16,
@@ -23,19 +23,19 @@ pub const Header = packed struct {
     }
 };
 
-pub const Chunk = packed struct {
+pub const Chunk = extern struct {
     name: [4]u8,
     size: lu32,
 
-    const names = struct {
-        const narc = "NARC";
-        const fat = "BTAF";
-        const fnt = "BTNF";
-        const file_data = "GMIF";
+    pub const names = struct {
+        pub const narc = "NARC";
+        pub const fat = "BTAF";
+        pub const fnt = "BTNF";
+        pub const file_data = "GMIF";
     };
 };
 
-pub const FatChunk = packed struct {
+pub const FatChunk = extern struct {
     header: Chunk,
     file_count: lu16,
     reserved: lu16,

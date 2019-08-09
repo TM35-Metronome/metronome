@@ -1,7 +1,6 @@
-// TODO: We can't have packages in tests
 const blz = @import("blz.zig");
 const common = @import("common.zig");
-const fun = @import("../lib/fun-with-zig/src/index.zig");
+const fun = @import("fun");
 const overlay = @import("overlay.zig");
 const std = @import("std");
 
@@ -62,7 +61,7 @@ pub const Rom = struct {
 
     root: *fs.Nitro,
 
-    pub fn fromFile(file: os.File, allocator: *mem.Allocator) !Rom {
+    pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {
         var file_stream = file.inStream();
         var stream = &file_stream.stream;
 
@@ -146,7 +145,7 @@ pub const Rom = struct {
         };
     }
 
-    pub fn writeToFile(rom: Rom, file: os.File) !void {
+    pub fn writeToFile(rom: Rom, file: std.fs.File) !void {
         var arena = heap.ArenaAllocator.init(rom.allocator);
         defer arena.deinit();
         const allocator = &arena.allocator;
