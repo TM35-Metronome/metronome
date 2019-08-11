@@ -7,6 +7,17 @@ const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
 
+//
+//Line <- Suffix* '=' .*
+//
+//Suffix
+//   <- '.' IDENTIFIER
+//    / '[' INTEGER ']'
+//
+//INTEGER <- [0-9]+
+//IDENTIFIER <- [a-zA-Z][A-Za-z0-9_]*
+//
+
 const sscan = fun.scan.sscan;
 
 pub const Token = struct {
