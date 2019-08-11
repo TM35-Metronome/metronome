@@ -1,4 +1,4 @@
-const common = @import("tm35-common");
+const common = @import("common.zig");
 
 pub const StarterLocation = union(enum) {
     Arm9: usize,
@@ -26,7 +26,7 @@ pub const Info = struct {
     wild_pokemons: []const u8,
 };
 
-pub const infos = []Info{
+pub const infos = [_]Info{
     hg_info,
     ss_info,
     diamond_info,

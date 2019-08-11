@@ -1,16 +1,28 @@
+const clap = @import("clap");
+const common = @import("tm35-common");
+const fun = @import("fun");
+const gba = @import("gba.zig");
+const gen5 = @import("gen5-types.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
-const nds = @import("../lib/tm35-nds/src/index");
-const clap = @import("zig-clap");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
+const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
-const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
+const math = std.math;
 const mem = std.mem;
+const fmt = std.fmt;
 const os = std.os;
+const rand = std.rand;
 const path = fs.path;
+const slice = fun.generic.slice;
 
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
@@ -71,23 +83,23 @@ pub fn main() !void {
     defer rom_file.close();
     var rom = try nds.Rom.fromFile(rom_file, allocator);
 
-    try os.makePath(allocator, out);
-    try write(try path.join(allocator, [][]const u8 {out, "arm9"}), rom.arm9);
-    try write(try path.join(allocator, [][]const u8 {out, "arm7"}), rom.arm7);
-    try write(try path.join(allocator, [][]const u8 {out, "banner" }), mem.toBytes(rom.banner));
+    try fs.makePath(allocator, out);
+    try write(try path.join(allocator, [_][]const u8{ out, "arm9" }), rom.arm9);
+    try write(try path.join(allocator, [_][]const u8{ out, "arm7" }), rom.arm7);
+    try write(try path.join(allocator, [_][]const u8{ out, "banner" }), mem.toBytes(rom.banner));
 
     if (rom.hasNitroFooter())
-        try write(try path.join(allocator, [][]const u8 {out, "nitro_footer"}), mem.toBytes(rom.nitro_footer));
+        try write(try path.join(allocator, [_][]const u8{ out, "nitro_footer" }), mem.toBytes(rom.nitro_footer));
 
-    const arm9_overlay_folder = try path.join(allocator, [][]const u8 {out, "arm9_overlays"});
-    const arm7_overlay_folder = try path.join(allocator, [][]const u8 {out, "arm7_overlays"});
-    try os.makePath(allocator, arm9_overlay_folder);
-    try os.makePath(allocator, arm7_overlay_folder);
+    const arm9_overlay_folder = try path.join(allocator, [_][]const u8{ out, "arm9_overlays" });
+    const arm7_overlay_folder = try path.join(allocator, [_][]const u8{ out, "arm7_overlays" });
+    try fs.makePath(allocator, arm9_overlay_folder);
+    try fs.makePath(allocator, arm7_overlay_folder);
     try writeOverlays(allocator, arm9_overlay_folder, rom.arm9_overlay_table, rom.arm9_overlay_files);
     try writeOverlays(allocator, arm7_overlay_folder, rom.arm7_overlay_table, rom.arm7_overlay_files);
 
-    const root_folder = try path.join(allocator, [][]const u8 {out, "root"});
-    try os.makePath(allocator, root_folder);
+    const root_folder = try path.join(allocator, [_][]const u8{ out, "root" });
+    try fs.makePath(allocator, root_folder);
     try writeFs(allocator, nds.fs.Nitro, root_folder, rom.root);
 }
 
@@ -109,7 +121,7 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
         defer allocator.free(state.path);
 
         for (state.folder.nodes.toSliceConst()) |node| {
-            const node_path = try path.join(allocator, [][]const u8 {state.path, node.name});
+            const node_path = try path.join(allocator, [_][]const u8{ state.path, node.name });
             switch (node.kind) {
                 Fs.Node.Kind.File => |f| {
                     defer allocator.free(node_path);
@@ -117,17 +129,17 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
                     switch (Fs) {
                         nds.fs.Nitro => switch (f.*) {
                             Tag.Binary => |bin| {
-                                var file = try os.File.openWrite(node_path);
+                                var file = try fs.File.openWrite(node_path);
                                 defer file.close();
                                 try file.write(bin.data);
                             },
                             Tag.Narc => |narc| {
-                                try os.makePath(allocator, node_path);
+                                try fs.makePath(allocator, node_path);
                                 try writeFs(allocator, nds.fs.Narc, node_path, narc);
                             },
                         },
                         nds.fs.Narc => {
-                            var file = try os.File.openWrite(node_path);
+                            var file = try fs.File.openWrite(node_path);
                             defer file.close();
                             try file.write(f.data);
                         },
@@ -135,7 +147,7 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
                     }
                 },
                 Fs.Node.Kind.Folder => |f| {
-                    try os.makePath(allocator, node_path);
+                    try fs.makePath(allocator, node_path);
                     try stack.append(State{
                         .path = node_path,
                         .folder = f,
@@ -151,13 +163,13 @@ fn writeOverlays(child_allocator: *mem.Allocator, folder: []const u8, overlays: 
     const allocator = &arena.allocator;
     defer arena.deinit();
 
-    const overlay_folder_path = try path.join(allocator, [][]const u8 {folder, "overlay"});
+    const overlay_folder_path = try path.join(allocator, [_][]const u8{ folder, "overlay" });
     for (overlays) |overlay, i| {
         const overlay_path = try fmt.allocPrint(allocator, "{}{}", overlay_folder_path, i);
         try write(overlay_path, mem.toBytes(overlay));
     }
 
-    const file_folder_path = try path.join(allocator, [][]const u8 {folder, "file"});
+    const file_folder_path = try path.join(allocator, [_][]const u8{ folder, "file" });
     for (files) |file, i| {
         const file_path = try fmt.allocPrint(allocator, "{}{}", file_folder_path, i);
         try write(file_path, file);
@@ -165,7 +177,7 @@ fn writeOverlays(child_allocator: *mem.Allocator, folder: []const u8, overlays: 
 }
 
 fn write(file_path: []const u8, data: []const u8) !void {
-    var file = try os.File.openWrite(file_path);
+    var file = try fs.File.openWrite(file_path);
     defer file.close();
     try file.write(data);
 }

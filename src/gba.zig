@@ -1,4 +1,4 @@
-const fun = @import("../lib/fun-with-zig/src/index.zig"); // TODO: package fix
+const fun = @import("fun");
 const std = @import("std");
 
 const ascii = fun.ascii;
@@ -10,7 +10,7 @@ const slice = generic.slice;
 
 const assert = debug.assert;
 
-pub const Header = packed struct {
+pub const Header = extern struct {
     rom_entry_point: [4]u8,
     nintendo_logo: [156]u8,
     game_title: [12]u8,
@@ -27,6 +27,10 @@ pub const Header = packed struct {
     complement_check: u8,
 
     reserved2: [2]u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(Header) == 192);
+    }
 
     pub fn validate(header: *const Header) !void {
         const game_title = ascii.asAsciiConst(header.game_title) catch return error.InvalidGameTitle;

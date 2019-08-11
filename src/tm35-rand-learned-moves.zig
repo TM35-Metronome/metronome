@@ -1,37 +1,50 @@
-const builtin = @import("builtin");
-const clap = @import("zig-clap");
-const format = @import("tm35-format");
+const clap = @import("clap");
+const common = @import("tm35-common");
+const fun = @import("fun");
+const gba = @import("gba.zig");
+const gen5 = @import("gen5-types.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
+const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
+const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
+const slice = fun.generic.slice;
 
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "which moves should be prefered over others [random, same-type]",
-        Names.both("preference"),
-    ),
-    Param.option(
-        "the seed used to randomize stats",
-        Names.both("seed"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "which moves should be prefered over others [random, same-type]",
+        .names = Names{ .short = 'p', .long = "preference" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "the seed used to randomize stats",
+        .names = Names{ .short = 's', .long = "seed" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -51,18 +64,15 @@ const Preference = enum {
 };
 
 pub fn main() !void {
-    const unbuf_stdout = &(try std.io.getStdOut()).outStream().stream;
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
     var buf_stdout = BufOutStream.init(unbuf_stdout);
     defer buf_stdout.flush() catch {};
 
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
     const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
     const stdout = &buf_stdout.stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -91,7 +101,7 @@ pub fn main() !void {
     const seed = blk: {
         const seed_str = args.option("--seed") orelse {
             var buf: [8]u8 = undefined;
-            try std.os.getRandomBytes(buf[0..]);
+            try std.os.getrandom(buf[0..]);
             break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
         };
 
@@ -201,32 +211,31 @@ fn randomize(data: Data, seed: u64, pref: Preference) error{}!void {
     var poke_iter = data.pokemons.iterator();
     while (poke_iter.next()) |poke_kv| {
         const pokemon_index = poke_kv.key;
-        const pokemon = &poke_kv.value;
-
-        inline for ([][]const u8{
-            "tms",
-            "hms",
-        }) |f| {
-            var iter = @field(pokemon, f ++ "_learned").iterator();
-            while (iter.next()) |kv| switch (pref) {
-                Preference.Random => kv.value = random.boolean(),
-                Preference.SameType => {
-                    const low_chance = 0.1;
-                    const chance: f64 = blk: {
-                        const move_index = @field(data, f).get(kv.key) orelse break :blk low_chance;
-                        const move = data.moves.get(move_index.value) orelse break :blk low_chance;
-                        const move_type = move.value.@"type" orelse break :blk low_chance;
-                        _ = pokemon.types.get(move_type) orelse break :blk low_chance;
-
-                        // Yay the move is stab. Give it a higher chance.
-                        break :blk f64(1.0 - low_chance);
-                    };
-
-                    kv.value = random.float(f64) < chance;
-                },
-            };
-        }
+        const pokemon = poke_kv.value;
+        randomizeMachinesLearned(data, pokemon, random, pref, data.tms, @field(pokemon, "tms_learned"));
+        randomizeMachinesLearned(data, pokemon, random, pref, data.hms, @field(pokemon, "hms_learned"));
     }
+}
+
+fn randomizeMachinesLearned(data: Data, pokemon: Pokemon, random: *rand.Random, pref: Preference, machines: Machines, learned: MachinesLearned) void {
+    var iter = learned.iterator();
+    while (iter.next()) |kv| switch (pref) {
+        Preference.Random => kv.value = random.boolean(),
+        Preference.SameType => {
+            const low_chance = 0.1;
+            const chance: f64 = blk: {
+                const move_index = machines.get(kv.key) orelse break :blk low_chance;
+                const move = data.moves.get(move_index.value) orelse break :blk low_chance;
+                const move_type = move.value.@"type" orelse break :blk low_chance;
+                _ = pokemon.types.get(move_type) orelse break :blk low_chance;
+
+                // Yay the move is stab. Give it a higher chance.
+                break :blk f64(1.0 - low_chance);
+            };
+
+            kv.value = random.float(f64) < chance;
+        },
+    };
 }
 
 const Pokemons = std.AutoHashMap(usize, Pokemon);

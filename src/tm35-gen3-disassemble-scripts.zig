@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
-const clap = @import("zig-clap");
-const common = @import("tm35-common");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("common.zig");
+const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
 const offsets = @import("gen3-offsets.zig");
@@ -15,21 +15,25 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
+const fs = std.fs;
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -52,10 +56,7 @@ pub fn main() !void {
     const stderr = &(try io.getStdErr()).outStream().stream;
     const stdout = &buf_stdout.stream;
 
-    var direct_allocator = heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -82,7 +83,7 @@ pub fn main() !void {
     };
 
     var game = blk: {
-        var file = os.File.openRead(file_name) catch |err| {
+        var file = fs.File.openRead(file_name) catch |err| {
             debug.warn("Couldn't open {}.\n", file_name);
             return err;
         };
@@ -180,16 +181,18 @@ pub fn printCommandHelper(stream: var, value: var) !void {
                         // 'union' so if one member of 'TagEnum' matches 'tag', then
                         // we can add the size of ''@field(union, tag_name)' to res and
                         // break out.
+                        var found: bool = true;
                         inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
                             if (@field(TagEnum, enum_field.name) == tag) {
                                 try printCommandHelper(stream, @field(union_value, enum_field.name));
-                                break :next;
+                                found = true;
                             }
                         }
 
                         // If no member of 'TagEnum' match, then 'tag' must be a value
                         // it is not suppose to be.
-                        return error.InvalidTag;
+                        if (!found)
+                            return error.InvalidTag;
                     },
                     else => try printCommandHelper(stream, @field(value, struct_field.name)),
                 }

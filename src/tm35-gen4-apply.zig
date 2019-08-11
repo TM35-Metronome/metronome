@@ -1,49 +1,55 @@
-const clap = @import("zig-clap");
-const common = @import("tm35-common");
-const format = @import("tm35-format");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("common.zig");
+const fun = @import("fun");
+const gba = @import("gba.zig");
 const gen4 = @import("gen4-types.zig");
-const nds = @import("tm35-nds");
-const offsets = @import("gen4-offsets.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
 const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const meta = std.meta;
+const fmt = std.fmt;
 const os = std.os;
-const path = os.path;
+const rand = std.rand;
 const slice = fun.generic.slice;
+const path = fs.path;
+
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
+const Clap = clap.ComptimeClap([]const u8, params);
+const Names = clap.Names;
+const Param = clap.Param([]const u8);
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 const lu128 = fun.platform.lu128;
 
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
-
-const params = []Param{
-    Param.flag(
-        "abort execution on the first warning emitted",
-        Names.long("abort-on-first-warning"),
-    ),
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "override destination path",
-        Names.both("output"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "abort execution on the first warning emitted",
+        .names = Names{ .long = "abort-on-first-warning" },
+    },
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "override destination path",
+        .names = Names{ .short = 'o', .long = "output" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -58,17 +64,15 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() !void {
-    const unbuf_stdin = &(try std.io.getStdIn()).inStream().stream;
-    var buf_stdin = BufInStream.init(unbuf_stdin);
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
-    const stdout = &(try std.io.getStdOut()).outStream().stream;
-    const stdin = &buf_stdin.stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
+    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
+    const stdout = &buf_stdout.stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -95,7 +99,7 @@ pub fn main() !void {
     };
 
     var rom = blk: {
-        var file = os.File.openRead(file_name) catch |err| {
+        var file = fs.File.openRead(file_name) catch |err| {
             debug.warn("Couldn't open {}.\n", file_name);
             return err;
         };
@@ -125,7 +129,7 @@ pub fn main() !void {
         else => return err,
     }
 
-    var out_file = os.File.openWrite(out) catch |err| {
+    var out_file = fs.File.openWrite(out) catch |err| {
         debug.warn("Couldn't open {}\n", out);
         return err;
     };
@@ -178,9 +182,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             if (parser.eatField("iv")) {
                 member.iv = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("gender")) {
-                member.gender = try parser.eatUnsignedValue(u4, 10);
+                member.gender_ability.gender = try parser.eatUnsignedValue(u4, 10);
             } else |_| if (parser.eatField("ability")) {
-                member.ability = try parser.eatUnsignedValue(u4, 10);
+                member.gender_ability.ability = try parser.eatUnsignedValue(u4, 10);
             } else |_| if (parser.eatField("level")) {
                 member.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("species")) {
@@ -357,34 +361,37 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
             common.Version.Diamond,
             common.Version.Pearl,
             common.Version.Platinum,
-            => done: {
+            => {
                 const wilds = try nodeAsType(gen4.DpptWildPokemons, wild_pokemons[zone_index]);
                 if (parser.eatField("grass")) {
                     if (parser.eatField("encounter_rate")) {
                         wilds.grass_rate = lu32.init(try parser.eatUnsignedValue(u32, 10));
-                        break :done;
+                        return;
                     } else |_| if (parser.eatField("pokemons")) {
                         const wild_index = try parser.eatIndexMax(wilds.grass.len);
                         const wild = &wilds.grass[wild_index];
 
                         if (parser.eatField("min_level")) {
                             wild.level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("max_level")) {
                             wild.level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("species")) {
                             wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                            return;
                         } else |_| if (parser.eatField("form")) {
                             wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            return;
                         } else |_| {
                             return error.NoField;
                         }
-                        break :done;
                     } else |_| {
                         return error.NoField;
                     }
                 } else |_| {}
 
-                inline for ([][]const u8{
+                inline for ([_][]const u8{
                     "swarm_replacements",
                     "day_replacements",
                     "night_replacements",
@@ -401,15 +408,16 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
                     if (parser.eatField("species")) {
                         wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                        return;
                     } else |_| if (parser.eatField("form")) {
                         wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                        return;
                     } else |_| {
                         return error.NoField;
                     }
-                    break :done;
                 }
 
-                inline for ([][]const u8{
+                inline for ([_][]const u8{
                     "surf",
                     "sea_unknown",
                     "old_rod",
@@ -419,7 +427,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                     parser.eatField(area_name) catch break :skip;
                     if (parser.eatField("encounter_rate")) {
                         @field(wilds, area_name ++ "_rate") = lu32.init(try parser.eatUnsignedValue(u32, 10));
-                        break :done;
+                        return;
                     } else |_| if (parser.eatField("pokemons")) {
                         const area = &@field(wilds, area_name);
                         const wild_index = try parser.eatIndexMax(area.len);
@@ -427,16 +435,19 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
                         if (parser.eatField("min_level")) {
                             wild.min_level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("max_level")) {
                             wild.max_level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("species")) {
                             wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                            return;
                         } else |_| if (parser.eatField("form")) {
                             wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            return;
                         } else |_| {
                             return error.NoField;
                         }
-                        break :done;
                     } else |_| {}
                 }
 
@@ -445,9 +456,9 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
             common.Version.HeartGold,
             common.Version.SoulSilver,
-            => done: {
+            => {
                 const wilds = try nodeAsType(gen4.HgssWildPokemons, wild_pokemons[zone_index]);
-                inline for ([][]const u8{
+                inline for ([_][]const u8{
                     "grass_morning",
                     "grass_day",
                     "grass_night",
@@ -455,7 +466,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                     parser.eatField(area_name) catch break :skip;
                     if (parser.eatField("encounter_rate")) {
                         wilds.grass_rate = try parser.eatUnsignedValue(u8, 10);
-                        break :done;
+                        return;
                     } else |_| if (parser.eatField("pokemons")) {
                         const area = &@field(wilds, area_name);
                         const wild_index = try parser.eatIndexMax(area.len);
@@ -463,20 +474,23 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
                         if (parser.eatField("min_level")) {
                             wilds.grass_levels[wild_index] = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("max_level")) {
                             wilds.grass_levels[wild_index] = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("species")) {
                             wild.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                            return;
                         } else |_| if (parser.eatField("form")) {
                             wild.setForm(try parser.eatUnsignedValue(u6, 10));
+                            return;
                         } else |_| {
                             return error.NoField;
                         }
-                        break :done;
                     } else |_| {}
                 }
 
-                inline for ([][]const u8{
+                inline for ([_][]const u8{
                     "surf",
                     "sea_unknown",
                     "old_rod",
@@ -486,7 +500,7 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
                     parser.eatField(area_name) catch break :skip;
                     if (parser.eatField("encounter_rate")) {
                         wilds.sea_rates[j] = try parser.eatUnsignedValue(u8, 10);
-                        break :done;
+                        return;
                     } else |_| if (parser.eatField("pokemons")) {
                         const area = &@field(wilds, area_name);
                         const wild_index = try parser.eatIndexMax(area.len);
@@ -494,16 +508,19 @@ fn apply(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
 
                         if (parser.eatField("min_level")) {
                             wild.min_level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("max_level")) {
                             wild.max_level = try parser.eatUnsignedValue(u8, 10);
+                            return;
                         } else |_| if (parser.eatField("species")) {
                             wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                            return;
                         } else |_| if (parser.eatField("form")) {
                             wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            return;
                         } else |_| {
                             return error.NoField;
                         }
-                        break :done;
                     } else |_| {}
                 }
 

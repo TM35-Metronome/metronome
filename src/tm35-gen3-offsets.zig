@@ -1,6 +1,6 @@
-const clap = @import("zig-clap");
-const common = @import("tm35-common");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("common.zig");
+const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
 const offsets = @import("gen3-offsets.zig");
@@ -12,6 +12,7 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
+const fs = std.fs;
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
@@ -24,12 +25,15 @@ const Names = clap.Names;
 const Param = clap.Param([]const u8);
 const Searcher = fun.searcher.Searcher;
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -47,14 +51,11 @@ pub fn main() !void {
     const stderr = &(try std.io.getStdErr()).outStream().stream;
     const stdout = &(try std.io.getStdOut()).outStream().stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arg_iter = clap.args.OsIterator.init(&direct_allocator.allocator);
+    var arg_iter = clap.args.OsIterator.init(heap.direct_allocator);
     defer arg_iter.deinit();
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(&direct_allocator.allocator, clap.args.OsIterator, &arg_iter) catch |err| {
+    var args = Clap.parse(heap.direct_allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         usage(stderr) catch {};
         return err;
     };
@@ -64,12 +65,12 @@ pub fn main() !void {
         return try usage(stdout);
 
     for (args.positionals()) |file_name, i| {
-        var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+        var arena = heap.ArenaAllocator.init(heap.direct_allocator);
         defer arena.deinit();
 
         const allocator = &arena.allocator;
 
-        var file = try os.File.openRead(file_name);
+        var file = try fs.File.openRead(file_name);
         defer file.close();
 
         var file_stream = file.inStream();
@@ -83,13 +84,7 @@ pub fn main() !void {
             return err;
         };
 
-        const info = try getInfo(
-            data,
-            version,
-            header.gamecode,
-            header.game_title,
-            header.software_version
-        );
+        const info = try getInfo(data, version, header.gamecode, header.game_title, header.software_version);
         try stdout.print(".game[{}].game_title={}\n", i, info.game_title);
         try stdout.print(".game[{}].gamecode={}\n", i, info.gamecode);
         try stdout.print(".game[{}].version={}\n", i, @tagName(info.version));
@@ -142,10 +137,9 @@ fn getInfo(
     software_version: u8,
 ) !offsets.Info {
     // TODO: A way to find starter pokemons
-
-    const trainer_searcher = Searcher(gen3.Trainer, [][]const []const u8{
-        [][]const u8{ "party" },
-        [][]const u8{ "name" },
+    const trainer_searcher = Searcher(gen3.Trainer, [_][]const []const u8{
+        [_][]const u8{"party"},
+        [_][]const u8{"name"},
     }).init(data);
     const trainers = switch (version) {
         common.Version.Emerald => trainer_searcher.findSlice3(
@@ -163,31 +157,29 @@ fn getInfo(
         else => null,
     } orelse return error.UnableToFindTrainerOffset;
 
-    const move_searcher = Searcher(gen3.Move, [][]const []const u8{}).init(data);
+    const move_searcher = Searcher(gen3.Move, [_][]const []const u8{}).init(data);
     const moves = move_searcher.findSlice3(
         first_moves,
         last_moves,
     ) orelse return error.UnableToFindMoveOffset;
 
-    const machine_searcher = Searcher(lu64, [][]const []const u8{}).init(data);
+    const machine_searcher = Searcher(lu64, [_][]const []const u8{}).init(data);
     const machine_learnset = machine_searcher.findSlice3(
         first_machine_learnsets,
         last_machine_learnsets,
     ) orelse return error.UnableToFindTmHmLearnsetOffset;
 
-    const pokemons_searcher = Searcher(gen3.BasePokemon, [][]const []const u8{
-        [][]const u8{ "padding" },
-        [][]const u8{ "egg_group1_pad" },
-        [][]const u8{ "egg_group2_pad" },
+    const pokemons_searcher = Searcher(gen3.BasePokemon, [_][]const []const u8{
+        [_][]const u8{"padding"},
+        [_][]const u8{"egg_group1_pad"},
+        [_][]const u8{"egg_group2_pad"},
     }).init(data);
     const pokemons = pokemons_searcher.findSlice3(
         first_pokemons,
         last_pokemons,
     ) orelse return error.UnableToFindBaseStatsOffset;
 
-    const evolution_searcher = Searcher([5]common.Evolution, [][]const []const u8{
-        [][]const u8{ "padding" },
-    }).init(data);
+    const evolution_searcher = Searcher([5]common.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}).init(data);
     const evolution_table = evolution_searcher.findSlice3(
         first_evolutions,
         last_evolutions,
@@ -195,7 +187,7 @@ fn getInfo(
 
     const level_up_learnset_pointers = blk: {
         const LevelUpRef = gen3.Ptr(gen3.LevelUpMove);
-        const level_up_searcher = Searcher(u8, [][]const []const u8{}).init(data);
+        const level_up_searcher = Searcher(u8, [_][]const []const u8{}).init(data);
 
         var first_pointers: [first_levelup_learnsets.len]LevelUpRef = undefined;
         for (first_levelup_learnsets) |learnset, i| {
@@ -211,11 +203,11 @@ fn getInfo(
             last_pointers[i] = try LevelUpRef.init(@intCast(u32, offset));
         }
 
-        const pointer_searcher = Searcher(LevelUpRef, [][]const []const u8{}).init(data);
+        const pointer_searcher = Searcher(LevelUpRef, [_][]const []const u8{}).init(data);
         break :blk pointer_searcher.findSlice3(first_pointers, last_pointers) orelse return error.UnableToFindLevelUpLearnsetOffset;
     };
 
-    const hm_tm_searcher = Searcher(lu16, [][]const []const u8{}).init(data);
+    const hm_tm_searcher = Searcher(lu16, [_][]const []const u8{}).init(data);
     const hms_slice = hm_tm_searcher.findSlice(hms) orelse return error.UnableToFindHmOffset;
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
@@ -223,11 +215,11 @@ fn getInfo(
     //       assume that the first table is the only one used.
     const tms_slice = hm_tm_searcher.findSlice(tms) orelse return error.UnableToFindTmOffset;
 
-    const items_searcher = Searcher(gen3.Item, [][]const []const u8{
-        [][]const u8{ "name" },
-        [][]const u8{ "description" },
-        [][]const u8{ "field_use_func" },
-        [][]const u8{ "battle_use_func" },
+    const items_searcher = Searcher(gen3.Item, [_][]const []const u8{
+        [_][]const u8{"name"},
+        [_][]const u8{"description"},
+        [_][]const u8{"field_use_func"},
+        [_][]const u8{"battle_use_func"},
     }).init(data);
     const items = switch (version) {
         common.Version.Emerald => items_searcher.findSlice3(
@@ -242,15 +234,15 @@ fn getInfo(
             frlg_first_items,
             frlg_last_items,
         ),
-          else => null,
+        else => null,
     } orelse return error.UnableToFindItemsOffset;
 
-    const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, [][]const []const u8{
-        [][]const u8{ "pad" },
-        [][]const u8{ "land" },
-        [][]const u8{ "surf" },
-        [][]const u8{ "rock_smash" },
-        [][]const u8{ "fishing"},
+    const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, [_][]const []const u8{
+        [_][]const u8{"pad"},
+        [_][]const u8{"land"},
+        [_][]const u8{"surf"},
+        [_][]const u8{"rock_smash"},
+        [_][]const u8{"fishing"},
     }).init(data);
     const maybe_wild_pokemon_headers = switch (version) {
         common.Version.Emerald => wild_pokemon_headers_searcher.findSlice3(
@@ -269,16 +261,17 @@ fn getInfo(
     };
     const wild_pokemon_headers = maybe_wild_pokemon_headers orelse return error.UnableToFindWildPokemonHeaders;
 
-    const map_header_searcher = Searcher(gen3.MapHeader, [][]const []const u8{
-        [][]const u8{ "map_data" },
-        [][]const u8{ "map_events" },
-        [][]const u8{ "map_scripts" },
-        [][]const u8{ "map_connections"},
-        [][]const u8{ "pad"},
+    const map_header_searcher = Searcher(gen3.MapHeader, [_][]const []const u8{
+        [_][]const u8{"map_data"},
+        [_][]const u8{"map_events"},
+        [_][]const u8{"map_scripts"},
+        [_][]const u8{"map_connections"},
+        [_][]const u8{"pad"},
     }).init(data);
     const maybe_map_headers = switch (version) {
         common.Version.Ruby,
-        common.Version.Sapphire, =>map_header_searcher.findSlice3(
+        common.Version.Sapphire,
+        => map_header_searcher.findSlice3(
             rs_first_map_headers,
             rs_last_map_headers,
         ),
@@ -318,14 +311,14 @@ fn getInfo(
     };
 }
 
-const em_first_trainers = []gen3.Trainer{
+const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
         .name = undefined,
-        .items = []lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
         .is_double = lu32.init(0),
         .ai = lu32.init(0),
         .party = undefined,
@@ -336,33 +329,33 @@ const em_first_trainers = []gen3.Trainer{
         .encounter_music = 0x0b,
         .trainer_picture = 0,
         .name = undefined,
-        .items = []lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
         .is_double = lu32.init(0),
         .ai = lu32.init(7),
         .party = undefined,
     },
 };
 
-const em_last_trainers = []gen3.Trainer{gen3.Trainer{
+const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = gen3.PartyType.None,
     .class = 0x41,
     .encounter_music = 0x80,
     .trainer_picture = 0x5c,
     .name = undefined,
-    .items = []lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
+    .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
     .is_double = lu32.init(0),
     .ai = lu32.init(0),
     .party = undefined,
 }};
 
-const rs_first_trainers = []gen3.Trainer{
+const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
         .name = undefined,
-        .items = []lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
         .is_double = lu32.init(0),
         .ai = lu32.init(0),
         .party = undefined,
@@ -373,33 +366,33 @@ const rs_first_trainers = []gen3.Trainer{
         .encounter_music = 0x06,
         .trainer_picture = 0x46,
         .name = undefined,
-        .items = []lu16{ lu16.init(0x16), lu16.init(0x16), lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0x16), lu16.init(0x16), lu16.init(0), lu16.init(0) },
         .is_double = lu32.init(0),
         .ai = lu32.init(7),
         .party = undefined,
     },
 };
 
-const rs_last_trainers = []gen3.Trainer{gen3.Trainer{
+const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = gen3.PartyType.None,
     .class = 0x21,
     .encounter_music = 0x0B,
     .trainer_picture = 0x06,
     .name = undefined,
-    .items = []lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
+    .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
     .is_double = lu32.init(0),
     .ai = lu32.init(1),
     .party = undefined,
 }};
 
-const frls_first_trainers = []gen3.Trainer{
+const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.None,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
         .name = undefined,
-        .items = []lu16{
+        .items = [_]lu16{
             lu16.init(0),
             lu16.init(0),
             lu16.init(0),
@@ -415,7 +408,7 @@ const frls_first_trainers = []gen3.Trainer{
         .encounter_music = 6,
         .trainer_picture = 0,
         .name = undefined,
-        .items = []lu16{
+        .items = [_]lu16{
             lu16.init(0),
             lu16.init(0),
             lu16.init(0),
@@ -427,14 +420,14 @@ const frls_first_trainers = []gen3.Trainer{
     },
 };
 
-const frls_last_trainers = []gen3.Trainer{
+const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = gen3.PartyType.Both,
         .class = 90,
         .encounter_music = 0,
         .trainer_picture = 125,
         .name = undefined,
-        .items = []lu16{
+        .items = [_]lu16{
             lu16.init(19),
             lu16.init(19),
             lu16.init(19),
@@ -450,7 +443,7 @@ const frls_last_trainers = []gen3.Trainer{
         .encounter_music = 0,
         .trainer_picture = 0x60,
         .name = undefined,
-        .items = []lu16{
+        .items = [_]lu16{
             lu16.init(0),
             lu16.init(0),
             lu16.init(0),
@@ -462,7 +455,7 @@ const frls_last_trainers = []gen3.Trainer{
     },
 };
 
-const first_moves = []gen3.Move{
+const first_moves = [_]gen3.Move{
     // Dummy
     gen3.Move{
         .effect = 0,
@@ -489,7 +482,7 @@ const first_moves = []gen3.Move{
     },
 };
 
-const last_moves = []gen3.Move{
+const last_moves = [_]gen3.Move{
 // Psycho Boost
 gen3.Move{
     .effect = 204,
@@ -503,21 +496,21 @@ gen3.Move{
     .flags = lu32.init(0x32),
 }};
 
-const first_machine_learnsets = []lu64{
+const first_machine_learnsets = [_]lu64{
     lu64.init(0x0000000000000000), // Dummy Pokemon
     lu64.init(0x00e41e0884350720), // Bulbasaur
     lu64.init(0x00e41e0884350720), // Ivysaur
     lu64.init(0x00e41e0886354730), // Venusaur
 };
 
-const last_machine_learnsets = []lu64{
+const last_machine_learnsets = [_]lu64{
     lu64.init(0x035c5e93b7bbd63e), // Latios
     lu64.init(0x00408e93b59bc62c), // Jirachi
     lu64.init(0x00e58fc3f5bbde2d), // Deoxys
     lu64.init(0x00419f03b41b8e28), // Chimecho
 };
 
-const first_pokemons = []gen3.BasePokemon{
+const first_pokemons = [_]gen3.BasePokemon{
     // Dummy
     gen3.BasePokemon{
         .stats = common.Stats{
@@ -529,7 +522,7 @@ const first_pokemons = []gen3.BasePokemon{
             .sp_defense = 0,
         },
 
-        .types = []gen3.Type{ gen3.Type.Normal, gen3.Type.Normal },
+        .types = [_]gen3.Type{ gen3.Type.Normal, gen3.Type.Normal },
 
         .catch_rate = 0,
         .base_exp_yield = 0,
@@ -544,7 +537,7 @@ const first_pokemons = []gen3.BasePokemon{
             .padding = 0,
         },
 
-        .items = []lu16{ lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
         .gender_ratio = 0,
         .egg_cycles = 0,
@@ -553,15 +546,15 @@ const first_pokemons = []gen3.BasePokemon{
         .growth_rate = common.GrowthRate.MediumFast,
 
         .egg_group1 = common.EggGroup.Invalid,
-        .egg_group1_pad = undefined,
         .egg_group2 = common.EggGroup.Invalid,
-        .egg_group2_pad = undefined,
 
-        .abilities = []u8{ 0, 0 },
+        .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
 
-        .color = common.Color.Red,
-        .flip = false,
+        .color_flip = gen3.BasePokemon.ColorFlip{
+            .color = common.Color.Red,
+            .flip = false,
+        },
 
         .padding = undefined,
     },
@@ -576,7 +569,7 @@ const first_pokemons = []gen3.BasePokemon{
             .sp_defense = 65,
         },
 
-        .types = []gen3.Type{ gen3.Type.Grass, gen3.Type.Poison },
+        .types = [_]gen3.Type{ gen3.Type.Grass, gen3.Type.Poison },
 
         .catch_rate = 45,
         .base_exp_yield = 64,
@@ -591,7 +584,7 @@ const first_pokemons = []gen3.BasePokemon{
             .padding = 0,
         },
 
-        .items = []lu16{ lu16.init(0), lu16.init(0) },
+        .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
         .gender_ratio = comptime percentFemale(12.5),
         .egg_cycles = 20,
@@ -600,21 +593,21 @@ const first_pokemons = []gen3.BasePokemon{
         .growth_rate = common.GrowthRate.MediumSlow,
 
         .egg_group1 = common.EggGroup.Monster,
-        .egg_group1_pad = undefined,
         .egg_group2 = common.EggGroup.Grass,
-        .egg_group2_pad = undefined,
 
-        .abilities = []u8{ 65, 0 },
+        .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
 
-        .color = common.Color.Green,
-        .flip = false,
+        .color_flip = gen3.BasePokemon.ColorFlip{
+            .color = common.Color.Green,
+            .flip = false,
+        },
 
         .padding = undefined,
     },
 };
 
-const last_pokemons = []gen3.BasePokemon{
+const last_pokemons = [_]gen3.BasePokemon{
 // Chimecho
 gen3.BasePokemon{
     .stats = common.Stats{
@@ -626,7 +619,7 @@ gen3.BasePokemon{
         .sp_defense = 80,
     },
 
-    .types = []gen3.Type{ gen3.Type.Psychic, gen3.Type.Psychic },
+    .types = [_]gen3.Type{ gen3.Type.Psychic, gen3.Type.Psychic },
 
     .catch_rate = 45,
     .base_exp_yield = 147,
@@ -641,7 +634,7 @@ gen3.BasePokemon{
         .padding = 0,
     },
 
-    .items = []lu16{ lu16.init(0), lu16.init(0) },
+    .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
     .gender_ratio = comptime percentFemale(50),
     .egg_cycles = 25,
@@ -650,15 +643,15 @@ gen3.BasePokemon{
     .growth_rate = common.GrowthRate.Fast,
 
     .egg_group1 = common.EggGroup.Amorphous,
-    .egg_group1_pad = undefined,
     .egg_group2 = common.EggGroup.Amorphous,
-    .egg_group2_pad = undefined,
 
-    .abilities = []u8{ 26, 0 },
+    .abilities = [_]u8{ 26, 0 },
     .safari_zone_rate = 0,
 
-    .color = common.Color.Blue,
-    .flip = false,
+    .color_flip = gen3.BasePokemon.ColorFlip{
+        .color = common.Color.Blue,
+        .flip = false,
+    },
 
     .padding = undefined,
 }};
@@ -673,14 +666,14 @@ const unused_evo = common.Evolution{
     .target = lu16.init(0),
     .padding = undefined,
 };
-const unused_evo5 = []common.Evolution{unused_evo} ** 5;
+const unused_evo5 = [_]common.Evolution{unused_evo} ** 5;
 
-const first_evolutions = [][5]common.Evolution{
+const first_evolutions = [_][5]common.Evolution{
     // Dummy
     unused_evo5,
 
     // Bulbasaur
-    []common.Evolution{
+    [_]common.Evolution{
         common.Evolution{
             .method = common.Evolution.Method.LevelUp,
             .param = lu16.init(16),
@@ -694,7 +687,7 @@ const first_evolutions = [][5]common.Evolution{
     },
 
     // Ivysaur
-    []common.Evolution{
+    [_]common.Evolution{
         common.Evolution{
             .method = common.Evolution.Method.LevelUp,
             .param = lu16.init(32),
@@ -708,9 +701,9 @@ const first_evolutions = [][5]common.Evolution{
     },
 };
 
-const last_evolutions = [][5]common.Evolution{
+const last_evolutions = [_][5]common.Evolution{
     // Beldum
-    []common.Evolution{
+    [_]common.Evolution{
         common.Evolution{
             .method = common.Evolution.Method.LevelUp,
             .param = lu16.init(20),
@@ -724,7 +717,7 @@ const last_evolutions = [][5]common.Evolution{
     },
 
     // Metang
-    []common.Evolution{
+    [_]common.Evolution{
         common.Evolution{
             .method = common.Evolution.Method.LevelUp,
             .param = lu16.init(45),
@@ -753,41 +746,40 @@ const last_evolutions = [][5]common.Evolution{
     unused_evo5,
 };
 
-const first_levelup_learnsets = [][]const u8{
+const first_levelup_learnsets = [_][]const u8{
     // Dummy mon have same moves as Bulbasaur
-    []u8{
+    [_]u8{
         0x21, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E,
         0x4B, 0x28, 0xE6, 0x32, 0x4A, 0x40, 0xEB, 0x4E, 0x4C, 0x5C, 0xFF, 0xFF,
     },
     // Bulbasaur
-    []u8{
+    [_]u8{
         0x21, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E,
         0x4B, 0x28, 0xE6, 0x32, 0x4A, 0x40, 0xEB, 0x4E, 0x4C, 0x5C, 0xFF, 0xFF,
     },
     // Ivysaur
-    []u8{
+    [_]u8{
         0x21, 0x02, 0x2D, 0x02, 0x49, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14,
         0x4D, 0x1E, 0x4F, 0x1E, 0x4B, 0x2C, 0xE6, 0x3A, 0x4A, 0x4C, 0xEB, 0x5E,
         0x4C, 0x70, 0xFF, 0xFF,
     },
     // Venusaur
-    []u8{
+    [_]u8{
         0x21, 0x02, 0x2D, 0x02, 0x49, 0x02, 0x16, 0x02, 0x2D, 0x08, 0x49, 0x0E,
         0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E, 0x4B, 0x2C, 0xE6, 0x3A, 0x4A, 0x52,
         0xEB, 0x6A, 0x4C, 0x82, 0xFF, 0xFF,
     },
 };
 
-const last_levelup_learnsets = [][]const u8{
-    // TODO: Figure out if only having Chimechos level up learnset is enough.
-    // Chimecho
-    []u8{
-        0x23, 0x02, 0x2D, 0x0C, 0x36, 0x13, 0x5D, 0x1C, 0x24, 0x22, 0xFD, 0x2C, 0x19,
-        0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
-    },
-};
+const last_levelup_learnsets = [_][]const u8{
+// TODO: Figure out if only having Chimechos level up learnset is enough.
+// Chimecho
+[_]u8{
+    0x23, 0x02, 0x2D, 0x0C, 0x36, 0x13, 0x5D, 0x1C, 0x24, 0x22, 0xFD, 0x2C, 0x19,
+    0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
+}};
 
-const hms = []lu16{
+const hms = [_]lu16{
     lu16.init(0x000f),
     lu16.init(0x0013),
     lu16.init(0x0039),
@@ -798,7 +790,7 @@ const hms = []lu16{
     lu16.init(0x0123),
 };
 
-const tms = []lu16{
+const tms = [_]lu16{
     lu16.init(0x0108),
     lu16.init(0x0151),
     lu16.init(0x0160),
@@ -851,7 +843,7 @@ const tms = []lu16{
     lu16.init(0x013b),
 };
 
-const em_first_items = []gen3.Item{
+const em_first_items = [_]gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
@@ -888,7 +880,7 @@ const em_first_items = []gen3.Item{
     },
 };
 
-const em_last_items = []gen3.Item{
+const em_last_items = [_]gen3.Item{
     // MAGMA EMBLEM
     gen3.Item{
         .name = undefined,
@@ -925,7 +917,7 @@ const em_last_items = []gen3.Item{
     },
 };
 
-const rs_first_items = []gen3.Item{
+const rs_first_items = [_]gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
@@ -962,7 +954,7 @@ const rs_first_items = []gen3.Item{
     },
 };
 
-const rs_last_items = []gen3.Item{
+const rs_last_items = [_]gen3.Item{
     // HM08
     gen3.Item{
         .name = undefined,
@@ -1016,7 +1008,7 @@ const rs_last_items = []gen3.Item{
     },
 };
 
-const frlg_first_items = []gen3.Item{
+const frlg_first_items = [_]gen3.Item{
     gen3.Item{
         .name = undefined,
         .id = lu16.init(0),
@@ -1051,7 +1043,7 @@ const frlg_first_items = []gen3.Item{
     },
 };
 
-const frlg_last_items = []gen3.Item{
+const frlg_last_items = [_]gen3.Item{
     gen3.Item{
         .name = undefined,
         .id = lu16.init(372),
@@ -1098,38 +1090,38 @@ fn wildHeader(map_group: u8, map_num: u8) gen3.WildPokemonHeader {
     };
 }
 
-const em_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const em_first_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(0, 16),
     wildHeader(0, 17),
     wildHeader(0, 18),
 };
 
-const em_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const em_last_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(24, 106),
     wildHeader(24, 106),
     wildHeader(24, 107),
 };
 
-const rs_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const rs_first_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(0, 0),
     wildHeader(0, 1),
     wildHeader(0, 5),
     wildHeader(0, 6),
 };
 
-const rs_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const rs_last_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(0, 15),
     wildHeader(0, 50),
     wildHeader(0, 51),
 };
 
-const frlg_first_wild_mon_headers = []gen3.WildPokemonHeader{
+const frlg_first_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(2, 27),
     wildHeader(2, 28),
     wildHeader(2, 29),
 };
 
-const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
+const frlg_last_wild_mon_headers = [_]gen3.WildPokemonHeader{
     wildHeader(1, 122),
     wildHeader(1, 122),
     wildHeader(1, 122),
@@ -1141,122 +1133,116 @@ const frlg_last_wild_mon_headers = []gen3.WildPokemonHeader{
     wildHeader(1, 122),
 };
 
-const em_first_map_headers = []gen3.MapHeader{
-    // Petalburg City
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(362),
-        .map_data_id = lu16.init(1),
-        .map_sec = 0x07,
-        .cave = 0,
-        .weather = 2,
-        .map_type = 2,
-        .pad = undefined,
-        .escape_rope = 0,
-        .flags = 0b00001101,
-        .map_battle_scene = 0,
-    },
-};
+const em_first_map_headers = [_]gen3.MapHeader{
+// Petalburg City
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(362),
+    .map_data_id = lu16.init(1),
+    .map_sec = 0x07,
+    .cave = 0,
+    .weather = 2,
+    .map_type = 2,
+    .pad = undefined,
+    .escape_rope = 0,
+    .flags = 0b00001101,
+    .map_battle_scene = 0,
+}};
 
-const em_last_map_headers = []gen3.MapHeader{
-    // Route 124 - Diving Treasure Hunters House
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(408),
-        .map_data_id = lu16.init(301),
-        .map_sec = 0x27,
-        .cave = 0,
-        .weather = 0,
-        .map_type = 8,
-        .pad = undefined,
-        .escape_rope = 0,
-        .flags = 0b00000000,
-        .map_battle_scene = 0,
-    },
-};
+const em_last_map_headers = [_]gen3.MapHeader{
+// Route 124 - Diving Treasure Hunters House
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(408),
+    .map_data_id = lu16.init(301),
+    .map_sec = 0x27,
+    .cave = 0,
+    .weather = 0,
+    .map_type = 8,
+    .pad = undefined,
+    .escape_rope = 0,
+    .flags = 0b00000000,
+    .map_battle_scene = 0,
+}};
 
-const rs_first_map_headers = []gen3.MapHeader{
-    // Petalburg City
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(362),
-        .map_data_id = lu16.init(1),
-        .map_sec = 0x07,
-        .cave = 0,
-        .weather = 2,
-        .map_type = 2,
-        .pad = undefined,
-        .escape_rope = 0,
-        .flags = 0b00000001,
-        .map_battle_scene = 0,
-    },
-};
+const rs_first_map_headers = [_]gen3.MapHeader{
+// Petalburg City
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(362),
+    .map_data_id = lu16.init(1),
+    .map_sec = 0x07,
+    .cave = 0,
+    .weather = 2,
+    .map_type = 2,
+    .pad = undefined,
+    .escape_rope = 0,
+    .flags = 0b00000001,
+    .map_battle_scene = 0,
+}};
 
-const rs_last_map_headers = []gen3.MapHeader{
-    // Route 124 - Diving Treasure Hunters House
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(408),
-        .map_data_id = lu16.init(302),
-        .map_sec = 0x27,
-        .cave = 0,
-        .weather = 0,
-        .map_type = 8,
-        .pad = undefined,
-        .escape_rope = 0,
-        .flags = 0b00000000,
-        .map_battle_scene = 0,
-    },
-};
+const rs_last_map_headers = [_]gen3.MapHeader{
+// Route 124 - Diving Treasure Hunters House
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(408),
+    .map_data_id = lu16.init(302),
+    .map_sec = 0x27,
+    .cave = 0,
+    .weather = 0,
+    .map_type = 8,
+    .pad = undefined,
+    .escape_rope = 0,
+    .flags = 0b00000000,
+    .map_battle_scene = 0,
+}};
 
-const frlg_first_map_headers = []gen3.MapHeader{
-    // ???
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(0x12F),
-        .map_data_id = lu16.init(0x2F),
-        .map_sec = 0xC4,
-        .cave = 0x0,
-        .weather = 0x0,
-        .map_type = 0x8,
-        .pad = undefined,
-        .escape_rope = 0x0,
-        .flags = 0x0,
-        .map_battle_scene = 0x8,
-    },
-};
+const frlg_first_map_headers = [_]gen3.MapHeader{
+// ???
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(0x12F),
+    .map_data_id = lu16.init(0x2F),
+    .map_sec = 0xC4,
+    .cave = 0x0,
+    .weather = 0x0,
+    .map_type = 0x8,
+    .pad = undefined,
+    .escape_rope = 0x0,
+    .flags = 0x0,
+    .map_battle_scene = 0x8,
+}};
 
-const frlg_last_map_headers = []gen3.MapHeader{
-    // ???
-    gen3.MapHeader{
-        .map_data = undefined,  
-        .map_events = undefined,  
-        .map_scripts = undefined, 
-        .map_connections = undefined, 
-        .music = lu16.init(0x151),
-        .map_data_id = lu16.init(0xB),
-        .map_sec = 0xA9,
-        .cave = 0x0,
-        .weather = 0x0,
-        .map_type = 0x8,
-        .pad = undefined,
-        .escape_rope = 0x0,
-        .flags = 0x0,
-        .map_battle_scene = 0x0,
-    },
-};
+const frlg_last_map_headers = [_]gen3.MapHeader{
+// ???
+gen3.MapHeader{
+    .map_data = undefined,
+    .map_events = undefined,
+    .map_scripts = undefined,
+    .map_connections = undefined,
+    .music = lu16.init(0x151),
+    .map_data_id = lu16.init(0xB),
+    .map_sec = 0xA9,
+    .cave = 0x0,
+    .weather = 0x0,
+    .map_type = 0x8,
+    .pad = undefined,
+    .escape_rope = 0x0,
+    .flags = 0x0,
+    .map_battle_scene = 0x0,
+}};

@@ -1,4 +1,4 @@
-const common = @import("tm35-common");
+const common = @import("common.zig");
 
 pub const NarcOffset = struct {
     file: usize,
@@ -21,7 +21,7 @@ pub const Info = struct {
     wild_pokemons: []const u8,
 };
 
-pub const infos = []Info{
+pub const infos = [_]Info{
     black2_info,
     white2_info,
     black_info,
@@ -33,18 +33,18 @@ const black2_info = Info{
     .gamecode = "IREO",
     .version = common.Version.Black2,
 
-    .starters = [][]const NarcOffset{
-        []NarcOffset{
+    .starters = [3][]const NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x58B },
             NarcOffset{ .file = 854, .offset = 0x590 },
             NarcOffset{ .file = 854, .offset = 0x595 },
         },
-        []NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x5C0 },
             NarcOffset{ .file = 854, .offset = 0x5C5 },
             NarcOffset{ .file = 854, .offset = 0x5CA },
         },
-        []NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x5E2 },
             NarcOffset{ .file = 854, .offset = 0x5E7 },
             NarcOffset{ .file = 854, .offset = 0x5EC },
@@ -74,30 +74,30 @@ const black_info = blk: {
     res.game_title = "POKEMON B\x00\x00\x00";
     res.gamecode = "IRBO";
     res.version = common.Version.Black;
-    res.starters = [][]const NarcOffset{
-        []NarcOffset{
+    res.starters = [3][]const NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x27f },
             NarcOffset{ .file = 782, .offset = 0x284 },
             NarcOffset{ .file = 782, .offset = 0x361 },
-            NarcOffset{ .file = 782, .offset = 0x5FD },
-            NarcOffset{ .file = 304, .offset = 0x0F9 },
-            NarcOffset{ .file = 304, .offset = 0x19C },
+            //            NarcOffset{ .file = 782, .offset = 0x5FD },
+            //            NarcOffset{ .file = 304, .offset = 0x0F9 },
+            //            NarcOffset{ .file = 304, .offset = 0x19C },
         },
-        []NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x2af },
             NarcOffset{ .file = 782, .offset = 0x2b4 },
             NarcOffset{ .file = 782, .offset = 0x356 },
-            NarcOffset{ .file = 782, .offset = 0x5F2 },
-            NarcOffset{ .file = 304, .offset = 0x11C },
-            NarcOffset{ .file = 304, .offset = 0x1C4 },
+            //            NarcOffset{ .file = 782, .offset = 0x5F2 },
+            //            NarcOffset{ .file = 304, .offset = 0x11C },
+            //            NarcOffset{ .file = 304, .offset = 0x1C4 },
         },
-        []NarcOffset{
+        [_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x2cc },
             NarcOffset{ .file = 782, .offset = 0x2d1 },
             NarcOffset{ .file = 782, .offset = 0x338 },
-            NarcOffset{ .file = 782, .offset = 0x5D4 },
-            NarcOffset{ .file = 304, .offset = 0x12C },
-            NarcOffset{ .file = 304, .offset = 0x1D9 },
+            //            NarcOffset{ .file = 782, .offset = 0x5D4 },
+            //            NarcOffset{ .file = 304, .offset = 0x12C },
+            //            NarcOffset{ .file = 304, .offset = 0x1D9 },
         },
     };
     res.scripts = "a/0/5/7";

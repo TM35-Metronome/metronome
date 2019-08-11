@@ -1,38 +1,49 @@
-const builtin = @import("builtin");
-const clap = @import("zig-clap");
-const format = @import("tm35-format");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("tm35-common");
+const fun = @import("fun");
+const gba = @import("gba.zig");
+const gen5 = @import("gen5-types.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
+const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
+const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
+const slice = fun.generic.slice;
 
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "the seed used to randomize parties",
-        Names.both("seed"),
-    ),
-    Param.flag(
-        "replaced party members should have simular total stats",
-        Names.long("simular-total-stats"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "replaced party members should have simular total stats",
+        .names = Names{ .short = 't', .long = "simular-total-stats" },
+    },
+    Param{
+        .id = "the seed used to randomize stats",
+        .names = Names{ .short = 's', .long = "seed" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -47,18 +58,15 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() !void {
-    const unbuf_stdout = &(try std.io.getStdOut()).outStream().stream;
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
     var buf_stdout = BufOutStream.init(unbuf_stdout);
     defer buf_stdout.flush() catch {};
 
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
     const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
     const stdout = &buf_stdout.stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -78,7 +86,7 @@ pub fn main() !void {
     const seed = blk: {
         const seed_str = args.option("--seed") orelse {
             var buf: [8]u8 = undefined;
-            try std.os.getRandomBytes(buf[0..]);
+            try std.os.getrandom(buf[0..]);
             break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
         };
 
@@ -166,7 +174,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("sp_defense")) |_| {
                 pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
-            }  else |_| {}
+            } else |_| {}
         } else |_| if (parser.eatField("types")) |_| {
             _ = try parser.eatIndex();
 
@@ -337,7 +345,7 @@ const Pokemon = struct {
         };
     }
 
-    const stats = [][]const u8{
+    const stats = [_][]const u8{
         "hp",
         "attack",
         "defense",

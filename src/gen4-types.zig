@@ -1,7 +1,7 @@
-const common = @import("tm35-common");
-const fun = @import("fun-with-zig");
+const common = @import("common.zig");
+const fun = @import("fun");
 const offsets = @import("gen4-offsets.zig");
-const nds = @import("tm35-nds");
+const nds = @import("nds.zig");
 const pokemon = @import("index.zig");
 const std = @import("std");
 
@@ -11,7 +11,7 @@ const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu128 = fun.platform.lu128;
 
-pub const BasePokemon = packed struct {
+pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]Type,
 
@@ -27,28 +27,33 @@ pub const BasePokemon = packed struct {
     growth_rate: common.GrowthRate,
 
     egg_group1: common.EggGroup,
-    egg_group1_pad: u4,
     egg_group2: common.EggGroup,
-    egg_group2_pad: u4,
 
     abilities: [2]u8,
     flee_rate: u8,
 
     color: common.Color,
-    color_padding: bool,
 
     // Memory layout
     // TMS 01-92, HMS 01-08
     machine_learnset: lu128,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 42);
+    }
 };
 
-pub const Evolution = packed struct {
+pub const Evolution = extern struct {
     method: Evolution.Method,
     padding: u8,
     param: lu16,
     target: lu16,
 
-    pub const Method = enum(u8) {
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 6);
+    }
+
+    pub const Method = packed enum(u8) {
         // TODO: It is said, that their is 26 evo methods, but not what they are called
         //       (https://projectpokemon.org/home/forums/topic/41694-hgss-pokemon-file-specifications/)
         // TODO: Verify that 0 is unused
@@ -311,21 +316,30 @@ pub const Evolution = packed struct {
     };
 };
 
-pub const MoveTutor = packed struct {
+pub const MoveTutor = extern struct {
     move: lu16,
     cost: u8,
     tutor: u8,
+
+    comptime {
+        @compileLog(@This(), @sizeOf(@This()));
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
-pub const PartyType = enum(u8) {
+pub const PartyType = packed enum(u8) {
     None = 0b00,
     Item = 0b10,
     Moves = 0b01,
     Both = 0b11,
 };
 
-pub const Species = packed struct {
+pub const Species = extern struct {
     value: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 2);
+    }
 
     pub fn species(s: Species) u10 {
         return @truncate(u10, s.value.value());
@@ -344,47 +358,75 @@ pub const Species = packed struct {
     }
 };
 
-pub const PartyMemberBase = packed struct {
+pub const PartyMemberBase = extern struct {
     iv: u8,
-    gender: u4,
-    ability: u4,
+    gender_ability: GenderAbilityPair, // 4 msb are gender, 4 lsb are ability
     level: lu16,
     species: Species,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 6);
+    }
+
+    pub const GenderAbilityPair = packed struct {
+        gender: u4,
+        ability: u4,
+    };
 
     pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
         return @fieldParentPtr(Parent, "base", base);
     }
 };
 
-pub const PartyMemberNone = packed struct {
+pub const PartyMemberNone = extern struct {
     base: PartyMemberBase,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 6);
+    }
 };
 
-pub const PartyMemberItem = packed struct {
+pub const PartyMemberItem = extern struct {
     base: PartyMemberBase,
     item: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
-pub const PartyMemberMoves = packed struct {
+pub const PartyMemberMoves = extern struct {
     base: PartyMemberBase,
     moves: [4]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 14);
+    }
 };
 
-pub const PartyMemberBoth = packed struct {
+pub const PartyMemberBoth = extern struct {
     base: PartyMemberBase,
     item: lu16,
     moves: [4]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 16);
+    }
 };
 
 /// In HG/SS/Plat, this struct is always padded with a u16 at the end, no matter the party_type
 pub fn HgSsPlatMember(comptime T: type) type {
-    return struct {
+    return extern struct {
         member: T,
         pad: lu16,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == @sizeOf(T) + 2);
+        }
     };
 }
 
-pub const Trainer = packed struct {
+pub const Trainer = extern struct {
     party_type: PartyType,
     class: u8,
     battle_type: u8, // TODO: This should probably be an enum
@@ -392,9 +434,13 @@ pub const Trainer = packed struct {
     items: [4]lu16,
     ai: lu32,
     battle_type2: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 17);
+    }
 };
 
-pub const Type = enum(u8) {
+pub const Type = packed enum(u8) {
     Normal = 0x00,
     Fighting = 0x01,
     Flying = 0x02,
@@ -417,12 +463,12 @@ pub const Type = enum(u8) {
 
 // TODO: This is the first data structure I had to decode from scratch as I couldn't find a proper
 //       resource for it... Fill it out!
-pub const Move = packed struct {
+pub const Move = extern struct {
     u8_0: u8,
     u8_1: u8,
     category: common.MoveCategory,
     power: u8,
-    @"type": Type,
+    type: Type,
     accuracy: u8,
     pp: u8,
     u8_7: u8,
@@ -434,14 +480,23 @@ pub const Move = packed struct {
     u8_13: u8,
     u8_14: u8,
     u8_15: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 16);
+    }
 };
 
-pub const LevelUpMove = packed struct {
+pub const LevelUpMove = extern struct {
     move_id: u9,
     level: u7,
+
+    comptime {
+        @compileLog(@sizeOf(@This()));
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
-pub const DpptWildPokemons = packed struct {
+pub const DpptWildPokemons = extern struct {
     grass_rate: lu32,
     grass: [12]Grass,
     swarm_replacements: [2]Replacement, // Replaces grass[0, 1]
@@ -466,28 +521,44 @@ pub const DpptWildPokemons = packed struct {
     super_rod_rate: lu32,
     super_rod: [5]Sea,
 
-    pub const Grass = packed struct {
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 424);
+    }
+
+    pub const Grass = extern struct {
         level: u8,
         pad1: [3]u8,
         species: Species,
         pad2: [2]u8,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == 8);
+        }
     };
 
-    pub const Sea = packed struct {
+    pub const Sea = extern struct {
         max_level: u8,
         min_level: u8,
         pad1: [2]u8,
         species: Species,
         pad2: [2]u8,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == 8);
+        }
     };
 
-    pub const Replacement = packed struct {
+    pub const Replacement = extern struct {
         species: Species,
         pad: [2]u8,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == 4);
+        }
     };
 };
 
-pub const HgssWildPokemons = packed struct {
+pub const HgssWildPokemons = extern struct {
     grass_rate: u8,
     sea_rates: [5]u8,
     unknown: [2]u8,
@@ -503,10 +574,18 @@ pub const HgssWildPokemons = packed struct {
     super_rod: [5]Sea,
     swarm: [4]Species,
 
-    pub const Sea = packed struct {
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 196);
+    }
+
+    pub const Sea = extern struct {
         min_level: u8,
         max_level: u8,
         species: Species,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == 4);
+        }
     };
 };
 
@@ -535,7 +614,7 @@ pub const Game = struct {
             .starters = switch (info.starters) {
                 offsets.StarterLocation.Arm9 => |offset| blk: {
                     const starters_section = @bytesToSlice(lu16, rom.arm9[offset..][0..offsets.starters_len]);
-                    break :blk []*lu16{
+                    break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
                         &starters_section[4],
@@ -544,7 +623,7 @@ pub const Game = struct {
                 offsets.StarterLocation.Overlay9 => |overlay| blk: {
                     const file = rom.arm9_overlay_files[overlay.file];
                     const starters_section = @bytesToSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
-                    break :blk []*lu16{
+                    break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
                         &starters_section[4],

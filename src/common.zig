@@ -1,8 +1,9 @@
-const fun = @import("../fun-with-zig/src/index.zig");
+const std = @import("std");
+const fun = @import("fun");
 
 const lu16 = fun.platform.lu16;
 
-pub const Version = extern enum {
+pub const Version = enum {
     Red,
     Blue,
     Yellow,
@@ -39,22 +40,26 @@ pub const Version = extern enum {
     UltraMoon,
 };
 
-pub const Stats = packed struct {
+pub const Stats = extern struct {
     hp: u8,
     attack: u8,
     defense: u8,
     speed: u8,
     sp_attack: u8,
     sp_defense: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(Stats) == 6);
+    }
 };
 
-pub const MoveCategory = enum(u8) {
+pub const MoveCategory = packed enum(u8) {
     Physical = 0x00,
     Status = 0x01,
     Special = 0x02,
 };
 
-pub const GrowthRate = enum(u8) {
+pub const GrowthRate = packed enum(u8) {
     MediumFast = 0x00,
     Erratic = 0x01,
     Fluctuating = 0x02,
@@ -63,7 +68,7 @@ pub const GrowthRate = enum(u8) {
     Slow = 0x05,
 };
 
-pub const EggGroup = enum(u4) {
+pub const EggGroup = packed enum(u4) {
     Invalid = 0x00, // TODO: Figure out if there is a 0x00 egg group
     Monster = 0x01,
     Water1 = 0x02,
@@ -82,7 +87,7 @@ pub const EggGroup = enum(u4) {
     Undiscovered = 0x0F,
 };
 
-pub const Color = enum(u7) {
+pub const Color = packed enum(u7) {
     Red = 0x00,
     Blue = 0x01,
     Yellow = 0x02,
@@ -226,6 +231,10 @@ pub const EvYield = packed struct {
     sp_attack: u2,
     sp_defense: u2,
     padding: u4,
+
+    comptime {
+        std.debug.assert(@sizeOf(EvYield) == 2);
+    }
 };
 
 pub const Evolution = packed struct {
@@ -252,6 +261,10 @@ pub const Evolution = packed struct {
         LevelUpSpawnIfCond = lu16.init(0x0E).value(),
         Beauty = lu16.init(0x0F).value(),
     };
+
+    comptime {
+        std.debug.assert(@sizeOf(Evolution) == 8);
+    }
 };
 
 pub const legendaries = []u16{

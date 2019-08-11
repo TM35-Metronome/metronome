@@ -1,7 +1,6 @@
-const blz = @import("blz.zig");
-const common = @import("common.zig");
+const blz = @import("nds/blz.zig");
 const fun = @import("fun");
-const overlay = @import("overlay.zig");
+const overlay = @import("nds/overlay.zig");
 const std = @import("std");
 
 const debug = std.debug;
@@ -14,21 +13,20 @@ const os = std.os;
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 
-pub const fs = @import("fs.zig");
+pub const fs = @import("nds/fs.zig");
 
-pub const Banner = @import("banner.zig").Banner;
-pub const Header = @import("header.zig").Header;
+pub const Banner = @import("nds/banner.zig").Banner;
+pub const Header = @import("nds/header.zig").Header;
 pub const Overlay = overlay.Overlay;
 
 test "nds" {
-    _ = @import("banner.zig");
-    _ = @import("blz.zig");
-    _ = @import("common.zig");
-    _ = @import("formats.zig");
-    _ = @import("fs.zig");
-    _ = @import("header.zig");
-    _ = @import("overlay.zig");
-    _ = @import("test.zig");
+    _ = @import("nds/banner.zig");
+    _ = @import("nds/blz.zig");
+    _ = @import("nds/formats.zig");
+    _ = @import("nds/fs.zig");
+    _ = @import("nds/header.zig");
+    _ = @import("nds/overlay.zig");
+    _ = @import("nds/test.zig");
 }
 
 pub const Rom = struct {
@@ -246,7 +244,7 @@ pub const Rom = struct {
         header.arm7_overlay_offset = lu32.init(@intCast(u32, arm7_overlay_pos));
         header.arm7_overlay_size = lu32.init(@intCast(u32, rom.arm7_overlay_table.len * @sizeOf(Overlay)));
 
-        header.total_used_rom_size = lu32.init(common.@"align"(@intCast(u32, try file.getPos()), u32(4)));
+        header.total_used_rom_size = lu32.init(@intCast(u32, mem.alignForward(try file.getPos(), 4)));
         header.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = header.total_used_rom_size.value();

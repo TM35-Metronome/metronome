@@ -2,7 +2,6 @@ const std = @import("std");
 
 // TODO: We can't have packages in tests, so we have to import the fun-with-zig lib manually
 const fun = @import("fun");
-const common = @import("common.zig");
 const formats = @import("formats.zig");
 
 const debug = std.debug;
@@ -632,7 +631,7 @@ pub fn writeNitroFile(file: std.fs.File, allocator: *mem.Allocator, fs_file: Nit
             const fat_start = file_start + @sizeOf(formats.Header);
             const fnt_start = fat_start + @sizeOf(formats.FatChunk) + files.len * @sizeOf(FatEntry);
             const fnt_end = fnt_start + @sizeOf(formats.Chunk) + sub_fnt.len + main_fnt.len * @sizeOf(FntMainEntry);
-            const file_image_start = common.@"align"(fnt_end, u32(0x4));
+            const file_image_start = mem.alignForward(fnt_end, u32(0x4));
             const narc_img_base = file_image_start + @sizeOf(formats.Chunk);
             const file_end = blk: {
                 var res = narc_img_base;

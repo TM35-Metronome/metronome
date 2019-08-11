@@ -1,49 +1,55 @@
-const clap = @import("zig-clap");
-const common = @import("tm35-common");
-const format = @import("tm35-format");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("common.zig");
+const fun = @import("fun");
+const gba = @import("gba.zig");
 const gen5 = @import("gen5-types.zig");
-const nds = @import("tm35-nds");
-const offsets = @import("gen5-offsets.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
 const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const meta = std.meta;
+const fmt = std.fmt;
 const os = std.os;
-const path = os.path;
+const rand = std.rand;
 const slice = fun.generic.slice;
+const path = fs.path;
+
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
+const Clap = clap.ComptimeClap([]const u8, params);
+const Names = clap.Names;
+const Param = clap.Param([]const u8);
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 const lu128 = fun.platform.lu128;
 
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
-
-const params = []Param{
-    Param.flag(
-        "abort execution on the first warning emitted",
-        Names.long("abort-on-first-warning"),
-    ),
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "override destination path",
-        Names.both("output"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "abort execution on the first warning emitted",
+        .names = Names{ .long = "abort-on-first-warning" },
+    },
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "override destination path",
+        .names = Names{ .short = 'o', .long = "output" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -58,17 +64,15 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() !void {
-    const unbuf_stdin = &(try std.io.getStdIn()).inStream().stream;
-    var buf_stdin = BufInStream.init(unbuf_stdin);
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
-    const stdout = &(try std.io.getStdOut()).outStream().stream;
-    const stdin = &buf_stdin.stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
+    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
+    const stdout = &buf_stdout.stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -95,7 +99,7 @@ pub fn main() !void {
     };
 
     var rom = blk: {
-        var file = os.File.openRead(file_name) catch |err| {
+        var file = fs.File.openRead(file_name) catch |err| {
             debug.warn("Couldn't open {}.\n", file_name);
             return err;
         };
@@ -125,7 +129,7 @@ pub fn main() !void {
         else => return err,
     }
 
-    var out_file = os.File.openWrite(out) catch |err| {
+    var out_file = fs.File.openWrite(out) catch |err| {
         debug.warn("Couldn't open {}\n", out);
         return err;
     };
@@ -183,9 +187,9 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
             if (parser.eatField("iv")) {
                 member.iv = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("gender")) {
-                member.gender = try parser.eatUnsignedValue(u4, 10);
+                member.gender_ability.gender = try parser.eatUnsignedValue(u4, 10);
             } else |_| if (parser.eatField("ability")) {
-                member.ability = try parser.eatUnsignedValue(u4, 10);
+                member.gender_ability.ability = try parser.eatUnsignedValue(u4, 10);
             } else |_| if (parser.eatField("level")) {
                 member.level = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("species")) {
@@ -240,14 +244,22 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
             move.pp = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("priority")) {
             move.priority = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("hits")) {
-            move.hits = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("min_hits")) {
-            move.min_hits = try parser.eatUnsignedValue(u4, 10);
+            move.min_max_hits.min = try parser.eatUnsignedValue(u4, 10);
         } else |_| if (parser.eatField("max_hits")) {
-            move.max_hits = try parser.eatUnsignedValue(u4, 10);
-        } else |_| if (parser.eatField("crit_chance")) {
-            move.crit_chance = try parser.eatUnsignedValue(u8, 10);
+            move.min_max_hits.max = try parser.eatUnsignedValue(u4, 10);
+        } else |_| if (parser.eatField("result_effect")) {
+            move.result_effect = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("effect_chance")) {
+            move.effect_chance = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("status")) {
+            move.status = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("min_turns")) {
+            move.min_turns = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("max_turns")) {
+            move.max_turns = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("crit")) {
+            move.crit = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("flinch")) {
             move.flinch = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("effect")) {
@@ -374,13 +386,13 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
     } else |_| if (parser.eatField("hms")) {
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("zones")) done: {
+    } else |_| if (parser.eatField("zones")) {
         const wild_pokemons = game.wild_pokemons.nodes.toSlice();
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
         const wilds = try nodeAsType(gen5.WildPokemons, wild_pokemons[zone_index]);
         try parser.eatField("wild");
 
-        inline for ([][]const u8{
+        inline for ([_][]const u8{
             "grass",
             "dark_grass",
             "rustling_grass",
@@ -392,7 +404,7 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
             parser.eatField(area_name) catch break :skip;
             if (parser.eatField("encounter_rate")) {
                 wilds.rates[j] = try parser.eatUnsignedValue(u8, 10);
-                break :done;
+                return;
             } else |_| if (parser.eatField("pokemons")) {
                 const area = &@field(wilds, area_name);
                 const wild_index = try parser.eatIndexMax(area.len);
@@ -400,16 +412,19 @@ fn apply(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
 
                 if (parser.eatField("min_level")) {
                     wild.min_level = try parser.eatUnsignedValue(u8, 10);
+                    return;
                 } else |_| if (parser.eatField("max_level")) {
                     wild.max_level = try parser.eatUnsignedValue(u8, 10);
+                    return;
                 } else |_| if (parser.eatField("species")) {
                     wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
+                    return;
                 } else |_| if (parser.eatField("form")) {
                     wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                    return;
                 } else |_| {
                     return error.NoField;
                 }
-                break :done;
             } else |_| {}
         }
 
@@ -426,7 +441,7 @@ fn nodeAsFile(node: nds.fs.Narc.Node) !*nds.fs.Narc.File {
     }
 }
 
-fn nodeAsType(comptime T: type, node: nds.fs.Narc.Node) !*T {
+fn nodeAsType(comptime T: type, node: nds.fs.Narc.Node) !*align(1) T {
     const file = try nodeAsFile(node);
     const data = slice.bytesToSliceTrim(T, file.data);
     return slice.at(data, 0) catch error.FileToSmall;

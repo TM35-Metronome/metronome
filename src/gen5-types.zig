@@ -1,6 +1,6 @@
-const common = @import("tm35-common");
-const fun = @import("fun-with-zig");
-const nds = @import("tm35-nds");
+const common = @import("common.zig");
+const fun = @import("fun");
+const nds = @import("nds.zig");
 const offsets = @import("gen5-offsets.zig");
 const std = @import("std");
 
@@ -13,7 +13,7 @@ const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu128 = fun.platform.lu128;
 
-pub const BasePokemon = packed struct {
+pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]Type,
 
@@ -29,9 +29,7 @@ pub const BasePokemon = packed struct {
     growth_rate: common.GrowthRate,
 
     egg_group1: common.EggGroup,
-    egg_group1_pad: u4,
     egg_group2: common.EggGroup,
-    egg_group2_pad: u4,
 
     abilities: [3]u8,
 
@@ -43,7 +41,6 @@ pub const BasePokemon = packed struct {
     form_count: u8,
 
     color: common.Color,
-    color_padding: bool,
 
     base_exp_yield: u8,
 
@@ -60,50 +57,78 @@ pub const BasePokemon = packed struct {
     //lentimas_tutor: lu32,
     //humilau_tutor: lu32,
     //nacrene_tutor: lu32,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 55);
+    }
 };
 
-pub const PartyType = enum(u8) {
+pub const PartyType = packed enum(u8) {
     None = 0b00,
     Item = 0b10,
     Moves = 0b01,
     Both = 0b11,
 };
 
-pub const PartyMemberBase = packed struct {
+pub const PartyMemberBase = extern struct {
     iv: u8,
-    gender: u4,
-    ability: u4,
+    gender_ability: GenderAbilityPair,
     level: u8,
     padding: u8,
     species: lu16,
     form: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
+
+    const GenderAbilityPair = packed struct {
+        gender: u4,
+        ability: u4,
+    };
 
     pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
         return @fieldParentPtr(Parent, "base", base);
     }
 };
 
-pub const PartyMemberNone = packed struct {
+pub const PartyMemberNone = extern struct {
     base: PartyMemberBase,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
-pub const PartyMemberItem = packed struct {
-    base: PartyMemberBase,
-    item: lu16,
-};
-
-pub const PartyMemberMoves = packed struct {
-    base: PartyMemberBase,
-    moves: [4]lu16,
-};
-
-pub const PartyMemberBoth = packed struct {
+pub const PartyMemberItem = extern struct {
     base: PartyMemberBase,
     item: lu16,
-    moves: [4]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 10);
+    }
 };
 
-pub const Trainer = packed struct {
+pub const PartyMemberMoves = extern struct {
+    base: PartyMemberBase,
+    moves: [4]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 16);
+    }
+};
+
+pub const PartyMemberBoth = extern struct {
+    base: PartyMemberBase,
+    item: lu16,
+    moves: [4]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 18);
+    }
+};
+
+pub const Trainer = extern struct {
     party_type: PartyType,
     class: u8,
     battle_type: u8, // TODO: This should probably be an enum
@@ -111,23 +136,29 @@ pub const Trainer = packed struct {
     items: [4]lu16,
     ai: lu32,
     healer: bool,
-    healer_padding: u7,
     cash: u8,
     post_battle_item: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 20);
+    }
 };
 
-pub const Move = packed struct {
-    @"type": Type,
+pub const Move = extern struct {
+    type: Type,
     effect_category: u8,
     category: common.MoveCategory,
     power: u8,
     accuracy: u8,
     pp: u8,
     priority: u8,
-    hits: u8,
-    min_hits: u4,
-    max_hits: u4,
-    crit_chance: u8,
+    min_max_hits: MinMaxPair,
+    result_effect: lu16,
+    effect_chance: u8,
+    status: u8,
+    min_turns: u8,
+    max_turns: u8,
+    crit: u8,
     flinch: u8,
     effect: lu16,
     target_hp: u8,
@@ -140,14 +171,28 @@ pub const Move = packed struct {
     // TODO: Figure out if this is actually how the last fields are layed out.
     padding: [2]u8,
     flags: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 34);
+    }
+
+    const MinMaxPair = packed struct {
+        min: u4,
+        max: u4,
+    };
 };
 
-pub const LevelUpMove = packed struct {
+pub const LevelUpMove = extern struct {
     move_id: lu16,
     level: lu16,
+
+    comptime {
+        @compileLog(@This(), @sizeOf(@This()));
+        std.debug.assert(@sizeOf(@This()) == 55);
+    }
 };
 
-pub const Type = enum(u8) {
+pub const Type = packed enum(u8) {
     Normal = 0x00,
     Fighting = 0x01,
     Flying = 0x02,
@@ -409,13 +454,17 @@ pub const Type = enum(u8) {
 };
 
 // TODO: Verify layout
-pub const Evolution = packed struct {
+pub const Evolution = extern struct {
     method: Evolution.Method,
     padding: u8,
     param: lu16,
     target: lu16,
 
-    pub const Method = enum(u8) {
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 6);
+    }
+
+    pub const Method = packed enum(u8) {
         // TODO: Verify methods
         // TODO: Verify that 0 is unused
         Unused = 0x00,
@@ -677,8 +726,12 @@ pub const Evolution = packed struct {
     };
 };
 
-pub const Species = packed struct {
+pub const Species = extern struct {
     value: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 2);
+    }
 
     pub fn species(s: Species) u10 {
         return @truncate(u10, s.value.value());
@@ -697,13 +750,17 @@ pub const Species = packed struct {
     }
 };
 
-pub const WildPokemon = packed struct {
+pub const WildPokemon = extern struct {
     species: Species,
     min_level: u8,
     max_level: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 4);
+    }
 };
 
-pub const WildPokemons = packed struct {
+pub const WildPokemons = extern struct {
     rates: [7]u8,
     pad: u8,
     grass: [12]WildPokemon,
@@ -713,6 +770,10 @@ pub const WildPokemons = packed struct {
     ripple_surf: [5]WildPokemon,
     fishing: [5]WildPokemon,
     ripple_fishing: [5]WildPokemon,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 232);
+    }
 };
 
 pub const Game = struct {

@@ -1,4 +1,4 @@
-const fun = @import("fun-with-zig");
+const fun = @import("fun");
 const builtin = @import("builtin");
 const std = @import("std");
 
@@ -139,36 +139,38 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
             var res: usize = 0;
             inline for (s.fields) |struct_field|
                 switch (@typeInfo(struct_field.field_type)) {
-                builtin.TypeId.Union => |u| next: {
-                    if (u.layout != builtin.TypeInfo.ContainerLayout.Packed)
-                        @compileError(@typeName(struct_field.field_type) ++ " is not packed");
-                    if (u.tag_type != null)
-                        @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
+                    builtin.TypeId.Union => |u| {
+                        if (u.layout != .Packed and u.layout != .Extern)
+                            @compileError(@typeName(struct_field.field_type) ++ " is not packed or extern");
+                        if (u.tag_type != null)
+                            @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
 
-                    // Find the field most likly to be this unions tag.
-                    const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
-                    const tag = @field(value, tag_field);
-                    const union_value = @field(value, struct_field.name);
-                    const TagEnum = @typeOf(tag);
+                        // Find the field most likly to be this unions tag.
+                        const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
+                        const tag = @field(value, tag_field);
+                        const union_value = @field(value, struct_field.name);
+                        const TagEnum = @typeOf(tag);
 
-                    // Switch over all tags. 'TagEnum' have the same field names as
-                    // 'union' so if one member of 'TagEnum' matches 'tag', then
-                    // we can add the size of ''@field(union, tag_name)' to res and
-                    // break out.
-                    inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
-                        if (@field(TagEnum, enum_field.name) == tag) {
-                            const union_field = @field(union_value, enum_field.name);
-                            res += try packedLength(union_field);
-                            break :next;
+                        // Switch over all tags. 'TagEnum' have the same field names as
+                        // 'union' so if one member of 'TagEnum' matches 'tag', then
+                        // we can add the size of ''@field(union, tag_name)' to res and
+                        // break out.
+                        var found: bool = false;
+                        inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+                            if (@field(TagEnum, enum_field.name) == tag) {
+                                const union_field = @field(union_value, enum_field.name);
+                                res += try packedLength(union_field);
+                                found = true;
+                            }
                         }
-                    }
 
-                    // If no member of 'TagEnum' match, then 'tag' must be a value
-                    // it is not suppose to be.
-                    return error.InvalidTag;
-                },
-                else => res += try packedLength(@field(value, struct_field.name)),
-            };
+                        // If no member of 'TagEnum' match, then 'tag' must be a value
+                        // it is not suppose to be.
+                        if (!found)
+                            return error.InvalidTag;
+                    },
+                    else => res += try packedLength(@field(value, struct_field.name)),
+                };
             return res;
         },
         else => @compileError(@typeName(T) ++ " not supported"),
@@ -220,7 +222,7 @@ pub const CommandDecoder = struct {
         if (decoder.bytes.len == 0)
             return null;
 
-        var buf = []u8{0} ** @sizeOf(Command);
+        var buf = [_]u8{0} ** @sizeOf(Command);
         const len = math.min(decoder.bytes.len, buf.len);
 
         // Copy the bytes to a buffer of size @sizeOf(Command).
@@ -249,7 +251,7 @@ pub const CommandDecoder = struct {
 
 pub const Command = packed struct {
     tag: Kind,
-    data: packed union {
+    data: extern union {
         // Does nothing.
         nop: nop,
 

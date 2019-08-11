@@ -1,50 +1,55 @@
-const clap = @import("zig-clap");
-const common = @import("tm35-common");
-const format = @import("tm35-format");
-const fun = @import("fun-with-zig");
+const clap = @import("clap");
+const common = @import("common.zig");
+const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
-const offsets = @import("gen3-offsets.zig");
+const nds = @import("nds.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+const format = @import("parser.zig");
 
 const bits = fun.bits;
 const debug = std.debug;
-const fmt = std.fmt;
 const heap = std.heap;
 const io = std.io;
+const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const meta = std.meta;
+const fmt = std.fmt;
 const os = std.os;
-const path = os.path;
+const rand = std.rand;
+const slice = fun.generic.slice;
+const path = fs.path;
 
-const sscan = fun.scan.sscan;
-
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
-
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-// This is a comment
-const params = []Param{
-    Param.flag(
-        "abort execution on the first warning emitted",
-        Names.long("abort-on-first-warning"),
-    ),
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "override destination path",
-        Names.both("output"),
-    ),
-    Param.positional(""),
+const lu16 = fun.platform.lu16;
+const lu32 = fun.platform.lu32;
+const lu64 = fun.platform.lu64;
+const lu128 = fun.platform.lu128;
+
+const params = [_]Param{
+    Param{
+        .id = "abort execution on the first warning emitted",
+        .names = Names{ .long = "abort-on-first-warning" },
+    },
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "override destination path",
+        .names = Names{ .short = 'o', .long = "output" },
+        .takes_value = true,
+    },
+    Param{
+        .id = "",
+        .takes_value = true,
+    },
 };
 
 fn usage(stream: var) !void {
@@ -59,17 +64,15 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() !void {
-    const unbuf_stdin = &(try std.io.getStdIn()).inStream().stream;
-    var buf_stdin = BufInStream.init(unbuf_stdin);
+    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
+    var buf_stdout = BufOutStream.init(unbuf_stdout);
+    defer buf_stdout.flush() catch {};
 
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
-    const stdout = &(try std.io.getStdOut()).outStream().stream;
-    const stdin = &buf_stdin.stream;
+    const stderr = &(try io.getStdErr()).outStream().stream;
+    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
+    const stdout = &buf_stdout.stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
     const allocator = &arena.allocator;
@@ -96,7 +99,7 @@ pub fn main() !void {
     };
 
     var game = blk: {
-        var file = try os.File.openRead(file_name);
+        var file = try fs.File.openRead(file_name);
         defer file.close();
 
         break :blk try gen3.Game.fromFile(file, allocator);
@@ -121,7 +124,7 @@ pub fn main() !void {
         else => return err,
     }
 
-    var out_file = try os.File.openWrite(out);
+    var out_file = try fs.File.openWrite(out);
     defer out_file.close();
 
     var out_stream = out_file.outStream();
@@ -297,9 +300,9 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         } else |_| if (parser.eatField("safari_zone_rate")) {
             pokemon.safari_zone_rate = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("color")) {
-            pokemon.color = try parser.eatEnumValue(common.Color);
+            pokemon.color_flip.color = try parser.eatEnumValue(common.Color);
         } else |_| if (parser.eatField("flip")) {
-            pokemon.flip = try parser.eatBoolValue();
+            pokemon.color_flip.flip = try parser.eatBoolValue();
         } else |_| if (parser.eatField("tms")) {
             const tm_index = try parser.eatIndexMax(game.tms.len);
             const value = try parser.eatBoolValue();
@@ -389,60 +392,69 @@ fn apply(game: gen3.Game, line: usize, str: []const u8) !void {
         const header = &game.wild_pokemon_headers[zone_index];
         try parser.eatField("wild");
 
-        inline for ([][]const u8{
-            "land",
-            "surf",
-            "rock_smash",
-            "fishing",
-        }) |area_name| {
-            if (parser.eatField(area_name)) {
-                const area = try @field(header, area_name).toSingle(game.data);
-
-                if (parser.eatField("encounter_rate")) {
-                    area.encounter_rate = try parser.eatUnsignedValue(u8, 10);
-                } else |_| if (parser.eatField("pokemons")) {
-                    const wilds = try area.wild_pokemons.toSingle(game.data);
-                    const wild_index = try parser.eatIndexMax(wilds.len);
+        const Fn = struct {
+            fn applyArea(p: *format.StrParser, g: gen3.Game, area: var) !void {
+                if (p.eatField("encounter_rate")) {
+                    area.encounter_rate = try p.eatUnsignedValue(u8, 10);
+                } else |_| if (p.eatField("pokemons")) {
+                    const wilds = try area.wild_pokemons.toSingle(g.data);
+                    const wild_index = try p.eatIndexMax(wilds.len);
                     const wild = &wilds[wild_index];
 
-                    if (parser.eatField("min_level")) {
-                        wild.min_level = try parser.eatUnsignedValue(u8, 10);
-                    } else |_| if (parser.eatField("max_level")) {
-                        wild.max_level = try parser.eatUnsignedValue(u8, 10);
-                    } else |_| if (parser.eatField("species")) {
-                        wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+                    if (p.eatField("min_level")) {
+                        wild.min_level = try p.eatUnsignedValue(u8, 10);
+                    } else |_| if (p.eatField("max_level")) {
+                        wild.max_level = try p.eatUnsignedValue(u8, 10);
+                    } else |_| if (p.eatField("species")) {
+                        wild.species = lu16.init(try p.eatUnsignedValue(u16, 10));
                     } else |_| {
                         return error.NoField;
                     }
                 } else |_| {
                     return error.NoField;
                 }
-            } else |_| {}
+            }
+        };
+
+        if (parser.eatField("land")) {
+            try Fn.applyArea(&parser, game, try header.land.toSingle(game.data));
+        } else |_| if (parser.eatField("surf")) {
+            try Fn.applyArea(&parser, game, try header.surf.toSingle(game.data));
+        } else |_| if (parser.eatField("rock_smash")) {
+            try Fn.applyArea(&parser, game, try header.rock_smash.toSingle(game.data));
+        } else |_| if (parser.eatField("fishing")) {
+            try Fn.applyArea(&parser, game, try header.fishing.toSingle(game.data));
+        } else |_| {
+            return error.NoField;
         }
     } else |_| if (parser.eatField("static_pokemons")) {
         const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
-        const static_mon = game.static_pokemons[static_mon_index];
+        var static_mon = game.static_pokemons[static_mon_index].data;
 
         if (parser.eatField("species")) {
-            static_mon.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.level = try parser.eatUnsignedValue(u8, 10);
+            static_mon.setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("item")) {
-            static_mon.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
+
+        game.static_pokemons[static_mon_index].data = static_mon;
     } else |_| if (parser.eatField("given_items")) {
         const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+        var given_item = game.given_items[given_index].data;
 
         if (parser.eatField("item")) {
-            given_item.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.giveitem.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("quantity")) {
-            given_item.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.giveitem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
+
+        game.given_items[given_index].data = given_item;
     } else |_| {
         return error.NoField;
     }

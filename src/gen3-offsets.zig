@@ -1,6 +1,6 @@
-const common = @import("tm35-common");
+const common = @import("common.zig");
 const debug = std.debug;
-const fun = @import("fun-with-zig");
+const fun = @import("fun");
 const gen3 = @import("gen3-types.zig");
 const generic = fun.generic;
 const mem = std.mem;
@@ -94,7 +94,7 @@ pub const Info = struct {
     map_headers: MapHeaderSection,
 };
 
-pub const infos = []Info{
+pub const infos = [_]Info{
     emerald_us_info,
     ruby_us_info,
     sapphire_us_info,
@@ -152,12 +152,12 @@ const emerald_us_info = Info{
         .len = 518,
     },
 
-    .starters = []StarterOffset{
+    .starters = [_]StarterOffset{
         StarterOffset{ .offset = 0x005B1DF8 },
         StarterOffset{ .offset = 0x005B1DFA },
         StarterOffset{ .offset = 0x005B1DFC },
     },
-    .starters_repeat = []StarterOffset{
+    .starters_repeat = [_]StarterOffset{
         StarterOffset{ .offset = 0x005B1DF8 },
         StarterOffset{ .offset = 0x005B1DFA },
         StarterOffset{ .offset = 0x005B1DFC },
@@ -214,12 +214,12 @@ pub const ruby_us_info = Info{
         .len = 394,
     },
 
-    .starters = []StarterOffset{
+    .starters = [_]StarterOffset{
         StarterOffset{ .offset = 0x003F76E0 },
         StarterOffset{ .offset = 0x003F76E2 },
         StarterOffset{ .offset = 0x003F76E4 },
     },
-    .starters_repeat = []StarterOffset{
+    .starters_repeat = [_]StarterOffset{
         StarterOffset{ .offset = 0x003F76E0 },
         StarterOffset{ .offset = 0x003F76E2 },
         StarterOffset{ .offset = 0x003F76E4 },
@@ -276,12 +276,12 @@ pub const sapphire_us_info = Info{
         .len = 394,
     },
 
-    .starters = []StarterOffset{
+    .starters = [_]StarterOffset{
         StarterOffset{ .offset = 0x003F773C },
         StarterOffset{ .offset = 0x003F773E },
         StarterOffset{ .offset = 0x003F7740 },
     },
-    .starters_repeat = []StarterOffset{
+    .starters_repeat = [_]StarterOffset{
         StarterOffset{ .offset = 0x003F773C },
         StarterOffset{ .offset = 0x003F773E },
         StarterOffset{ .offset = 0x003F7740 },
@@ -338,12 +338,12 @@ pub const fire_us_info = Info{
         .len = 425,
     },
 
-    .starters = []StarterOffset{
+    .starters = [_]StarterOffset{
         StarterOffset{ .offset = 0x00169C2D },
         StarterOffset{ .offset = 0x00169C2D + 515 },
         StarterOffset{ .offset = 0x00169C2D + 461 },
     },
-    .starters_repeat = []StarterOffset{
+    .starters_repeat = [_]StarterOffset{
         StarterOffset{ .offset = 0x00169C2D + 5 + 461 },
         StarterOffset{ .offset = 0x00169C2D + 5 },
         StarterOffset{ .offset = 0x00169C2D + 5 + 515 },
@@ -400,12 +400,12 @@ pub const leaf_us_info = Info{
         .len = 425,
     },
 
-    .starters = []StarterOffset{
+    .starters = [_]StarterOffset{
         StarterOffset{ .offset = 0x00169C09 },
         StarterOffset{ .offset = 0x00169C09 + 515 },
         StarterOffset{ .offset = 0x00169C09 + 461 },
     },
-    .starters_repeat = []StarterOffset{
+    .starters_repeat = [_]StarterOffset{
         StarterOffset{ .offset = 0x00169C09 + 5 + 461 },
         StarterOffset{ .offset = 0x00169C09 + 5 },
         StarterOffset{ .offset = 0x00169C09 + 5 + 515 },
