@@ -17,6 +17,6 @@ pub fn build(b: *Builder) void {
 pub fn exes(b: *Builder, path: []const u8) [1]*LibExeObjStep {
     const exe = b.addExecutable("tm35-nds-extract", b.fmt("{}/src/main.zig", path));
     exe.addPackagePath("tm35-nds", b.fmt("{}/lib/tm35-nds/src/index.zig", path));
-    exe.addPackagePath("zig-clap", b.fmt("{}/lib/zig-clap/index.zig", path));
-    return []*LibExeObjStep{exe};
+    exe.addPackagePath("zig-clap", b.fmt("{}/lib/zig-clap/clap.zig", path));
+    return [_]*LibExeObjStep{exe};
 }

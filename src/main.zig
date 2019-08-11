@@ -1,29 +1,31 @@
 const std = @import("std");
-const nds = @import("tm35-nds");
+const nds = @import("../lib/tm35-nds/src/index");
 const clap = @import("zig-clap");
 
 const debug = std.debug;
 const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 const os = std.os;
-const path = os.path;
+const path = fs.path;
 
 const Clap = clap.ComptimeClap([]const u8, params);
 const Names = clap.Names;
 const Param = clap.Param([]const u8);
 
-const params = []Param{
-    Param.flag(
-        "display this help text and exit",
-        Names.both("help"),
-    ),
-    Param.option(
-        "override destination path",
-        Names.both("output"),
-    ),
-    Param.positional(""),
+const params = [_]Param{
+    Param{
+        .id = "display this help text and exit",
+        .names = Names{ .short = 'h', .long = "help" },
+    },
+    Param{
+        .id = "override destination path",
+        .names = Names{ .short = 'o', .long = "output" },
+        .takes_value = true,
+    },
+    Param{ .id = "" },
 };
 
 fn usage(stream: var) !void {
@@ -41,10 +43,7 @@ pub fn main() !void {
     const stderr = &(try std.io.getStdErr()).outStream().stream;
     const stdout = &(try std.io.getStdOut()).outStream().stream;
 
-    var direct_allocator = std.heap.DirectAllocator.init();
-    defer direct_allocator.deinit();
-
-    var arena = heap.ArenaAllocator.init(&direct_allocator.allocator);
+    var arena = heap.ArenaAllocator.init(std.heap.direct_allocator);
     const allocator = &arena.allocator;
     defer arena.deinit();
 
@@ -68,7 +67,7 @@ pub fn main() !void {
         break :blk try fmt.allocPrint(allocator, "{}.output", path.basename(file_name));
     };
 
-    var rom_file = try os.File.openRead(file_name);
+    var rom_file = try fs.File.openRead(file_name);
     defer rom_file.close();
     var rom = try nds.Rom.fromFile(rom_file, allocator);
 
