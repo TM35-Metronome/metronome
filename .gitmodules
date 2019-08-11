@@ -1,3 +1,9 @@
+[submodule "lib/zig-crc"]
+	path = lib/zig-crc
+	url = https://github.com/Hejsil/zig-crc.git
+[submodule "lib/zig-bench"]
+	path = lib/zig-bench
+	url = https://github.com/Hejsil/zig-bench.git
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
 	url = https://github.com/Hejsil/zig-clap.git
