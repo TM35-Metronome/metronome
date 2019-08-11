@@ -172,14 +172,14 @@ pub fn outputGameData(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".moves[{}].priority={}\n", i, move.priority);
         try stream.print(".moves[{}].min_hits={}\n", i, move.min_max_hits.min);
         try stream.print(".moves[{}].max_hits={}\n", i, move.min_max_hits.max);
-        try stream.print(".moves[{}].result_effect={}\n", i, move.result_effect);
+        try stream.print(".moves[{}].result_effect={}\n", i, move.result_effect.value());
         try stream.print(".moves[{}].effect_chance={}\n", i, move.effect_chance);
         try stream.print(".moves[{}].status={}\n", i, move.status);
         try stream.print(".moves[{}].min_turns={}\n", i, move.min_turns);
         try stream.print(".moves[{}].max_turns={}\n", i, move.max_turns);
         try stream.print(".moves[{}].crit={}\n", i, move.crit);
         try stream.print(".moves[{}].flinch={}\n", i, move.flinch);
-        try stream.print(".moves[{}].effect={}\n", i, move.effect);
+        try stream.print(".moves[{}].effect={}\n", i, move.effect.value());
         try stream.print(".moves[{}].target_hp={}\n", i, move.target_hp);
         try stream.print(".moves[{}].user_hp={}\n", i, move.user_hp);
         try stream.print(".moves[{}].target={}\n", i, move.target);
