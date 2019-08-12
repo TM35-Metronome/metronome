@@ -70,35 +70,41 @@ const white2_info = blk: {
 };
 
 const black_info = blk: {
+    const starter1_offsets = [6]NarcOffset{
+        NarcOffset{ .file = 782, .offset = 0x27f },
+        NarcOffset{ .file = 782, .offset = 0x284 },
+        NarcOffset{ .file = 782, .offset = 0x361 },
+        NarcOffset{ .file = 782, .offset = 0x5FD },
+        NarcOffset{ .file = 304, .offset = 0x0F9 },
+        NarcOffset{ .file = 304, .offset = 0x19C },
+    };
+
+    const starter2_offsets = [6]NarcOffset{
+        NarcOffset{ .file = 782, .offset = 0x2af },
+        NarcOffset{ .file = 782, .offset = 0x2b4 },
+        NarcOffset{ .file = 782, .offset = 0x356 },
+        NarcOffset{ .file = 782, .offset = 0x5F2 },
+        NarcOffset{ .file = 304, .offset = 0x11C },
+        NarcOffset{ .file = 304, .offset = 0x1C4 },
+    };
+
+    const starter3_offsets = [6]NarcOffset{
+        NarcOffset{ .file = 782, .offset = 0x2cc },
+        NarcOffset{ .file = 782, .offset = 0x2d1 },
+        NarcOffset{ .file = 782, .offset = 0x338 },
+        NarcOffset{ .file = 782, .offset = 0x5D4 },
+        NarcOffset{ .file = 304, .offset = 0x12C },
+        NarcOffset{ .file = 304, .offset = 0x1D9 },
+    };
+
     var res = black2_info;
     res.game_title = "POKEMON B\x00\x00\x00";
     res.gamecode = "IRBO";
     res.version = common.Version.Black;
     res.starters = [3][]const NarcOffset{
-        [_]NarcOffset{
-            NarcOffset{ .file = 782, .offset = 0x27f },
-            NarcOffset{ .file = 782, .offset = 0x284 },
-            NarcOffset{ .file = 782, .offset = 0x361 },
-            //            NarcOffset{ .file = 782, .offset = 0x5FD },
-            //            NarcOffset{ .file = 304, .offset = 0x0F9 },
-            //            NarcOffset{ .file = 304, .offset = 0x19C },
-        },
-        [_]NarcOffset{
-            NarcOffset{ .file = 782, .offset = 0x2af },
-            NarcOffset{ .file = 782, .offset = 0x2b4 },
-            NarcOffset{ .file = 782, .offset = 0x356 },
-            //            NarcOffset{ .file = 782, .offset = 0x5F2 },
-            //            NarcOffset{ .file = 304, .offset = 0x11C },
-            //            NarcOffset{ .file = 304, .offset = 0x1C4 },
-        },
-        [_]NarcOffset{
-            NarcOffset{ .file = 782, .offset = 0x2cc },
-            NarcOffset{ .file = 782, .offset = 0x2d1 },
-            NarcOffset{ .file = 782, .offset = 0x338 },
-            //            NarcOffset{ .file = 782, .offset = 0x5D4 },
-            //            NarcOffset{ .file = 304, .offset = 0x12C },
-            //            NarcOffset{ .file = 304, .offset = 0x1D9 },
-        },
+        starter1_offsets,
+        starter2_offsets,
+        starter3_offsets,
     };
     res.scripts = "a/0/5/7";
     res.trainers = "a/0/9/2";
