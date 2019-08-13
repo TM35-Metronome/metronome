@@ -6,7 +6,7 @@ const gen3 = @import("gen3-types.zig");
 const nds = @import("nds.zig");
 const std = @import("std");
 const builtin = @import("builtin");
-const format = @import("parser.zig");
+const format = @import("format");
 
 const bits = fun.bits;
 const debug = std.debug;
