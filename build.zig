@@ -10,12 +10,10 @@ const folder = "src";
 const core_tools = [_][]const u8{
     "tm35-gen3-apply",
     "tm35-gen3-disassemble-scripts",
-    "tm35-gen3-load",
     "tm35-gen3-offsets",
     "tm35-gen4-apply",
-    "tm35-gen4-load",
     "tm35-gen5-apply",
-    "tm35-gen5-load",
+    "tm35-load",
     "tm35-nds-extract",
 };
 
