@@ -33,7 +33,7 @@ const black2_info = Info{
     .gamecode = "IREO",
     .version = common.Version.Black2,
 
-    .starters = [3][]const NarcOffset{
+    .starters = [_][]const NarcOffset{
         [_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x58B },
             NarcOffset{ .file = 854, .offset = 0x590 },
@@ -60,67 +60,77 @@ const black2_info = Info{
     .wild_pokemons = "a/1/2/7",
 };
 
-const white2_info = blk: {
-    var res = black2_info;
-    res.game_title = "POKEMON W2\x00\x00";
-    res.gamecode = "IRDO";
-    res.version = common.Version.White2;
+const white2_info = Info{
+    .game_title = "POKEMON W2\x00\x00",
+    .gamecode = "IRDO",
+    .version = common.Version.White2,
 
-    break :blk res;
+    .starters = black2_info.starters,
+    .scripts = black2_info.scripts,
+    .pokemons = black2_info.pokemons,
+    .evolutions = black2_info.evolutions,
+    .level_up_moves = black2_info.level_up_moves,
+    .moves = black2_info.moves,
+    .trainers = black2_info.trainers,
+    .parties = black2_info.parties,
+    .wild_pokemons = black2_info.wild_pokemons,
 };
 
-const black_info = blk: {
-    const starter1_offsets = [6]NarcOffset{
-        NarcOffset{ .file = 782, .offset = 0x27f },
-        NarcOffset{ .file = 782, .offset = 0x284 },
-        NarcOffset{ .file = 782, .offset = 0x361 },
-        NarcOffset{ .file = 782, .offset = 0x5FD },
-        NarcOffset{ .file = 304, .offset = 0x0F9 },
-        NarcOffset{ .file = 304, .offset = 0x19C },
-    };
+const black_info = Info{
+    .game_title = "POKEMON B\x00\x00\x00",
+    .gamecode = "IRBO",
+    .version = common.Version.Black,
 
-    const starter2_offsets = [6]NarcOffset{
-        NarcOffset{ .file = 782, .offset = 0x2af },
-        NarcOffset{ .file = 782, .offset = 0x2b4 },
-        NarcOffset{ .file = 782, .offset = 0x356 },
-        NarcOffset{ .file = 782, .offset = 0x5F2 },
-        NarcOffset{ .file = 304, .offset = 0x11C },
-        NarcOffset{ .file = 304, .offset = 0x1C4 },
-    };
-
-    const starter3_offsets = [6]NarcOffset{
-        NarcOffset{ .file = 782, .offset = 0x2cc },
-        NarcOffset{ .file = 782, .offset = 0x2d1 },
-        NarcOffset{ .file = 782, .offset = 0x338 },
-        NarcOffset{ .file = 782, .offset = 0x5D4 },
-        NarcOffset{ .file = 304, .offset = 0x12C },
-        NarcOffset{ .file = 304, .offset = 0x1D9 },
-    };
-
-    var res = black2_info;
-    res.game_title = "POKEMON B\x00\x00\x00";
-    res.gamecode = "IRBO";
-    res.version = common.Version.Black;
-    res.starters = [3][]const NarcOffset{
-        starter1_offsets,
-        starter2_offsets,
-        starter3_offsets,
-    };
-    res.scripts = "a/0/5/7";
-    res.trainers = "a/0/9/2";
-    res.parties = "a/0/9/3";
-    res.wild_pokemons = "a/1/2/6";
-
-    break :blk res;
+    .starters = [_][]const NarcOffset{
+        [_]NarcOffset{
+            NarcOffset{ .file = 782, .offset = 0x27f },
+            NarcOffset{ .file = 782, .offset = 0x284 },
+            NarcOffset{ .file = 782, .offset = 0x361 },
+            NarcOffset{ .file = 782, .offset = 0x5FD },
+            NarcOffset{ .file = 304, .offset = 0x0F9 },
+            NarcOffset{ .file = 304, .offset = 0x19C },
+        },
+        [_]NarcOffset{
+            NarcOffset{ .file = 782, .offset = 0x2af },
+            NarcOffset{ .file = 782, .offset = 0x2b4 },
+            NarcOffset{ .file = 782, .offset = 0x356 },
+            NarcOffset{ .file = 782, .offset = 0x5F2 },
+            NarcOffset{ .file = 304, .offset = 0x11C },
+            NarcOffset{ .file = 304, .offset = 0x1C4 },
+        },
+        [_]NarcOffset{
+            NarcOffset{ .file = 782, .offset = 0x2cc },
+            NarcOffset{ .file = 782, .offset = 0x2d1 },
+            NarcOffset{ .file = 782, .offset = 0x338 },
+            NarcOffset{ .file = 782, .offset = 0x5D4 },
+            NarcOffset{ .file = 304, .offset = 0x12C },
+            NarcOffset{ .file = 304, .offset = 0x1D9 },
+        },
+    },
+    .scripts = "a/0/5/7",
+    .pokemons = black2_info.pokemons,
+    .evolutions = black2_info.evolutions,
+    .level_up_moves = black2_info.level_up_moves,
+    .moves = black2_info.moves,
+    .trainers = "a/0/9/2",
+    .parties = "a/0/9/3",
+    .wild_pokemons = "a/1/2/6",
 };
 
-const white_info = blk: {
-    var res = black_info;
-    res.game_title = "POKEMON W\x00\x00\x00";
-    res.gamecode = "IRAO";
-    res.version = common.Version.Black;
+const white_info = Info{
+    .game_title = "POKEMON W\x00\x00\x00",
+    .gamecode = "IRAO",
+    .version = common.Version.Black,
 
-    break :blk res;
+    .starters = black_info.starters,
+    .scripts = black_info.scripts,
+    .pokemons = black_info.pokemons,
+    .evolutions = black_info.evolutions,
+    .level_up_moves = black_info.level_up_moves,
+    .moves = black_info.moves,
+    .trainers = black_info.trainers,
+    .parties = black_info.parties,
+    .wild_pokemons = black_info.wild_pokemons,
 };
 
 pub const tm_count = 95;

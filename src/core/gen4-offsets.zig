@@ -50,14 +50,20 @@ const hg_info = Info{
     .wild_pokemons = "a/0/3/7",
 };
 
-const ss_info = blk: {
-    var res = hg_info;
-    res.game_title = "POKEMON SS\x00\x00";
-    res.gamecode = "IPGE";
-    res.version = common.Version.SoulSilver;
-    res.wild_pokemons = "a/1/3/6";
+const ss_info = Info{
+    .game_title = "POKEMON SS\x00\x00",
+    .gamecode = "IPGE",
+    .version = common.Version.SoulSilver,
 
-    break :blk res;
+    .starters = hg_info.starters,
+    .hm_tm_prefix = hg_info.hm_tm_prefix,
+    .pokemons = hg_info.pokemons,
+    .level_up_moves = hg_info.level_up_moves,
+    .moves = hg_info.moves,
+    .trainers = hg_info.trainers,
+    .parties = hg_info.parties,
+    .evolutions = hg_info.evolutions,
+    .wild_pokemons = "a/1/3/6",
 };
 
 const diamond_info = Info{
@@ -81,31 +87,41 @@ const diamond_info = Info{
     .wild_pokemons = "fielddata/encountdata/d_enc_data.narc",
 };
 
-const pearl_info = blk: {
-    var res = diamond_info;
-    res.game_title = "POKEMON P\x00\x00\x00";
-    res.gamecode = "APAE";
-    res.version = common.Version.Pearl;
-    res.pokemons = "/poketool/personal_pearl/personal.narc";
-    res.wild_pokemons = "fielddata/encountdata/p_enc_data.narc";
-    break :blk res;
+const pearl_info = Info{
+    .game_title = "POKEMON P\x00\x00\x00",
+    .gamecode = "APAE",
+    .version = common.Version.Pearl,
+
+    .starters = diamond_info.starters,
+    .hm_tm_prefix = diamond_info.hm_tm_prefix,
+    .pokemons = "/poketool/personal_pearl/personal.narc",
+    .level_up_moves = diamond_info.level_up_moves,
+    .moves = diamond_info.moves,
+    .trainers = diamond_info.trainers,
+    .parties = diamond_info.parties,
+    .evolutions = diamond_info.evolutions,
+    .wild_pokemons = "fielddata/encountdata/p_enc_data.narc",
 };
 
-const platinum_info = blk: {
-    var res = diamond_info;
-    res.game_title = "POKEMON PL\x00\x00";
-    res.gamecode = "CPUE";
-    res.version = common.Version.Platinum;
-    res.starters = StarterLocation{
+const platinum_info = Info{
+    .game_title = "POKEMON PL\x00\x00",
+    .gamecode = "CPUE",
+    .version = common.Version.Platinum,
+
+    .starters = StarterLocation{
         .Overlay9 = StarterLocation.Overlay{
             .offset = 0x1BC0,
             .file = 78,
         },
-    };
-    res.pokemons = "/poketool/personal/pl_personal.narc";
-    res.moves = "/poketool/waza/pl_waza_tbl.narc";
-    res.wild_pokemons = "fielddata/encountdata/pl_enc_data.narc";
-    break :blk res;
+    },
+    .hm_tm_prefix = diamond_info.hm_tm_prefix,
+    .pokemons = "/poketool/personal/pl_personal.narc",
+    .level_up_moves = diamond_info.level_up_moves,
+    .moves = "/poketool/waza/pl_waza_tbl.narc",
+    .trainers = diamond_info.trainers,
+    .parties = diamond_info.parties,
+    .evolutions = diamond_info.evolutions,
+    .wild_pokemons = "fielddata/encountdata/pl_enc_data.narc",
 };
 
 pub const tm_count = 92;
