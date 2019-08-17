@@ -1,7 +1,6 @@
-const builtin = @import("builtin");
+const build_options = @import("build_options");
 const clap = @import("clap");
 const common = @import("common.zig");
-const format = @import("format");
 const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
@@ -11,42 +10,30 @@ const nds = @import("nds.zig");
 const std = @import("std");
 
 const debug = std.debug;
-const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
-const os = std.os;
-const rand = std.rand;
-
-const path = fs.path;
 
 const bits = fun.bits;
 const slice = fun.generic.slice;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
 
 const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+    clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
+    clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
+    Param{ .takes_value = true },
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-gen3-load [OPTION]... FILE
-        \\Prints information about a generation 3 Pokemon rom to stdout in the
-        \\tm35 format.
+        \\Usage: tm35-load [-hv] <FILE>
+        \\Loads data from Pokémon roms.
         \\
         \\Options:
         \\
@@ -58,9 +45,8 @@ pub fn main() u8 {
     const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}", err);
     const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}", err);
 
-    var buf_stdout = BufOutStream.init(&stdout_file.outStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
     const stderr = &stderr_file.outStream().stream;
-    const stdout = &buf_stdout.stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -71,19 +57,27 @@ pub fn main() u8 {
     _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(stdout) catch |err| return errPrint("Failed to write data to stdout: {}\n", err);
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
         debug.warn("No file provided\n");
-        usage(stderr) catch {};
+        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
         return 1;
     };
 
@@ -91,22 +85,22 @@ pub fn main() u8 {
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        outputGen3Data(game, stdout) catch |err| return stdoutWriteError(err);
-        buf_stdout.flush() catch |err| return stdoutWriteError(err);
+        outputGen3Data(game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     } else |err| err;
 
     file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |rom| {
         const gen4_error = if (gen4.Game.fromRom(rom)) |game| {
-            outputGen4Data(rom, game, stdout) catch |err| return stdoutWriteError(err);
-            buf_stdout.flush() catch |err| return stdoutWriteError(err);
+            outputGen4Data(rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+            stdout.flush() catch |err| return failedWriteError("<stdout>", err);
             return 0;
         } else |err| err;
 
         if (gen5.Game.fromRom(allocator, rom)) |game| {
-            outputGen5Data(rom, game, stdout) catch |err| return stdoutWriteError(err);
-            buf_stdout.flush() catch |err| return stdoutWriteError(err);
+            outputGen5Data(rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+            stdout.flush() catch |err| return failedWriteError("<stdout>", err);
             return 0;
         } else |gen5_error| {
             debug.warn("Successfully loaded '{}' as a nds rom.\n", file_name);
@@ -121,8 +115,8 @@ pub fn main() u8 {
     }
 }
 
-fn stdoutWriteError(err: anyerror) u8 {
-    debug.warn("Failed to write data to stdout: {}\n", err);
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
     return 1;
 }
 

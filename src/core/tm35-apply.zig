@@ -1,5 +1,7 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
 const common = @import("common.zig");
+const format = @import("format");
 const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
@@ -7,59 +9,47 @@ const gen4 = @import("gen4-types.zig");
 const gen5 = @import("gen5-types.zig");
 const nds = @import("nds.zig");
 const std = @import("std");
-const builtin = @import("builtin");
-const format = @import("format");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
-const os = std.os;
-const rand = std.rand;
-const slice = fun.generic.slice;
+
 const path = fs.path;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
+const bits = fun.bits;
+const slice = fun.generic.slice;
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 const lu128 = fun.platform.lu128;
 
-const readLine = @import("io.zig").readLine;
+const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
 
-const params = [_]Param{
-    Param{
-        .id = "abort execution on the first warning emitted",
-        .names = Names{ .long = "abort-on-first-warning" },
-    },
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "override destination path",
-        .names = Names{ .short = 'o', .long = "output" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+const readLine = @import("readline").readLine;
+
+const params = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_]Param{
+        clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.") catch unreachable,
+        clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
+        clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
+        clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
+        Param{ .takes_value = true },
+    };
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-gen3-apply [OPTION]... FILE
-        \\Reads the tm35 format from stdin and applies it to a generation 3 Pokemon rom.
+        \\Usage: tm35-apply [-ahv] [-o <FILE>] <FILE>
+        \\Applies changes to Pokémon roms.
         \\
         \\Options:
         \\
@@ -68,13 +58,13 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}", err);
-    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}", err);
-    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}", err);
+    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
 
-    const stderr = &stderr_file.outStream().stream;
-    const stdout = &stdout_file.outStream().stream;
     const stdin = &BufInStream.init(&stdin_file.inStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -86,19 +76,26 @@ pub fn main() u8 {
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         debug.warn("{}\n", err);
-        usage(stderr) catch {};
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(stdout) catch |err| return errPrint("Failed to write data to stdout: {}\n", err);
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
         debug.warn("No file provided\n");
-        usage(stderr) catch {};
+        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
         return 1;
     };
 
@@ -118,9 +115,7 @@ pub fn main() u8 {
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}\n", err);
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        while (readLine(stdin, &line_buf) catch |err| {
-            return errPrint("Failed to read data from stdin: {}\n", err);
-        }) |line| : (line_num += 1) {
+        while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
             applyGen3(game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                 debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                 if (abort_on_first_warning)
@@ -130,16 +125,14 @@ pub fn main() u8 {
         }
 
         var out_stream = out_file.outStream();
-        game.writeToStream(&out_stream.stream) catch |err| return errPrint("Failed to write to '{}': {}\n", out, err);
+        game.writeToStream(&out_stream.stream) catch |err| return failedWriteError(out, err);
         return 0;
     } else |err| err;
 
     file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |rom| {
         const gen4_error = if (gen4.Game.fromRom(rom)) |game| {
-            while (readLine(stdin, &line_buf) catch |err| {
-                return errPrint("Failed to read data from stdin: {}\n", err);
-            }) |line| : (line_num += 1) {
+            while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
                 applyGen4(rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning)
@@ -148,14 +141,12 @@ pub fn main() u8 {
                 line_buf.shrink(0);
             }
 
-            rom.writeToFile(out_file) catch |err| return errPrint("Failed to write to '{}': {}\n", out, err);
+            rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
             return 0;
         } else |err| err;
 
         if (gen5.Game.fromRom(allocator, rom)) |game| {
-            while (readLine(stdin, &line_buf) catch |err| {
-                return errPrint("Failed to read data from stdin: {}\n", err);
-            }) |line| : (line_num += 1) {
+            while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
                 applyGen5(rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning) {
@@ -166,7 +157,7 @@ pub fn main() u8 {
                 line_buf.shrink(0);
             }
 
-            rom.writeToFile(out_file) catch |err| return errPrint("Failed to write to '{}': {}\n", out, err);
+            rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
             return 0;
         } else |gen5_error| {
             debug.warn("Successfully loaded '{}' as a nds rom.\n", file_name);
@@ -179,6 +170,16 @@ pub fn main() u8 {
         debug.warn("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error);
         return 1;
     }
+}
+
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
+
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
 }
 
 fn errPrint(comptime format_str: []const u8, args: ...) u8 {

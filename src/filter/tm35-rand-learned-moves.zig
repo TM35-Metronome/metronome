@@ -1,56 +1,40 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
-const common = @import("tm35-common");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
-const builtin = @import("builtin");
 const format = @import("format");
+const std = @import("std");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
-const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
-const slice = fun.generic.slice;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
 
-const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "which moves should be prefered over others [random, same-type]",
-        .names = Names{ .short = 'p', .long = "preference" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "the seed used to randomize stats",
-        .names = Names{ .short = 's', .long = "seed" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
+
+const readLine = @import("readline").readLine;
+
+const params = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_]Param{
+        clap.parseParam("-h, --help                      Display this help text and exit.                                                          ") catch unreachable,
+        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random).            ") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-v, --version                   Output version information and exit.                                                      ") catch unreachable,
+        Param{ .takes_value = true },
+    };
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-rand-learned-moves [OPTION]...
-        \\Reads the tm35 format from stdin and randomizes the moves pokemons can learn.
+        \\Usage: tm35-rand-learned-moves [-hv] [-p <random|stab>] [-s <NUM>]
+        \\Randomizes the moves Pokémons can learn.
         \\
         \\Options:
         \\
@@ -60,17 +44,17 @@ fn usage(stream: var) !void {
 
 const Preference = enum {
     Random,
-    SameType,
+    Stab,
 };
 
-pub fn main() !void {
-    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
-    var buf_stdout = BufOutStream.init(unbuf_stdout);
-    defer buf_stdout.flush() catch {};
+pub fn main() u8 {
+    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
 
-    const stderr = &(try io.getStdErr()).outStream().stream;
-    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
-    const stdout = &buf_stdout.stream;
+    const stdin = &BufInStream.init(&stdin_file.inStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -78,38 +62,67 @@ pub fn main() !void {
     const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    _ = try arg_iter.next();
+    _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
 
-    if (args.flag("--help"))
-        return try usage(stdout);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
 
-    const pref = blk: {
-        const pref = args.option("--preference") orelse "random";
-        if (mem.eql(u8, pref, "random")) {
-            break :blk Preference.Random;
-        } else if (mem.eql(u8, pref, "same-type")) {
-            break :blk Preference.SameType;
-        } else {
-            return error.@"Invalid argument to --preference.";
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    const seed = if (args.option("--seed")) |seed|
+        fmt.parseUnsigned(u64, seed, 10) catch |err| {
+            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
+            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            return 1;
         }
-    };
-    const seed = blk: {
-        const seed_str = args.option("--seed") orelse {
-            var buf: [8]u8 = undefined;
-            try std.os.getrandom(buf[0..]);
-            break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
-        };
-
-        break :blk try fmt.parseUnsigned(u64, seed_str, 10);
+    else blk: {
+        var buf: [8]u8 = undefined;
+        os.getrandom(buf[0..]) catch break :blk u64(0);
+        break :blk mem.readInt(u64, &buf, .Little);
     };
 
-    const data = try readData(allocator, stdin, stdout);
-    try randomize(data, seed, pref);
+    const pref = if (args.option("--preference")) |pref| if (mem.eql(u8, pref, "random"))
+        Preference.Random
+    else if (mem.eql(u8, pref, "stab"))
+        Preference.Stab
+    else {
+        debug.warn("--preference does not support '{}'\n", pref);
+        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
+        return 1;
+    } else Preference.Random;
+
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var data = Data{
+        .pokemons = Pokemons.init(allocator),
+        .moves = Moves.init(allocator),
+        .tms = Machines.init(allocator),
+        .hms = Machines.init(allocator),
+    };
+
+    while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+        const str = mem.trimRight(u8, line, "\r\n");
+        const print_line = parseLine(&data, str) catch true;
+        if (print_line)
+            stdout.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+
+        line_buf.shrink(0);
+    }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+
+    randomize(data, seed, pref);
 
     var poke_iter = data.pokemons.iterator();
     while (poke_iter.next()) |poke_kv| {
@@ -118,40 +131,42 @@ pub fn main() !void {
 
         var tm_iter = pokemon.tms_learned.iterator();
         while (tm_iter.next()) |tm_kv| {
-            try stdout.print(".pokemons[{}].tms[{}]={}\n", pokemon_index, tm_kv.key, tm_kv.value);
+            stdout.stream.print(
+                ".pokemons[{}].tms[{}]={}\n",
+                pokemon_index,
+                tm_kv.key,
+                tm_kv.value,
+            ) catch |err| return failedWriteError("<stdout>", err);
         }
 
         var hm_iter = pokemon.hms_learned.iterator();
         while (hm_iter.next()) |hm_kv| {
-            try stdout.print(".pokemons[{}].hms[{}]={}\n", pokemon_index, hm_kv.key, hm_kv.value);
+            stdout.stream.print(
+                ".pokemons[{}].hms[{}]={}\n",
+                pokemon_index,
+                hm_kv.key,
+                hm_kv.value,
+            ) catch |err| return failedWriteError("<stdout>", err);
         }
     }
+
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    return 0;
 }
 
-fn readData(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Data {
-    var res = Data{
-        .pokemons = Pokemons.init(allocator),
-        .moves = Moves.init(allocator),
-        .tms = Machines.init(allocator),
-        .hms = Machines.init(allocator),
-    };
-    var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
 
-    var line: usize = 1;
-    while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
-        const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-        const print_line = parseLine(&res, str) catch |err| true;
-        if (print_line)
-            try out_stream.print("{}\n", str);
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
+}
 
-        line_buf.shrink(0);
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
-    }
-
-    return res;
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
@@ -184,14 +199,14 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         const move_index = try parser.eatIndex();
         const move_entry = try data.moves.getOrPutValue(move_index, Move{
             .power = null,
-            .@"type" = null,
+            .type = null,
         });
         const move = &move_entry.value;
 
         if (parser.eatField("power")) {
             move.power = try parser.eatUnsignedValue(usize, 10);
         } else |_| if (parser.eatField("type")) {
-            move.@"type" = try mem.dupe(allocator, u8, try parser.eatValue());
+            move.type = try mem.dupe(allocator, u8, try parser.eatValue());
         } else |_| {}
     } else |_| if (parser.eatField("tms")) {
         const tm = try parser.eatIndex();
@@ -204,8 +219,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     return true;
 }
 
-fn randomize(data: Data, seed: u64, pref: Preference) error{}!void {
-    const allocator = data.pokemons.allocator;
+fn randomize(data: Data, seed: u64, pref: Preference) void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     var poke_iter = data.pokemons.iterator();
@@ -220,13 +234,13 @@ fn randomize(data: Data, seed: u64, pref: Preference) error{}!void {
 fn randomizeMachinesLearned(data: Data, pokemon: Pokemon, random: *rand.Random, pref: Preference, machines: Machines, learned: MachinesLearned) void {
     var iter = learned.iterator();
     while (iter.next()) |kv| switch (pref) {
-        Preference.Random => kv.value = random.boolean(),
-        Preference.SameType => {
+        .Random => kv.value = random.boolean(),
+        .Stab => {
             const low_chance = 0.1;
             const chance: f64 = blk: {
                 const move_index = machines.get(kv.key) orelse break :blk low_chance;
                 const move = data.moves.get(move_index.value) orelse break :blk low_chance;
-                const move_type = move.value.@"type" orelse break :blk low_chance;
+                const move_type = move.value.type orelse break :blk low_chance;
                 _ = pokemon.types.get(move_type) orelse break :blk low_chance;
 
                 // Yay the move is stab. Give it a higher chance.
@@ -266,5 +280,5 @@ const LvlUpMove = struct {
 
 const Move = struct {
     power: ?usize,
-    @"type": ?[]const u8,
+    type: ?[]const u8,
 };

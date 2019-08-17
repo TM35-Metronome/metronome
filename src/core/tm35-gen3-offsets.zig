@@ -1,9 +1,9 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
 const common = @import("common.zig");
 const fun = @import("fun");
 const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
-const offsets = @import("gen3-offsets.zig");
 const std = @import("std");
 
 const debug = std.debug;
@@ -11,34 +11,30 @@ const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
-const os = std.os;
 const fs = std.fs;
+
+const offsets = gen3.offsets;
 
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
 
-const BufInStream = io.BufferedInStream(os.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(os.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
 const Searcher = fun.searcher.Searcher;
 
+const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
+
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
+
 const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+    clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
+    clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
+    Param{ .takes_value = true },
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-gen3-offsets [OPTION]... [FILE]...
+        \\Usage: tm35-gen3-offsets [-hv] <FILE>...
         \\Finds the offsets to data in generation 3 Pokemon roms.
         \\
         \\Options:
@@ -47,71 +43,99 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() !void {
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
-    const stdout = &(try std.io.getStdOut()).outStream().stream;
+pub fn main() u8 {
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}", err);
+
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arg_iter = clap.args.OsIterator.init(heap.direct_allocator);
     defer arg_iter.deinit();
+
     _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(heap.direct_allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
     defer args.deinit();
 
-    if (args.flag("--help"))
-        return try usage(stdout);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
 
     for (args.positionals()) |file_name, i| {
         var arena = heap.ArenaAllocator.init(heap.direct_allocator);
         defer arena.deinit();
 
         const allocator = &arena.allocator;
-
-        var file = try fs.File.openRead(file_name);
-        defer file.close();
-
-        var file_stream = file.inStream();
-        const data = try file_stream.stream.readAllAlloc(allocator, 1024 * 1024 * 32);
+        const data = io.readFileAlloc(allocator, file_name) catch |err| return failedReadError(file_name, err);
         if (data.len < @sizeOf(gba.Header))
-            return error.RomTooSmall;
+            return errPrint("'{}' is not a gen3 Pokémon game: {}\n", file_name, error.FileToSmall);
 
         const header = @bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = getVersion(header.gamecode) catch |err| {
-            debug.warn("{} is not a gen3 Pokemon rom.\n", file_name);
-            return err;
-        };
-
-        const info = try getInfo(data, version, header.gamecode, header.game_title, header.software_version);
-        try stdout.print(".game[{}].game_title={}\n", i, info.game_title);
-        try stdout.print(".game[{}].gamecode={}\n", i, info.gamecode);
-        try stdout.print(".game[{}].version={}\n", i, @tagName(info.version));
-        try stdout.print(".game[{}].software_version={}\n", i, info.software_version);
-        try stdout.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
-        try stdout.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
-        try stdout.print(".game[{}].moves.start={}\n", i, info.moves.start);
-        try stdout.print(".game[{}].moves.len={}\n", i, info.moves.len);
-        try stdout.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
-        try stdout.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-        try stdout.print(".game[{}].pokemons.start={}\n", i, info.pokemons.start);
-        try stdout.print(".game[{}].pokemons.len={}\n", i, info.pokemons.len);
-        try stdout.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
-        try stdout.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
-        try stdout.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
-        try stdout.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
-        try stdout.print(".game[{}].hms.start={}\n", i, info.hms.start);
-        try stdout.print(".game[{}].hms.len={}\n", i, info.hms.len);
-        try stdout.print(".game[{}].tms.start={}\n", i, info.tms.start);
-        try stdout.print(".game[{}].tms.len={}\n", i, info.tms.len);
-        try stdout.print(".game[{}].items.start={}\n", i, info.items.start);
-        try stdout.print(".game[{}].items.len={}\n", i, info.items.len);
-        try stdout.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
-        try stdout.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
-        try stdout.print(".game[{}].map_headers.start={}\n", i, info.map_headers.start);
-        try stdout.print(".game[{}].map_headers.len={}\n", i, info.map_headers.len);
+        const version = getVersion(header.gamecode) catch |err| return errPrint("'{}' is not a gen3 Pokémon game: {}\n", file_name, err);
+        const info_err = getInfo(data, version, header.gamecode, header.game_title, header.software_version);
+        const info = info_err catch |err| return errPrint("Failed to get offsets from '{}': {}\n", file_name, err);
+        outputInfo(&stdout.stream, i, info) catch |err| return failedWriteError("<stdout>", err);
     }
+
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    return 0;
+}
+
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
+
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
+}
+
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
+}
+
+fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
+    try stream.print(".game[{}].game_title={}\n", i, info.game_title);
+    try stream.print(".game[{}].gamecode={}\n", i, info.gamecode);
+    try stream.print(".game[{}].version={}\n", i, @tagName(info.version));
+    try stream.print(".game[{}].software_version={}\n", i, info.software_version);
+    try stream.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
+    try stream.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
+    try stream.print(".game[{}].moves.start={}\n", i, info.moves.start);
+    try stream.print(".game[{}].moves.len={}\n", i, info.moves.len);
+    try stream.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
+    try stream.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
+    try stream.print(".game[{}].pokemons.start={}\n", i, info.pokemons.start);
+    try stream.print(".game[{}].pokemons.len={}\n", i, info.pokemons.len);
+    try stream.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
+    try stream.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
+    try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
+    try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
+    try stream.print(".game[{}].hms.start={}\n", i, info.hms.start);
+    try stream.print(".game[{}].hms.len={}\n", i, info.hms.len);
+    try stream.print(".game[{}].tms.start={}\n", i, info.tms.start);
+    try stream.print(".game[{}].tms.len={}\n", i, info.tms.len);
+    try stream.print(".game[{}].items.start={}\n", i, info.items.start);
+    try stream.print(".game[{}].items.len={}\n", i, info.items.len);
+    try stream.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
+    try stream.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
+    try stream.print(".game[{}].map_headers.start={}\n", i, info.map_headers.start);
+    try stream.print(".game[{}].map_headers.len={}\n", i, info.map_headers.len);
 }
 
 fn getVersion(gamecode: []const u8) !common.Version {
@@ -135,7 +159,7 @@ fn getInfo(
     gamecode: [4]u8,
     game_title: [12]u8,
     software_version: u8,
-) !offsets.Info {
+) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons
     const trainer_searcher = Searcher(gen3.Trainer, [_][]const []const u8{
         [_][]const u8{"party"},

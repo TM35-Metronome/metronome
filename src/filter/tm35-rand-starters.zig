@@ -1,56 +1,42 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
-const common = @import("tm35-common");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
-const builtin = @import("builtin");
 const format = @import("format");
+const std = @import("std");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
-const slice = fun.generic.slice;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
 
-const params = [_]Param{
-    Param{
-        .id = "only pick starters with VALUE evolutions",
-        .names = Names{ .short = 'e', .long = "evolutions" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "the seed used to randomize stats",
-        .names = Names{ .short = 's', .long = "seed" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
+
+const readLine = @import("readline").readLine;
+
+const params = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_]Param{
+        clap.parseParam("-e, --evolutions <NUM>       Only pick starters with NUM or more evolutions.                                           ") catch unreachable,
+        clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
+        clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
+        Param{ .takes_value = true },
+    };
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-rand-starters [OPTION]...
-        \\Reads the tm35 format from stdin and randomizes the starter pokemons.
+        \\Usage: tm35-rand-starters [-hlv] [-e <NUM>] [-s <NUM>]
+        \\Randomizes starter Pokémons.
         \\
         \\Options:
         \\
@@ -58,14 +44,14 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() !void {
-    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
-    var buf_stdout = BufOutStream.init(unbuf_stdout);
-    defer buf_stdout.flush() catch {};
+pub fn main() u8 {
+    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
 
-    const stderr = &(try io.getStdErr()).outStream().stream;
-    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
-    const stdout = &buf_stdout.stream;
+    const stdin = &BufInStream.init(&stdin_file.inStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -76,60 +62,87 @@ pub fn main() !void {
     _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
 
-    if (args.flag("--help"))
-        return try usage(stdout);
-
-    const evolutions = blk: {
-        const str = args.option("--evolutions") orelse break :blk null;
-        break :blk try fmt.parseUnsigned(usize, str, 10);
-    };
-    const seed = blk: {
-        const seed_str = args.option("--seed") orelse {
-            var buf: [8]u8 = undefined;
-            try std.os.getrandom(buf[0..]);
-            break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
-        };
-
-        break :blk try fmt.parseUnsigned(u64, seed_str, 10);
-    };
-
-    const data = try readData(allocator, stdin, stdout);
-    try randomize(data, seed, evolutions);
-
-    var iter = data.starters.iterator();
-    while (iter.next()) |kv| {
-        try stdout.print(".starters[{}]={}\n", kv.key, kv.value);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
     }
-}
 
-fn readData(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Data {
-    var res = Data{
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    const seed = if (args.option("--seed")) |seed|
+        fmt.parseUnsigned(u64, seed, 10) catch |err| {
+            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
+            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            return 1;
+        }
+    else blk: {
+        var buf: [8]u8 = undefined;
+        os.getrandom(buf[0..]) catch break :blk u64(0);
+        break :blk mem.readInt(u64, &buf, .Little);
+    };
+
+    const evolutions = if (args.option("--evolutions")) |evos|
+        fmt.parseUnsigned(usize, evos, 10) catch |err| {
+            debug.warn("'{}' could not be parsed as a number to --evolutions: {}\n", evos, err);
+            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            return 1;
+        }
+    else
+        0;
+
+    const pick_lowest = args.flag("--pick-lowest-evolution");
+
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var data = Data{
         .starters = Starters.init(allocator),
         .pokemons = Set.init(allocator),
         .evolves_from = Evolutions.init(allocator),
         .evolves_to = Evolutions.init(allocator),
     };
-    var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
 
-    var line: usize = 1;
-    while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
-        const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-        const print_line = parseLine(&res, str) catch |err| true;
+    while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+        const str = mem.trimRight(u8, line, "\r\n");
+        const print_line = parseLine(&data, str) catch true;
         if (print_line)
-            try out_stream.print("{}\n", str);
+            stdout.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
 
         line_buf.shrink(0);
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
     }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
 
-    return res;
+    randomize(data, seed, evolutions, pick_lowest) catch |err| return errPrint("Failed to randomize data: {}", err);
+
+    var iter = data.starters.iterator();
+    while (iter.next()) |kv| {
+        stdout.stream.print(".starters[{}]={}\n", kv.key, kv.value) catch |err| return failedWriteError("<stdout>", err);
+    }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    return 0;
+}
+
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
+
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
+}
+
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
@@ -169,7 +182,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     return true;
 }
 
-fn randomize(data: Data, seed: u64, evolutions: ?usize) !void {
+fn randomize(data: Data, seed: u64, evolutions: usize, pick_lowest: bool) !void {
     const allocator = data.starters.allocator;
     const random = &rand.DefaultPrng.init(seed).random;
 
@@ -178,17 +191,13 @@ fn randomize(data: Data, seed: u64, evolutions: ?usize) !void {
         var iter = data.pokemons.iterator();
         while (iter.next()) |kv| {
             const pokemon = kv.key;
-            if (evolutions) |evos| {
-                // If the pokemon is not the lowest evo then we won't pick it.
-                if (data.evolves_from.get(pokemon) != null)
-                    continue;
-                if (countEvos(data, pokemon) != evos)
-                    continue;
+            // Only pick lowest evo pokemon if pick_lowest is true
+            if (pick_lowest and data.evolves_from.get(pokemon) != null)
+                continue;
+            if (countEvos(data, pokemon) < evolutions)
+                continue;
 
-                try res.append(pokemon);
-            } else {
-                try res.append(pokemon);
-            }
+            try res.append(pokemon);
         }
 
         break :blk res.toOwnedSlice();

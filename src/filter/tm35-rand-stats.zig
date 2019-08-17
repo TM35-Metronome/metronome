@@ -1,59 +1,42 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
-const common = @import("tm35-common");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
-const builtin = @import("builtin");
 const format = @import("format");
+const std = @import("std");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
-const slice = fun.generic.slice;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
 
-const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "ensure, that after randomizing the stats, the total stats are the same",
-        .names = Names{ .short = 't', .long = "same-total-stats" },
-    },
-    Param{
-        .id = "randomized stats should follow the evolution line",
-        .names = Names{ .short = 'f', .long = "follow-evos" },
-    },
-    Param{
-        .id = "the seed used to randomize stats",
-        .names = Names{ .short = 's', .long = "seed" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
+
+const readLine = @import("readline").readLine;
+
+const params = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_]Param{
+        clap.parseParam("-f, --follow-evos       Evolution will use the none evolved form as a base for its own stats.                     ") catch unreachable,
+        clap.parseParam("-h, --help              Display this help text and exit.                                                          ") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>        The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-t, --same-total-stats  Pokémons will have the same total stats after randomization.                              ") catch unreachable,
+        clap.parseParam("-v, --version           Output version information and exit.                                                      ") catch unreachable,
+        Param{ .takes_value = true },
+    };
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-rand-stats [OPTION]...
-        \\Reads the tm35 format from stdin and randomizes the stats of pokemons.
+        \\Usage: tm35-rand-stats [-fhtv] [-s <NUM>]
+        \\Randomizes Pokémon stats.
         \\
         \\Options:
         \\
@@ -61,14 +44,14 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() !void {
-    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
-    var buf_stdout = BufOutStream.init(unbuf_stdout);
-    defer buf_stdout.flush() catch {};
+pub fn main() u8 {
+    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
 
-    const stderr = &(try io.getStdErr()).outStream().stream;
-    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
-    const stdout = &buf_stdout.stream;
+    const stdin = &BufInStream.init(&stdin_file.inStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -76,59 +59,82 @@ pub fn main() !void {
     const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
-    _ = try arg_iter.next();
+    _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
 
-    if (args.flag("--help"))
-        return try usage(stdout);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    const seed = if (args.option("--seed")) |seed|
+        fmt.parseUnsigned(u64, seed, 10) catch |err| {
+            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
+            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            return 1;
+        }
+    else blk: {
+        var buf: [8]u8 = undefined;
+        os.getrandom(buf[0..]) catch break :blk u64(0);
+        break :blk mem.readInt(u64, &buf, .Little);
+    };
 
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
-    const seed = blk: {
-        const seed_str = args.option("--seed") orelse {
-            var buf: [8]u8 = undefined;
-            try std.os.getrandom(buf[0..]);
-            break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
-        };
 
-        break :blk try fmt.parseUnsigned(u64, seed_str, 10);
-    };
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var pokemons = PokemonMap.init(allocator);
 
-    const pokemons = try readPokemons(allocator, stdin, stdout);
+    while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+        const str = mem.trimRight(u8, line, "\r\n");
+        const print_line = parseLine(&pokemons, str) catch true;
+        if (print_line)
+            stdout.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+
+        line_buf.shrink(0);
+    }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+
     randomize(pokemons, seed, same_total_stats, follow_evos);
 
     var iter = pokemons.iterator();
     while (iter.next()) |kv| {
-        inline for (Pokemon.stats) |stat| {
-            if (@field(kv.value, stat)) |s|
-                try stdout.print(".pokemons[{}].stats.{}={}\n", kv.key, stat, s);
+        inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
+            const stat_i = @enumToInt(@field(Pokemon.Stat, stat.name));
+            if (kv.value.output[stat_i]) {
+                stdout.stream.print(".pokemons[{}].stats.{}={}\n", kv.key, stat.name, kv.value.stats[stat_i]) catch |err| return failedWriteError("<stdout>", err);
+            }
         }
     }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    return 0;
 }
 
-fn readPokemons(allocator: *mem.Allocator, in_stream: var, out_stream: var) !PokemonMap {
-    var res = PokemonMap.init(allocator);
-    var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
 
-    var line: usize = 1;
-    while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
-        const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-        const print_line = parseLine(&res, str) catch |err| true;
-        if (print_line)
-            try out_stream.print("{}\n", str);
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
+}
 
-        line_buf.shrink(0);
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
-    }
-
-    return res;
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
 }
 
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
@@ -141,23 +147,16 @@ fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
         const entry = try pokemons.getOrPutValue(pokemon_index, Pokemon.init(pokemons.allocator));
         const pokemon = &entry.value;
 
-        if (parser.eatField("hp")) |_| {
-            pokemon.hp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("attack")) |_| {
-            pokemon.attack = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("defense")) |_| {
-            pokemon.defense = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("speed")) |_| {
-            pokemon.speed = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("sp_attack")) |_| {
-            pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("sp_defense")) |_| {
-            pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return true;
+        inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
+            const stat_i = @enumToInt(@field(Pokemon.Stat, stat.name));
+            if (parser.eatField(stat.name)) |_| {
+                pokemon.stats[stat_i] = try parser.eatUnsignedValue(u8, 10);
+                pokemon.output[stat_i] = true;
+                return false;
+            } else |_| {}
         }
 
-        return false;
+        return true;
     } else |_| if (parser.eatField("evos")) |_| {
         _ = try parser.eatIndex();
         try parser.eatField("target");
@@ -177,15 +176,11 @@ fn randomize(pokemons: PokemonMap, seed: u64, same_total_stats: bool, follow_evo
     var iter = pokemons.iterator();
     while (iter.next()) |kv| {
         const pokemon = &kv.value;
-        var buf: [Pokemon.stats.len]u8 = undefined;
-        const stats = pokemon.toBuf(&buf);
-
-        const old_total = sum(u8, stats);
-        const new_random_total = random.random.intRangeAtMost(u64, 0, stats.len * math.maxInt(u8));
+        const old_total = sum(u8, pokemon.stats);
+        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.stats.len * math.maxInt(u8));
         const new_total = if (same_total_stats) old_total else new_random_total;
 
-        _ = randomWithinSum(&random.random, u8, stats, new_total);
-        pokemon.fromBuf(stats);
+        randomWithinSum(&random.random, u8, &pokemon.stats, new_total);
     }
 
     if (!follow_evos)
@@ -210,8 +205,7 @@ fn randomizeFromChildren(
         return;
 
     // Get the average stats of all the prevolutions
-    var stats = [_]u64{0} ** Pokemon.stats.len;
-    var stats_count = [_]u64{0} ** Pokemon.stats.len;
+    var stats = [_]u64{0} ** Pokemon.stats;
     var iter = pokemon.evolves_from.iterator();
 
     while (iter.next()) |prevolution| {
@@ -220,44 +214,36 @@ fn randomizeFromChildren(
             continue;
 
         // TODO: Can this ever happen???
-        //                                                   VVVVVVVV
+        //                                             VVVVVVVV
         const p = pokemons.get(prevolution.key) orelse continue;
 
         // We should randomize prevolution by the same rules.
         randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
-        inline for (Pokemon.stats) |stat_name, i| {
-            if (@field(p.value, stat_name)) |stat| {
-                stats[i] += stat;
-                stats_count[i] += 1;
-            }
-        }
+        for (p.value.stats) |stat, i|
+            stats[i] += stat;
     }
 
     // Average calculated here
-    var average: Pokemon = undefined;
-    inline for (Pokemon.stats) |stat_name, i| {
-        @field(average, stat_name) = if (@field(pokemon, stat_name)) |_|
-            math.cast(u8, stats[i] / math.max(stats_count[i], 1)) catch math.maxInt(u8)
-        else
-            null;
+    var average = [_]u8{0} ** Pokemon.stats;
+    for (average) |*stat, i| {
+        stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch math.maxInt(u8);
     }
 
-    var buf: [Pokemon.stats.len]u8 = undefined;
-    const old_total = sum(u8, pokemon.toBuf(&buf));
-    const average_total = sum(u8, average.toBuf(&buf));
+    const old_total = sum(u8, pokemon.stats);
+    const average_total = sum(u8, average);
     const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
-    const new_stats = randomUntilSum(random, u8, average.toBuf(&buf), new_total);
-    pokemon.fromBuf(new_stats);
+    randomUntilSum(random, u8, &average, new_total);
+    mem.copy(u8, &pokemon.stats, average);
 }
 
-fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T {
+fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) void {
     mem.set(T, buf, 0);
-    return randomUntilSum(random, T, buf, s);
+    randomUntilSum(random, T, buf, s);
 }
 
-fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T {
+fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) void {
     // TODO: In this program, we will never pass buf.len > 6, so we can
     //       statically have this buffer. If this function is to be more
     //       general, we problably have to accept an allpocator.
@@ -272,7 +258,7 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T 
     const curr = sum(T, buf);
     const max = math.min(s, buf.len * math.maxInt(T));
     if (max < curr)
-        return buf;
+        return;
 
     const missing = max - curr;
     const total_weigth = sum(f32, weights);
@@ -286,14 +272,12 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) []T 
         const index = random.intRangeLessThan(usize, 0, buf.len);
         buf[index] = math.add(T, buf[index], 1) catch buf[index];
     }
-
-    return buf;
 }
 
 fn SumReturn(comptime T: type) type {
     return switch (@typeId(T)) {
-        builtin.TypeId.Int => u64,
-        builtin.TypeId.Float => f64,
+        .Int => u64,
+        .Float => f64,
         else => unreachable,
     };
 }
@@ -310,54 +294,25 @@ const PokemonMap = std.AutoHashMap(usize, Pokemon);
 const EvoMap = std.AutoHashMap(usize, void);
 
 const Pokemon = struct {
-    hp: ?u8,
-    attack: ?u8,
-    defense: ?u8,
-    speed: ?u8,
-    sp_attack: ?u8,
-    sp_defense: ?u8,
+    stats: [stats]u8,
+    output: [stats]bool,
     evolves_from: EvoMap,
 
     fn init(allocator: *mem.Allocator) Pokemon {
         return Pokemon{
-            .hp = null,
-            .attack = null,
-            .defense = null,
-            .speed = null,
-            .sp_attack = null,
-            .sp_defense = null,
+            .stats = [_]u8{0} ** stats,
+            .output = [_]bool{false} ** stats,
             .evolves_from = EvoMap.init(allocator),
         };
     }
 
-    const stats = [_][]const u8{
-        "hp",
-        "attack",
-        "defense",
-        "speed",
-        "sp_attack",
-        "sp_defense",
+    const stats = @typeInfo(Stat).Enum.fields.len;
+    const Stat = enum {
+        hp = 0,
+        attack = 1,
+        defense = 2,
+        speed = 3,
+        sp_attack = 4,
+        sp_defense = 5,
     };
-
-    fn toBuf(p: Pokemon, buf: *[stats.len]u8) []u8 {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |stat| {
-                buf[i] = stat;
-                i += 1;
-            }
-        }
-
-        return buf[0..i];
-    }
-
-    fn fromBuf(p: *Pokemon, buf: []u8) void {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |*stat| {
-                stat.* = buf[i];
-                i += 1;
-            }
-        }
-    }
 };

@@ -1,8 +1,6 @@
 const common = @import("common.zig");
 const fun = @import("fun");
 const gba = @import("gba.zig");
-const offsets = @import("gen3-offsets.zig");
-const script = @import("gen3-script.zig");
 const std = @import("std");
 
 const math = std.math;
@@ -13,6 +11,9 @@ const fs = std.fs;
 const lu16 = fun.platform.lu16;
 const lu32 = fun.platform.lu32;
 const lu64 = fun.platform.lu64;
+
+pub const offsets = @import("gen3-offsets.zig");
+pub const script = @import("gen3-script.zig");
 
 /// A pointer to an unknown number of elements.
 /// In GBA games pointers are 32 bits and the game rom is loaded into address

@@ -25,9 +25,11 @@ const filter_tools = [_][]const u8{
 
 const gui_tools = [_][]const u8{"tm35-randomizer"};
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *Builder) !void {
     b.setPreferredReleaseMode(.ReleaseSafe);
     const mode = b.standardReleaseOptions();
+
+    const version = b.fmt("\"{}\"", mem.trim(u8, try b.exec([_][]const u8{ "git", "describe", "--always" }), "\t\n "));
 
     const fmt_step = b.addFmt([_][]const u8{
         "build.zig",
@@ -41,7 +43,9 @@ pub fn build(b: *Builder) void {
         exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
         exe.addPackagePath("fun", "lib/fun-with-zig/fun.zig");
         exe.addPackagePath("crc", "lib/zig-crc/crc.zig");
-        exe.addPackagePath("format", "src/common/parser.zig");
+        exe.addPackagePath("format", "src/common/format.zig");
+        exe.addPackagePath("readline", "src/common/readline.zig");
+        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);
@@ -50,7 +54,9 @@ pub fn build(b: *Builder) void {
     inline for (filter_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/filter/" ++ tool ++ ".zig");
         exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
-        exe.addPackagePath("format", "src/common/parser.zig");
+        exe.addPackagePath("format", "src/common/format.zig");
+        exe.addPackagePath("readline", "src/common/readline.zig");
+        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);
@@ -60,7 +66,7 @@ pub fn build(b: *Builder) void {
     inline for (gui_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/gui/" ++ tool ++ ".zig");
         exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
-        exe.addPackagePath("format", "src/common/parser.zig");
+        exe.addPackagePath("format", "src/common/format.zig");
         exe.addIncludeDir("lib/nuklear");
         exe.addIncludeDir("lib/nuklear/demo/x11_xft");
         exe.addIncludeDir("src/gui/nuklear");
@@ -71,6 +77,7 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("m");
         exe.linkSystemLibrary("X11");
         exe.linkSystemLibrary("Xft");
+        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);

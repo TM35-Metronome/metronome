@@ -1,70 +1,43 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
-const common = @import("tm35-common");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
-const builtin = @import("builtin");
 const format = @import("format");
+const std = @import("std");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
 const os = std.os;
 const rand = std.rand;
-const slice = fun.generic.slice;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
 
-const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "fix party member moves (will pick the best level up moves the pokemon can learn for its level)",
-        .names = Names{ .short = 'f', .long = "fix-moves" },
-    },
-    Param{
-        .id = "the seed used to randomize stats",
-        .names = Names{ .short = 's', .long = "seed" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "replaced party members should have simular total stats",
-        .names = Names{ .long = "simular-total-stats" },
-    },
-    Param{
-        .id = "which types each trainer should use [same, random, themed]",
-        .names = Names{ .short = 't', .long = "types" },
-        .takes_value = true,
-    },
-    Param{
-        .id = "",
-        .takes_value = true,
-    },
-};
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
 
-const TypesOption = enum {
-    same,
-    random,
-    themed,
+const readLine = @import("readline").readLine;
+
+const params = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_]Param{
+        clap.parseParam("-h, --help                        Display this help text and exit.                                                               ") catch unreachable,
+        clap.parseParam("-f, --fix-moves                   Fix party member moves (will pick the best level up moves the pokemon can learn for its level).") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>                  The seed to use for random numbers. A random seed will be picked if this is not specified.     ") catch unreachable,
+        clap.parseParam("-i, --simular-total-stats         Replaced party members should have simular total stats.                                        ") catch unreachable,
+        clap.parseParam("-t, --types <random|same|themed>  Which types each trainer should use.                                                           ") catch unreachable,
+        clap.parseParam("-v, --version                     Output version information and exit.                                                           ") catch unreachable,
+        Param{ .takes_value = true },
+    };
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-rand-parties [OPTION]...
-        \\Reads the tm35 format from stdin and randomizes the parties of trainers.
+        \\Usage: tm35-rand-parties [-hfiv] [-s <NUM>] [-t <random|same|themed>]
+        \\Randomizes trainer parties.
         \\
         \\Options:
         \\
@@ -72,14 +45,20 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() !void {
-    const unbuf_stdout = &(try io.getStdOut()).outStream().stream;
-    var buf_stdout = BufOutStream.init(unbuf_stdout);
-    defer buf_stdout.flush() catch {};
+const TypesOption = enum {
+    same,
+    random,
+    themed,
+};
 
-    const stderr = &(try io.getStdErr()).outStream().stream;
-    const stdin = &BufInStream.init(&(try std.io.getStdIn()).inStream().stream).stream;
-    const stdout = &buf_stdout.stream;
+pub fn main() u8 {
+    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
+
+    const stdin = &BufInStream.init(&stdin_file.inStream().stream);
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -90,34 +69,67 @@ pub fn main() !void {
     _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
 
-    if (args.flag("--help"))
-        return try usage(stdout);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    const seed = if (args.option("--seed")) |seed|
+        fmt.parseUnsigned(u64, seed, 10) catch |err| {
+            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
+            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            return 1;
+        }
+    else blk: {
+        var buf: [8]u8 = undefined;
+        os.getrandom(buf[0..]) catch break :blk u64(0);
+        break :blk mem.readInt(u64, &buf, .Little);
+    };
+
+    const types = if (args.option("--types")) |types|
+        std.meta.stringToEnum(TypesOption, types) orelse {
+            debug.warn("--types does not support '{}'\n", types);
+            usage(stderr) catch |err| return failedWriteError("<stderr>", err);
+            return 1;
+        }
+    else
+        TypesOption.random;
 
     const fix_moves = args.flag("--fix-moves");
     const simular_total_stats = args.flag("--simular-total-stats");
-    const types = blk: {
-        const types = args.option("--types") orelse "random";
-        break :blk std.meta.stringToEnum(TypesOption, types) orelse {
-            usage(stderr) catch {};
-            return error.@"Unknown --types value";
-        };
-    };
-    const seed = blk: {
-        const seed_str = args.option("--seed") orelse {
-            var buf: [8]u8 = undefined;
-            try std.os.getrandom(buf[0..]);
-            break :blk mem.readInt(u64, &buf, builtin.Endian.Little);
-        };
 
-        break :blk try fmt.parseUnsigned(u64, seed_str, 10);
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var data = Data{
+        .types = std.ArrayList([]const u8).init(allocator),
+        .pokemons_by_types = PokemonByType.init(allocator),
+        .pokemons = Pokemons.init(allocator),
+        .trainers = Trainers.init(allocator),
+        .moves = Moves.init(allocator),
     };
 
-    const data = try readData(allocator, stdin, stdout);
-    try randomize(data, seed, fix_moves, simular_total_stats, types);
+    while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+        const str = mem.trimRight(u8, line, "\r\n");
+        const print_line = parseLine(&data, str) catch true;
+        if (print_line)
+            stdout.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+
+        line_buf.shrink(0);
+    }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+
+    randomize(data, seed, fix_moves, simular_total_stats, types) catch |err| return errPrint("Failed to randomize data: {}", err);
 
     var trainer_iter = data.trainers.iterator();
     while (trainer_iter.next()) |trainer_kv| {
@@ -130,44 +142,33 @@ pub fn main() !void {
             const member = party_kv.value;
 
             if (member.species) |s|
-                try stdout.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s);
+                stdout.stream.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s) catch |err| return failedWriteError("<stdout>", err);
             if (member.level) |l|
-                try stdout.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l);
+                stdout.stream.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l) catch |err| return failedWriteError("<stdout>", err);
 
             var move_iter = member.moves.iterator();
             while (move_iter.next()) |move_kv| {
-                try stdout.print(".trainers[{}].party[{}].moves[{}]={}\n", trainer_i, member_i, move_kv.key, move_kv.value);
+                stdout.stream.print(".trainers[{}].party[{}].moves[{}]={}\n", trainer_i, member_i, move_kv.key, move_kv.value) catch |err| return failedWriteError("<stdout>", err);
             }
         }
     }
+    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    return 0;
 }
 
-fn readData(allocator: *mem.Allocator, in_stream: var, out_stream: var) !Data {
-    var res = Data{
-        .types = std.ArrayList([]const u8).init(allocator),
-        .pokemons_by_types = PokemonByType.init(allocator),
-        .pokemons = Pokemons.init(allocator),
-        .trainers = Trainers.init(allocator),
-        .moves = Moves.init(allocator),
-    };
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
 
-    var line_buf = try std.Buffer.initSize(allocator, 0);
-    defer line_buf.deinit();
+fn failedReadError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to read data from '{}': {}\n", file, err);
+    return 1;
+}
 
-    var line: usize = 1;
-    while (in_stream.readUntilDelimiterBuffer(&line_buf, '\n', 10000)) : (line += 1) {
-        const str = mem.trimRight(u8, line_buf.toSlice(), "\r\n");
-        const print_line = parseLine(&res, str) catch |err| true;
-        if (print_line)
-            try out_stream.print("{}\n", str);
-
-        line_buf.shrink(0);
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
-    }
-
-    return res;
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
@@ -180,18 +181,18 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         const pokemon = &poke_entry.value;
 
         if (parser.eatField("stats")) |_| {
-            if (parser.eatField("hp=")) |_| {
-                pokemon.hp = try parser.eatUnsignedValue(u8, 10);
+            if (parser.eatField("hp")) |_| {
+                pokemon.stats[0] = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("attack")) |_| {
-                pokemon.attack = try parser.eatUnsignedValue(u8, 10);
+                pokemon.stats[1] = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("defense")) |_| {
-                pokemon.defense = try parser.eatUnsignedValue(u8, 10);
+                pokemon.stats[2] = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("speed")) |_| {
-                pokemon.speed = try parser.eatUnsignedValue(u8, 10);
+                pokemon.stats[3] = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("sp_attack")) |_| {
-                pokemon.sp_attack = try parser.eatUnsignedValue(u8, 10);
+                pokemon.stats[4] = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("sp_defense")) |_| {
-                pokemon.sp_defense = try parser.eatUnsignedValue(u8, 10);
+                pokemon.stats[5] = try parser.eatUnsignedValue(u8, 10);
             } else |_| {}
         } else |_| if (parser.eatField("types")) |_| {
             _ = try parser.eatIndex();
@@ -249,14 +250,14 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             .power = null,
             .accuracy = null,
             .pp = null,
-            .@"type" = null,
+            .type = null,
         });
         const move = &entry.value;
 
         if (parser.eatField("power")) |_| {
             move.power = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("type")) |_| {
-            move.@"type" = try mem.dupe(allocator, u8, try parser.eatValue());
+            move.type = try mem.dupe(allocator, u8, try parser.eatValue());
         } else |_| if (parser.eatField("pp")) |_| {
             move.pp = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("accuracy")) |_| {
@@ -337,8 +338,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
 
                 // TODO: We could probably reuse this ArrayList
                 var simular = std.ArrayList(usize).init(allocator);
-                var stats: [Pokemon.stats.len]u8 = undefined;
-                var min = @intCast(i64, sum(u8, pokemon.toBuf(&stats)));
+                var min = @intCast(i64, sum(u8, pokemon.stats));
                 var max = min;
 
                 while (simular.len < 5) {
@@ -347,7 +347,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
 
                     for (pick_from) |s| {
                         const p = data.pokemons.get(s).?.value;
-                        const total = @intCast(i64, sum(u8, p.toBuf(&stats)));
+                        const total = @intCast(i64, sum(u8, p.stats));
                         if (min <= total and total <= max)
                             try simular.append(s);
                     }
@@ -405,8 +405,8 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
 
 fn SumReturn(comptime T: type) type {
     return switch (@typeId(T)) {
-        builtin.TypeId.Int => u64,
-        builtin.TypeId.Float => f64,
+        .Int => u64,
+        .Float => f64,
         else => unreachable,
     };
 }
@@ -466,7 +466,7 @@ const Move = struct {
     power: ?u8,
     accuracy: ?u8,
     pp: ?u8,
-    @"type": ?[]const u8,
+    type: ?[]const u8,
 };
 
 // Represents a moves power in relation to the pokemon who uses it
@@ -480,7 +480,7 @@ const RelativeMove = struct {
             .power = blk: {
                 const power = @intToFloat(f32, m.power orelse 0);
                 const stab = for (p.types.toSlice()) |t1| {
-                    const t2 = m.@"type" orelse continue;
+                    const t2 = m.type orelse continue;
                     if (mem.eql(u8, t1, t2))
                         break f32(1.5);
                 } else f32(1.0);
@@ -506,56 +506,15 @@ const RelativeMove = struct {
 };
 
 const Pokemon = struct {
-    hp: ?u8,
-    attack: ?u8,
-    defense: ?u8,
-    speed: ?u8,
-    sp_attack: ?u8,
-    sp_defense: ?u8,
+    stats: [6]u8,
     types: std.ArrayList([]const u8),
     lvl_up_moves: LvlUpMoves,
 
     fn init(allocator: *mem.Allocator) Pokemon {
         return Pokemon{
-            .hp = null,
-            .attack = null,
-            .defense = null,
-            .speed = null,
-            .sp_attack = null,
-            .sp_defense = null,
+            .stats = [_]u8{0} ** 6,
             .types = std.ArrayList([]const u8).init(allocator),
             .lvl_up_moves = LvlUpMoves.init(allocator),
         };
-    }
-
-    const stats = [_][]const u8{
-        "hp",
-        "attack",
-        "defense",
-        "speed",
-        "sp_attack",
-        "sp_defense",
-    };
-
-    fn toBuf(p: Pokemon, buf: *[stats.len]u8) []u8 {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |stat| {
-                buf[i] = stat;
-                i += 1;
-            }
-        }
-
-        return buf[0..i];
-    }
-
-    fn fromBuf(p: *Pokemon, buf: []u8) void {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |*stat| {
-                stat.* = buf[i];
-                i += 1;
-            }
-        }
     }
 };

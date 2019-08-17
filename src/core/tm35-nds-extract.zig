@@ -1,49 +1,34 @@
+const build_options = @import("build_options");
 const clap = @import("clap");
-const common = @import("tm35-common");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen5 = @import("gen5-types.zig");
 const nds = @import("nds.zig");
 const std = @import("std");
-const builtin = @import("builtin");
-const format = @import("format");
 
-const bits = fun.bits;
 const debug = std.debug;
+const fmt = std.fmt;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
-const fs = std.fs;
-const math = std.math;
 const mem = std.mem;
-const fmt = std.fmt;
 const os = std.os;
-const rand = std.rand;
-const path = fs.path;
-const slice = fun.generic.slice;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
+const path = fs.path;
+
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap([]const u8, params);
-const Names = clap.Names;
-const Param = clap.Param([]const u8);
+
+const Clap = clap.ComptimeClap(clap.Help, params);
+const Param = clap.Param(clap.Help);
 
 const params = [_]Param{
-    Param{
-        .id = "display this help text and exit",
-        .names = Names{ .short = 'h', .long = "help" },
-    },
-    Param{
-        .id = "override destination path",
-        .names = Names{ .short = 'o', .long = "output" },
-        .takes_value = true,
-    },
-    Param{ .id = "" },
+    clap.parseParam("-h, --help           Display this help text and exit.    ") catch unreachable,
+    clap.parseParam("-o, --output <FILE>  Override destination path.          ") catch unreachable,
+    clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
+    Param{ .takes_value = true },
 };
 
 fn usage(stream: var) !void {
     try stream.write(
-        \\Usage: tm35-nds-extract [OPTION]... FILE
-        \\Reads a Nintendo DS rom and extract its files into a folder.
+        \\Usage: tm35-nds-extract [-hv] [-o <FILE>] <FILE>
+        \\Reads a Nintendo DS rom and extract its file system into a folder.
         \\
         \\Options:
         \\
@@ -51,56 +36,99 @@ fn usage(stream: var) !void {
     try clap.help(stream, params);
 }
 
-pub fn main() !void {
-    const stderr = &(try std.io.getStdErr()).outStream().stream;
-    const stdout = &(try std.io.getStdOut()).outStream().stream;
+pub fn main() u8 {
+    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}", err);
+    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}", err);
 
-    var arena = heap.ArenaAllocator.init(std.heap.direct_allocator);
-    const allocator = &arena.allocator;
+    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
+    const stderr = &stderr_file.outStream().stream;
+
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
+
+    const allocator = &arena.allocator;
 
     var arg_iter = clap.args.OsIterator.init(allocator);
     _ = arg_iter.next() catch undefined;
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        usage(stderr) catch {};
-        return err;
+        debug.warn("{}\n", err);
+        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        return 1;
     };
 
-    if (args.flag("--help"))
-        return try usage(stdout);
+    if (args.flag("--help")) {
+        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
 
-    const file_name = if (args.positionals().len > 0) args.positionals()[0] else {
-        try usage(stderr);
-        return error.NoFileProvided;
+    if (args.flag("--version")) {
+        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        return 0;
+    }
+
+    const pos = args.positionals();
+    const file_name = if (pos.len > 0) pos[0] else {
+        debug.warn("No file provided\n");
+        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
+        return 1;
     };
 
     const out = args.option("--output") orelse blk: {
-        break :blk try fmt.allocPrint(allocator, "{}.output", path.basename(file_name));
+        const res = fmt.allocPrint(allocator, "{}.output", path.basename(file_name));
+        break :blk res catch return allocFailed();
     };
 
-    var rom_file = try fs.File.openRead(file_name);
+    var rom_file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
     defer rom_file.close();
-    var rom = try nds.Rom.fromFile(rom_file, allocator);
+    var rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return errPrint("Failed to read nds rom: {}\n", err);
 
-    try fs.makePath(allocator, out);
-    try write(try path.join(allocator, [_][]const u8{ out, "arm9" }), rom.arm9);
-    try write(try path.join(allocator, [_][]const u8{ out, "arm7" }), rom.arm7);
-    try write(try path.join(allocator, [_][]const u8{ out, "banner" }), mem.toBytes(rom.banner));
+    const arm9_file = path.join(allocator, [_][]const u8{ out, "arm9" }) catch return allocFailed();
+    const arm7_file = path.join(allocator, [_][]const u8{ out, "arm7" }) catch return allocFailed();
+    const banner_file = path.join(allocator, [_][]const u8{ out, "banner" }) catch return allocFailed();
+    const nitro_footer_file = path.join(allocator, [_][]const u8{ out, "nitro_footer" }) catch return allocFailed();
+    const arm9_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm9_overlays" }) catch return allocFailed();
+    const arm7_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm7_overlays" }) catch return allocFailed();
+    const root_folder = path.join(allocator, [_][]const u8{ out, "root" }) catch return allocFailed();
+
+    fs.makePath(allocator, out) catch |err| return failedToMakePath(out, err);
+    io.writeFile(arm9_file, rom.arm9) catch |err| return failedWriteError(arm9_file, err);
+    io.writeFile(arm7_file, rom.arm7) catch |err| return failedWriteError(arm7_file, err);
+    io.writeFile(banner_file, mem.toBytes(rom.banner)) catch |err| return failedWriteError(banner_file, err);
 
     if (rom.hasNitroFooter())
-        try write(try path.join(allocator, [_][]const u8{ out, "nitro_footer" }), mem.toBytes(rom.nitro_footer));
+        io.writeFile(nitro_footer_file, mem.toBytes(rom.nitro_footer)) catch |err| return failedWriteError(nitro_footer_file, err);
 
-    const arm9_overlay_folder = try path.join(allocator, [_][]const u8{ out, "arm9_overlays" });
-    const arm7_overlay_folder = try path.join(allocator, [_][]const u8{ out, "arm7_overlays" });
-    try fs.makePath(allocator, arm9_overlay_folder);
-    try fs.makePath(allocator, arm7_overlay_folder);
-    try writeOverlays(allocator, arm9_overlay_folder, rom.arm9_overlay_table, rom.arm9_overlay_files);
-    try writeOverlays(allocator, arm7_overlay_folder, rom.arm7_overlay_table, rom.arm7_overlay_files);
+    fs.makePath(allocator, arm9_overlay_folder) catch |err| return failedToMakePath(arm9_overlay_folder, err);
+    fs.makePath(allocator, arm7_overlay_folder) catch |err| return failedToMakePath(arm7_overlay_folder, err);
+    writeOverlays(allocator, arm9_overlay_folder, rom.arm9_overlay_table, rom.arm9_overlay_files) catch |err| return errPrint("Failed to write arm9 overlays: {}", err);
+    writeOverlays(allocator, arm7_overlay_folder, rom.arm7_overlay_table, rom.arm7_overlay_files) catch |err| return errPrint("Failed to write arm7 overlays: {}", err);
 
-    const root_folder = try path.join(allocator, [_][]const u8{ out, "root" });
-    try fs.makePath(allocator, root_folder);
-    try writeFs(allocator, nds.fs.Nitro, root_folder, rom.root);
+    fs.makePath(allocator, root_folder) catch |err| return failedToMakePath(root_folder, err);
+    writeFs(allocator, nds.fs.Nitro, root_folder, rom.root) catch |err| return errPrint("Failed to write root file system: {}", err);
+    return 0;
+}
+
+fn allocFailed() u8 {
+    debug.warn("Allocation failed\n");
+    return 1;
+}
+
+fn failedWriteError(file: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to write data to '{}': {}\n", file, err);
+    return 1;
+}
+
+fn failedToMakePath(path_str: []const u8, err: anyerror) u8 {
+    debug.warn("Failed to make path '{}': {}\n", path_str, err);
+    return 1;
+}
+
+fn errPrint(comptime format_str: []const u8, args: ...) u8 {
+    debug.warn(format_str, args);
+    return 1;
 }
 
 fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: *Fs) !void {
@@ -128,21 +156,13 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
                     const Tag = @TagType(nds.fs.Nitro.File);
                     switch (Fs) {
                         nds.fs.Nitro => switch (f.*) {
-                            Tag.Binary => |bin| {
-                                var file = try fs.File.openWrite(node_path);
-                                defer file.close();
-                                try file.write(bin.data);
-                            },
+                            Tag.Binary => |bin| try io.writeFile(node_path, bin.data),
                             Tag.Narc => |narc| {
                                 try fs.makePath(allocator, node_path);
                                 try writeFs(allocator, nds.fs.Narc, node_path, narc);
                             },
                         },
-                        nds.fs.Narc => {
-                            var file = try fs.File.openWrite(node_path);
-                            defer file.close();
-                            try file.write(f.data);
-                        },
+                        nds.fs.Narc => try io.writeFile(node_path, f.data),
                         else => comptime unreachable,
                     }
                 },
@@ -166,18 +186,12 @@ fn writeOverlays(child_allocator: *mem.Allocator, folder: []const u8, overlays: 
     const overlay_folder_path = try path.join(allocator, [_][]const u8{ folder, "overlay" });
     for (overlays) |overlay, i| {
         const overlay_path = try fmt.allocPrint(allocator, "{}{}", overlay_folder_path, i);
-        try write(overlay_path, mem.toBytes(overlay));
+        try io.writeFile(overlay_path, mem.toBytes(overlay));
     }
 
     const file_folder_path = try path.join(allocator, [_][]const u8{ folder, "file" });
     for (files) |file, i| {
         const file_path = try fmt.allocPrint(allocator, "{}{}", file_folder_path, i);
-        try write(file_path, file);
+        try io.writeFile(file_path, file);
     }
-}
-
-fn write(file_path: []const u8, data: []const u8) !void {
-    var file = try fs.File.openWrite(file_path);
-    defer file.close();
-    try file.write(data);
 }
