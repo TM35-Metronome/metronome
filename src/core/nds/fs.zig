@@ -45,6 +45,19 @@ pub fn Folder(comptime TFile: type) type {
                 File: *File,
                 Folder: *Self,
             };
+
+            pub fn asFile(node: Node) !*File {
+                switch (node.kind) {
+                    .File => |file| return file,
+                    .Folder => return error.NotAFile,
+                }
+            }
+
+            pub fn asDataFile(node: Node, comptime T: type) !*T {
+                const file = try asFile(node);
+                const data = slice.bytesToSliceTrim(T, file.data);
+                return slice.at(data, 0) catch error.FileToSmall;
+            }
         };
 
         // The parent folder. If we are root, then this is `null`

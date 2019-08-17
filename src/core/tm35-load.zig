@@ -80,15 +80,11 @@ pub fn main() u8 {
         return 0;
     }
 
-    const file_name = blk: {
-        const poss = args.positionals();
-        if (poss.len == 0) {
-            debug.warn("No file provided\n");
-            usage(stderr) catch {};
-            return 1;
-        }
-
-        break :blk poss[0];
+    const pos = args.positionals();
+    const file_name = if (pos.len > 0) pos[0] else {
+        debug.warn("No file provided\n");
+        usage(stderr) catch {};
+        return 1;
     };
 
     const file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
@@ -354,7 +350,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     for (game.trainers.nodes.toSlice()) |node, i| {
-        const trainer = nodeAsType(gen4.Trainer, node) catch continue;
+        const trainer = node.asDataFile(gen4.Trainer) catch continue;
 
         try stream.print(".trainers[{}].class={}\n", i, trainer.class);
         try stream.print(".trainers[{}].battle_type={}\n", i, trainer.battle_type);
@@ -369,17 +365,11 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
         if (parties.len <= i)
             continue;
 
-        const party_file = nodeAsFile(parties[i]) catch continue;
+        const party_file = node.asFile() catch continue;
         const party_data = party_file.data;
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
-            const base = switch (trainer.party_type) {
-                gen4.PartyType.None => &(getGen4Member(gen4.PartyMemberNone, party_data, game.version, i) orelse break).base,
-                gen4.PartyType.Item => &(getGen4Member(gen4.PartyMemberItem, party_data, game.version, i) orelse break).base,
-                gen4.PartyType.Moves => &(getGen4Member(gen4.PartyMemberMoves, party_data, game.version, i) orelse break).base,
-                gen4.PartyType.Both => &(getGen4Member(gen4.PartyMemberBoth, party_data, game.version, i) orelse break).base,
-            };
-
+            const base = trainer.partyMember(game.version, party_data, i) orelse continue;
             try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, base.iv);
             try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, base.gender_ability.gender);
             try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, base.gender_ability.ability);
@@ -411,7 +401,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     for (game.moves.nodes.toSlice()) |node, i| {
-        const move = nodeAsType(gen4.Move, node) catch continue;
+        const move = node.asDataFile(gen4.Move) catch continue;
         try stream.print(".moves[{}].category={}\n", i, @tagName(move.category));
         try stream.print(".moves[{}].power={}\n", i, move.power);
         try stream.print(".moves[{}].type={}\n", i, @tagName(move.@"type"));
@@ -420,7 +410,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     for (game.pokemons.nodes.toSlice()) |node, i| {
-        const pokemon = nodeAsType(gen4.BasePokemon, node) catch continue;
+        const pokemon = node.asDataFile(gen4.BasePokemon) catch continue;
         try stream.print(".pokemons[{}].stats.hp={}\n", i, pokemon.stats.hp);
         try stream.print(".pokemons[{}].stats.attack={}\n", i, pokemon.stats.attack);
         try stream.print(".pokemons[{}].stats.defense={}\n", i, pokemon.stats.defense);
@@ -469,7 +459,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
             }
         }
 
-        const evos_file = try nodeAsFile(game.evolutions.nodes.toSlice()[i]);
+        const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
         const evos = slice.bytesToSliceTrim(gen4.Evolution, evos_file.data);
         for (evos) |evo, j| {
             if (evo.method == gen4.Evolution.Method.Unused)
@@ -494,7 +484,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
             common.Version.Pearl,
             common.Version.Platinum,
             => {
-                const wild_mons = nodeAsType(gen4.DpptWildPokemons, node) catch continue;
+                const wild_mons = node.asDataFile(gen4.DpptWildPokemons) catch continue;
 
                 try stream.print(".zones[{}].wild.grass.encounter_rate={}\n", i, wild_mons.grass_rate.value());
                 for (wild_mons.grass) |grass, j| {
@@ -538,7 +528,7 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
             common.Version.HeartGold,
             common.Version.SoulSilver,
             => {
-                const wild_mons = nodeAsType(gen4.HgssWildPokemons, node) catch continue;
+                const wild_mons = node.asDataFile(gen4.HgssWildPokemons) catch continue;
                 inline for ([_][]const u8{
                     "grass_morning",
                     "grass_day",
@@ -576,35 +566,6 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
         };
 }
 
-fn getGen4MemberBase(party_type: gen4.PartyType, data: []u8, version: common.Version, i: usize) ?*gen4.PartyMemberBase {}
-
-fn getGen4Member(comptime T: type, data: []u8, version: common.Version, i: usize) ?*T {
-    switch (version) {
-        common.Version.Diamond,
-        common.Version.Pearl,
-        => {
-            const party = slice.bytesToSliceTrim(T, data);
-            if (party.len <= i)
-                return null;
-
-            return &party[i];
-        },
-
-        common.Version.Platinum,
-        common.Version.HeartGold,
-        common.Version.SoulSilver,
-        => {
-            const party = slice.bytesToSliceTrim(gen4.HgSsPlatMember(T), data);
-            if (party.len <= i)
-                return null;
-
-            return &party[i].member;
-        },
-
-        else => unreachable,
-    }
-}
-
 fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
 
@@ -623,7 +584,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.trainers.nodes.toSlice()) |node, i| {
-        const trainer = nodeAsType(gen5.Trainer, node) catch continue;
+        const trainer = node.asDataFile(gen5.Trainer) catch continue;
 
         try stream.print(".trainers[{}].class={}\n", i, trainer.class);
         try stream.print(".trainers[{}].battle_type={}\n", i, trainer.battle_type);
@@ -641,16 +602,11 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         if (parties.len <= i)
             continue;
 
-        const party_file = nodeAsFile(parties[i]) catch continue;
+        const party_file = parties[i].asFile() catch continue;
         const party_data = party_file.data;
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
-            const base = switch (trainer.party_type) {
-                gen5.PartyType.None => &(getGen5Member(gen5.PartyMemberNone, party_data, i) orelse break).base,
-                gen5.PartyType.Item => &(getGen5Member(gen5.PartyMemberItem, party_data, i) orelse break).base,
-                gen5.PartyType.Moves => &(getGen5Member(gen5.PartyMemberMoves, party_data, i) orelse break).base,
-                gen5.PartyType.Both => &(getGen5Member(gen5.PartyMemberBoth, party_data, i) orelse break).base,
-            };
+            const base = trainer.partyMember(party_data, i) orelse continue;
             try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, base.iv);
             try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, base.gender_ability.gender);
             try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, base.gender_ability.ability);
@@ -682,7 +638,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.moves.nodes.toSlice()) |node, i| {
-        const move = nodeAsType(gen5.Move, node) catch continue;
+        const move = node.asDataFile(gen5.Move) catch continue;
 
         try stream.print(".moves[{}].type={}\n", i, @tagName(move.@"type"));
         try stream.print(".moves[{}].effect_category={}\n", i, move.effect_category);
@@ -707,7 +663,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
         const stats_affected = move.stats_affected;
         for (stats_affected) |stat_affected, j|
-            try stream.print(".moves[{}].stats_affected[{}]={}\n", i, j, stats_affected);
+            try stream.print(".moves[{}].stats_affected[{}]={}\n", i, j, stat_affected);
 
         const stats_affected_magnetude = move.stats_affected_magnetude;
         for (stats_affected_magnetude) |stat_affected_magnetude, j|
@@ -719,7 +675,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.pokemons.nodes.toSlice()) |node, i| {
-        const pokemon = nodeAsType(gen5.BasePokemon, node) catch continue;
+        const pokemon = node.asDataFile(gen5.BasePokemon) catch continue;
 
         try stream.print(".pokemons[{}].stats.hp={}\n", i, pokemon.stats.hp);
         try stream.print(".pokemons[{}].stats.attack={}\n", i, pokemon.stats.attack);
@@ -779,7 +735,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         if (game.evolutions.nodes.len <= i)
             continue;
 
-        const evos_file = try nodeAsFile(game.evolutions.nodes.toSlice()[i]);
+        const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
         const evos = slice.bytesToSliceTrim(gen5.Evolution, evos_file.data);
         for (evos) |evo, j| {
             if (evo.method == gen5.Evolution.Method.Unused)
@@ -798,7 +754,7 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".hms[{}]={}\n", i, hm.value());
 
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
-        const wild_mons = nodeAsType(gen5.WildPokemons, node) catch continue;
+        const wild_mons = node.asDataFile(gen5.WildPokemons) catch continue;
         inline for ([_][]const u8{
             "grass",
             "dark_grass",
@@ -818,25 +774,4 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
             }
         }
     }
-}
-
-fn getGen5Member(comptime T: type, data: []u8, i: usize) ?*T {
-    const party = slice.bytesToSliceTrim(T, data);
-    if (party.len <= i)
-        return null;
-
-    return &party[i];
-}
-
-fn nodeAsFile(node: nds.fs.Narc.Node) !*nds.fs.Narc.File {
-    switch (node.kind) {
-        nds.fs.Narc.Node.Kind.File => |file| return file,
-        nds.fs.Narc.Node.Kind.Folder => return error.NotFile,
-    }
-}
-
-fn nodeAsType(comptime T: type, node: nds.fs.Narc.Node) !*T {
-    const file = try nodeAsFile(node);
-    const data = slice.bytesToSliceTrim(T, file.data);
-    return slice.at(data, 0) catch error.FileToSmall;
 }

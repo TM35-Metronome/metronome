@@ -142,6 +142,22 @@ pub const Trainer = extern struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 20);
     }
+
+    pub fn partyMember(trainer: Trainer, party: []u8, i: usize) ?*PartyMemberBase {
+        const member_size = switch (trainer.party_type) {
+            .None => usize(@sizeOf(PartyMemberNone)),
+            .Item => usize(@sizeOf(PartyMemberItem)),
+            .Moves => usize(@sizeOf(PartyMemberMoves)),
+            .Both => usize(@sizeOf(PartyMemberBoth)),
+        };
+
+        const start = i * member_size;
+        const end = start + member_size;
+        if (party.len < end)
+            return null;
+
+        return &@bytesToSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
+    }
 };
 
 pub const Move = extern struct {

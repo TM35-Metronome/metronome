@@ -438,6 +438,38 @@ pub const Trainer = extern struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 17);
     }
+
+    pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
+        const member_size = switch (version) {
+            common.Version.Diamond,
+            common.Version.Pearl,
+            => switch (trainer.party_type) {
+                .None => usize(@sizeOf(PartyMemberNone)),
+                .Item => usize(@sizeOf(PartyMemberItem)),
+                .Moves => usize(@sizeOf(PartyMemberMoves)),
+                .Both => usize(@sizeOf(PartyMemberBoth)),
+            },
+
+            common.Version.Platinum,
+            common.Version.HeartGold,
+            common.Version.SoulSilver,
+            => switch (trainer.party_type) {
+                .None => usize(@sizeOf(HgSsPlatMember(PartyMemberNone))),
+                .Item => usize(@sizeOf(HgSsPlatMember(PartyMemberItem))),
+                .Moves => usize(@sizeOf(HgSsPlatMember(PartyMemberMoves))),
+                .Both => usize(@sizeOf(HgSsPlatMember(PartyMemberBoth))),
+            },
+
+            else => unreachable,
+        };
+
+        const start = i * member_size;
+        const end = start + member_size;
+        if (party.len < end)
+            return null;
+
+        return &@bytesToSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
+    }
 };
 
 pub const Type = packed enum(u8) {
