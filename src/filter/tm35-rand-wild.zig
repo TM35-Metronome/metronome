@@ -299,7 +299,7 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
 
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const Zones = std.AutoHashMap(usize, Zone);
-const WildAreas = std.AutoHashMap([]const u8, WildArea);
+const WildAreas = std.HashMap([]const u8, WildArea, mem.hash_slice_u8, mem.eql_slice_u8);
 const WildPokemons = std.AutoHashMap(usize, WildPokemon);
 
 const Data = struct {

@@ -257,7 +257,7 @@ const MachinesLearned = std.AutoHashMap(usize, bool);
 const Machines = std.AutoHashMap(usize, usize);
 //const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
 const Moves = std.AutoHashMap(usize, Move);
-const Types = std.AutoHashMap([]const u8, void);
+const Types = std.BufSet;
 
 const Data = struct {
     pokemons: Pokemons,
