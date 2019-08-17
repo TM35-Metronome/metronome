@@ -193,7 +193,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         } else |_| if (parser.eatField("types")) {
             _ = try parser.eatIndex();
             const t = try parser.eatValue();
-            _ = try pokemon.types.put(try mem.dupe(allocator, u8, t), {});
+            _ = try pokemon.types.put(t);
         } else |_| {}
     } else |_| if (parser.eatField("moves")) {
         const move_index = try parser.eatIndex();
@@ -241,7 +241,8 @@ fn randomizeMachinesLearned(data: Data, pokemon: Pokemon, random: *rand.Random, 
                 const move_index = machines.get(kv.key) orelse break :blk low_chance;
                 const move = data.moves.get(move_index.value) orelse break :blk low_chance;
                 const move_type = move.value.type orelse break :blk low_chance;
-                _ = pokemon.types.get(move_type) orelse break :blk low_chance;
+                if (!pokemon.types.exists(move_type))
+                    break :blk low_chance;
 
                 // Yay the move is stab. Give it a higher chance.
                 break :blk f64(1.0 - low_chance);
