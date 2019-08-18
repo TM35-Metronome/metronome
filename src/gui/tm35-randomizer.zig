@@ -89,28 +89,6 @@ pub fn main() u8 {
     return 0;
 }
 
-//fn tabs(ctx: *c.struct_nk_context, selected: Group) Group {
-//    const style = ctx.style;
-//    defer ctx.style = style;
-//    ctx.style.window.spacing.x = 0;
-//
-//    var res = selected;
-//
-//    c.nk_layout_row_dynamic(ctx, 0, 5);
-//    if (c.nk_select_label(ctx, c" Moves", @enumToInt(c.NK_TEXT_LEFT), @boolToInt(res == .Moves)) != 0)
-//        res = .Moves;
-//    if (c.nk_select_label(ctx, c" Trainer parties", @enumToInt(c.NK_TEXT_LEFT), @boolToInt(res == .Parties)) != 0)
-//        res = .Parties;
-//    if (c.nk_select_label(ctx, c" Starters", @enumToInt(c.NK_TEXT_LEFT), @boolToInt(res == .Starters)) != 0)
-//        res = .Starters;
-//    if (c.nk_select_label(ctx, c" Stats", @enumToInt(c.NK_TEXT_LEFT), @boolToInt(res == .Stats)) != 0)
-//        res = .Stats;
-//    if (c.nk_select_label(ctx, c" Wild", @enumToInt(c.NK_TEXT_LEFT), @boolToInt(res == .Wild)) != 0)
-//        res = .Wild;
-//
-//    return res;
-//}
-
 fn errPrint(comptime format_str: []const u8, args: ...) u8 {
     debug.warn(format_str, args);
     return 1;
@@ -139,6 +117,7 @@ const Exes = struct {
     const Filters = std.HashMap([]const u8, Filter, mem.hash_slice_u8, mem.eql_slice_u8);
 
     const Filter = struct {
+        call: bool,
         path: []const u8,
         help: []const u8,
         params: []const clap.Param(clap.Help),
@@ -182,19 +161,19 @@ const Exes = struct {
         var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
 
         if (join(&fs_tmp, [_][]const u8{ self_exe_dir, "core", tool })) |in_core| {
-            if (execHelpBufCheckSuccess(in_core, cwd, env_map)) {
+            if (execHelpCheckSuccess(in_core, cwd, env_map)) {
                 return mem.dupe(allocator, u8, in_core);
             } else |_| {}
         } else |_| {}
 
         if (join(&fs_tmp, [_][]const u8{ self_exe_dir, tool })) |in_self_exe_dir| {
-            if (execHelpBufCheckSuccess(in_self_exe_dir, cwd, env_map)) {
+            if (execHelpCheckSuccess(in_self_exe_dir, cwd, env_map)) {
                 return mem.dupe(allocator, u8, in_self_exe_dir);
             } else |_| {}
         } else |_| {}
 
         // Try exe as if it was in PATH
-        if (execHelpBufCheckSuccess(tool, cwd, env_map)) {
+        if (execHelpCheckSuccess(tool, cwd, env_map)) {
             return mem.dupe(allocator, u8, tool);
         } else |_| {}
 
@@ -205,15 +184,9 @@ const Exes = struct {
         var res = Filters.init(allocator);
         errdefer freeFilters(allocator, res);
 
-        // Put in blacklisted filters. We remove them before we return.
-        // We also remove them if an error occured, as `freeFilters` should
-        // not try to free these entries.
+        // HACK: We put our own exe in as a blacklist to avoid running our self infinite times
         try res.putNoClobber(self_exe, undefined);
         errdefer _ = res.remove(self_exe);
-        try res.putNoClobber("tm35-load", undefined);
-        errdefer _ = res.remove("tm35-load");
-        try res.putNoClobber("tm35-apply", undefined);
-        errdefer _ = res.remove("tm35-apply");
 
         // Try to find filters is "$SELF_EXE_PATH/filter" and "$SELF_EXE_PATH/"
         var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
@@ -231,8 +204,6 @@ const Exes = struct {
         while (it.next()) |dir|
             findFiltersIn(&res, allocator, dir, cwd, env_map) catch {};
 
-        _ = res.remove("tm35-load");
-        _ = res.remove("tm35-apply");
         _ = res.remove(self_exe);
         return res;
     }
@@ -261,19 +232,13 @@ const Exes = struct {
     }
 
     fn pathToFilter(allocator: *mem.Allocator, filter_path: []const u8, cwd: []const u8, env_map: *const std.BufMap) !Filter {
-        const help_result = try execHelp(allocator, filter_path, cwd, env_map);
-        defer allocator.free(help_result.stderr);
-        errdefer allocator.free(help_result.stdout);
-
-        switch (help_result.term) {
-            .Exited => |status| {
-                if (status != 0)
-                    return error.ProcessFailed;
+        try checkTm35Tool(filter_path, cwd, env_map);
+        const help = try execHelp(allocator, filter_path, cwd, env_map);
+        errdefer allocator.free(help);
 
                 var params = std.ArrayList(clap.Param(clap.Help)).init(allocator);
                 errdefer params.deinit();
 
-                const help = help_result.stdout;
                 var it = mem.separate(help, "\n");
                 while (it.next()) |line| {
                     const param = clap.parseParam(line) catch continue;
@@ -285,9 +250,6 @@ const Exes = struct {
                     .help = help,
                     .params = params.toOwnedSlice(),
                 };
-            },
-            else => return error.ProcessFailed,
-        }
     }
 
     fn freeFilters(allocator: *mem.Allocator, filters: Filters) void {
@@ -301,18 +263,78 @@ const Exes = struct {
         filters.deinit();
     }
 
-    fn execHelpBufCheckSuccess(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
-        var buf: [1024 * 64]u8 = undefined;
+    fn checkTm35Tool(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
+        var buf: [1024 * 4]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
-        const res = try execHelp(&fba.allocator, exe, cwd, env_map);
-        switch (res.term) {
+
+        var p = try std.ChildProcess.init([_][]const u8{exe}, &fba.allocator);
+        defer p.deinit();
+
+        p.stdin_behavior = std.ChildProcess.StdIo.Pipe;
+        p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
+        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
+        p.cwd = cwd;
+        p.env_map = env_map;
+
+        try p.spawn();
+        defer _ = p.kill() catch undefined;
+
+        try p.stdin.?.write(".this.is.a[0].dummy=Line\n");
+        p.stdin.?.close();
+        p.stdin = null;
+
+        var response_buf: [1024]u8 = undefined;
+        const response_len = try p.stdout.?.inStream().stream.readFull(&response_buf);
+        const response = response_buf[0..response_len];
+        if (!mem.startsWith(u8, response, ".this.is.a[0].dummy="))
+            return error.NoTm35Filter;
+    }
+
+    fn execHelpCheckSuccess(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
+        var buf: [1024 * 4]u8 = undefined;
+        var fba = heap.FixedBufferAllocator.init(&buf);
+
+        var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
+        defer p.deinit();
+
+        p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
+        p.stdout_behavior = std.ChildProcess.StdIo.Ignore;
+        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
+        p.cwd = cwd;
+        p.env_map = env_map;
+
+        const res = try p.spawnAndWait();
+        switch (res) {
             .Exited => |status| if (status != 0) return error.ProcessFailed,
             else => return error.ProcessFailed,
         }
     }
 
-    fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !std.ChildProcess.ExecResult {
-        return std.ChildProcess.exec(allocator, [_][]const u8{ exe, "--help" }, cwd, env_map, math.maxInt(usize));
+    fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]u8 {
+        var buf: [1024 * 4]u8 = undefined;
+        var fba = heap.FixedBufferAllocator.init(&buf);
+
+        var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
+        defer p.deinit();
+
+        p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
+        p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
+        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
+        p.cwd = cwd;
+        p.env_map = env_map;
+
+        try p.spawn();
+        errdefer _ = p.kill() catch undefined;
+
+        const help = try p.stdout.?.inStream().stream.readAllAlloc(allocator, 1024 * 1024);
+
+        const res = try p.wait();
+        switch (res) {
+            .Exited => |status| if (status != 0) return error.ProcessFailed,
+            else => return error.ProcessFailed,
+        }
+
+        return help;
     }
 
     fn join(buf: *[fs.MAX_PATH_BYTES]u8, paths: []const []const u8) ![]u8 {
