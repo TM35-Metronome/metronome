@@ -1,0 +1,23 @@
+#include <stddef.h>
+#include <stdint.h>
+
+void zig_assert(int ok);
+void* zig_memcopy(void *dst, const void *src, size_t n);
+void zig_memset(void *ptr, uint8_t c0, size_t size);
+float zig_sqrt(float x);
+float zig_sin(float x);
+float zig_cos(float x);
+
+#define NK_ASSERT zig_assert
+#define NK_MEMSET zig_memset
+#define NK_MEMCPY zig_memcopy
+#define NK_SQRT zig_sqrt
+#define NK_SIN zig_sin
+#define NK_COS zig_cos
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#include <nuklear.h>
+#define nk_memset zig_memset
+
+int nkBegin(struct nk_context *ctx, const char *title, const struct nk_rect *bounds, nk_flags flags);
+int nkPopupBegin(struct nk_context *ctx, enum nk_popup_type type, const char *title, nk_flags flags, const struct nk_rect *rect);
+int nkMenuBeginLabel(struct nk_context *ctx, const char *text, nk_flags align, const struct nk_vec2 *size);
