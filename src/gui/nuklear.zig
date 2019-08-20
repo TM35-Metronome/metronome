@@ -197,8 +197,8 @@ pub const X11Window = struct {
             c.CWEventMask | c.CWColormap,
             &set_w_attr,
         );
-        errdefer _ = c.XDestroyWindow(xdisplay, window);
-        errdefer _ = c.XUnmapWindow(xdisplay, window);
+        errdefer _ = c.XDestroyWindow(display, window);
+        errdefer _ = c.XUnmapWindow(display, window);
 
         _ = c.XStoreName(display, window, c"X11");
         _ = c.XMapWindow(display, window);

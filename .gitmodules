@@ -12,4 +12,4 @@
 	url = https://github.com/Hejsil/fun-with-zig.git
 [submodule "lib/nuklear"]
 	path = lib/nuklear
-	url = https://github.com/vurtun/nuklear.git
+	url = https://github.com/Hejsil/nuklear.git

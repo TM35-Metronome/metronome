@@ -41,6 +41,7 @@ pub fn main() u8 {
     const exes = Exes.find(allocator) catch |err| return errPrint("Failed to find exes: {}\n", err);
     defer exes.deinit();
 
+    var selected: usize = 0;
     outer: while (true) {
         timer.reset();
 
@@ -53,17 +54,118 @@ pub fn main() u8 {
         }
         c.nk_input_end(ctx);
 
-        if (nk.begin(ctx, c"", nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height)), 0)) {
-            c.nk_layout_row_dynamic(ctx, 400, 1);
-            var list_view: c.nk_list_view = undefined;
-            if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", 0, 20, @intCast(c_int, exes.filters.count())) != 0) {
-                var filters = exes.filters.iterator();
-                while (filters.next()) |kv| {
-                    c.nk_layout_row_dynamic(ctx, 20, 1);
-                    c.nk_text(ctx, kv.key.ptr, @intCast(c_int, kv.key.len), nk.NK_TEXT_LEFT);
+        if (nk.begin(ctx, c"", nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height)), nk.WINDOW_NO_SCROLLBAR)) {
+            var total_space: c.struct_nk_rect = undefined;
+            c.nkWindowGetContentRegion(ctx, &total_space);
+
+            const group_height = total_space.h - ctx.style.window.padding.y * 2;
+            const inner_height = group_height - groupSize(ctx);
+            c.nk_layout_row_template_begin(ctx, group_height);
+            c.nk_layout_row_template_push_static(ctx, 220);
+            c.nk_layout_row_template_push_dynamic(ctx);
+            c.nk_layout_row_template_push_static(ctx, 180);
+            c.nk_layout_row_template_end(ctx);
+
+            if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
+                c.nk_layout_row_dynamic(ctx, inner_height, 1);
+                var list_view: c.nk_list_view = undefined;
+                if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", 0, 0, @intCast(c_int, exes.filters.len)) != 0) {
+                    for (exes.filters) |filter, i| {
+                        if (i < @intCast(usize, list_view.begin))
+                            continue;
+                        if (@intCast(usize, list_view.end) <= i)
+                            break;
+
+                        c.nk_layout_row_template_begin(ctx, 0);
+                        c.nk_layout_row_template_push_static(ctx, checkboxHeight(ctx));
+                        c.nk_layout_row_template_push_dynamic(ctx);
+                        c.nk_layout_row_template_end(ctx);
+
+                        const name = path.basename(filter.path)[5..];
+                        _ = c.nk_check_label(ctx, c"", @boolToInt(false)) != 0; // TODO: use
+                        if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.NK_TEXT_LEFT, @boolToInt(i == selected)) != 0)
+                            selected = i;
+                    }
+                    c.nk_list_view_end(&list_view);
                 }
+                c.nk_group_end(ctx);
             }
-            c.nk_list_view_end(&list_view);
+
+            if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
+                if (exes.filters.len == 0) {
+                    c.nk_group_end(ctx);
+                    break :blk;
+                }
+
+                const filter = exes.filters[selected];
+                var it = mem.separate(filter.help, "\n");
+                while (it.next()) |line_notrim| {
+                    const line = mem.trimRight(u8, line_notrim, " ");
+                    if (line.len == 0)
+                        continue;
+                    if (mem.startsWith(u8, line, "Usage:"))
+                        continue;
+                    if (mem.startsWith(u8, line, "Options:"))
+                        continue;
+                    if (mem.startsWith(u8, line, " "))
+                        continue;
+                    if (mem.startsWith(u8, line, "\t"))
+                        continue;
+
+                    c.nk_layout_row_dynamic(ctx, 0, 1);
+                    c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.NK_TEXT_LEFT);
+                }
+
+                for (filter.params) |param| {
+                    const help = param.id.msg;
+                    const text = param.names.long orelse "???";
+                    if (mem.eql(u8, text, "help"))
+                        continue;
+                    if (mem.eql(u8, text, "version"))
+                        continue;
+
+                    var bounds: c.struct_nk_rect = undefined;
+                    c.nkWidgetBounds(ctx, &bounds);
+
+                    if (!param.takes_value) {
+                        _ = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), 0); // TODO: use
+                        if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
+                            c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+                        continue;
+                    }
+                }
+
+                c.nk_group_end(ctx);
+            }
+
+            if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) {
+                c.nk_layout_row_dynamic(ctx, 0, 1);
+                _ = c.nk_button_label(ctx, c"Randomize!");
+                _ = c.nk_button_label(ctx, c"Load settings");
+                _ = c.nk_button_label(ctx, c"Save settings");
+                c.nk_group_end(ctx);
+            }
+
+            //var total_space2: c.struct_nk_rect = undefined;
+            //c.nkWindowGetContentRegion(ctx, &total_space2);
+            //debug.warn("2 {}\n", total_space2);
+            //debug.warn("2 {}\n", c.nk_widget_width(ctx));
+            //debug.warn("2 {}\n", c.nk_widget_height(ctx));
+            //
+            //var list_view: c.nk_list_view = undefined;
+            //if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", 0, 0, @intCast(c_int, exes.filters.count())) != 0) {
+            //    var filters = exes.filters.iterator();
+            //    var i: c_int = 0;
+            //    while (filters.next()) |kv| : (i += 1) {
+            //        if (i < list_view.begin)
+            //            continue;
+            //        if (list_view.end <= i)
+            //            break;
+            //        c.nk_layout_row_dynamic(ctx, 0, 1);
+            //        c.nk_text(ctx, kv.key.ptr, @intCast(c_int, kv.key.len), nk.NK_TEXT_LEFT);
+            //    }
+            //    c.nk_list_view_end(&list_view);
+            //}
 
             //c.nk_layout_row_template_begin(ctx, 400);
             //c.nk_layout_row_template_push_dynamic(ctx);
@@ -94,12 +196,12 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
     return 1;
 }
 
-fn rowMinHeight(ctx: *const c.struct_nk_context) f32 {
-    return ctx.current.*.layout.*.row.min_height + ctx.style.window.spacing.y;
+fn checkboxHeight(ctx: *const c.struct_nk_context) f32 {
+    return ctx.style.font.*.height;
 }
 
 fn groupSize(ctx: *const c.struct_nk_context) f32 {
-    return headerHeight(ctx) + ctx.style.window.group_padding.y + ctx.style.window.spacing.y;
+    return headerHeight(ctx) + (ctx.style.window.group_padding.y * 2) + ctx.style.window.spacing.y;
 }
 
 fn headerHeight(ctx: *const c.struct_nk_context) f32 {
@@ -112,21 +214,19 @@ const Exes = struct {
     allocator: *mem.Allocator,
     load: []const u8,
     apply: []const u8,
-    filters: Filters,
-
-    const Filters = std.HashMap([]const u8, Filter, mem.hash_slice_u8, mem.eql_slice_u8);
+    filters: []const Filter,
 
     const Filter = struct {
-        call: bool,
         path: []const u8,
         help: []const u8,
         params: []const clap.Param(clap.Help),
     };
 
     fn deinit(exes: Exes) void {
+        freeFilters(exes.allocator, exes.filters);
         exes.allocator.free(exes.load);
         exes.allocator.free(exes.apply);
-        freeFilters(exes.allocator, exes.filters);
+        exes.allocator.free(exes.filters);
     }
 
     fn find(allocator: *mem.Allocator) !Exes {
@@ -147,7 +247,8 @@ const Exes = struct {
         errdefer allocator.free(apply_tool);
 
         const filters = try findFilters(allocator, self_exe, self_exe_dir, cwd, &env_map);
-        errdefer freeFilters(filters);
+        errdefer allocator.free(filters);
+        errdefer freeFilters(allocator, filters);
 
         return Exes{
             .allocator = allocator,
@@ -180,21 +281,26 @@ const Exes = struct {
         return error.CoreToolNotFound;
     }
 
-    fn findFilters(allocator: *mem.Allocator, self_exe: []const u8, self_exe_dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) !Filters {
-        var res = Filters.init(allocator);
-        errdefer freeFilters(allocator, res);
+    fn findFilters(allocator: *mem.Allocator, self_exe: []const u8, self_exe_dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]Filter {
+        var res = std.ArrayList(Filter).init(allocator);
+        defer res.deinit();
+        defer freeFilters(allocator, res.toSlice());
 
-        // HACK: We put our own exe in as a blacklist to avoid running our self infinite times
-        try res.putNoClobber(self_exe, undefined);
-        errdefer _ = res.remove(self_exe);
+        var found_tools = std.BufSet.init(allocator);
+        defer found_tools.deinit();
+
+        // HACK: We put our own exe as found so that we hope that we don't exectute ourself again (this with be an info process spawner).
+        //       This is not robust at all. Idk if we can have a better way of detecting filters though. Think about this.
+        try found_tools.put(self_exe);
+        defer _ = found_tools.delete(self_exe);
 
         // Try to find filters is "$SELF_EXE_PATH/filter" and "$SELF_EXE_PATH/"
         var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
         if (join(&fs_tmp, [_][]const u8{ self_exe_dir, "filter" })) |self_filter_dir| {
-            findFiltersIn(&res, allocator, self_filter_dir, cwd, env_map) catch {};
+            findFiltersIn(&res, &found_tools, allocator, self_filter_dir, cwd, env_map) catch {};
         } else |_| {}
 
-        findFiltersIn(&res, allocator, self_exe_dir, cwd, env_map) catch {};
+        findFiltersIn(&res, &found_tools, allocator, self_exe_dir, cwd, env_map) catch {};
 
         // Try to find filters from "$PATH"
         const path_split = if (std.os.windows.is_the_target) ";" else ":";
@@ -202,13 +308,12 @@ const Exes = struct {
 
         var it = mem.separate(path_list, path_split);
         while (it.next()) |dir|
-            findFiltersIn(&res, allocator, dir, cwd, env_map) catch {};
+            findFiltersIn(&res, &found_tools, allocator, dir, cwd, env_map) catch {};
 
-        _ = res.remove(self_exe);
-        return res;
+        return res.toOwnedSlice();
     }
 
-    fn findFiltersIn(filters: *Filters, allocator: *mem.Allocator, dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
+    fn findFiltersIn(filters: *std.ArrayList(Filter), found: *std.BufSet, allocator: *mem.Allocator, dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
         var open_dir = try fs.Dir.open(allocator, dir);
         defer open_dir.close();
 
@@ -218,16 +323,14 @@ const Exes = struct {
                 continue;
             if (!mem.startsWith(u8, entry.name, "tm35-"))
                 continue;
-            if (filters.contains(entry.name))
+            if (found.exists(entry.name))
                 continue;
 
             const path_to_exe = join(&fs_tmp, [_][]const u8{ dir, entry.name }) catch continue;
             const filter = pathToFilter(allocator, path_to_exe, cwd, env_map) catch continue;
 
-            const duped_entry = try mem.dupe(allocator, u8, entry.name);
-            errdefer allocator.free(duped_entry);
-
-            try filters.putNoClobber(duped_entry, filter);
+            try found.put(entry.name);
+            try filters.append(filter);
         }
     }
 
@@ -236,31 +339,28 @@ const Exes = struct {
         const help = try execHelp(allocator, filter_path, cwd, env_map);
         errdefer allocator.free(help);
 
-                var params = std.ArrayList(clap.Param(clap.Help)).init(allocator);
-                errdefer params.deinit();
+        var params = std.ArrayList(clap.Param(clap.Help)).init(allocator);
+        errdefer params.deinit();
 
-                var it = mem.separate(help, "\n");
-                while (it.next()) |line| {
-                    const param = clap.parseParam(line) catch continue;
-                    try params.append(param);
-                }
+        var it = mem.separate(help, "\n");
+        while (it.next()) |line| {
+            const param = clap.parseParam(line) catch continue;
+            try params.append(param);
+        }
 
-                return Filter{
-                    .path = try mem.dupe(allocator, u8, filter_path),
-                    .help = help,
-                    .params = params.toOwnedSlice(),
-                };
+        return Filter{
+            .path = try mem.dupe(allocator, u8, filter_path),
+            .help = help,
+            .params = params.toOwnedSlice(),
+        };
     }
 
-    fn freeFilters(allocator: *mem.Allocator, filters: Filters) void {
-        var it = filters.iterator();
-        while (it.next()) |kv| {
-            allocator.free(kv.value.path);
-            allocator.free(kv.value.help);
-            allocator.free(kv.value.params);
-            allocator.free(kv.key);
+    fn freeFilters(allocator: *mem.Allocator, filters: []const Filter) void {
+        for (filters) |filter| {
+            allocator.free(filter.path);
+            allocator.free(filter.help);
+            allocator.free(filter.params);
         }
-        filters.deinit();
     }
 
     fn checkTm35Tool(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {

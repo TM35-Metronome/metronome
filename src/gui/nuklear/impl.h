@@ -19,5 +19,8 @@ float zig_cos(float x);
 #define nk_memset zig_memset
 
 int nkBegin(struct nk_context *ctx, const char *title, const struct nk_rect *bounds, nk_flags flags);
+void nkWindowGetContentRegion(struct nk_context *ctx, struct nk_rect *res);
+void nkWidgetBounds(struct nk_context *ctx, struct nk_rect *res);
+int nkInputIsMouseHoveringRect(const struct nk_input *input, const struct nk_rect *rect);
 int nkPopupBegin(struct nk_context *ctx, enum nk_popup_type type, const char *title, nk_flags flags, const struct nk_rect *rect);
 int nkMenuBeginLabel(struct nk_context *ctx, const char *text, nk_flags align, const struct nk_vec2 *size);
