@@ -23,10 +23,10 @@ const readLine = @import("readline").readLine;
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-h, --help                      Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random).            ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version                   Output version information and exit.                                                      ") catch unreachable,
+        clap.parseParam("-h, --help                      Display this help text and exit.                                                                ") catch unreachable,
+        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
+        clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
         Param{ .takes_value = true },
     };
 };
@@ -94,15 +94,18 @@ pub fn main() u8 {
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
-    const pref = if (args.option("--preference")) |pref| if (mem.eql(u8, pref, "random"))
-        Preference.Random
-    else if (mem.eql(u8, pref, "stab"))
-        Preference.Stab
-    else {
-        debug.warn("--preference does not support '{}'\n", pref);
-        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
-        return 1;
-    } else Preference.Random;
+    const pref = if (args.option("--preference")) |pref|
+        if (mem.eql(u8, pref, "random"))
+            Preference.Random
+        else if (mem.eql(u8, pref, "stab"))
+            Preference.Stab
+        else {
+            debug.warn("--preference does not support '{}'\n", pref);
+            usage(stderr) catch |err| return failedWriteError("<stderr>", err);
+            return 1;
+        }
+    else
+        Preference.Random;
 
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
     var data = Data{

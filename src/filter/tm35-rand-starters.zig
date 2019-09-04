@@ -24,7 +24,7 @@ const readLine = @import("readline").readLine;
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-e, --evolutions <NUM>       Only pick starters with NUM or more evolutions.                                           ") catch unreachable,
+        clap.parseParam("-e, --evolutions <NUM>       Only pick starters with NUM or more evolutions. (default: 0)                              ") catch unreachable,
         clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
         clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
         clap.parseParam("-s, --seed <NUM>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,

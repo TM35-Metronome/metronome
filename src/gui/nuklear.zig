@@ -37,15 +37,15 @@ export fn zig_cos(value: f32) f32 {
 }
 
 // Nuklear functions
-pub const NK_TEXT_ALIGN_LEFT = @enumToInt(c.NK_TEXT_ALIGN_LEFT);
-pub const NK_TEXT_ALIGN_CENTERED = @enumToInt(c.NK_TEXT_ALIGN_CENTERED);
-pub const NK_TEXT_ALIGN_RIGHT = @enumToInt(c.NK_TEXT_ALIGN_RIGHT);
-pub const NK_TEXT_ALIGN_TOP = @enumToInt(c.NK_TEXT_ALIGN_TOP);
-pub const NK_TEXT_ALIGN_MIDDLE = @enumToInt(c.NK_TEXT_ALIGN_MIDDLE);
-pub const NK_TEXT_ALIGN_BOTTOM = @enumToInt(c.NK_TEXT_ALIGN_BOTTOM);
-pub const NK_TEXT_LEFT = @enumToInt(c.NK_TEXT_LEFT);
-pub const NK_TEXT_CENTERED = @enumToInt(c.NK_TEXT_CENTERED);
-pub const NK_TEXT_RIGHT = @enumToInt(c.NK_TEXT_RIGHT);
+pub const TEXT_ALIGN_LEFT = @enumToInt(c.NK_TEXT_ALIGN_LEFT);
+pub const TEXT_ALIGN_CENTERED = @enumToInt(c.NK_TEXT_ALIGN_CENTERED);
+pub const TEXT_ALIGN_RIGHT = @enumToInt(c.NK_TEXT_ALIGN_RIGHT);
+pub const TEXT_ALIGN_TOP = @enumToInt(c.NK_TEXT_ALIGN_TOP);
+pub const TEXT_ALIGN_MIDDLE = @enumToInt(c.NK_TEXT_ALIGN_MIDDLE);
+pub const TEXT_ALIGN_BOTTOM = @enumToInt(c.NK_TEXT_ALIGN_BOTTOM);
+pub const TEXT_LEFT = @enumToInt(c.NK_TEXT_LEFT);
+pub const TEXT_CENTERED = @enumToInt(c.NK_TEXT_CENTERED);
+pub const TEXT_RIGHT = @enumToInt(c.NK_TEXT_RIGHT);
 
 pub const WINDOW_BORDER = @enumToInt(c.NK_WINDOW_BORDER);
 pub const WINDOW_MOVABLE = @enumToInt(c.NK_WINDOW_MOVABLE);
@@ -58,6 +58,25 @@ pub const WINDOW_SCROLL_AUTO_HIDE = @enumToInt(c.NK_WINDOW_SCROLL_AUTO_HIDE);
 pub const WINDOW_BACKGROUND = @enumToInt(c.NK_WINDOW_BACKGROUND);
 pub const WINDOW_SCALE_LEFT = @enumToInt(c.NK_WINDOW_SCALE_LEFT);
 pub const WINDOW_NO_INPUT = @enumToInt(c.NK_WINDOW_NO_INPUT);
+
+pub const EDIT_DEFAULT = @enumToInt(c.NK_EDIT_DEFAULT);
+pub const EDIT_READ_ONLY = @enumToInt(c.NK_EDIT_READ_ONLY);
+pub const EDIT_AUTO_SELECT = @enumToInt(c.NK_EDIT_AUTO_SELECT);
+pub const EDIT_SIG_ENTER = @enumToInt(c.NK_EDIT_SIG_ENTER);
+pub const EDIT_ALLOW_TAB = @enumToInt(c.NK_EDIT_ALLOW_TAB);
+pub const EDIT_NO_CURSOR = @enumToInt(c.NK_EDIT_NO_CURSOR);
+pub const EDIT_SELECTABLE = @enumToInt(c.NK_EDIT_SELECTABLE);
+pub const EDIT_CLIPBOARD = @enumToInt(c.NK_EDIT_CLIPBOARD);
+pub const EDIT_CTRL_ENTER_NEWLINE = @enumToInt(c.NK_EDIT_CTRL_ENTER_NEWLINE);
+pub const EDIT_NO_HORIZONTAL_SCROLL = @enumToInt(c.NK_EDIT_NO_HORIZONTAL_SCROLL);
+pub const EDIT_ALWAYS_INSERT_MODE = @enumToInt(c.NK_EDIT_ALWAYS_INSERT_MODE);
+pub const EDIT_MULTILINE = @enumToInt(c.NK_EDIT_MULTILINE);
+pub const EDIT_GOTO_END_ON_ACTIVATE = @enumToInt(c.NK_EDIT_GOTO_END_ON_ACTIVATE);
+
+pub const EDIT_SIMPLE = @enumToInt(c.NK_EDIT_SIMPLE);
+pub const EDIT_FIELD = @enumToInt(c.NK_EDIT_FIELD);
+pub const EDIT_BOX = @enumToInt(c.NK_EDIT_BOX);
+pub const EDIT_EDITOR = @enumToInt(c.NK_EDIT_EDITOR);
 
 pub const Context = c.nk_context;
 

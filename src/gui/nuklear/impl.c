@@ -5,6 +5,10 @@ int nkBegin(struct nk_context *ctx, const char *title, const struct nk_rect *bou
     return nk_begin(ctx, title, *bounds, flags);
 }
 
+int nkComboBeginText(struct nk_context *ctx, const char *selected, int len, const struct nk_vec2 *size) {
+    return nk_combo_begin_text(ctx, selected, len, *size);
+}
+
 void nkWindowGetContentRegion(struct nk_context *ctx, struct nk_rect *res) {
     *res = nk_window_get_content_region(ctx);
 }

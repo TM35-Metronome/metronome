@@ -38,13 +38,20 @@ pub fn build(b: *Builder) !void {
 
     b.default_step.dependOn(&fmt_step.step);
 
+    const pkgs = [_][2][]const u8{
+        [_][]const u8{ "clap", "lib/zig-clap/clap.zig" },
+        [_][]const u8{ "fun", "lib/fun-with-zig/fun.zig" },
+        [_][]const u8{ "crc", "lib/zig-crc/crc.zig" },
+        [_][]const u8{ "format", "src/common/format.zig" },
+        [_][]const u8{ "readline", "src/common/readline.zig" },
+        [_][]const u8{ "util", "src/common/util.zig" },
+    };
+
     inline for (core_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/core/" ++ tool ++ ".zig");
-        exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
-        exe.addPackagePath("fun", "lib/fun-with-zig/fun.zig");
-        exe.addPackagePath("crc", "lib/zig-crc/crc.zig");
-        exe.addPackagePath("format", "src/common/format.zig");
-        exe.addPackagePath("readline", "src/common/readline.zig");
+        for (pkgs) |pkg|
+            exe.addPackagePath(pkg[0], pkg[1]);
+
         exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
@@ -53,9 +60,9 @@ pub fn build(b: *Builder) !void {
 
     inline for (filter_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/filter/" ++ tool ++ ".zig");
-        exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
-        exe.addPackagePath("format", "src/common/format.zig");
-        exe.addPackagePath("readline", "src/common/readline.zig");
+        for (pkgs) |pkg|
+            exe.addPackagePath(pkg[0], pkg[1]);
+
         exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
@@ -65,8 +72,9 @@ pub fn build(b: *Builder) !void {
     const lib_cflags = [_][]const u8{ "-std=c89", "-D_POSIX_C_SOURCE=200809L" };
     inline for (gui_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/gui/" ++ tool ++ ".zig");
-        exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
-        exe.addPackagePath("format", "src/common/format.zig");
+        for (pkgs) |pkg|
+            exe.addPackagePath(pkg[0], pkg[1]);
+
         exe.addIncludeDir("lib/nuklear");
         exe.addIncludeDir("lib/nuklear/demo/x11_xft");
         exe.addIncludeDir("src/gui/nuklear");
