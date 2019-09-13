@@ -41,6 +41,7 @@ const params = blk: {
         clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.") catch unreachable,
         clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
         clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
+        clap.parseParam("-r, --replace                 Replace output file if it already exists.    ") catch unreachable,
         clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
         Param{ .takes_value = true },
     };
@@ -100,6 +101,7 @@ pub fn main() u8 {
     };
 
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
+    const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
         const res = fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
         break :blk res catch |err| return errPrint("Allocation failed: {}\n", err);
@@ -108,7 +110,10 @@ pub fn main() u8 {
     const file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
     defer file.close();
 
-    var out_file = fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errPrint("Could not create file '{}': {}\n", out, err);
+    var out_file = if (replace)
+        fs.File.openWrite(out) catch |err| return errPrint("Could not open/create file '{}': {}\n", out, err)
+    else
+        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errPrint("Could not create file '{}': {}\n", out, err);
     defer out_file.close();
 
     var line_num: usize = 1;

@@ -31,7 +31,7 @@ const lu32 = fun.platform.lu32;
 pub fn Folder(comptime TFile: type) type {
     return struct {
         const Self = @This();
-        const IndexMap = std.HashMap([]const u8, usize, mem.hash_slice_u8, mem.eql_slice_u8);
+        const IndexMap = std.StringHashMap(usize);
         const Nodes = std.ArrayList(Node);
 
         pub const File = TFile;

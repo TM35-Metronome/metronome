@@ -16,7 +16,6 @@ float zig_cos(float x);
 #define NK_COS zig_cos
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #include <nuklear.h>
-#define nk_memset zig_memset
 
 int nkBegin(struct nk_context *ctx, const char *title, const struct nk_rect *bounds, nk_flags flags);
 int nkComboBeginText(struct nk_context *ctx, const char *selected, int len, const struct nk_vec2 *size);

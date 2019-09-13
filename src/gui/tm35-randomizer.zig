@@ -1,4 +1,5 @@
 const build_options = @import("build_options");
+const builtin = @import("builtin");
 const clap = @import("clap");
 const nk = @import("nuklear.zig");
 const std = @import("std");
@@ -28,6 +29,8 @@ const border_title_group = border_group | nk.WINDOW_TITLE;
 
 pub fn main() u8 {
     const allocator = heap.c_allocator;
+
+    const stderr = std.io.getStdErr() catch |err| return errPrint("Unable to get stderr: {}\n", err);
 
     var window = nk.Window.create(WINDOW_WIDTH, WINDOW_HEIGHT) catch |err| return errPrint("Could not create window: {}\n", err);
     defer window.destroy();
@@ -240,7 +243,11 @@ pub fn main() u8 {
 
             if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) {
                 c.nk_layout_row_dynamic(ctx, 0, 1);
-                if (c.nk_button_label(ctx, c"Randomize") != 0) {}
+                if (c.nk_button_label(ctx, c"Randomize") != 0) {
+                    outputScript(&stderr.outStream().stream, exes, settings, "test1", "test2") catch |err| {};
+                    stderr.write("\n") catch |err| {};
+                    randomizer(exes, settings, "test1", "test2") catch |err| debug.warn("err: {}\n", err);
+                }
                 if (c.nk_button_label(ctx, c"Load settings") != 0) {
                     // TODO: Actual prompt user for a path to save to
                     const file = fs.File.openRead("test.settings") catch |err| return errPrint("err: {}\n", err);
@@ -282,6 +289,91 @@ fn headerHeight(ctx: *const c.struct_nk_context) f32 {
     return ctx.style.font.*.height +
         (ctx.style.window.header.padding.y * 2) +
         (ctx.style.window.header.label_padding.y * 2) + 1;
+}
+
+fn randomizer(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+    switch (builtin.os) {
+        .linux => {
+            const sh = try std.ChildProcess.init([_][]const u8{"sh"}, std.heap.direct_allocator);
+            sh.stdin_behavior = .Pipe;
+            try sh.spawn();
+
+            const stream = &sh.stdin.?.outStream().stream;
+            try outputScript(stream, exes, settings, in, out);
+
+            sh.stdin.?.close();
+            sh.stdin = null;
+            const term = try sh.wait();
+            switch (term) {
+                .Exited => |code| {
+                    if (code != 0)
+                        return error.CommandFailed;
+                },
+                .Signal, .Stopped, .Unknown => |code| {
+                    return error.CommandFailed;
+                },
+            }
+        },
+        else => @compileError("Unsupported os"),
+    }
+}
+
+fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+    switch (builtin.os) {
+        .linux => {
+            const escapes = blk: {
+                var res = util.default_escapes;
+                res['\''] = "'\\''";
+                break :blk res;
+            };
+
+            try stream.write("'");
+            try util.writeEscaped(stream, exes.load, escapes);
+            try stream.write("' '");
+            try util.writeEscaped(stream, in, escapes);
+            try stream.write("' | ");
+
+            for (settings.order) |order| {
+                const filter = exes.filters[order];
+                const filter_args = settings.filters_args[order];
+                if (!settings.checks[order])
+                    continue;
+
+                try stream.write("'");
+                try util.writeEscaped(stream, filter.path, escapes);
+                try stream.write("'");
+
+                for (filter.params) |param, i| {
+                    const param_pre = if (param.names.long) |_| "--" else "-";
+                    const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
+                    const arg = filter_args[i];
+                    if (arg.len == 0)
+                        continue;
+
+                    try stream.write(" '");
+                    try stream.write(param_pre);
+                    try util.writeEscaped(stream, param_name, escapes);
+                    try stream.write("'");
+                    if (param.takes_value) {
+                        try stream.write(" '");
+                        try util.writeEscaped(stream, arg, escapes);
+                        try stream.write("'");
+                    }
+                }
+
+                try stream.write(" | ");
+            }
+
+            try stream.write("'");
+            try util.writeEscaped(stream, exes.apply, escapes);
+            try stream.write("' --replace --output '");
+            try util.writeEscaped(stream, out, escapes);
+            try stream.write("' '");
+            try util.writeEscaped(stream, in, escapes);
+            try stream.write("'");
+        },
+        else => @compileError("Unsupported os"),
+    }
 }
 
 const Settings = struct {

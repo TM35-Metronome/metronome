@@ -419,7 +419,7 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const PokemonByType = std.HashMap([]const u8, std.ArrayList(usize), mem.hash_slice_u8, mem.eql_slice_u8);
+const PokemonByType = std.StringHashMap(std.ArrayList(usize));
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
 const Trainers = std.AutoHashMap(usize, Trainer);
