@@ -1,8 +1,13 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const debug = std.debug;
+const fs = std.fs;
+const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
+const os = std.os;
 const testing = std.testing;
 
 const chars = blk: {
@@ -183,3 +188,99 @@ test "indexOfPtr" {
         testing.expectEqual(i, indexOfPtr(u8, arr, item));
     }
 }
+
+pub fn StackArrayList(comptime size: usize, comptime T: type) type {
+    return struct {
+        items: [size]T,
+        len: usize,
+
+        pub fn fromSlice(items: []const T) !@This() {
+            if (size < items.len)
+                return error.SliceToBig;
+
+            var res: @This() = undefined;
+            mem.copy(T, &res.items, items);
+            res.len = items.len;
+            return res;
+        }
+
+        pub fn toSlice(list: *@This()) []T {
+            return list.items[0..list.len];
+        }
+
+        pub fn toSliceConst(list: *const @This()) []const T {
+            return list.items[0..list.len];
+        }
+    };
+}
+
+pub const Path = StackArrayList(fs.MAX_PATH_BYTES, u8);
+
+pub const path = struct {
+    pub fn join(paths: []const []const u8) !Path {
+        var res: Path = undefined;
+        var fba = heap.FixedBufferAllocator.init(&res.items);
+        var failing = debug.FailingAllocator.init(&fba.allocator, math.maxInt(usize));
+        const res_slice = try fs.path.join(&failing.allocator, paths);
+        res.len = res_slice.len;
+        debug.assert(failing.allocations == 1);
+
+        return res;
+    }
+
+    pub fn selfExeDir() !Path {
+        var res: Path = undefined;
+        const res_slice = try fs.selfExeDirPath(&res.items);
+        res.len = res_slice.len;
+        return res;
+    }
+
+    pub fn cwd() !Path {
+        var res: Path = undefined;
+        const res_slice = try os.getcwd(&res.items);
+        res.len = res_slice.len;
+        return res;
+    }
+
+    pub const DirError = error{NotAvailable};
+
+    pub fn home() DirError!Path {
+        switch (builtin.os) {
+            .linux => return getEnvPath("HOME") orelse return DirError.NotAvailable,
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn cache() DirError!Path {
+        switch (builtin.os) {
+            .linux => return xdgHelper("XDG_CACHE_HOME", ".cache"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn config() DirError!Path {
+        switch (builtin.os) {
+            .linux => return xdgHelper("XDG_CONFIG_HOME", ".config"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    fn xdgHelper(key: []const u8, home_fallback: []const u8) DirError!Path {
+        if (getEnvPath(key)) |cache_dir|
+            return cache_dir;
+        if (getEnvPath("HOME")) |home_dir| {
+            if (join([_][]const u8{ home_dir.toSliceConst(), home_fallback, "" })) |cache_dir|
+                return cache_dir;
+        }
+
+        return DirError.NotAvailable;
+    }
+
+    fn getEnvPath(key: []const u8) ?Path {
+        const env = os.getenv(key) orelse return null;
+        if (!fs.path.isAbsolute(env))
+            return null;
+
+        return Path.fromSlice(env) catch return null;
+    }
+};

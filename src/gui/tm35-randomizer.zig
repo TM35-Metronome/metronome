@@ -28,239 +28,456 @@ const border_group = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR;
 const border_title_group = border_group | nk.WINDOW_TITLE;
 
 pub fn main() u8 {
+    const font_name = c"Arial";
     const allocator = heap.c_allocator;
 
+    // Set up essetial state for the program to run. If any of these
+    // fail, the only thing we can do is exit.
     const stderr = std.io.getStdErr() catch |err| return errPrint("Unable to get stderr: {}\n", err);
+    var timer = time.Timer.start() catch |err| return errPrint("Could not create timer: {}\n", err);
 
     var window = nk.Window.create(WINDOW_WIDTH, WINDOW_HEIGHT) catch |err| return errPrint("Could not create window: {}\n", err);
     defer window.destroy();
 
-    const font = window.createFont(c"Arial");
+    const font = window.createFont(font_name);
     defer window.destroyFont(font);
 
     const ctx = nk.create(window, font) catch |err| return errPrint("Could not create nuklear context: {}\n", err);
     defer nk.destroy(ctx, window);
 
-    var timer = time.Timer.start() catch |err| return errPrint("Could not create timer: {}\n", err);
+    // From this point on, we can report errors to the user. This is done
+    // with this 'Errors' struct. If an error occures, it should be appended
+    // with 'errors.append("error str {}", arg1, arg2...)'.
+    // It is also possible to report a fatal error with
+    // 'errors.fatal("error str {}", arg1, arg2...)'. A fatal error means, that
+    // the only way to recover is to exit. This error is reported to the user,
+    // after which the only option they have is to quit the program.
+    var errors = Errors{ .list = std.ArrayList([]const u8).init(allocator) };
+    defer errors.deinit();
 
-    // TODO: This error should be shown in the GUI
-    const exes = Exes.find(allocator) catch |err| return errPrint("Failed to find exes: {}\n", err);
+    const exes = Exes.find(allocator) catch |err| blk: {
+        errors.append("Failed to find exes: {}", err);
+        break :blk Exes{ .allocator = allocator };
+    };
     defer exes.deinit();
 
-    var arena_allocator = heap.ArenaAllocator.init(allocator);
-    const arena = &arena_allocator.allocator;
-    defer arena_allocator.deinit();
-
-    const settings = Settings.init(arena, exes) catch |err| return errPrint("Failed to create settings: {}\n", err);
+    const settings = Settings.init(allocator, exes) catch |err| blk: {
+        errors.append("Failed to create settings: {}", err);
+        break :blk Settings{ .allocator = allocator };
+    };
     defer settings.deinit();
 
+    const FileBrowserKind = enum {
+        LoadRom,
+        Randomize,
+        LoadSettings,
+        SaveSettings,
+    };
+
+    var in: ?util.Path = null;
+    var out: ?util.Path = null;
+    var file_browser_kind: FileBrowserKind = undefined; // This should always be written to before read from
+    var file_browser_dir = util.path.cwd() catch
+        util.path.home() catch
+        util.path.selfExeDir() catch blk: {
+        errors.fatal("Could not find a directory to start the file browser in.");
+        break :blk util.Path.fromSlice("") catch unreachable;
+    };
+    var file_browser: ?nk.FileBrowser = null;
+    defer if (file_browser) |fb| fb.close();
+
     var selected: usize = 0;
-    outer: while (true) {
+    while (true) {
         timer.reset();
 
-        c.nk_input_begin(ctx);
-        while (window.nextEvent()) |event| {
-            if (nk.isExitEvent(event))
-                break :outer;
+        {
+            c.nk_input_begin(ctx);
+            defer c.nk_input_end(ctx);
+            while (window.nextEvent()) |event| {
+                if (nk.isExitEvent(event))
+                    return 0;
 
-            nk.handleEvent(ctx, window, event);
+                nk.handleEvent(ctx, window, event);
+            }
         }
-        c.nk_input_end(ctx);
 
-        if (nk.begin(ctx, c"", nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height)), nk.WINDOW_NO_SCROLLBAR)) {
+        const window_rect = nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height));
+
+        if (nk.begin(ctx, c"", window_rect, nk.WINDOW_NO_SCROLLBAR)) ui_end: {
+            const layout = ctx.current.*.layout;
+            const min_height = layout.*.row.min_height;
+
             var total_space: c.struct_nk_rect = undefined;
             c.nkWindowGetContentRegion(ctx, &total_space);
 
-            const group_height = total_space.h - ctx.style.window.padding.y * 2;
-            const inner_height = group_height - groupOuterHeight(ctx);
-            c.nk_layout_row_template_begin(ctx, group_height);
-            c.nk_layout_row_template_push_static(ctx, 300);
-            c.nk_layout_row_template_push_dynamic(ctx);
-            c.nk_layout_row_template_push_static(ctx, 180);
-            c.nk_layout_row_template_end(ctx);
+            // If file_browser isn't null, then we are promting the user for a file,
+            // so we just draw the file browser instead of our normal UI.
+            if (file_browser) |*fb| {
+                if (nk.fileBrowser(ctx, fb, total_space.h)) |pressed| {
+                    switch (pressed) {
+                        .Confirm => err_blk: {
+                            const selected_path = util.path.join([_][]const u8{
+                                fb.curr_path.toSliceConst(),
+                                fb.selected_file.toSliceConst(),
+                            }) catch {
+                                errors.append("Path '{}/{}' is to long", fb.curr_path.toSliceConst(), fb.selected_file.toSliceConst());
+                                break :err_blk;
+                            };
+                            switch (file_browser_kind) {
+                                .LoadRom => in = selected_path,
+                                .Randomize => {
+                                    // in should never be null here, because "Randomize"
+                                    const in_path = in.?.toSliceConst();
+                                    const out_path = selected_path.toSliceConst();
+                                    outputScript(&stderr.outStream().stream, exes, settings, in_path, out_path) catch {};
+                                    stderr.write("\n") catch {};
+                                    randomize(exes, settings, in_path, out_path) catch |err| {
+                                        // TODO: Maybe print the stderr from the command we run in the randomizer function
+                                        errors.append("Failed to randomize '{}': {}", in_path, err);
+                                        break :err_blk;
+                                    };
+                                    // TODO: Print a done message?
+                                },
+                                .LoadSettings => {
+                                    const file = fs.File.openRead(selected_path.toSliceConst()) catch |err| {
+                                        errors.append("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                                        break :err_blk;
+                                    };
+                                    defer file.close();
+                                    settings.load(exes, &file.inStream().stream) catch |err| {
+                                        errors.append("Failed to load from '{}': {}", selected_path.toSliceConst(), err);
+                                        break :err_blk;
+                                    };
+                                },
+                                .SaveSettings => {
+                                    // TODO: Warn if the user tries to overwrite existing file.
+                                    const file = fs.File.openWrite(selected_path.toSliceConst()) catch |err| {
+                                        errors.append("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                                        break :err_blk;
+                                    };
+                                    defer file.close();
+                                    settings.save(exes, &file.outStream().stream) catch |err| {
+                                        errors.append("Failed to write to '{}': {}", selected_path.toSliceConst(), err);
+                                        break :err_blk;
+                                    };
+                                },
+                            }
+                        },
+                        .Cancel => {},
+                    }
 
-            if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
-                c.nk_layout_row_template_begin(ctx, inner_height);
-                c.nk_layout_row_template_push_static(ctx, 30);
+                    file_browser_dir = fb.curr_path;
+                    fb.close();
+                    file_browser = null;
+                }
+            } else {
+                const group_height = total_space.h - ctx.style.window.padding.y * 2;
+                const inner_height = group_height - groupOuterHeight(ctx);
+                c.nk_layout_row_template_begin(ctx, group_height);
+                c.nk_layout_row_template_push_static(ctx, 300);
                 c.nk_layout_row_template_push_dynamic(ctx);
+                c.nk_layout_row_template_push_static(ctx, 180);
                 c.nk_layout_row_template_end(ctx);
 
-                const old = ctx.style.window;
-                ctx.style.window.padding = nk.vec2(0, 0);
-                ctx.style.window.group_padding = nk.vec2(0, 0);
+                // +---------------------------+
+                // | Filters                   |
+                // +---------------------------+
+                // | +-+ +-------------------+ |
+                // | |^| | # tm35-rand-stats | |
+                // | +-+ | # tm35-rand-wild  | |
+                // | +-+ |                   | |
+                // | |V| |                   | |
+                // | +-+ |                   | |
+                // |     +-------------------+ |
+                // +---------------------------+
+                if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
+                    defer c.nk_group_end(ctx);
+                    c.nk_layout_row_template_begin(ctx, inner_height);
+                    c.nk_layout_row_template_push_static(ctx, min_height);
+                    c.nk_layout_row_template_push_dynamic(ctx);
+                    c.nk_layout_row_template_end(ctx);
 
-                if (c.nk_group_begin(ctx, c"Buttons", nk.WINDOW_NO_SCROLLBAR) != 0) {
-                    c.nk_layout_row_dynamic(ctx, 0, 1);
-                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
-                        const before = math.sub(usize, selected, 1) catch 0;
-                        mem.swap(usize, &settings.order[before], &settings.order[selected]);
-                        selected = before;
+                    if (nk.nonPaddedGroupBegin(ctx, c"filter-buttons", nk.WINDOW_NO_SCROLLBAR)) {
+                        defer nk.nonPaddedGroupEnd(ctx);
+                        c.nk_layout_row_dynamic(ctx, 0, 1);
+                        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
+                            const before = math.sub(usize, selected, 1) catch 0;
+                            mem.swap(usize, &settings.order[before], &settings.order[selected]);
+                            selected = before;
+                        }
+                        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
+                            const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
+                            mem.swap(usize, &settings.order[selected], &settings.order[after]);
+                            selected = after;
+                        }
                     }
-                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
-                        const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
-                        mem.swap(usize, &settings.order[selected], &settings.order[after]);
-                        selected = after;
+
+                    var list_view: c.nk_list_view = undefined;
+                    if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.filters.len)) != 0) {
+                        defer c.nk_list_view_end(&list_view);
+                        for (settings.order) |filter_i, i| {
+                            const filter = exes.filters[filter_i];
+                            if (i < @intCast(usize, list_view.begin))
+                                continue;
+                            if (@intCast(usize, list_view.end) <= i)
+                                break;
+
+                            c.nk_layout_row_template_begin(ctx, 0);
+                            c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
+                            c.nk_layout_row_template_push_dynamic(ctx);
+                            c.nk_layout_row_template_end(ctx);
+
+                            const name = path.basename(filter.path)[5..];
+                            settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
+                            if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
+                                selected = i;
+                        }
                     }
-                    c.nk_group_end(ctx);
                 }
-                ctx.style.window = old;
 
-                var list_view: c.nk_list_view = undefined;
-                if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.filters.len)) != 0) {
-                    for (settings.order) |filter_i, i| {
-                        const filter = exes.filters[filter_i];
-                        if (i < @intCast(usize, list_view.begin))
+                // +---------------------------+
+                // | Options                   |
+                // +---------------------------+
+                // | This is the help message  |
+                // | # flag-a                  |
+                // | # flag-b                  |
+                // | drop-down |            V| |
+                // | field-a   |             | |
+                // | field-b   |             | |
+                // |                           |
+                // +---------------------------+
+                if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
+                    defer c.nk_group_end(ctx);
+                    if (exes.filters.len == 0)
+                        break :blk;
+
+                    const filter = exes.filters[settings.order[selected]];
+                    var it = mem.separate(filter.help, "\n");
+                    while (it.next()) |line_notrim| {
+                        const line = mem.trimRight(u8, line_notrim, " ");
+                        if (line.len == 0)
                             continue;
-                        if (@intCast(usize, list_view.end) <= i)
-                            break;
+                        if (mem.startsWith(u8, line, "Usage:"))
+                            continue;
+                        if (mem.startsWith(u8, line, "Options:"))
+                            continue;
+                        if (mem.startsWith(u8, line, " "))
+                            continue;
+                        if (mem.startsWith(u8, line, "\t"))
+                            continue;
 
+                        c.nk_layout_row_dynamic(ctx, 0, 1);
+                        c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.TEXT_LEFT);
+                    }
+
+                    var biggest_len: f32 = 0;
+                    for (filter.params) |param, i| {
+                        const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
+                        if (!param.takes_value)
+                            continue;
+                        if (mem.eql(u8, text, "help"))
+                            continue;
+                        if (mem.eql(u8, text, "version"))
+                            continue;
+
+                        const style_font = ctx.style.font;
+                        const text_len = style_font.*.width.?(style_font.*.userdata, 0, text.ptr, @intCast(c_int, text.len));
+                        if (biggest_len < text_len)
+                            biggest_len = text_len;
+                    }
+
+                    for (filter.params) |param, i| {
+                        const buf = &settings.filters_bufs[settings.order[selected]][i];
+                        const arg = &settings.filters_args[settings.order[selected]][i];
+                        const help = param.id.msg;
+                        const value = param.id.value;
+                        const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
+                        var bounds: c.struct_nk_rect = undefined;
+                        if (mem.eql(u8, text, "help"))
+                            continue;
+                        if (mem.eql(u8, text, "version"))
+                            continue;
+
+                        if (!param.takes_value) {
+                            c.nk_layout_row_dynamic(ctx, 0, 1);
+
+                            c.nkWidgetBounds(ctx, &bounds);
+                            if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
+                                c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+
+                            // For flags, we only care about whether it's checked or not. We indicate this
+                            // by having a slice of len 1 instead of 0.
+                            const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
+                            arg.* = buf[0..@boolToInt(checked)];
+                            continue;
+                        }
+
+                        const style_font = ctx.style.font;
+                        const prompt_len = style_font.*.width.?(style_font.*.userdata, 0, &("a" ** 30), 30);
                         c.nk_layout_row_template_begin(ctx, 0);
-                        c.nk_layout_row_template_push_static(ctx, checkboxHeight(ctx));
+                        c.nk_layout_row_template_push_static(ctx, biggest_len);
+                        c.nk_layout_row_template_push_static(ctx, prompt_len);
                         c.nk_layout_row_template_push_dynamic(ctx);
                         c.nk_layout_row_template_end(ctx);
-
-                        const name = path.basename(filter.path)[5..];
-                        settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
-                        if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
-                            selected = i;
-                    }
-                    c.nk_list_view_end(&list_view);
-                }
-
-                c.nk_group_end(ctx);
-            }
-
-            if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
-                if (exes.filters.len == 0) {
-                    c.nk_group_end(ctx);
-                    break :blk;
-                }
-
-                const filter = exes.filters[settings.order[selected]];
-                var it = mem.separate(filter.help, "\n");
-                while (it.next()) |line_notrim| {
-                    const line = mem.trimRight(u8, line_notrim, " ");
-                    if (line.len == 0)
-                        continue;
-                    if (mem.startsWith(u8, line, "Usage:"))
-                        continue;
-                    if (mem.startsWith(u8, line, "Options:"))
-                        continue;
-                    if (mem.startsWith(u8, line, " "))
-                        continue;
-                    if (mem.startsWith(u8, line, "\t"))
-                        continue;
-
-                    c.nk_layout_row_dynamic(ctx, 0, 1);
-                    c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.TEXT_LEFT);
-                }
-
-                var biggest_len: f32 = 0;
-                for (filter.params) |param, i| {
-                    const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
-                    if (!param.takes_value)
-                        continue;
-                    if (mem.eql(u8, text, "help"))
-                        continue;
-                    if (mem.eql(u8, text, "version"))
-                        continue;
-
-                    const style_font = ctx.style.font;
-                    const text_len = style_font.*.width.?(style_font.*.userdata, 0, text.ptr, @intCast(c_int, text.len));
-                    if (biggest_len < text_len)
-                        biggest_len = text_len;
-                }
-
-                for (filter.params) |param, i| {
-                    const buf = &settings.filters_bufs[settings.order[selected]][i];
-                    const arg = &settings.filters_args[settings.order[selected]][i];
-                    const help = param.id.msg;
-                    const value = param.id.value;
-                    const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
-                    var bounds: c.struct_nk_rect = undefined;
-                    if (mem.eql(u8, text, "help"))
-                        continue;
-                    if (mem.eql(u8, text, "version"))
-                        continue;
-
-                    if (!param.takes_value) {
-                        c.nk_layout_row_dynamic(ctx, 0, 1);
 
                         c.nkWidgetBounds(ctx, &bounds);
                         if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
                             c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
 
-                        // For flags, we only care about whether it's checked or not. We indicate this
-                        // by having a slice of len 1 instead of 0.
-                        const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
-                        arg.* = buf[0..@boolToInt(checked)];
-                        continue;
-                    }
+                        c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
 
-                    const style_font = ctx.style.font;
-                    const prompt_len = style_font.*.width.?(style_font.*.userdata, 0, &("a" ** 30), 30);
+                        if (mem.eql(u8, value, "NUM")) {
+                            // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
+                            debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
+                            _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_decimal);
+                            continue;
+                        }
+                        if (mem.indexOfScalar(u8, value, '|')) |_| {
+                            if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_len, 500)) != 0) {
+                                c.nk_layout_row_dynamic(ctx, 0, 1);
+                                if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
+                                    arg.* = buf[0..0];
+
+                                var item_it = mem.separate(value, "|");
+                                while (item_it.next()) |item| {
+                                    if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) != 0)
+                                        arg.* = item;
+                                }
+                                c.nk_combo_end(ctx);
+                            }
+                            continue;
+                        }
+
+                        // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
+                        debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
+                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_default);
+                    }
+                }
+
+                // +-------------------+
+                // | Actions           |
+                // +-------------------+
+                // | +---+ +---------+ |
+                // | | f | | in.nds  | |
+                // | +---+ +---------+ |
+                // | +---------------+ |
+                // | |   Randomize   | |
+                // | +---------------+ |
+                // | +---------------+ |
+                // | | Load Settings | |
+                // | +---------------+ |
+                // | +---------------+ |
+                // | | Save Settings | |
+                // | +---------------+ |
+                // +-------------------+
+                if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) {
+                    defer c.nk_group_end(ctx);
                     c.nk_layout_row_template_begin(ctx, 0);
-                    c.nk_layout_row_template_push_static(ctx, biggest_len);
-                    c.nk_layout_row_template_push_static(ctx, prompt_len);
+                    c.nk_layout_row_template_push_static(ctx, min_height);
                     c.nk_layout_row_template_push_dynamic(ctx);
                     c.nk_layout_row_template_end(ctx);
 
-                    c.nkWidgetBounds(ctx, &bounds);
-                    if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-                        c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+                    var open_file_browser: bool = false;
 
-                    c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
-
-                    if (mem.eql(u8, value, "NUM")) {
-                        // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                        debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_decimal);
-                        continue;
+                    // TODO: Draw folder icon
+                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_PLUS) != 0) {
+                        open_file_browser = true;
+                        file_browser_kind = .LoadRom;
                     }
-                    if (mem.indexOfScalar(u8, value, '|')) |_| {
-                        if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_len, 500)) != 0) {
-                            c.nk_layout_row_dynamic(ctx, 0, 1);
-                            if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
-                                arg.* = buf[0..0];
 
-                            var item_it = mem.separate(value, "|");
-                            while (item_it.next()) |item| {
-                                if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) != 0)
-                                    arg.* = item;
-                            }
-                            c.nk_combo_end(ctx);
+                    const in_slice = if (in) |*i| i.toSliceConst() else " ";
+                    var basename = path.basename(in_slice);
+                    _ = c.nk_edit_string(
+                        ctx,
+                        nk.EDIT_READ_ONLY,
+                        // with edit_string being READ_ONLY always, it should be safe to cast away const
+                        @intToPtr([*]u8, @ptrToInt(basename.ptr)),
+                        @ptrCast(*c_int, &basename.len),
+                        @intCast(c_int, basename.len + 1),
+                        c.nk_filter_default,
+                    );
+
+                    c.nk_layout_row_dynamic(ctx, 0, 1);
+                    if (in != null) {
+                        if (c.nk_button_label(ctx, c"Randomize") != 0) {
+                            open_file_browser = true;
+                            file_browser_kind = .Randomize;
                         }
-                        continue;
+                    } else {
+                        _ = nk.inactiveButton(ctx, "Randomize");
+                    }
+                    if (c.nk_button_label(ctx, c"Load settings") != 0) {
+                        open_file_browser = true;
+                        file_browser_kind = .LoadSettings;
+                    }
+                    if (c.nk_button_label(ctx, c"Save settings") != 0) {
+                        open_file_browser = true;
+                        file_browser_kind = .SaveSettings;
                     }
 
-                    // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                    debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                    _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_default);
+                    if (open_file_browser) {
+                        const mode = switch (file_browser_kind) {
+                            .Randomize, .SaveSettings => nk.FileBrowser.Mode.Save,
+                            .LoadSettings, .LoadRom => nk.FileBrowser.Mode.OpenOne,
+                        };
+                        if (nk.FileBrowser.open(allocator, mode, file_browser_dir.toSliceConst())) |fb| {
+                            file_browser = fb;
+                        } else |err| {
+                            errors.append("Could not open file browser: {}", err);
+                        }
+                    }
                 }
-
-                c.nk_group_end(ctx);
             }
 
-            if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) {
-                c.nk_layout_row_dynamic(ctx, 0, 1);
-                if (c.nk_button_label(ctx, c"Randomize") != 0) {
-                    outputScript(&stderr.outStream().stream, exes, settings, "test1", "test2") catch |err| {};
-                    stderr.write("\n") catch |err| {};
-                    randomizer(exes, settings, "test1", "test2") catch |err| debug.warn("err: {}\n", err);
+            // +-------------------+
+            // | Error             |
+            // +-------------------+
+            // | This is an error  |
+            // |          +------+ |
+            // |          |  Ok  | |
+            // |          +------+ |
+            // +-------------------+
+            const w: f32 = 350;
+            const h: f32 = 150;
+            const x = (@intToFloat(f32, window.width) / 2) - (w / 2);
+            const y = (@intToFloat(f32, window.height) / 2) - (h / 2);
+            const popup_rect = nk.rect(x, y, w, h);
+            const fatal = errors.fatalError();
+            if (fatal != null or errors.list.len != 0) {
+                const title = if (fatal) |_| c"Fatal error!" else c"Error";
+                if (c.nkPopupBegin(ctx, c.NK_POPUP_STATIC, title, border_title_group, &popup_rect) != 0) {
+                    defer c.nk_popup_end(ctx);
+                    const err = fatal orelse errors.list.at(errors.list.len - 1);
+
+                    const padding_height = groupOuterHeight(ctx);
+                    const buttons_height = ctx.style.window.spacing.y +
+                        min_height;
+                    const err_height = h - (padding_height + buttons_height);
+
+                    c.nk_layout_row_dynamic(ctx, err_height, 1);
+                    c.nk_text_wrap(ctx, err.ptr, @intCast(c_int, err.len));
+
+                    const button_label = if (fatal) |_| c"Quit" else c"Ok";
+                    const button_label_len = mem.len(u8, button_label);
+                    const style_font = ctx.style.font;
+                    const style_button = ctx.style.button;
+                    const label_width = style_font.*.width.?(style_font.*.userdata, 0, button_label, @intCast(c_int, button_label_len));
+                    const button_width = label_width + style_button.border +
+                        (style_button.padding.x + style_button.rounding) * 6;
+
+                    c.nk_layout_row_template_begin(ctx, 0);
+                    c.nk_layout_row_template_push_dynamic(ctx);
+                    c.nk_layout_row_template_push_static(ctx, button_width);
+                    c.nk_layout_row_template_end(ctx);
+
+                    c.nk_label(ctx, c"", nk.TEXT_LEFT);
+                    if (c.nk_button_label(ctx, button_label) != 0) {
+                        if (fatal) |_|
+                            return 1;
+                        errors.list.allocator.free(errors.list.pop());
+                        c.nk_popup_close(ctx);
+                    }
                 }
-                if (c.nk_button_label(ctx, c"Load settings") != 0) {
-                    // TODO: Actual prompt user for a path to save to
-                    const file = fs.File.openRead("test.settings") catch |err| return errPrint("err: {}\n", err);
-                    defer file.close();
-                    settings.load(exes, file) catch |err| return errPrint("err: {}\n", err);
-                }
-                if (c.nk_button_label(ctx, c"Save settings") != 0) {
-                    // TODO: Actual prompt user for a path to save to
-                    const file = fs.File.openWrite("test.settings") catch |err| return errPrint("err: {}\n", err);
-                    defer file.close();
-                    settings.save(exes, file) catch |err| return errPrint("err: {}\n", err);
-                }
-                c.nk_group_end(ctx);
             }
         }
         c.nk_end(ctx);
@@ -272,26 +489,54 @@ pub fn main() u8 {
     return 0;
 }
 
+const Errors = struct {
+    fatal_error: [128]u8 = "\x00" ** 128,
+    list: std.ArrayList([]const u8),
+
+    fn append(errors: *Errors, comptime fmt: []const u8, args: ...) void {
+        const err_msg = std.fmt.allocPrint(errors.list.allocator, fmt, args) catch {
+            return errors.fatal("Allocation failed");
+        };
+        errors.list.append(err_msg) catch {
+            errors.list.allocator.free(err_msg);
+            return errors.fatal("Allocation failed");
+        };
+    }
+
+    fn fatal(errors: *Errors, comptime fmt: []const u8, args: ...) void {
+        _ = std.fmt.bufPrint(&errors.fatal_error, fmt ++ "\x00", args) catch return;
+    }
+
+    fn fatalError(errors: *const Errors) ?[]const u8 {
+        const res = mem.toSliceConst(u8, &errors.fatal_error);
+        if (res.len == 0)
+            return null;
+        return res;
+    }
+
+    fn deinit(errors: Errors) void {
+        for (errors.list.toSlice()) |err|
+            errors.list.allocator.free(err);
+        errors.list.deinit();
+    }
+};
+
 fn errPrint(comptime format_str: []const u8, args: ...) u8 {
     debug.warn(format_str, args);
     return 1;
 }
 
-fn checkboxHeight(ctx: *const c.struct_nk_context) f32 {
-    return ctx.style.font.*.height;
-}
-
-fn groupOuterHeight(ctx: *const c.struct_nk_context) f32 {
+fn groupOuterHeight(ctx: *const nk.Context) f32 {
     return headerHeight(ctx) + (ctx.style.window.group_padding.y * 2) + ctx.style.window.spacing.y;
 }
 
-fn headerHeight(ctx: *const c.struct_nk_context) f32 {
+fn headerHeight(ctx: *const nk.Context) f32 {
     return ctx.style.font.*.height +
         (ctx.style.window.header.padding.y * 2) +
         (ctx.style.window.header.label_padding.y * 2) + 1;
 }
 
-fn randomizer(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     switch (builtin.os) {
         .linux => {
             const sh = try std.ChildProcess.init([_][]const u8{"sh"}, std.heap.direct_allocator);
@@ -381,18 +626,18 @@ const Settings = struct {
 
     // The order in which we call the filters. This is an array of indexes into
     // exes.filters
-    order: []usize,
+    order: []usize = ([*]usize)(undefined)[0..0],
 
     // The filters to call
-    checks: []bool,
+    checks: []bool = ([*]bool)(undefined)[0..0],
 
     // Allocate all the memory for the values passed to the commands the user wants to execute.
     // filters_args will be the slices we pass. filters_bufs are the backend buffers that all
     // the filters_args will point into. I believe that 64 bytes max for each arg is more than
     // enough. If this is proven to be false, we can increase that number (or rethink how this
     // is done).
-    filters_args: [][][]const u8,
-    filters_bufs: [][][64]u8,
+    filters_args: [][][]const u8 = ([*][][]const u8)(undefined)[0..0],
+    filters_bufs: [][][64]u8 = ([*][][64]u8)(undefined)[0..0],
 
     fn init(allocator: *mem.Allocator, exes: Exes) !Settings {
         const order = try allocator.alloc(usize, exes.filters.len);
@@ -528,7 +773,7 @@ const Settings = struct {
         var order_i: usize = 0;
         var buf: [1024 * 2]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
-        var buf_in_stream = io.BufferedInStream(@typeOf(in_stream.read(undefined)).ErrorSet).init(&in_stream.inStream().stream);
+        var buf_in_stream = io.BufferedInStream(@typeOf(in_stream.read(undefined)).ErrorSet).init(in_stream);
         var buffer = try std.Buffer.initSize(&fba.allocator, 0);
 
         while (try readLine(&buf_in_stream, &buffer)) |line| {
@@ -587,9 +832,9 @@ const Settings = struct {
 
 const Exes = struct {
     allocator: *mem.Allocator,
-    load: []const u8,
-    apply: []const u8,
-    filters: []const Filter,
+    load: []const u8 = "",
+    apply: []const u8 = "",
+    filters: []const Filter = [_]Filter{},
 
     const Filter = struct {
         path: []const u8,

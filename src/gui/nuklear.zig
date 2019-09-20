@@ -36,6 +36,39 @@ export fn zig_cos(value: f32) f32 {
     return math.cos(value);
 }
 
+// Custom
+pub const FileBrowser = @import("nuklear/file-browser.zig").FileBrowser;
+pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
+
+pub fn inactiveButton(ctx: *Context, text: []const u8) bool {
+    const old_button_style = ctx.style.button;
+    ctx.style.button.normal = ctx.style.button.hover;
+    ctx.style.button.active = ctx.style.button.hover;
+    ctx.style.button.text_background = ctx.style.button.border_color;
+    ctx.style.button.text_normal = ctx.style.button.border_color;
+    ctx.style.button.text_hover = ctx.style.button.border_color;
+    ctx.style.button.text_active = ctx.style.button.border_color;
+    const clicked = c.nk_button_text(ctx, &text[0], @intCast(c_int, text.len)) != 0;
+    ctx.style.button = old_button_style;
+    return clicked;
+}
+
+pub fn nonPaddedGroupBegin(ctx: *Context, title: [*]const u8, flags: c.nk_flags) bool {
+    const old = ctx.style.window;
+    ctx.style.window.group_padding = vec2(0, 0);
+    const is_showing = c.nk_group_begin(ctx, title, flags) != 0;
+    ctx.style.window = old;
+
+    return is_showing;
+}
+
+pub fn nonPaddedGroupEnd(ctx: *Context) void {
+    const old = ctx.style.window;
+    ctx.style.window.group_padding = vec2(0, 0);
+    c.nk_group_end(ctx);
+    ctx.style.window = old;
+}
+
 // Nuklear functions
 pub const TEXT_ALIGN_LEFT = @enumToInt(c.NK_TEXT_ALIGN_LEFT);
 pub const TEXT_ALIGN_CENTERED = @enumToInt(c.NK_TEXT_ALIGN_CENTERED);
@@ -77,6 +110,12 @@ pub const EDIT_SIMPLE = @enumToInt(c.NK_EDIT_SIMPLE);
 pub const EDIT_FIELD = @enumToInt(c.NK_EDIT_FIELD);
 pub const EDIT_BOX = @enumToInt(c.NK_EDIT_BOX);
 pub const EDIT_EDITOR = @enumToInt(c.NK_EDIT_EDITOR);
+
+pub const EDIT_ACTIVE = @enumToInt(c.NK_EDIT_ACTIVE);
+pub const EDIT_INACTIVE = @enumToInt(c.NK_EDIT_INACTIVE);
+pub const EDIT_ACTIVATED = @enumToInt(c.NK_EDIT_ACTIVATED);
+pub const EDIT_DEACTIVATED = @enumToInt(c.NK_EDIT_DEACTIVATED);
+pub const EDIT_COMMITED = @enumToInt(c.NK_EDIT_COMMITED);
 
 pub const Context = c.nk_context;
 

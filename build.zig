@@ -23,7 +23,9 @@ const filter_tools = [_][]const u8{
     "tm35-rand-parties",
 };
 
-const gui_tools = [_][]const u8{"tm35-randomizer"};
+const gui_tools = [_][]const u8{
+    "tm35-randomizer",
+};
 
 pub fn build(b: *Builder) !void {
     b.setPreferredReleaseMode(.ReleaseSafe);
