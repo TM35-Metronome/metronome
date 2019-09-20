@@ -42,12 +42,8 @@ pub const FileBrowser = struct {
         defer dir.close();
 
         // Do a path.join here, so that curr_path will always look like a directory
-        // (ending with '\\' or '/' depeding on platform). FixedBufferAllocator +
-        // FailingAllocator are used here to ensure that a max of MAX_PATH_BYTES is
-        // allocated, and that only one allocation occures. This allows for dir_buf
-        // to be copied.
+        // (ending with '\\' or '/' depeding on platform). 
         const dir_path = try util.path.join([_][]const u8{ path, "" });
-
         var entries = std.ArrayList(Entry).init(allocator);
         defer {
             for (entries.toSlice()) |entry|

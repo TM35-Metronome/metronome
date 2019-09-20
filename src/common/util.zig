@@ -219,6 +219,10 @@ pub const Path = StackArrayList(fs.MAX_PATH_BYTES, u8);
 pub const path = struct {
     pub fn join(paths: []const []const u8) !Path {
         var res: Path = undefined;
+
+        // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
+        // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
+        // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.items);
         var failing = debug.FailingAllocator.init(&fba.allocator, math.maxInt(usize));
         const res_slice = try fs.path.join(&failing.allocator, paths);
