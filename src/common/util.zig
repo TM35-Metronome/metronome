@@ -191,8 +191,8 @@ test "indexOfPtr" {
 
 pub fn StackArrayList(comptime size: usize, comptime T: type) type {
     return struct {
-        items: [size]T,
-        len: usize,
+        items: [size]T = undefined,
+        len: usize = 0,
 
         pub fn fromSlice(items: []const T) !@This() {
             if (size < items.len)
@@ -231,7 +231,9 @@ pub const path = struct {
 
         return res;
     }
+};
 
+pub const dir = struct {
     pub fn selfExeDir() !Path {
         var res: Path = undefined;
         const res_slice = try fs.selfExeDirPath(&res.items);
@@ -250,41 +252,134 @@ pub const path = struct {
 
     pub fn home() DirError!Path {
         switch (builtin.os) {
-            .linux => return getEnvPath("HOME") orelse return DirError.NotAvailable,
+            .linux => return getEnvPath("HOME"),
             else => @compileError("Unsupported os"),
         }
     }
 
     pub fn cache() DirError!Path {
         switch (builtin.os) {
-            .linux => return xdgHelper("XDG_CACHE_HOME", ".cache"),
+            .linux => return getEnvPathWithHomeFallback("XDG_CACHE_HOME", ".cache"),
             else => @compileError("Unsupported os"),
         }
     }
 
     pub fn config() DirError!Path {
         switch (builtin.os) {
-            .linux => return xdgHelper("XDG_CONFIG_HOME", ".config"),
+            .linux => return getEnvPathWithHomeFallback("XDG_CONFIG_HOME", ".config"),
             else => @compileError("Unsupported os"),
         }
     }
 
-    fn xdgHelper(key: []const u8, home_fallback: []const u8) DirError!Path {
-        if (getEnvPath(key)) |cache_dir|
-            return cache_dir;
-        if (getEnvPath("HOME")) |home_dir| {
-            if (join([_][]const u8{ home_dir.toSliceConst(), home_fallback, "" })) |cache_dir|
-                return cache_dir;
+    pub fn audio() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("MUSIC"),
+            else => @compileError("Unsupported os"),
         }
-
-        return DirError.NotAvailable;
     }
 
-    fn getEnvPath(key: []const u8) ?Path {
-        const env = os.getenv(key) orelse return null;
-        if (!fs.path.isAbsolute(env))
-            return null;
+    pub fn desktop() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("DESKTOP"),
+            else => @compileError("Unsupported os"),
+        }
+    }
 
-        return Path.fromSlice(env) catch return null;
+    pub fn documents() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("DOCUMENTS"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn download() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("DOWNLOAD"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn pictures() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("PICTURES"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn public() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("PUBLICSHARE"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn templates() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("TEMPLATES"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    pub fn videos() DirError!Path {
+        switch (builtin.os) {
+            .linux => return runXdgUserDirCommand("VIDEOS"),
+            else => @compileError("Unsupported os"),
+        }
+    }
+
+    fn getEnvPathWithHomeFallback(key: []const u8, home_fallback: []const u8) DirError!Path {
+        return getEnvPath(key) catch {
+            const home_dir = try getEnvPath("HOME");
+            return path.join([_][]const u8{ home_dir.toSliceConst(), home_fallback, "" }) catch return DirError.NotAvailable;
+        };
+    }
+
+    fn getEnvPath(key: []const u8) DirError!Path {
+        const env = os.getenv(key) orelse return DirError.NotAvailable;
+        if (!fs.path.isAbsolute(env))
+            return DirError.NotAvailable;
+
+        return path.join([_][]const u8{ env, "" }) catch return DirError.NotAvailable;
+    }
+
+    fn runXdgUserDirCommand(key: []const u8) DirError!Path {
+        var process_buf: [1024 * 1024]u8 = undefined;
+        var fba = heap.FixedBufferAllocator.init(&process_buf);
+        comptime debug.assert(@sizeOf(std.ChildProcess) <= process_buf.len);
+
+        // std.ChildProcess.init current impl allocates ChildProcess and nothing else.
+        // Therefore it should never fail, as long as the above assert doesn't trigger.
+        // Remember to make sure that this assumetion is up to date with zigs std lib.
+        const process = std.ChildProcess.init([_][]const u8{ "xdg-user-dir", key }, &fba.allocator) catch unreachable;
+        defer process.deinit();
+        process.stdin_behavior = .Ignore;
+        process.stdout_behavior = .Pipe;
+        process.stderr_behavior = .Ignore;
+
+        process.spawn() catch return DirError.NotAvailable;
+        errdefer _ = process.kill() catch undefined;
+
+        const stdout_stream = &process.stdout.?.inStream().stream;
+        var res: Path = undefined;
+        res.len = stdout_stream.readFull(&res.items) catch return DirError.NotAvailable;
+
+        const term = process.wait() catch return DirError.NotAvailable;
+        if (term == .Exited and term.Exited != 0)
+            return DirError.NotAvailable;
+        if (term != .Exited)
+            return DirError.NotAvailable;
+
+        res.len -= 1; // Remove newline. Assumes that if xdg-user-dir succeeds. It'll always return something
+
+        // Join result with nothing, so that we always get an ending seperator
+        res = path.join([_][]const u8{ res.toSliceConst(), "" }) catch return DirError.NotAvailable;
+
+        // It's not very useful if xdg-user-dir returns the home dir, so let's assume that
+        // the dir is not available if that happends.
+        const home_dir = home() catch Path{};
+        if (mem.eql(u8, res.toSliceConst(), home_dir.toSliceConst()))
+            return DirError.NotAvailable;
+
+        return res;
     }
 };

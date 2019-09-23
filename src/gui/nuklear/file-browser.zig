@@ -13,9 +13,22 @@ const c = nk.c;
 
 pub const FileBrowser = struct {
     allocator: *mem.Allocator,
-    selected_file: util.Path = util.Path.fromSlice("") catch unreachable,
+    selected_file: util.Path = util.Path{},
     search_path: util.Path,
-    curr_path: util.Path,
+    curr_dir: util.Path,
+
+    audio_dir: util.Path,
+    cache_dir: util.Path,
+    config_dir: util.Path,
+    desktop_dir: util.Path,
+    document_dir: util.Path,
+    download_dir: util.Path,
+    home_dir: util.Path,
+    picture_dir: util.Path,
+    public_dir: util.Path,
+    template_dir: util.Path,
+    video_dir: util.Path,
+
     entries: []Entry,
     last_selected_entry: usize = 0,
     mode: Mode,
@@ -42,7 +55,7 @@ pub const FileBrowser = struct {
         defer dir.close();
 
         // Do a path.join here, so that curr_path will always look like a directory
-        // (ending with '\\' or '/' depeding on platform). 
+        // (ending with '\\' or '/' depeding on platform).
         const dir_path = try util.path.join([_][]const u8{ path, "" });
         var entries = std.ArrayList(Entry).init(allocator);
         defer {
@@ -65,7 +78,20 @@ pub const FileBrowser = struct {
         return FileBrowser{
             .allocator = allocator,
             .search_path = dir_path,
-            .curr_path = dir_path,
+            .curr_dir = dir_path,
+
+            .audio_dir = util.dir.audio() catch util.Path{},
+            .cache_dir = util.dir.cache() catch util.Path{},
+            .config_dir = util.dir.config() catch util.Path{},
+            .desktop_dir = util.dir.desktop() catch util.Path{},
+            .document_dir = util.dir.documents() catch util.Path{},
+            .download_dir = util.dir.download() catch util.Path{},
+            .home_dir = util.dir.home() catch util.Path{},
+            .picture_dir = util.dir.pictures() catch util.Path{},
+            .public_dir = util.dir.public() catch util.Path{},
+            .template_dir = util.dir.templates() catch util.Path{},
+            .video_dir = util.dir.videos() catch util.Path{},
+
             .entries = entries.toOwnedSlice(),
             .mode = mode,
         };
@@ -144,10 +170,37 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
         defer c.nk_group_end(ctx);
         c.nk_layout_row_dynamic(ctx, 0, 1);
 
-        c.nk_label(ctx, c"123", nk.TEXT_LEFT);
+        var clicked: ?util.Path = null;
+        if (clickablePath(ctx, "Audio", browser.audio_dir, browser.curr_dir))
+            clicked = browser.audio_dir;
+        if (clickablePath(ctx, "Cache", browser.cache_dir, browser.curr_dir))
+            clicked = browser.cache_dir;
+        if (clickablePath(ctx, "Config", browser.config_dir, browser.curr_dir))
+            clicked = browser.config_dir;
+        if (clickablePath(ctx, "Documents", browser.document_dir, browser.curr_dir))
+            clicked = browser.document_dir;
+        if (clickablePath(ctx, "Download", browser.download_dir, browser.curr_dir))
+            clicked = browser.download_dir;
+        if (clickablePath(ctx, "Home", browser.home_dir, browser.curr_dir))
+            clicked = browser.home_dir;
+        if (clickablePath(ctx, "Pictures", browser.picture_dir, browser.curr_dir))
+            clicked = browser.picture_dir;
+        if (clickablePath(ctx, "Public", browser.public_dir, browser.curr_dir))
+            clicked = browser.public_dir;
+        if (clickablePath(ctx, "Template", browser.template_dir, browser.curr_dir))
+            clicked = browser.template_dir;
+        if (clickablePath(ctx, "Video", browser.video_dir, browser.curr_dir))
+            clicked = browser.video_dir;
+
+        if (clicked) |path| {
+            if (FileBrowser.open(browser.allocator, browser.mode, path.toSliceConst())) |new_browser| {
+                browser.close();
+                browser.* = new_browser;
+            } else |_| {}
+        }
     }
 
-    if (nk.nonPaddedGroupBegin(ctx, c"file-browser-explorer", nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR)) {
+    if (nk.nonPaddedGroupBegin(ctx, c"file-browser-explorer", nk.WINDOW_NO_SCROLLBAR)) {
         defer nk.nonPaddedGroupEnd(ctx);
         // +----------------+
         // | /path/to/      |
@@ -221,7 +274,7 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
                 if (c.nkInputIsMouseClickInRect(&ctx.input, c.NK_BUTTON_DOUBLE, &bounds) != 0) switch (entry.kind) {
                     .Directory => {
                         const dir = util.path.join([_][]const u8{
-                            browser.curr_path.toSliceConst(),
+                            browser.curr_dir.toSliceConst(),
                             entry.name,
                         }) catch continue;
 
@@ -279,4 +332,12 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
     }
 
     return res;
+}
+
+fn clickablePath(ctx: *nk.Context, text: []const u8, path: util.Path, curr: util.Path) bool {
+    if (path.len == 0)
+        return false;
+
+    var selected: c_int = @boolToInt(mem.eql(u8, path.toSliceConst(), curr.toSliceConst()));
+    return c.nk_selectable_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT, &selected) != 0;
 }

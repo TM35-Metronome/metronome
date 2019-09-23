@@ -77,11 +77,11 @@ pub fn main() u8 {
     var in: ?util.Path = null;
     var out: ?util.Path = null;
     var file_browser_kind: FileBrowserKind = undefined; // This should always be written to before read from
-    var file_browser_dir = util.path.cwd() catch
-        util.path.home() catch
-        util.path.selfExeDir() catch blk: {
+    var file_browser_dir = util.dir.cwd() catch
+        util.dir.home() catch
+        util.dir.selfExeDir() catch blk: {
         errors.fatal("Could not find a directory to start the file browser in.");
-        break :blk util.Path.fromSlice("") catch unreachable;
+        break :blk util.Path{};
     };
     var file_browser: ?nk.FileBrowser = null;
     defer if (file_browser) |fb| fb.close();
@@ -117,10 +117,10 @@ pub fn main() u8 {
                     switch (pressed) {
                         .Confirm => err_blk: {
                             const selected_path = util.path.join([_][]const u8{
-                                fb.curr_path.toSliceConst(),
+                                fb.curr_dir.toSliceConst(),
                                 fb.selected_file.toSliceConst(),
                             }) catch {
-                                errors.append("Path '{}/{}' is to long", fb.curr_path.toSliceConst(), fb.selected_file.toSliceConst());
+                                errors.append("Path '{}/{}' is to long", fb.curr_dir.toSliceConst(), fb.selected_file.toSliceConst());
                                 break :err_blk;
                             };
                             switch (file_browser_kind) {
@@ -166,7 +166,7 @@ pub fn main() u8 {
                         .Cancel => {},
                     }
 
-                    file_browser_dir = fb.curr_path;
+                    file_browser_dir = fb.curr_dir;
                     fb.close();
                     file_browser = null;
                 }
