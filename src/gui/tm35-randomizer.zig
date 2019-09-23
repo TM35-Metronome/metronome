@@ -46,23 +46,28 @@ pub fn main() u8 {
     defer nk.destroy(ctx, window);
 
     // From this point on, we can report errors to the user. This is done
-    // with this 'Errors' struct. If an error occures, it should be appended
-    // with 'errors.append("error str {}", arg1, arg2...)'.
+    // with this 'Popups' struct. If an error occures, it should be appended
+    // with 'popups.err("error str {}", arg1, arg2...)'.
     // It is also possible to report a fatal error with
-    // 'errors.fatal("error str {}", arg1, arg2...)'. A fatal error means, that
+    // 'popups.fatal("error str {}", arg1, arg2...)'. A fatal error means, that
     // the only way to recover is to exit. This error is reported to the user,
     // after which the only option they have is to quit the program.
-    var errors = Errors{ .list = std.ArrayList([]const u8).init(allocator) };
-    defer errors.deinit();
+    // Finally, we can also just inform the user of something with
+    // 'popups.info("info str {}", arg1, arg2...)'.
+    var popups = Popups{
+        .errors = std.ArrayList([]const u8).init(allocator),
+        .infos = std.ArrayList([]const u8).init(allocator),
+    };
+    defer popups.deinit();
 
     const exes = Exes.find(allocator) catch |err| blk: {
-        errors.append("Failed to find exes: {}", err);
+        popups.err("Failed to find exes: {}", err);
         break :blk Exes{ .allocator = allocator };
     };
     defer exes.deinit();
 
     const settings = Settings.init(allocator, exes) catch |err| blk: {
-        errors.append("Failed to create settings: {}", err);
+        popups.err("Failed to create settings: {}", err);
         break :blk Settings{ .allocator = allocator };
     };
     defer settings.deinit();
@@ -80,7 +85,7 @@ pub fn main() u8 {
     var file_browser_dir = util.dir.cwd() catch
         util.dir.home() catch
         util.dir.selfExeDir() catch blk: {
-        errors.fatal("Could not find a directory to start the file browser in.");
+        popups.fatal("Could not find a directory to start the file browser in.");
         break :blk util.Path{};
     };
     var file_browser: ?nk.FileBrowser = null;
@@ -120,7 +125,7 @@ pub fn main() u8 {
                                 fb.curr_dir.toSliceConst(),
                                 fb.selected_file.toSliceConst(),
                             }) catch {
-                                errors.append("Path '{}/{}' is to long", fb.curr_dir.toSliceConst(), fb.selected_file.toSliceConst());
+                                popups.err("Path '{}/{}' is to long", fb.curr_dir.toSliceConst(), fb.selected_file.toSliceConst());
                                 break :err_blk;
                             };
                             switch (file_browser_kind) {
@@ -133,31 +138,32 @@ pub fn main() u8 {
                                     stderr.write("\n") catch {};
                                     randomize(exes, settings, in_path, out_path) catch |err| {
                                         // TODO: Maybe print the stderr from the command we run in the randomizer function
-                                        errors.append("Failed to randomize '{}': {}", in_path, err);
+                                        popups.err("Failed to randomize '{}': {}", in_path, err);
                                         break :err_blk;
                                     };
-                                    // TODO: Print a done message?
+
+                                    popups.info("Rom has been randomized!");
                                 },
                                 .LoadSettings => {
                                     const file = fs.File.openRead(selected_path.toSliceConst()) catch |err| {
-                                        errors.append("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                                        popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
                                         break :err_blk;
                                     };
                                     defer file.close();
                                     settings.load(exes, &file.inStream().stream) catch |err| {
-                                        errors.append("Failed to load from '{}': {}", selected_path.toSliceConst(), err);
+                                        popups.err("Failed to load from '{}': {}", selected_path.toSliceConst(), err);
                                         break :err_blk;
                                     };
                                 },
                                 .SaveSettings => {
                                     // TODO: Warn if the user tries to overwrite existing file.
                                     const file = fs.File.openWrite(selected_path.toSliceConst()) catch |err| {
-                                        errors.append("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                                        popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
                                         break :err_blk;
                                     };
                                     defer file.close();
                                     settings.save(exes, &file.outStream().stream) catch |err| {
-                                        errors.append("Failed to write to '{}': {}", selected_path.toSliceConst(), err);
+                                        popups.err("Failed to write to '{}': {}", selected_path.toSliceConst(), err);
                                         break :err_blk;
                                     };
                                 },
@@ -423,7 +429,7 @@ pub fn main() u8 {
                         if (nk.FileBrowser.open(allocator, mode, file_browser_dir.toSliceConst())) |fb| {
                             file_browser = fb;
                         } else |err| {
-                            errors.append("Could not open file browser: {}", err);
+                            popups.err("Could not open file browser: {}", err);
                         }
                     }
                 }
@@ -442,22 +448,24 @@ pub fn main() u8 {
             const x = (@intToFloat(f32, window.width) / 2) - (w / 2);
             const y = (@intToFloat(f32, window.height) / 2) - (h / 2);
             const popup_rect = nk.rect(x, y, w, h);
-            const fatal = errors.fatalError();
-            if (fatal != null or errors.list.len != 0) {
-                const title = if (fatal) |_| c"Fatal error!" else c"Error";
+            const fatal_err = popups.fatalError();
+            const is_err = popups.errors.len != 0;
+            const is_info = popups.infos.len != 0;
+            if (fatal_err != null or is_err or is_info) {
+                const title = if (fatal_err) |_| c"Fatal error!" else if (is_err) c"Error" else c"Info";
                 if (c.nkPopupBegin(ctx, c.NK_POPUP_STATIC, title, border_title_group, &popup_rect) != 0) {
                     defer c.nk_popup_end(ctx);
-                    const err = fatal orelse errors.list.at(errors.list.len - 1);
+                    const text = fatal_err orelse if (is_err) popups.lastError() else popups.lastInfo();
 
                     const padding_height = groupOuterHeight(ctx);
                     const buttons_height = ctx.style.window.spacing.y +
                         min_height;
-                    const err_height = h - (padding_height + buttons_height);
+                    const text_height = h - (padding_height + buttons_height);
 
-                    c.nk_layout_row_dynamic(ctx, err_height, 1);
-                    c.nk_text_wrap(ctx, err.ptr, @intCast(c_int, err.len));
+                    c.nk_layout_row_dynamic(ctx, text_height, 1);
+                    c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
 
-                    const button_label = if (fatal) |_| c"Quit" else c"Ok";
+                    const button_label = if (fatal_err) |_| c"Quit" else c"Ok";
                     const button_label_len = mem.len(u8, button_label);
                     const style_font = ctx.style.font;
                     const style_button = ctx.style.button;
@@ -472,10 +480,16 @@ pub fn main() u8 {
 
                     c.nk_label(ctx, c"", nk.TEXT_LEFT);
                     if (c.nk_button_label(ctx, button_label) != 0) {
-                        if (fatal) |_|
+                        if (fatal_err) |_|
                             return 1;
-                        errors.list.allocator.free(errors.list.pop());
-                        c.nk_popup_close(ctx);
+                        if (is_err) {
+                            popups.errors.allocator.free(popups.errors.pop());
+                            c.nk_popup_close(ctx);
+                        }
+                        if (is_info) {
+                            popups.infos.allocator.free(popups.infos.pop());
+                            c.nk_popup_close(ctx);
+                        }
                     }
                 }
             }
@@ -489,35 +503,55 @@ pub fn main() u8 {
     return 0;
 }
 
-const Errors = struct {
+const Popups = struct {
     fatal_error: [128]u8 = "\x00" ** 128,
-    list: std.ArrayList([]const u8),
+    errors: std.ArrayList([]const u8),
+    infos: std.ArrayList([]const u8),
 
-    fn append(errors: *Errors, comptime fmt: []const u8, args: ...) void {
-        const err_msg = std.fmt.allocPrint(errors.list.allocator, fmt, args) catch {
-            return errors.fatal("Allocation failed");
+    fn err(popups: *Popups, comptime fmt: []const u8, args: ...) void {
+        popups.append(&popups.errors, fmt, args);
+    }
+
+    fn lastError(popups: *Popups) []const u8 {
+        return popups.errors.at(popups.errors.len - 1);
+    }
+
+    fn info(popups: *Popups, comptime fmt: []const u8, args: ...) void {
+        popups.append(&popups.infos, fmt, args);
+    }
+
+    fn lastInfo(popups: *Popups) []const u8 {
+        return popups.infos.at(popups.infos.len - 1);
+    }
+
+    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: ...) void {
+        const msg = std.fmt.allocPrint(list.allocator, fmt, args) catch {
+            return popups.fatal("Allocation failed");
         };
-        errors.list.append(err_msg) catch {
-            errors.list.allocator.free(err_msg);
-            return errors.fatal("Allocation failed");
+        list.append(msg) catch {
+            list.allocator.free(msg);
+            return popups.fatal("Allocation failed");
         };
     }
 
-    fn fatal(errors: *Errors, comptime fmt: []const u8, args: ...) void {
-        _ = std.fmt.bufPrint(&errors.fatal_error, fmt ++ "\x00", args) catch return;
+    fn fatal(popups: *Popups, comptime fmt: []const u8, args: ...) void {
+        _ = std.fmt.bufPrint(&popups.fatal_error, fmt ++ "\x00", args) catch return;
     }
 
-    fn fatalError(errors: *const Errors) ?[]const u8 {
-        const res = mem.toSliceConst(u8, &errors.fatal_error);
+    fn fatalError(popups: *const Popups) ?[]const u8 {
+        const res = mem.toSliceConst(u8, &popups.fatal_error);
         if (res.len == 0)
             return null;
         return res;
     }
 
-    fn deinit(errors: Errors) void {
-        for (errors.list.toSlice()) |err|
-            errors.list.allocator.free(err);
-        errors.list.deinit();
+    fn deinit(popups: Popups) void {
+        for (popups.errors.toSlice()) |e|
+            popups.errors.allocator.free(e);
+        for (popups.infos.toSlice()) |i|
+            popups.infos.allocator.free(i);
+        popups.errors.deinit();
+        popups.infos.deinit();
     }
 };
 
