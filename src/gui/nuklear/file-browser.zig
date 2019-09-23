@@ -215,6 +215,8 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
                 if (FileBrowser.open(browser.allocator, browser.mode, browser.search_path.toSliceConst())) |new_browser| {
                     browser.close();
                     browser.* = new_browser;
+                } else |_| if (fs.File.access(browser.search_path.toSliceConst())) {
+                    res = .Confirm;
                 } else |_| {}
             }
         }
