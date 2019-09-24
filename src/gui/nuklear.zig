@@ -40,7 +40,11 @@ export fn zig_cos(value: f32) f32 {
 pub const FileBrowser = @import("nuklear/file-browser.zig").FileBrowser;
 pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
 
-pub fn inactiveButton(ctx: *Context, text: []const u8) void {
+pub fn button(ctx: *Context, text: []const u8) bool {
+    return c.nk_button_text(ctx, text.ptr, @intCast(c_int, text.len)) != 0;
+}
+
+pub fn buttonInactive(ctx: *Context, text: []const u8) void {
     const old_button_style = ctx.style.button;
     ctx.style.button.normal = ctx.style.button.hover;
     ctx.style.button.active = ctx.style.button.hover;
@@ -48,8 +52,17 @@ pub fn inactiveButton(ctx: *Context, text: []const u8) void {
     ctx.style.button.text_normal = ctx.style.button.border_color;
     ctx.style.button.text_hover = ctx.style.button.border_color;
     ctx.style.button.text_active = ctx.style.button.border_color;
-    _ = c.nk_button_text(ctx, &text[0], @intCast(c_int, text.len)) != 0;
+    _ = button(ctx, text);
     ctx.style.button = old_button_style;
+}
+
+pub fn buttonActivatable(ctx: *Context, text: []const u8, active: bool) bool {
+    if (active) {
+        return button(ctx, text);
+    } else {
+        buttonInactive(ctx, text);
+        return false;
+    }
 }
 
 pub fn nonPaddedGroupBegin(ctx: *Context, title: [*]const u8, flags: c.nk_flags) bool {

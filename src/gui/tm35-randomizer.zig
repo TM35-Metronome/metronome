@@ -403,19 +403,15 @@ pub fn main() u8 {
                     );
 
                     c.nk_layout_row_dynamic(ctx, 0, 1);
-                    if (in != null) {
-                        if (c.nk_button_label(ctx, c"Randomize") != 0) {
-                            open_file_browser = true;
-                            file_browser_kind = .Randomize;
-                        }
-                    } else {
-                        _ = nk.inactiveButton(ctx, "Randomize");
+                    if (nk.buttonActivatable(ctx, "Randomize", in != null)) {
+                        open_file_browser = true;
+                        file_browser_kind = .Randomize;
                     }
-                    if (c.nk_button_label(ctx, c"Load settings") != 0) {
+                    if (nk.button(ctx, "Load settings")) {
                         open_file_browser = true;
                         file_browser_kind = .LoadSettings;
                     }
-                    if (c.nk_button_label(ctx, c"Save settings") != 0) {
+                    if (nk.button(ctx, "Save settings")) {
                         open_file_browser = true;
                         file_browser_kind = .SaveSettings;
                     }
@@ -464,11 +460,9 @@ pub fn main() u8 {
                     c.nk_layout_row_dynamic(ctx, text_height, 1);
                     c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
 
-                    const button_label = if (fatal_err) |_| c"Quit" else c"Ok";
-                    const button_label_len = mem.len(u8, button_label);
-                    const style_font = ctx.style.font;
+                    const button_label = if (fatal_err) |_| "Quit" else "Ok";
                     const style_button = ctx.style.button;
-                    const label_width = style_font.*.width.?(style_font.*.userdata, 0, button_label, @intCast(c_int, button_label_len));
+                    const label_width = nk.fontWidth(ctx, button_label);
                     const button_width = label_width + style_button.border +
                         (style_button.padding.x + style_button.rounding) * 6;
 
@@ -478,7 +472,7 @@ pub fn main() u8 {
                     c.nk_layout_row_template_end(ctx);
 
                     c.nk_label(ctx, c"", nk.TEXT_LEFT);
-                    if (c.nk_button_label(ctx, button_label) != 0) {
+                    if (nk.button(ctx, button_label)) {
                         if (fatal_err) |_|
                             return 1;
                         if (is_err) {

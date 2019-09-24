@@ -313,16 +313,6 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
     const button_width = cancel_width + style_button.border +
         (style_button.padding.x + style_button.rounding) * 6;
 
-    c.nk_layout_row_template_begin(ctx, 0);
-    c.nk_layout_row_template_push_dynamic(ctx);
-    c.nk_layout_row_template_push_static(ctx, button_width);
-    c.nk_layout_row_template_push_static(ctx, button_width);
-    c.nk_layout_row_template_end(ctx);
-
-    c.nk_label(ctx, c"", nk.TEXT_LEFT);
-    if (c.nk_button_text(ctx, cancel_text.ptr, @intCast(c_int, cancel_text.len)) != 0)
-        res = .Cancel;
-
     const confirm_is_active = switch (browser.mode) {
         .Save, .OpenOne => browser.selected_file.len != 0,
         .OpenMany => blk: {
@@ -334,12 +324,17 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
         },
     };
 
-    if (confirm_is_active) {
-        if (c.nk_button_text(ctx, confirm_text.ptr, @intCast(c_int, confirm_text.len)) != 0)
-            res = .Confirm;
-    } else {
-        nk.inactiveButton(ctx, confirm_text);
-    }
+    c.nk_layout_row_template_begin(ctx, 0);
+    c.nk_layout_row_template_push_dynamic(ctx);
+    c.nk_layout_row_template_push_static(ctx, button_width);
+    c.nk_layout_row_template_push_static(ctx, button_width);
+    c.nk_layout_row_template_end(ctx);
+
+    c.nk_label(ctx, c"", nk.TEXT_LEFT);
+    if (nk.button(ctx, cancel_text))
+        res = .Cancel;
+    if (nk.buttonActivatable(ctx, confirm_text, confirm_is_active))
+        res = .Confirm;
 
     if (res != null and res.? == .Confirm) {
         switch (browser.mode) {
@@ -395,11 +390,11 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
             c.nk_layout_row_template_end(ctx);
 
             c.nk_label(ctx, c"", nk.TEXT_LEFT);
-            if (c.nk_button_text(ctx, cancel_label.ptr, @intCast(c_int, cancel_label.len)) != 0) {
+            if (nk.button(ctx, cancel_label)) {
                 browser.show_replace_prompt = false;
                 c.nk_popup_close(ctx);
             }
-            if (c.nk_button_text(ctx, replace_label.ptr, @intCast(c_int, replace_label.len)) != 0) {
+            if (nk.button(ctx, replace_label)) {
                 res = .Confirm;
                 browser.show_replace_prompt = false;
                 c.nk_popup_close(ctx);
