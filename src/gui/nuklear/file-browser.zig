@@ -31,6 +31,8 @@ pub const FileBrowser = struct {
 
     entries: []Entry,
     last_selected_entry: usize = 0,
+    show_replace_prompt: bool = false,
+
     mode: Mode,
 
     pub const Pressed = enum {
@@ -121,8 +123,15 @@ pub const FileBrowser = struct {
 ///            | Cancel | |   Ok   |
 ///            +--------+ +--------+
 ///
-pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?FileBrowser.Pressed {
+pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Pressed {
+    var file_browser_bounds: c.struct_nk_rect = undefined;
+    c.nkWidgetBounds(ctx, &file_browser_bounds);
+    if (!nk.nonPaddedGroupBegin(ctx, c"file-browser", nk.WINDOW_NO_SCROLLBAR))
+        return null;
+    defer nk.nonPaddedGroupEnd(ctx);
+
     const border_group = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR;
+    const border_title_group = border_group | nk.WINDOW_TITLE;
     const layout = ctx.current.*.layout;
     const min_height = layout.*.row.min_height;
 
@@ -152,7 +161,7 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
         if (browser.mode == .Save) ctx.style.window.spacing.y + bar_height else 0;
     const ok_cancel_buttons_height = ctx.style.window.spacing.y +
         min_height;
-    const below_file_name_height = height - (used_up_space + ok_cancel_buttons_height);
+    const below_file_name_height = file_browser_bounds.h - (used_up_space + ok_cancel_buttons_height);
     c.nk_layout_row_template_begin(ctx, below_file_name_height);
     c.nk_layout_row_template_push_static(ctx, 250);
     c.nk_layout_row_template_push_dynamic(ctx);
@@ -299,9 +308,8 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
         .Save => "Save",
         .OpenOne, .OpenMany => "Open",
     };
-    const style_font = ctx.style.font;
     const style_button = ctx.style.button;
-    const cancel_width = style_font.*.width.?(style_font.*.userdata, 0, cancel_text.ptr, @intCast(c_int, cancel_text.len));
+    const cancel_width = nk.fontWidth(ctx, cancel_text);
     const button_width = cancel_width + style_button.border +
         (style_button.padding.x + style_button.rounding) * 6;
 
@@ -330,7 +338,73 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser, height: f32) ?File
         if (c.nk_button_text(ctx, confirm_text.ptr, @intCast(c_int, confirm_text.len)) != 0)
             res = .Confirm;
     } else {
-        _ = nk.inactiveButton(ctx, confirm_text);
+        nk.inactiveButton(ctx, confirm_text);
+    }
+
+    if (res != null and res.? == .Confirm) {
+        switch (browser.mode) {
+            .Save => if (fs.File.access(browser.search_path.toSliceConst())) {
+                browser.show_replace_prompt = true;
+                res = null;
+            } else |err| switch (err) {
+                error.FileNotFound, error.NameTooLong, error.BadPathName, error.InvalidUtf8, error.Unexpected => {
+                    browser.show_replace_prompt = false;
+                },
+                error.InputOutput, error.SystemResources, error.PermissionDenied => {
+                    browser.show_replace_prompt = true;
+                    res = null;
+                },
+            },
+            .OpenMany, .OpenOne => {},
+        }
+    }
+
+    // +-------------------------+
+    // | Note                    |
+    // +-------------------------+
+    // | File already exists.    |
+    // |   +--------++---------+ |
+    // |   | Cancel || Replace | |
+    // |   +--------++---------+ |
+    // +-------------------------+
+    const w: f32 = 350;
+    const h: f32 = 150;
+    const x = (file_browser_bounds.w / 2) - (w / 2);
+    const y = (file_browser_bounds.h / 2) - (h / 2);
+    const popup_rect = nk.rect(x, y, w, h);
+    if (browser.show_replace_prompt) {
+        if (c.nkPopupBegin(ctx, c.NK_POPUP_STATIC, c"Note", border_title_group, &popup_rect) != 0) {
+            defer c.nk_popup_end(ctx);
+
+            const padding_height = groupOuterHeight(ctx);
+            const buttons_height = ctx.style.window.spacing.y +
+                min_height;
+            const text_height = h - (padding_height + buttons_height);
+
+            const text = "File already exists. Replacing it will override its content."[0..];
+            c.nk_layout_row_dynamic(ctx, text_height, 1);
+            c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
+
+            const replace_label = "Replace"[0..];
+            const cancel_label = "Cancel"[0..];
+
+            c.nk_layout_row_template_begin(ctx, 0);
+            c.nk_layout_row_template_push_dynamic(ctx);
+            c.nk_layout_row_template_push_static(ctx, button_width);
+            c.nk_layout_row_template_push_static(ctx, button_width);
+            c.nk_layout_row_template_end(ctx);
+
+            c.nk_label(ctx, c"", nk.TEXT_LEFT);
+            if (c.nk_button_text(ctx, cancel_label.ptr, @intCast(c_int, cancel_label.len)) != 0) {
+                browser.show_replace_prompt = false;
+                c.nk_popup_close(ctx);
+            }
+            if (c.nk_button_text(ctx, replace_label.ptr, @intCast(c_int, replace_label.len)) != 0) {
+                res = .Confirm;
+                browser.show_replace_prompt = false;
+                c.nk_popup_close(ctx);
+            }
+        }
     }
 
     return res;
@@ -342,4 +416,14 @@ fn clickablePath(ctx: *nk.Context, text: []const u8, path: util.Path, curr: util
 
     var selected: c_int = @boolToInt(mem.eql(u8, path.toSliceConst(), curr.toSliceConst()));
     return c.nk_selectable_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT, &selected) != 0;
+}
+
+fn groupOuterHeight(ctx: *const nk.Context) f32 {
+    return headerHeight(ctx) + (ctx.style.window.group_padding.y * 2) + ctx.style.window.spacing.y;
+}
+
+fn headerHeight(ctx: *const nk.Context) f32 {
+    return ctx.style.font.*.height +
+        (ctx.style.window.header.padding.y * 2) +
+        (ctx.style.window.header.label_padding.y * 2) + 1;
 }

@@ -108,7 +108,7 @@ pub fn main() u8 {
 
         const window_rect = nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height));
 
-        if (nk.begin(ctx, c"", window_rect, nk.WINDOW_NO_SCROLLBAR)) ui_end: {
+        if (nk.begin(ctx, c"", window_rect, nk.WINDOW_NO_SCROLLBAR)) {
             const layout = ctx.current.*.layout;
             const min_height = layout.*.row.min_height;
 
@@ -118,7 +118,8 @@ pub fn main() u8 {
             // If file_browser isn't null, then we are promting the user for a file,
             // so we just draw the file browser instead of our normal UI.
             if (file_browser) |*fb| {
-                if (nk.fileBrowser(ctx, fb, total_space.h)) |pressed| {
+                c.nk_layout_row_dynamic(ctx, total_space.h, 1);
+                if (nk.fileBrowser(ctx, fb)) |pressed| {
                     switch (pressed) {
                         .Confirm => err_blk: {
                             const selected_path = util.path.join([_][]const u8{
@@ -276,7 +277,7 @@ pub fn main() u8 {
                         c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.TEXT_LEFT);
                     }
 
-                    var biggest_len: f32 = 0;
+                    var biggest_width: f32 = 0;
                     for (filter.params) |param, i| {
                         const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
                         if (!param.takes_value)
@@ -286,10 +287,9 @@ pub fn main() u8 {
                         if (mem.eql(u8, text, "version"))
                             continue;
 
-                        const style_font = ctx.style.font;
-                        const text_len = style_font.*.width.?(style_font.*.userdata, 0, text.ptr, @intCast(c_int, text.len));
-                        if (biggest_len < text_len)
-                            biggest_len = text_len;
+                        const text_width = nk.fontWidth(ctx, text);
+                        if (biggest_width < text_width)
+                            biggest_width = text_width;
                     }
 
                     for (filter.params) |param, i| {
@@ -318,11 +318,10 @@ pub fn main() u8 {
                             continue;
                         }
 
-                        const style_font = ctx.style.font;
-                        const prompt_len = style_font.*.width.?(style_font.*.userdata, 0, &("a" ** 30), 30);
+                        const prompt_width = nk.fontWidth(ctx, "a" ** 30);
                         c.nk_layout_row_template_begin(ctx, 0);
-                        c.nk_layout_row_template_push_static(ctx, biggest_len);
-                        c.nk_layout_row_template_push_static(ctx, prompt_len);
+                        c.nk_layout_row_template_push_static(ctx, biggest_width);
+                        c.nk_layout_row_template_push_static(ctx, prompt_width);
                         c.nk_layout_row_template_push_dynamic(ctx);
                         c.nk_layout_row_template_end(ctx);
 
@@ -339,7 +338,7 @@ pub fn main() u8 {
                             continue;
                         }
                         if (mem.indexOfScalar(u8, value, '|')) |_| {
-                            if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_len, 500)) != 0) {
+                            if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
                                 c.nk_layout_row_dynamic(ctx, 0, 1);
                                 if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
                                     arg.* = buf[0..0];

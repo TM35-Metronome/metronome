@@ -40,7 +40,7 @@ export fn zig_cos(value: f32) f32 {
 pub const FileBrowser = @import("nuklear/file-browser.zig").FileBrowser;
 pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
 
-pub fn inactiveButton(ctx: *Context, text: []const u8) bool {
+pub fn inactiveButton(ctx: *Context, text: []const u8) void {
     const old_button_style = ctx.style.button;
     ctx.style.button.normal = ctx.style.button.hover;
     ctx.style.button.active = ctx.style.button.hover;
@@ -48,9 +48,8 @@ pub fn inactiveButton(ctx: *Context, text: []const u8) bool {
     ctx.style.button.text_normal = ctx.style.button.border_color;
     ctx.style.button.text_hover = ctx.style.button.border_color;
     ctx.style.button.text_active = ctx.style.button.border_color;
-    const clicked = c.nk_button_text(ctx, &text[0], @intCast(c_int, text.len)) != 0;
+    _ = c.nk_button_text(ctx, &text[0], @intCast(c_int, text.len)) != 0;
     ctx.style.button = old_button_style;
-    return clicked;
 }
 
 pub fn nonPaddedGroupBegin(ctx: *Context, title: [*]const u8, flags: c.nk_flags) bool {
@@ -67,6 +66,11 @@ pub fn nonPaddedGroupEnd(ctx: *Context) void {
     ctx.style.window.group_padding = vec2(0, 0);
     c.nk_group_end(ctx);
     ctx.style.window = old;
+}
+
+pub fn fontWidth(ctx: *Context, text: []const u8) f32 {
+    const style_font = ctx.style.font;
+    return style_font.*.width.?(style_font.*.userdata, 0, text.ptr, @intCast(c_int, text.len));
 }
 
 // Nuklear functions
