@@ -460,29 +460,22 @@ pub fn main() u8 {
                     c.nk_layout_row_dynamic(ctx, text_height, 1);
                     c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
 
-                    const button_label = if (fatal_err) |_| "Quit" else "Ok";
-                    const style_button = ctx.style.button;
-                    const label_width = nk.fontWidth(ctx, button_label);
-                    const button_width = label_width + style_button.border +
-                        (style_button.padding.x + style_button.rounding) * 6;
-
-                    c.nk_layout_row_template_begin(ctx, 0);
-                    c.nk_layout_row_template_push_dynamic(ctx);
-                    c.nk_layout_row_template_push_static(ctx, button_width);
-                    c.nk_layout_row_template_end(ctx);
-
-                    c.nk_label(ctx, c"", nk.TEXT_LEFT);
-                    if (nk.button(ctx, button_label)) {
-                        if (fatal_err) |_|
-                            return 1;
-                        if (is_err) {
-                            popups.errors.allocator.free(popups.errors.pop());
-                            c.nk_popup_close(ctx);
-                        }
-                        if (is_info) {
-                            popups.infos.allocator.free(popups.infos.pop());
-                            c.nk_popup_close(ctx);
-                        }
+                    switch (nk.buttons(ctx, .Right, nk.buttonWidth(ctx, "Quit"), 0, [_]nk.Button{
+                        nk.Button{ .text = if (fatal_err) |_| "Quit" else "Ok" },
+                    })) {
+                        0 => {
+                            if (fatal_err) |_|
+                                return 1;
+                            if (is_err) {
+                                popups.errors.allocator.free(popups.errors.pop());
+                                c.nk_popup_close(ctx);
+                            }
+                            if (is_info) {
+                                popups.infos.allocator.free(popups.infos.pop());
+                                c.nk_popup_close(ctx);
+                            }
+                        },
+                        else => {},
                     }
                 }
             }

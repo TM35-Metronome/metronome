@@ -303,16 +303,10 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
     // +--------+ +--------+
     // | Cancel | |  Open  |
     // +--------+ +--------+
-    const cancel_text: []const u8 = "Cancel";
     const confirm_text: []const u8 = switch (browser.mode) {
         .Save => "Save",
         .OpenOne, .OpenMany => "Open",
     };
-    const style_button = ctx.style.button;
-    const cancel_width = nk.fontWidth(ctx, cancel_text);
-    const button_width = cancel_width + style_button.border +
-        (style_button.padding.x + style_button.rounding) * 6;
-
     const confirm_is_active = switch (browser.mode) {
         .Save, .OpenOne => browser.selected_file.len != 0,
         .OpenMany => blk: {
@@ -324,17 +318,14 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
         },
     };
 
-    c.nk_layout_row_template_begin(ctx, 0);
-    c.nk_layout_row_template_push_dynamic(ctx);
-    c.nk_layout_row_template_push_static(ctx, button_width);
-    c.nk_layout_row_template_push_static(ctx, button_width);
-    c.nk_layout_row_template_end(ctx);
-
-    c.nk_label(ctx, c"", nk.TEXT_LEFT);
-    if (nk.button(ctx, cancel_text))
-        res = .Cancel;
-    if (nk.buttonActivatable(ctx, confirm_text, confirm_is_active))
-        res = .Confirm;
+    switch (nk.buttonsAutoWidth(ctx, .Right, 0, [_]nk.Button{
+        nk.Button{ .text = "Cancel" },
+        nk.Button{ .text = confirm_text, .is_active = confirm_is_active },
+    })) {
+        0 => res = .Cancel,
+        1 => res = .Confirm,
+        else => {},
+    }
 
     if (res != null and res.? == .Confirm) {
         switch (browser.mode) {
@@ -380,24 +371,20 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
             c.nk_layout_row_dynamic(ctx, text_height, 1);
             c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
 
-            const replace_label = "Replace"[0..];
-            const cancel_label = "Cancel"[0..];
-
-            c.nk_layout_row_template_begin(ctx, 0);
-            c.nk_layout_row_template_push_dynamic(ctx);
-            c.nk_layout_row_template_push_static(ctx, button_width);
-            c.nk_layout_row_template_push_static(ctx, button_width);
-            c.nk_layout_row_template_end(ctx);
-
-            c.nk_label(ctx, c"", nk.TEXT_LEFT);
-            if (nk.button(ctx, cancel_label)) {
-                browser.show_replace_prompt = false;
-                c.nk_popup_close(ctx);
-            }
-            if (nk.button(ctx, replace_label)) {
-                res = .Confirm;
-                browser.show_replace_prompt = false;
-                c.nk_popup_close(ctx);
+            switch (nk.buttonsAutoWidth(ctx, .Right, 0, [_]nk.Button{
+                nk.Button{ .text = "Cancel" },
+                nk.Button{ .text = "Replace" },
+            })) {
+                0 => {
+                    browser.show_replace_prompt = false;
+                    c.nk_popup_close(ctx);
+                },
+                1 => {
+                    res = .Confirm;
+                    browser.show_replace_prompt = false;
+                    c.nk_popup_close(ctx);
+                },
+                else => {},
             }
         }
     }

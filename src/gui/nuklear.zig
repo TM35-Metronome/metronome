@@ -40,10 +40,6 @@ export fn zig_cos(value: f32) f32 {
 pub const FileBrowser = @import("nuklear/file-browser.zig").FileBrowser;
 pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
 
-pub fn button(ctx: *Context, text: []const u8) bool {
-    return c.nk_button_text(ctx, text.ptr, @intCast(c_int, text.len)) != 0;
-}
-
 pub fn buttonInactive(ctx: *Context, text: []const u8) void {
     const old_button_style = ctx.style.button;
     ctx.style.button.normal = ctx.style.button.hover;
@@ -84,6 +80,59 @@ pub fn nonPaddedGroupEnd(ctx: *Context) void {
 pub fn fontWidth(ctx: *Context, text: []const u8) f32 {
     const style_font = ctx.style.font;
     return style_font.*.width.?(style_font.*.userdata, 0, text.ptr, @intCast(c_int, text.len));
+}
+
+pub const Align = enum {
+    Left,
+    Right,
+};
+
+pub const no_button_clicked = math.maxInt(usize);
+
+pub const Button = struct {
+    text: []const u8,
+    is_active: bool = true,
+};
+
+pub fn buttonWidth(ctx: *Context, text: []const u8) f32 {
+    const style_button = ctx.style.button;
+    return fontWidth(ctx, text) + style_button.border +
+        (style_button.padding.x + style_button.rounding) * 2;
+}
+
+pub fn buttonsAutoWidth(ctx: *Context, alignment: Align, height: f32, buttons_: []const Button) usize {
+    var biggest: f32 = 0;
+    for (buttons_) |but|
+        biggest = math.max(biggest, buttonWidth(ctx, but.text));
+
+    return buttons(ctx, alignment, biggest, height, buttons_);
+}
+
+pub fn buttons(ctx: *Context, alignment: Align, width: f32, height: f32, buttons_: []const Button) usize {
+    c.nk_layout_row_template_begin(ctx, height);
+    if (alignment == .Right)
+        c.nk_layout_row_template_push_dynamic(ctx);
+
+    for (buttons_) |_|
+        c.nk_layout_row_template_push_static(ctx, width);
+
+    if (alignment == .Left)
+        c.nk_layout_row_template_push_dynamic(ctx);
+    c.nk_layout_row_template_end(ctx);
+
+    if (alignment == .Right)
+        c.nk_label(ctx, c"", TEXT_LEFT);
+
+    var res: usize = no_button_clicked;
+    for (buttons_) |but, i| {
+        if (buttonActivatable(ctx, but.text, but.is_active))
+            res = i;
+    }
+
+    if (alignment == .Left)
+        c.nk_label(ctx, c"", TEXT_LEFT);
+
+    return res;
 }
 
 // Nuklear functions
@@ -135,21 +184,28 @@ pub const EDIT_DEACTIVATED = @enumToInt(c.NK_EDIT_DEACTIVATED);
 pub const EDIT_COMMITED = @enumToInt(c.NK_EDIT_COMMITED);
 
 pub const Context = c.nk_context;
+pub const Rect = c.struct_nk_rect;
+pub const Vec2 = c.struct_nk_vec2;
+pub const Color = c.nk_color;
 
-pub fn begin(ctx: *c.nk_context, title: [*]const u8, r: c.struct_nk_rect, flags: c.nk_flags) bool {
+pub fn begin(ctx: *c.nk_context, title: [*]const u8, r: Rect, flags: c.nk_flags) bool {
     return c.nkBegin(ctx, title, &r, flags) != 0;
 }
 
-pub fn rect(x: f32, y: f32, w: f32, h: f32) c.struct_nk_rect {
-    return c.struct_nk_rect{ .x = x, .y = y, .w = w, .h = h };
+pub fn button(ctx: *Context, text: []const u8) bool {
+    return c.nk_button_text(ctx, text.ptr, @intCast(c_int, text.len)) != 0;
 }
 
-pub fn vec2(x: f32, y: f32) c.struct_nk_vec2 {
-    return c.struct_nk_vec2{ .x = x, .y = y };
+pub fn rect(x: f32, y: f32, w: f32, h: f32) Rect {
+    return Rect{ .x = x, .y = y, .w = w, .h = h };
 }
 
-pub fn rgba(r: u8, g: u8, b: u8, a: u8) c.nk_color {
-    return c.nk_color{ .r = r, .g = g, .b = b, .a = a };
+pub fn vec2(x: f32, y: f32) Vec2 {
+    return Vec2{ .x = x, .y = y };
+}
+
+pub fn rgba(r: u8, g: u8, b: u8, a: u8) Color {
+    return Color{ .r = r, .g = g, .b = b, .a = a };
 }
 
 // Backend functions
