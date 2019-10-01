@@ -234,7 +234,7 @@ pub fn main() u8 {
                             c.nk_layout_row_template_push_dynamic(ctx);
                             c.nk_layout_row_template_end(ctx);
 
-                            const name = path.basename(filter.path)[5..];
+                            const name = path.basename(filter.path);
                             settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
                             if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
                                 selected = i;
@@ -593,7 +593,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
             };
 
             try stream.write("'");
-            try util.writeEscaped(stream, exes.load, escapes);
+            try util.writeEscaped(stream, exes.load.toSliceConst(), escapes);
             try stream.write("' '");
             try util.writeEscaped(stream, in, escapes);
             try stream.write("' | ");
@@ -630,7 +630,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
             }
 
             try stream.write("'");
-            try util.writeEscaped(stream, exes.apply, escapes);
+            try util.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
             try stream.write("' --replace --output '");
             try util.writeEscaped(stream, out, escapes);
             try stream.write("' '");
@@ -850,10 +850,20 @@ const Settings = struct {
     }
 };
 
+const filter_file_name = "filters";
+const default_filters =
+    \\tm35-rand-learned-moves
+    \\tm35-rand-parties
+    \\tm35-rand-starters
+    \\tm35-rand-stats
+    \\tm35-rand-wild
+    \\
+;
+
 const Exes = struct {
     allocator: *mem.Allocator,
-    load: []const u8 = "",
-    apply: []const u8 = "",
+    load: util.Path = util.Path{},
+    apply: util.Path = util.Path{},
     filters: []const Filter = [_]Filter{},
 
     const Filter = struct {
@@ -864,29 +874,14 @@ const Exes = struct {
 
     fn deinit(exes: Exes) void {
         freeFilters(exes.allocator, exes.filters);
-        exes.allocator.free(exes.load);
-        exes.allocator.free(exes.apply);
         exes.allocator.free(exes.filters);
     }
 
     fn find(allocator: *mem.Allocator) !Exes {
-        var self_exe_dir_buf: [fs.MAX_PATH_BYTES]u8 = undefined;
-        const self_exe_path = try fs.selfExePath(&self_exe_dir_buf);
-        const self_exe = path.basename(self_exe_path);
-        const self_exe_dir = path.dirname(self_exe_path).?;
+        const load_tool = findCore("tm35-load") catch return error.LoadToolNotFound;
+        const apply_tool = findCore("tm35-apply") catch return error.ApplyToolNotFound;
 
-        var cwd_buf: [fs.MAX_PATH_BYTES]u8 = undefined;
-        const cwd = try process.getCwd(&cwd_buf);
-        var env_map = try process.getEnvMap(allocator);
-        defer env_map.deinit();
-
-        const load_tool = findCore(allocator, self_exe_dir, "tm35-load", cwd, &env_map) catch return error.LoadToolNotFound;
-        errdefer allocator.free(load_tool);
-
-        const apply_tool = findCore(allocator, self_exe_dir, "tm35-apply", cwd, &env_map) catch return error.ApplyToolNotFound;
-        errdefer allocator.free(apply_tool);
-
-        const filters = try findFilters(allocator, self_exe, self_exe_dir, cwd, &env_map);
+        const filters = try findFilters(allocator);
         errdefer allocator.free(filters);
         errdefer freeFilters(allocator, filters);
 
@@ -898,84 +893,108 @@ const Exes = struct {
         };
     }
 
-    fn findCore(allocator: *mem.Allocator, self_exe_dir: []const u8, tool: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]u8 {
-        var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
+    fn findCore(tool: []const u8) !util.Path {
+        const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
 
-        if (join(&fs_tmp, [_][]const u8{ self_exe_dir, "core", tool })) |in_core| {
-            if (execHelpCheckSuccess(in_core, cwd, env_map)) {
-                return mem.dupe(allocator, u8, in_core);
-            } else |_| {}
-        } else |_| {}
+        return joinExists([_][]const u8{ self_exe_dir, "core", tool }) catch
+            joinExists([_][]const u8{ self_exe_dir, tool }) catch {
+            var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
+            var fba = heap.FixedBufferAllocator.init(&buf);
+            const path_env = try process.getEnvVarOwned(&fba.allocator, "PATH");
 
-        if (join(&fs_tmp, [_][]const u8{ self_exe_dir, tool })) |in_self_exe_dir| {
-            if (execHelpCheckSuccess(in_self_exe_dir, cwd, env_map)) {
-                return mem.dupe(allocator, u8, in_self_exe_dir);
-            } else |_| {}
-        } else |_| {}
+            var iter = mem.tokenize(path_env, ":");
+            while (iter.next()) |dir| {
+                if (joinExists([_][]const u8{ dir, tool })) |res| {
+                    return res;
+                } else |_| {}
+            }
 
-        // Try exe as if it was in PATH
-        if (execHelpCheckSuccess(tool, cwd, env_map)) {
-            return mem.dupe(allocator, u8, tool);
-        } else |_| {}
-
-        return error.CoreToolNotFound;
+            return error.CoreToolNotFound;
+        };
     }
 
-    fn findFilters(allocator: *mem.Allocator, self_exe: []const u8, self_exe_dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]Filter {
+    fn joinExists(paths: []const []const u8) !util.Path {
+        const res = try util.path.join(paths);
+        try fs.File.access(res.toSliceConst());
+        return res;
+    }
+
+    fn findFilters(allocator: *mem.Allocator) ![]Filter {
+        const filter_file = try openFilterFile();
+        defer filter_file.close();
+
+        const cwd = try util.dir.cwd();
+        var env_map = try process.getEnvMap(allocator);
+        defer env_map.deinit();
+
         var res = std.ArrayList(Filter).init(allocator);
         defer res.deinit();
         defer freeFilters(allocator, res.toSlice());
 
-        var found_tools = std.BufSet.init(allocator);
-        defer found_tools.deinit();
+        var buf_stream = io.BufferedInStream(fs.File.InStream.Error).init(&filter_file.inStream().stream);
+        var buffer = try std.Buffer.initSize(allocator, 0);
+        defer buffer.deinit();
 
-        // HACK: We put our own exe as found so that we hope that we don't exectute ourself again (this with be an info process spawner).
-        //       This is not robust at all. Idk if we can have a better way of detecting filters though. Think about this.
-        try found_tools.put(self_exe);
-        defer _ = found_tools.delete(self_exe);
-
-        // Try to find filters is "$SELF_EXE_PATH/filter" and "$SELF_EXE_PATH/"
-        var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
-        if (join(&fs_tmp, [_][]const u8{ self_exe_dir, "filter" })) |self_filter_dir| {
-            findFiltersIn(&res, &found_tools, allocator, self_filter_dir, cwd, env_map) catch {};
-        } else |_| {}
-
-        findFiltersIn(&res, &found_tools, allocator, self_exe_dir, cwd, env_map) catch {};
-
-        // Try to find filters from "$PATH"
-        const path_split = if (std.os.windows.is_the_target) ";" else ":";
-        const path_list = env_map.get("PATH") orelse "";
-
-        var it = mem.separate(path_list, path_split);
-        while (it.next()) |dir|
-            findFiltersIn(&res, &found_tools, allocator, dir, cwd, env_map) catch {};
+        while (try readLine(&buf_stream, &buffer)) |line| {
+            if (fs.path.isAbsolute(line)) {
+                const filter = pathToFilter(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
+                try res.append(filter);
+            } else {
+                const filter_path = findFilter(line) catch continue;
+                const filter = pathToFilter(allocator, filter_path.toSliceConst(), cwd.toSliceConst(), &env_map) catch continue;
+                try res.append(filter);
+            }
+        }
 
         return res.toOwnedSlice();
     }
 
-    fn findFiltersIn(filters: *std.ArrayList(Filter), found: *std.BufSet, allocator: *mem.Allocator, dir: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
-        var open_dir = try fs.Dir.open(allocator, dir);
-        defer open_dir.close();
+    fn findFilter(name: []const u8) !util.Path {
+        const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
+        const config_dir = (try util.dir.config()).toSliceConst();
+        const cwd = (try util.dir.cwd()).toSliceConst();
+        return joinExists([_][]const u8{ cwd, "filters", name }) catch
+            joinExists([_][]const u8{ cwd, name }) catch
+            joinExists([_][]const u8{ config_dir, "tm35-randomizer", name }) catch
+            joinExists([_][]const u8{ self_exe_dir, "filters", name }) catch
+            joinExists([_][]const u8{ self_exe_dir, name }) catch
+            {
+            var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
+            var fba = heap.FixedBufferAllocator.init(&buf);
+            const path_env = try process.getEnvVarOwned(&fba.allocator, "PATH");
 
-        var fs_tmp: [fs.MAX_PATH_BYTES]u8 = undefined;
-        while (try open_dir.next()) |entry| {
-            if (entry.kind != .File)
-                continue;
-            if (!mem.startsWith(u8, entry.name, "tm35-"))
-                continue;
-            if (found.exists(entry.name))
-                continue;
+            var iter = mem.tokenize(path_env, ":");
+            while (iter.next()) |dir| {
+                if (joinExists([_][]const u8{ dir, name })) |res| {
+                    return res;
+                } else |_| {}
+            }
 
-            const path_to_exe = join(&fs_tmp, [_][]const u8{ dir, entry.name }) catch continue;
-            const filter = pathToFilter(allocator, path_to_exe, cwd, env_map) catch continue;
+            return error.NotFound;
+        };
+    }
 
-            try found.put(entry.name);
-            try filters.append(filter);
+    fn openFilterFile() !fs.File {
+        const config_dir = (try util.dir.config()).toSliceConst();
+        const filter_path = (try util.path.join([_][]const u8{
+            config_dir,
+            "tm35-randomizer",
+            filter_file_name,
+        })).toSliceConst();
+        if (fs.File.openRead(filter_path)) |file| {
+            return file;
+        } else |_| {
+            var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
+            var fba = heap.FixedBufferAllocator.init(&buf);
+            const dirname = fs.path.dirname(filter_path) orelse ".";
+
+            try fs.makePath(&fba.allocator, dirname);
+            try io.writeFile(filter_path, default_filters);
+            return fs.File.openRead(filter_path);
         }
     }
 
     fn pathToFilter(allocator: *mem.Allocator, filter_path: []const u8, cwd: []const u8, env_map: *const std.BufMap) !Filter {
-        try checkTm35Tool(filter_path, cwd, env_map);
         const help = try execHelp(allocator, filter_path, cwd, env_map);
         errdefer allocator.free(help);
 
@@ -1026,53 +1045,6 @@ const Exes = struct {
         }
     }
 
-    fn checkTm35Tool(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
-        var buf: [1024 * 4]u8 = undefined;
-        var fba = heap.FixedBufferAllocator.init(&buf);
-
-        var p = try std.ChildProcess.init([_][]const u8{exe}, &fba.allocator);
-        defer p.deinit();
-
-        p.stdin_behavior = std.ChildProcess.StdIo.Pipe;
-        p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
-        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
-        p.cwd = cwd;
-        p.env_map = env_map;
-
-        try p.spawn();
-        defer _ = p.kill() catch undefined;
-
-        try p.stdin.?.write(".this.is.a[0].dummy=Line\n");
-        p.stdin.?.close();
-        p.stdin = null;
-
-        var response_buf: [1024]u8 = undefined;
-        const response_len = try p.stdout.?.inStream().stream.readFull(&response_buf);
-        const response = response_buf[0..response_len];
-        if (!mem.startsWith(u8, response, ".this.is.a[0].dummy="))
-            return error.NoTm35Filter;
-    }
-
-    fn execHelpCheckSuccess(exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) !void {
-        var buf: [1024 * 4]u8 = undefined;
-        var fba = heap.FixedBufferAllocator.init(&buf);
-
-        var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
-        defer p.deinit();
-
-        p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
-        p.stdout_behavior = std.ChildProcess.StdIo.Ignore;
-        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
-        p.cwd = cwd;
-        p.env_map = env_map;
-
-        const res = try p.spawnAndWait();
-        switch (res) {
-            .Exited => |status| if (status != 0) return error.ProcessFailed,
-            else => return error.ProcessFailed,
-        }
-    }
-
     fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]u8 {
         var buf: [1024 * 4]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
@@ -1098,10 +1070,5 @@ const Exes = struct {
         }
 
         return help;
-    }
-
-    fn join(buf: *[fs.MAX_PATH_BYTES]u8, paths: []const []const u8) ![]u8 {
-        var fba = heap.FixedBufferAllocator.init(buf);
-        return path.join(&fba.allocator, paths);
     }
 };
