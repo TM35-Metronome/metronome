@@ -231,6 +231,21 @@ pub const path = struct {
 
         return res;
     }
+
+    pub fn resolve(paths: []const []const u8) !Path {
+        var res: Path = undefined;
+
+        // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
+        // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
+        // ensures that only a valid path has been allocated into res.
+        var fba = heap.FixedBufferAllocator.init(&res.items);
+        var failing = debug.FailingAllocator.init(&fba.allocator, math.maxInt(usize));
+        const res_slice = try fs.path.resolve(&failing.allocator, paths);
+        res.len = res_slice.len;
+        debug.assert(failing.allocations == 1);
+
+        return res;
+    }
 };
 
 pub const dir = struct {

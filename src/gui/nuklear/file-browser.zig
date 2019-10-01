@@ -111,9 +111,9 @@ pub const FileBrowser = struct {
 /// +------------------------------+
 /// | file-name.txt                |
 /// +------------------------------+
-/// +-----------+ +----------------+
-/// | Download  | | /path/to/      |
-/// | Documents | +----------------+
+/// +-----------+ +---+------------+
+/// | Download  | | ^ | /path/to/  |
+/// | Documents | +---+------------+
 /// | Home      | +----------------+
 /// |           | | file.txt      ||
 /// |           | | folder        "|
@@ -211,13 +211,24 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
 
     if (nk.nonPaddedGroupBegin(ctx, c"file-browser-explorer", nk.WINDOW_NO_SCROLLBAR)) {
         defer nk.nonPaddedGroupEnd(ctx);
-        // +----------------+
-        // | /path/to/      |
-        // +----------------+
+        // +---+------------+
+        // | ^ | /path/to/  |
+        // +---+------------+
         c.nk_layout_row_dynamic(ctx, bar_height, 1);
         if (c.nk_group_begin(ctx, c"file-browser-search-bar", border_group) != 0) {
             defer c.nk_group_end(ctx);
-            c.nk_layout_row_dynamic(ctx, 0, 1);
+
+            c.nk_layout_row_template_begin(ctx, 0);
+            c.nk_layout_row_template_push_static(ctx, min_height);
+            c.nk_layout_row_template_push_dynamic(ctx);
+            c.nk_layout_row_template_end(ctx);
+
+            if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) blk: {
+                const new_path = util.path.resolve([_][]const u8{ browser.curr_dir.toSliceConst(), ".." }) catch break :blk;
+                const new_browser = FileBrowser.open(browser.allocator, browser.mode, new_path.toSliceConst()) catch break :blk;
+                browser.close();
+                browser.* = new_browser;
+            }
 
             const flags = c.nk_edit_string(ctx, bar_edit_mode, &browser.search_path.items, @ptrCast(*c_int, &browser.search_path.len), browser.search_path.items.len, c.nk_filter_default);
             if (flags & @intCast(c_uint, nk.EDIT_COMMITED) != 0) {
