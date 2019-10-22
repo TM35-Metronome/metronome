@@ -28,3 +28,11 @@ int nkInputIsMouseHoveringRect(const struct nk_input *input, const struct nk_rec
 int nkPopupBegin(struct nk_context *ctx, enum nk_popup_type type, const char *title, nk_flags flags, const struct nk_rect *rect);
 int nkMenuBeginLabel(struct nk_context *ctx, const char *text, nk_flags align, const struct nk_vec2 *size);
 void nkLayoutSpacePush(struct nk_context *ctx, const struct nk_rect *rect);
+
+extern size_t width;
+extern size_t height;
+
+struct nk_context *nkInit(size_t w, size_t h);
+int nkInput(struct nk_context *ctx);
+void nkRender(struct nk_context *ctx);
+void nkDeinit(struct nk_context *ctx);

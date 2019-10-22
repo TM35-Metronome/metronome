@@ -267,7 +267,7 @@ pub const dir = struct {
 
     pub fn home() DirError!Path {
         switch (builtin.os) {
-            .linux => return getEnvPath("HOME"),
+            .linux, .windows => return getEnvPath("HOME"),
             else => @compileError("Unsupported os"),
         }
     }
@@ -275,6 +275,7 @@ pub const dir = struct {
     pub fn cache() DirError!Path {
         switch (builtin.os) {
             .linux => return getEnvPathWithHomeFallback("XDG_CACHE_HOME", ".cache"),
+            .windows => return knownFolder(&FOLDERID_LocalAppData),
             else => @compileError("Unsupported os"),
         }
     }
@@ -282,6 +283,7 @@ pub const dir = struct {
     pub fn config() DirError!Path {
         switch (builtin.os) {
             .linux => return getEnvPathWithHomeFallback("XDG_CONFIG_HOME", ".config"),
+            .windows => return knownFolder(&FOLDERID_RoamingAppData),
             else => @compileError("Unsupported os"),
         }
     }
@@ -289,6 +291,7 @@ pub const dir = struct {
     pub fn audio() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("MUSIC"),
+            .windows => return knownFolder(&FOLDERID_Music),
             else => @compileError("Unsupported os"),
         }
     }
@@ -296,6 +299,7 @@ pub const dir = struct {
     pub fn desktop() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("DESKTOP"),
+            .windows => return knownFolder(&FOLDERID_Desktop),
             else => @compileError("Unsupported os"),
         }
     }
@@ -303,6 +307,7 @@ pub const dir = struct {
     pub fn documents() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("DOCUMENTS"),
+            .windows => return knownFolder(&FOLDERID_Documents),
             else => @compileError("Unsupported os"),
         }
     }
@@ -310,6 +315,7 @@ pub const dir = struct {
     pub fn download() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("DOWNLOAD"),
+            .windows => return knownFolder(&FOLDERID_Downloads),
             else => @compileError("Unsupported os"),
         }
     }
@@ -317,6 +323,7 @@ pub const dir = struct {
     pub fn pictures() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("PICTURES"),
+            .windows => return knownFolder(&FOLDERID_Pictures),
             else => @compileError("Unsupported os"),
         }
     }
@@ -324,6 +331,7 @@ pub const dir = struct {
     pub fn public() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("PUBLICSHARE"),
+            .windows => return knownFolder(&FOLDERID_Public),
             else => @compileError("Unsupported os"),
         }
     }
@@ -331,6 +339,7 @@ pub const dir = struct {
     pub fn templates() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("TEMPLATES"),
+            .windows => return knownFolder(&FOLDERID_Templates),
             else => @compileError("Unsupported os"),
         }
     }
@@ -338,6 +347,7 @@ pub const dir = struct {
     pub fn videos() DirError!Path {
         switch (builtin.os) {
             .linux => return runXdgUserDirCommand("VIDEOS"),
+            .windows => return knownFolder(&FOLDERID_Videos),
             else => @compileError("Unsupported os"),
         }
     }
@@ -396,5 +406,30 @@ pub const dir = struct {
             return DirError.NotAvailable;
 
         return res;
+    }
+
+    const FOLDERID_LocalAppData = os.windows.GUID.parse("{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}");
+    const FOLDERID_RoamingAppData = os.windows.GUID.parse("{3EB685DB-65F9-4CF6-A03A-E3EF65729F3D}");
+    const FOLDERID_Music = os.windows.GUID.parse("{4BD8D571-6D19-48D3-BE97-422220080E43}");
+    const FOLDERID_Desktop = os.windows.GUID.parse("{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}");
+    const FOLDERID_Documents = os.windows.GUID.parse("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}");
+    const FOLDERID_Downloads = os.windows.GUID.parse("{374DE290-123F-4565-9164-39C4925E467B}");
+    const FOLDERID_Pictures = os.windows.GUID.parse("{33E28130-4E1E-4676-835A-98395C3BC3BB}");
+    const FOLDERID_Public = os.windows.GUID.parse("{DFDF76A2-C82A-4D63-906A-5644AC457385}");
+    const FOLDERID_Templates = os.windows.GUID.parse("{A63293E8-664E-48DB-A079-DF759E0509F7}");
+    const FOLDERID_Videos = os.windows.GUID.parse("{18989B1D-99B5-455B-841C-AB7C74E4DDFC}");
+
+    fn knownFolder(id: *const os.windows.KNOWNFOLDERID) DirError!Path {
+        var res_path: [*]os.windows.WCHAR = undefined;
+        const err = os.windows.shell32.SHGetKnownFolderPath(id, 0, null, &res_path);
+        if (err != os.windows.S_OK)
+            return DirError.NotAvailable;
+
+        defer os.windows.ole32.CoTaskMemFree(@ptrCast(*c_void, res_path));
+
+        var buf: [fs.MAX_PATH_BYTES * 2]u8 = undefined;
+        var fba = heap.FixedBufferAllocator.init(&buf);
+        const utf8_path = std.unicode.utf16leToUtf8Alloc(&fba.allocator, mem.toSlice(u16, res_path)) catch return DirError.NotAvailable;
+        return Path.fromSlice(utf8_path) catch return DirError.NotAvailable;
     }
 };

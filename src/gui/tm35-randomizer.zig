@@ -36,14 +36,8 @@ pub fn main() u8 {
     const stderr = std.io.getStdErr() catch |err| return errPrint("Unable to get stderr: {}\n", err);
     var timer = time.Timer.start() catch |err| return errPrint("Could not create timer: {}\n", err);
 
-    var window = nk.Window.create(WINDOW_WIDTH, WINDOW_HEIGHT) catch |err| return errPrint("Could not create window: {}\n", err);
-    defer window.destroy();
-
-    const font = window.createFont(font_name);
-    defer window.destroyFont(font);
-
-    const ctx = nk.create(window, font) catch |err| return errPrint("Could not create nuklear context: {}\n", err);
-    defer nk.destroy(ctx, window);
+    const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return errPrint("Could not create nuklear context\n");
+    defer c.nkDeinit(ctx);
 
     // From this point on, we can report errors to the user. This is done
     // with this 'Popups' struct. If an error occures, it should be appended
@@ -94,19 +88,10 @@ pub fn main() u8 {
     var selected: usize = 0;
     while (true) {
         timer.reset();
+        if (c.nkInput(ctx) == 0)
+            return 0;
 
-        {
-            c.nk_input_begin(ctx);
-            defer c.nk_input_end(ctx);
-            while (window.nextEvent()) |event| {
-                if (nk.isExitEvent(event))
-                    return 0;
-
-                nk.handleEvent(ctx, window, event);
-            }
-        }
-
-        const window_rect = nk.rect(0, 0, @intToFloat(f32, window.width), @intToFloat(f32, window.height));
+        const window_rect = nk.rect(0, 0, @intToFloat(f32, c.width), @intToFloat(f32, c.height));
 
         if (nk.begin(ctx, c"", window_rect, nk.WINDOW_NO_SCROLLBAR)) {
             const layout = ctx.current.*.layout;
@@ -440,8 +425,8 @@ pub fn main() u8 {
             // +-------------------+
             const w: f32 = 350;
             const h: f32 = 150;
-            const x = (@intToFloat(f32, window.width) / 2) - (w / 2);
-            const y = (@intToFloat(f32, window.height) / 2) - (h / 2);
+            const x = (@intToFloat(f32, c.width) / 2) - (w / 2);
+            const y = (@intToFloat(f32, c.height) / 2) - (h / 2);
             const popup_rect = nk.rect(x, y, w, h);
             const fatal_err = popups.fatalError();
             const is_err = popups.errors.len != 0;
@@ -482,7 +467,7 @@ pub fn main() u8 {
         }
         c.nk_end(ctx);
 
-        nk.render(ctx, window);
+        c.nkRender(ctx);
         time.sleep(math.sub(u64, frame_time, timer.read()) catch 0);
     }
 
@@ -557,88 +542,97 @@ fn headerHeight(ctx: *const nk.Context) f32 {
 }
 
 fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
-    switch (builtin.os) {
-        .linux => {
-            const sh = try std.ChildProcess.init([_][]const u8{"sh"}, std.heap.direct_allocator);
-            sh.stdin_behavior = .Pipe;
-            try sh.spawn();
-
-            const stream = &sh.stdin.?.outStream().stream;
-            try outputScript(stream, exes, settings, in, out);
-
-            sh.stdin.?.close();
-            sh.stdin = null;
-            const term = try sh.wait();
-            switch (term) {
-                .Exited => |code| {
-                    if (code != 0)
-                        return error.CommandFailed;
-                },
-                .Signal, .Stopped, .Unknown => |code| {
-                    return error.CommandFailed;
-                },
-            }
-        },
+    const shell = switch (builtin.os) {
+        .linux => "sh",
+        .windows => "cmd.exe",
         else => @compileError("Unsupported os"),
+    };
+
+    const sh = try std.ChildProcess.init([_][]const u8{shell}, std.heap.direct_allocator);
+    sh.stdin_behavior = .Pipe;
+    try sh.spawn();
+
+    const stream = &sh.stdin.?.outStream().stream;
+    try outputScript(stream, exes, settings, in, out);
+
+    sh.stdin.?.close();
+    sh.stdin = null;
+    const term = try sh.wait();
+    switch (term) {
+        .Exited => |code| {
+            if (code != 0)
+                return error.CommandFailed;
+        },
+        .Signal, .Stopped, .Unknown => |code| {
+            return error.CommandFailed;
+        },
     }
 }
 
 fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
-    switch (builtin.os) {
-        .linux => {
-            const escapes = blk: {
-                var res = util.default_escapes;
-                res['\''] = "'\\''";
-                break :blk res;
-            };
-
-            try stream.write("'");
-            try util.writeEscaped(stream, exes.load.toSliceConst(), escapes);
-            try stream.write("' '");
-            try util.writeEscaped(stream, in, escapes);
-            try stream.write("' | ");
-
-            for (settings.order) |order| {
-                const filter = exes.filters[order];
-                const filter_args = settings.filters_args[order];
-                if (!settings.checks[order])
-                    continue;
-
-                try stream.write("'");
-                try util.writeEscaped(stream, filter.path, escapes);
-                try stream.write("'");
-
-                for (filter.params) |param, i| {
-                    const param_pre = if (param.names.long) |_| "--" else "-";
-                    const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
-                    const arg = filter_args[i];
-                    if (arg.len == 0)
-                        continue;
-
-                    try stream.write(" '");
-                    try stream.write(param_pre);
-                    try util.writeEscaped(stream, param_name, escapes);
-                    try stream.write("'");
-                    if (param.takes_value) {
-                        try stream.write(" '");
-                        try util.writeEscaped(stream, arg, escapes);
-                        try stream.write("'");
-                    }
-                }
-
-                try stream.write(" | ");
-            }
-
-            try stream.write("'");
-            try util.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
-            try stream.write("' --replace --output '");
-            try util.writeEscaped(stream, out, escapes);
-            try stream.write("' '");
-            try util.writeEscaped(stream, in, escapes);
-            try stream.write("'");
+    const escapes = switch (builtin.os) {
+        .linux => blk: {
+            var res = util.default_escapes;
+            res['\''] = "'\\''";
+            break :blk res;
+        },
+        .windows => blk: {
+            var res = util.default_escapes;
+            res['"'] = "\"";
+            break :blk res;
         },
         else => @compileError("Unsupported os"),
+    };
+    const quotes = switch (builtin.os) {
+        .linux => "'",
+        .windows => "\"",
+        else => @compileError("Unsupported os"),
+    };
+
+    try stream.write(quotes);
+    try util.writeEscaped(stream, exes.load.toSliceConst(), escapes);
+    try stream.write(quotes ++ " " ++ quotes);
+    try util.writeEscaped(stream, in, escapes);
+    try stream.write(quotes ++ " | ");
+
+    for (settings.order) |order| {
+        const filter = exes.filters[order];
+        const filter_args = settings.filters_args[order];
+        if (!settings.checks[order])
+            continue;
+
+        try stream.write(quotes);
+        try util.writeEscaped(stream, filter.path, escapes);
+        try stream.write(quotes);
+
+        for (filter.params) |param, i| {
+            const param_pre = if (param.names.long) |_| "--" else "-";
+            const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
+            const arg = filter_args[i];
+            if (arg.len == 0)
+                continue;
+
+            try stream.write(" " ++ quotes);
+            try stream.write(param_pre);
+            try util.writeEscaped(stream, param_name, escapes);
+            try stream.write(quotes);
+            if (param.takes_value) {
+                try stream.write(" " ++ quotes);
+                try util.writeEscaped(stream, arg, escapes);
+                try stream.write(quotes);
+            }
+        }
+
+        try stream.write(" | ");
     }
+
+    try stream.write(quotes);
+    try util.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
+    try stream.write(quotes ++ " --replace --output " ++ quotes);
+    try util.writeEscaped(stream, out, escapes);
+    try stream.write(quotes ++ " " ++ quotes);
+    try util.writeEscaped(stream, in, escapes);
+    try stream.write(quotes);
 }
 
 const Settings = struct {

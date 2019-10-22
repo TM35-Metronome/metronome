@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const mem = std.mem;
@@ -30,6 +31,11 @@ const gui_tools = [_][]const u8{
 pub fn build(b: *Builder) !void {
     b.setPreferredReleaseMode(.ReleaseSafe);
     const mode = b.standardReleaseOptions();
+    const target = b.standardTargetOptions(null); // TODO: We don't actually support all targets. Provide the actual subset we do support
+    const os = switch (target) {
+        .Native => builtin.os,
+        .Cross => |c| c.os,
+    };
 
     const version = b.fmt("\"{}\"", mem.trim(u8, try b.exec([_][]const u8{ "git", "describe", "--always" }), "\t\n "));
 
@@ -77,16 +83,29 @@ pub fn build(b: *Builder) !void {
         for (pkgs) |pkg|
             exe.addPackagePath(pkg[0], pkg[1]);
 
+        switch (os) {
+            .windows => {
+                exe.addIncludeDir("lib/nuklear/demo/gdi");
+                exe.addCSourceFile("src/gui/nuklear/gdi.c", lib_cflags);
+                exe.linkSystemLibrary("user32");
+                exe.linkSystemLibrary("gdi32");
+                exe.linkSystemLibrary("Msimg32");
+            },
+            .linux => {
+                exe.addIncludeDir("lib/nuklear/demo/x11_xft");
+                exe.addIncludeDir("/usr/include/freetype2");
+                exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
+                exe.linkSystemLibrary("X11");
+                exe.linkSystemLibrary("Xft");
+            },
+            else => {}, // TODO: More os support
+        }
+
         exe.addIncludeDir("lib/nuklear");
-        exe.addIncludeDir("lib/nuklear/demo/x11_xft");
         exe.addIncludeDir("src/gui/nuklear");
-        exe.addIncludeDir("/usr/include/freetype2");
         exe.addCSourceFile("src/gui/nuklear/impl.c", lib_cflags);
-        exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
-        exe.linkSystemLibrary("X11");
-        exe.linkSystemLibrary("Xft");
         exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
