@@ -53,7 +53,9 @@ pub const FileBrowser = struct {
     };
 
     pub fn open(allocator: *mem.Allocator, mode: Mode, path: []const u8) !FileBrowser {
-        var dir = try fs.Dir.open(allocator, path);
+        // TODO: On windows, the Dir.open call fails to open a path that ends in a separator
+        const path_to_open = if (path[path.len - 1] == fs.path.sep) path[0 .. path.len - 1] else path;
+        var dir = try fs.Dir.open(allocator, path_to_open);
         defer dir.close();
 
         // Do a path.join here, so that curr_path will always look like a directory
@@ -303,6 +305,7 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
                         if (FileBrowser.open(browser.allocator, browser.mode, dir.toSliceConst())) |new_browser| {
                             browser.close();
                             browser.* = new_browser;
+                            break;
                         } else |_| {}
                     },
                     else => res = .Confirm,
@@ -340,17 +343,26 @@ pub fn fileBrowser(ctx: *c.nk_context, browser: *FileBrowser) ?FileBrowser.Press
 
     if (res != null and res.? == .Confirm) {
         switch (browser.mode) {
-            .Save => if (fs.File.access(browser.search_path.toSliceConst())) {
-                browser.show_replace_prompt = true;
-                res = null;
-            } else |err| switch (err) {
-                error.FileNotFound, error.NameTooLong, error.BadPathName, error.InvalidUtf8, error.Unexpected => {
-                    browser.show_replace_prompt = false;
-                },
-                error.InputOutput, error.SystemResources, error.PermissionDenied => {
+            .Save => blk: {
+                const to_open = util.path.join([_][]const u8{
+                    browser.curr_dir.toSliceConst(),
+                    browser.selected_file.toSliceConst(),
+                }) catch {
+                    res = null;
+                    break :blk;
+                };
+                if (fs.File.access(to_open.toSliceConst())) {
                     browser.show_replace_prompt = true;
                     res = null;
-                },
+                } else |err| switch (err) {
+                    error.FileNotFound, error.NameTooLong, error.BadPathName, error.InvalidUtf8, error.Unexpected => {
+                        browser.show_replace_prompt = false;
+                    },
+                    error.InputOutput, error.SystemResources, error.PermissionDenied => {
+                        browser.show_replace_prompt = true;
+                        res = null;
+                    },
+                }
             },
             .OpenMany, .OpenOne => {},
         }

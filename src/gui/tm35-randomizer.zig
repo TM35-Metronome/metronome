@@ -28,7 +28,6 @@ const border_group = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR;
 const border_title_group = border_group | nk.WINDOW_TITLE;
 
 pub fn main() u8 {
-    const font_name = c"Arial";
     const allocator = heap.c_allocator;
 
     // Set up essetial state for the program to run. If any of these
@@ -120,6 +119,7 @@ pub fn main() u8 {
                                     // in should never be null here, because "Randomize"
                                     const in_path = in.?.toSliceConst();
                                     const out_path = selected_path.toSliceConst();
+
                                     outputScript(&stderr.outStream().stream, exes, settings, in_path, out_path) catch {};
                                     stderr.write("\n") catch {};
                                     randomize(exes, settings, in_path, out_path) catch |err| {
@@ -542,22 +542,50 @@ fn headerHeight(ctx: *const nk.Context) f32 {
 }
 
 fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
-    const shell = switch (builtin.os) {
-        .linux => "sh",
-        .windows => "cmd.exe",
+    const term = switch (builtin.os) {
+        .linux => blk: {
+            const sh = try std.ChildProcess.init([_][]const u8{"sh"}, std.heap.direct_allocator);
+            defer sh.deinit();
+
+            sh.stdin_behavior = .Pipe;
+            try sh.spawn();
+
+            const stream = &sh.stdin.?.outStream().stream;
+            try outputScript(stream, exes, settings, in, out);
+
+            sh.stdin.?.close();
+            sh.stdin = null;
+
+            break :blk try sh.wait();
+        },
+        .windows => blk: {
+            const cache_dir = try util.dir.cache();
+            const program_cache_dir = try util.path.join([_][]const u8{
+                cache_dir.toSliceConst(),
+                program_name,
+            });
+            const script_file_name = try util.path.join([_][]const u8{
+                program_cache_dir.toSliceConst(),
+                "tmp_scipt.bat",
+            });
+            {
+                fs.makeDir(program_cache_dir.toSliceConst()) catch |err| switch (err) {
+                    error.PathAlreadyExists => {},
+                    else => |e| return e,
+                };
+                const file = try fs.File.openWrite(script_file_name.toSliceConst());
+                defer file.close();
+                const stream = &file.outStream().stream;
+                try outputScript(stream, exes, settings, in, out);
+            }
+
+            const cmd = try std.ChildProcess.init([_][]const u8{ "cmd", "/c", "call", script_file_name.toSliceConst() }, std.heap.direct_allocator);
+            defer cmd.deinit();
+
+            break :blk try cmd.spawnAndWait();
+        },
         else => @compileError("Unsupported os"),
     };
-
-    const sh = try std.ChildProcess.init([_][]const u8{shell}, std.heap.direct_allocator);
-    sh.stdin_behavior = .Pipe;
-    try sh.spawn();
-
-    const stream = &sh.stdin.?.outStream().stream;
-    try outputScript(stream, exes, settings, in, out);
-
-    sh.stdin.?.close();
-    sh.stdin = null;
-    const term = try sh.wait();
     switch (term) {
         .Exited => |code| {
             if (code != 0)
@@ -572,12 +600,14 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
 fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const escapes = switch (builtin.os) {
         .linux => blk: {
-            var res = util.default_escapes;
+            var res: [255][]const u8 = undefined;
+            mem.copy([]const u8, res[0..], util.default_escapes);
             res['\''] = "'\\''";
             break :blk res;
         },
         .windows => blk: {
-            var res = util.default_escapes;
+            var res: [255][]const u8 = undefined;
+            mem.copy([]const u8, res[0..], util.default_escapes);
             res['"'] = "\"";
             break :blk res;
         },
@@ -633,6 +663,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     try stream.write(quotes ++ " " ++ quotes);
     try util.writeEscaped(stream, in, escapes);
     try stream.write(quotes);
+    try stream.write("\n");
 }
 
 const Settings = struct {
@@ -721,7 +752,8 @@ const Settings = struct {
     }
 
     const escapes = blk: {
-        var res = util.default_escapes;
+        var res: [255][]const u8 = undefined;
+        mem.copy([]const u8, res[0..], util.default_escapes);
         res['\n'] = "\\n";
         res['\\'] = "\\\\";
         res[','] = "\\,";
@@ -844,15 +876,28 @@ const Settings = struct {
     }
 };
 
+const path_env_seperator = switch (builtin.os) {
+    .linux => ":",
+    .windows => ";",
+    else => @compileError("Unsupported os"),
+};
+const path_env_name = switch (builtin.os) {
+    .linux => "PATH",
+    .windows => "Path",
+    else => @compileError("Unsupported os"),
+};
+const extension = switch (builtin.os) {
+    .linux => "",
+    .windows => ".exe",
+    else => @compileError("Unsupported os"),
+};
+const program_name = "tm35-randomizer";
 const filter_file_name = "filters";
-const default_filters =
-    \\tm35-rand-learned-moves
-    \\tm35-rand-parties
-    \\tm35-rand-starters
-    \\tm35-rand-stats
-    \\tm35-rand-wild
-    \\
-;
+const default_filters = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
+    "tm35-rand-parties" ++ extension ++ "\n" ++
+    "tm35-rand-starters" ++ extension ++ "\n" ++
+    "tm35-rand-stats" ++ extension ++ "\n" ++
+    "tm35-rand-wild" ++ extension ++ "\n";
 
 const Exes = struct {
     allocator: *mem.Allocator,
@@ -872,8 +917,8 @@ const Exes = struct {
     }
 
     fn find(allocator: *mem.Allocator) !Exes {
-        const load_tool = findCore("tm35-load") catch return error.LoadToolNotFound;
-        const apply_tool = findCore("tm35-apply") catch return error.ApplyToolNotFound;
+        const load_tool = findCore("tm35-load" ++ extension) catch return error.LoadToolNotFound;
+        const apply_tool = findCore("tm35-apply" ++ extension) catch return error.ApplyToolNotFound;
 
         const filters = try findFilters(allocator);
         errdefer allocator.free(filters);
@@ -891,26 +936,8 @@ const Exes = struct {
         const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
 
         return joinExists([_][]const u8{ self_exe_dir, "core", tool }) catch
-            joinExists([_][]const u8{ self_exe_dir, tool }) catch {
-            var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
-            var fba = heap.FixedBufferAllocator.init(&buf);
-            const path_env = try process.getEnvVarOwned(&fba.allocator, "PATH");
-
-            var iter = mem.tokenize(path_env, ":");
-            while (iter.next()) |dir| {
-                if (joinExists([_][]const u8{ dir, tool })) |res| {
-                    return res;
-                } else |_| {}
-            }
-
-            return error.CoreToolNotFound;
-        };
-    }
-
-    fn joinExists(paths: []const []const u8) !util.Path {
-        const res = try util.path.join(paths);
-        try fs.File.access(res.toSliceConst());
-        return res;
+            joinExists([_][]const u8{ self_exe_dir, tool }) catch
+            try findInPath(tool);
     }
 
     fn findFilters(allocator: *mem.Allocator) ![]Filter {
@@ -949,30 +976,17 @@ const Exes = struct {
         const cwd = (try util.dir.cwd()).toSliceConst();
         return joinExists([_][]const u8{ cwd, "filters", name }) catch
             joinExists([_][]const u8{ cwd, name }) catch
-            joinExists([_][]const u8{ config_dir, "tm35-randomizer", name }) catch
+            joinExists([_][]const u8{ config_dir, program_name, name }) catch
             joinExists([_][]const u8{ self_exe_dir, "filters", name }) catch
             joinExists([_][]const u8{ self_exe_dir, name }) catch
-            {
-            var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
-            var fba = heap.FixedBufferAllocator.init(&buf);
-            const path_env = try process.getEnvVarOwned(&fba.allocator, "PATH");
-
-            var iter = mem.tokenize(path_env, ":");
-            while (iter.next()) |dir| {
-                if (joinExists([_][]const u8{ dir, name })) |res| {
-                    return res;
-                } else |_| {}
-            }
-
-            return error.NotFound;
-        };
+            try findInPath(name);
     }
 
     fn openFilterFile() !fs.File {
         const config_dir = (try util.dir.config()).toSliceConst();
         const filter_path = (try util.path.join([_][]const u8{
             config_dir,
-            "tm35-randomizer",
+            program_name,
             filter_file_name,
         })).toSliceConst();
         if (fs.File.openRead(filter_path)) |file| {
@@ -1038,31 +1052,52 @@ const Exes = struct {
             allocator.free(filter.params);
         }
     }
-
-    fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]u8 {
-        var buf: [1024 * 4]u8 = undefined;
-        var fba = heap.FixedBufferAllocator.init(&buf);
-
-        var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
-        defer p.deinit();
-
-        p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
-        p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
-        p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
-        p.cwd = cwd;
-        p.env_map = env_map;
-
-        try p.spawn();
-        errdefer _ = p.kill() catch undefined;
-
-        const help = try p.stdout.?.inStream().stream.readAllAlloc(allocator, 1024 * 1024);
-
-        const res = try p.wait();
-        switch (res) {
-            .Exited => |status| if (status != 0) return error.ProcessFailed,
-            else => return error.ProcessFailed,
-        }
-
-        return help;
-    }
 };
+
+fn findInPath(name: []const u8) !util.Path {
+    var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
+    var fba = heap.FixedBufferAllocator.init(&buf);
+    const path_env = try process.getEnvVarOwned(&fba.allocator, path_env_name);
+
+    var iter = mem.tokenize(path_env, path_env_seperator);
+    while (iter.next()) |dir| {
+        if (joinExists([_][]const u8{ dir, name })) |res| {
+            return res;
+        } else |_| {}
+    }
+
+    return error.NotInPath;
+}
+
+fn joinExists(paths: []const []const u8) !util.Path {
+    const res = try util.path.join(paths);
+    try fs.File.access(res.toSliceConst());
+    return res;
+}
+
+fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map: *const std.BufMap) ![]u8 {
+    var buf: [1024 * 40]u8 = undefined;
+    var fba = heap.FixedBufferAllocator.init(&buf);
+
+    var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
+    defer p.deinit();
+
+    p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
+    p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
+    p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
+    p.cwd = cwd;
+    p.env_map = env_map;
+
+    try p.spawn();
+    errdefer _ = p.kill() catch undefined;
+
+    const help = try p.stdout.?.inStream().stream.readAllAlloc(allocator, 1024 * 1024);
+
+    const res = try p.wait();
+    switch (res) {
+        .Exited => |status| if (status != 0) return error.ProcessFailed,
+        else => return error.ProcessFailed,
+    }
+
+    return help;
+}

@@ -40,6 +40,7 @@ test "writeEscaped" {
     testWriteEscaped(comma_escape, "a,bc", "a\\,bc");
     testWriteEscaped(comma_escape, "a,b,c", "a\\,b\\,c");
     testWriteEscaped(comma_escape, "a,,b,,c", "a\\,\\,b\\,\\,c");
+    testWriteEscaped(comma_escape, "a\\,,b,,c", "a\\\\,\\,b\\,\\,c");
 }
 
 fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
@@ -430,6 +431,8 @@ pub const dir = struct {
         var buf: [fs.MAX_PATH_BYTES * 2]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
         const utf8_path = std.unicode.utf16leToUtf8Alloc(&fba.allocator, mem.toSlice(u16, res_path)) catch return DirError.NotAvailable;
-        return Path.fromSlice(utf8_path) catch return DirError.NotAvailable;
+
+        // Join result with nothing, so that we always get an ending seperator
+        return path.join([_][]const u8{ utf8_path, "" }) catch return DirError.NotAvailable;
     }
 };
