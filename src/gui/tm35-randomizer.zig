@@ -38,6 +38,54 @@ pub fn main() u8 {
     const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return errPrint("Could not create nuklear context\n");
     defer c.nkDeinit(ctx);
 
+    {
+        const black = nk.rgb(0x00, 0x00, 0x00);
+        const white = nk.rgb(0xff, 0xff, 0xff);
+        const header_gray = nk.rgb(0xf5, 0xf5, 0xf5);
+        const border_gray = nk.rgb(0xda, 0xdb, 0xdc);
+        const light_gray1 = nk.rgb(0xe1, 0xe1, 0xe1);
+        const light_gray2 = nk.rgb(0xd0, 0xd0, 0xd0);
+        const light_gray3 = nk.rgb(0xbf, 0xbf, 0xbf);
+        const light_gray4 = nk.rgb(0xaf, 0xaf, 0xaf);
+
+        // I color all elements not used in the ui an ugly red color.
+        // This will let me easily see when I need to update this color table.
+        const ugly_read = nk.rgb(0xff, 0x00, 0x00);
+
+        var colors: [nk.COLOR_COUNT]nk.Color = undefined;
+        colors[nk.COLOR_TEXT] = black;
+        colors[nk.COLOR_WINDOW] = white;
+        colors[nk.COLOR_HEADER] = header_gray;
+        colors[nk.COLOR_BORDER] = border_gray;
+        colors[nk.COLOR_BUTTON] = light_gray1;
+        colors[nk.COLOR_BUTTON_HOVER] = light_gray2;
+        colors[nk.COLOR_BUTTON_ACTIVE] = light_gray4;
+        colors[nk.COLOR_TOGGLE] = light_gray1;
+        colors[nk.COLOR_TOGGLE_HOVER] = light_gray2;
+        colors[nk.COLOR_TOGGLE_CURSOR] = black;
+        colors[nk.COLOR_SELECT] = white;
+        colors[nk.COLOR_SELECT_ACTIVE] = light_gray4;
+        colors[nk.COLOR_SLIDER] = ugly_read;
+        colors[nk.COLOR_SLIDER_CURSOR] = ugly_read;
+        colors[nk.COLOR_SLIDER_CURSOR_HOVER] = ugly_read;
+        colors[nk.COLOR_SLIDER_CURSOR_ACTIVE] = ugly_read;
+        colors[nk.COLOR_PROPERTY] = ugly_read;
+        colors[nk.COLOR_EDIT] = light_gray1;
+        colors[nk.COLOR_EDIT_CURSOR] = ugly_read;
+        colors[nk.COLOR_COMBO] = light_gray1;
+        colors[nk.COLOR_CHART] = ugly_read;
+        colors[nk.COLOR_CHART_COLOR] = ugly_read;
+        colors[nk.COLOR_CHART_COLOR_HIGHLIGHT] = ugly_read;
+        colors[nk.COLOR_SCROLLBAR] = light_gray1;
+        colors[nk.COLOR_SCROLLBAR_CURSOR] = light_gray2;
+        colors[nk.COLOR_SCROLLBAR_CURSOR_HOVER] = light_gray3;
+        colors[nk.COLOR_SCROLLBAR_CURSOR_ACTIVE] = light_gray4;
+        colors[nk.COLOR_TAB_HEADER] = ugly_read;
+        c.nk_style_from_table(ctx, &colors);
+
+        ctx.style.window.min_row_height_padding = 4;
+    }
+
     // From this point on, we can report errors to the user. This is done
     // with this 'Popups' struct. If an error occures, it should be appended
     // with 'popups.err("error str {}", arg1, arg2...)'.
@@ -375,7 +423,7 @@ pub fn main() u8 {
                         file_browser_kind = .LoadRom;
                     }
 
-                    const in_slice = if (in) |*i| i.toSliceConst() else " ";
+                    const in_slice = if (in) |*i| i.toSliceConst() else "< Add a rom";
                     var basename = path.basename(in_slice);
                     _ = c.nk_edit_string(
                         ctx,

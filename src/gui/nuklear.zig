@@ -41,12 +41,13 @@ pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
 
 pub fn buttonInactive(ctx: *Context, text: []const u8) void {
     const old_button_style = ctx.style.button;
-    ctx.style.button.normal = ctx.style.button.hover;
-    ctx.style.button.active = ctx.style.button.hover;
-    ctx.style.button.text_background = ctx.style.button.border_color;
-    ctx.style.button.text_normal = ctx.style.button.border_color;
-    ctx.style.button.text_hover = ctx.style.button.border_color;
-    ctx.style.button.text_active = ctx.style.button.border_color;
+    ctx.style.button.normal = ctx.style.button.active;
+    ctx.style.button.hover = ctx.style.button.active;
+    ctx.style.button.active = ctx.style.button.active;
+    ctx.style.button.text_background = ctx.style.button.text_active;
+    ctx.style.button.text_normal = ctx.style.button.text_active;
+    ctx.style.button.text_hover = ctx.style.button.text_active;
+    ctx.style.button.text_active = ctx.style.button.text_active;
     _ = button(ctx, text);
     ctx.style.button = old_button_style;
 }
@@ -182,6 +183,36 @@ pub const EDIT_ACTIVATED = @enumToInt(c.NK_EDIT_ACTIVATED);
 pub const EDIT_DEACTIVATED = @enumToInt(c.NK_EDIT_DEACTIVATED);
 pub const EDIT_COMMITED = @enumToInt(c.NK_EDIT_COMMITED);
 
+pub const COLOR_TEXT = @enumToInt(c.NK_COLOR_TEXT);
+pub const COLOR_WINDOW = @enumToInt(c.NK_COLOR_WINDOW);
+pub const COLOR_HEADER = @enumToInt(c.NK_COLOR_HEADER);
+pub const COLOR_BORDER = @enumToInt(c.NK_COLOR_BORDER);
+pub const COLOR_BUTTON = @enumToInt(c.NK_COLOR_BUTTON);
+pub const COLOR_BUTTON_HOVER = @enumToInt(c.NK_COLOR_BUTTON_HOVER);
+pub const COLOR_BUTTON_ACTIVE = @enumToInt(c.NK_COLOR_BUTTON_ACTIVE);
+pub const COLOR_TOGGLE = @enumToInt(c.NK_COLOR_TOGGLE);
+pub const COLOR_TOGGLE_HOVER = @enumToInt(c.NK_COLOR_TOGGLE_HOVER);
+pub const COLOR_TOGGLE_CURSOR = @enumToInt(c.NK_COLOR_TOGGLE_CURSOR);
+pub const COLOR_SELECT = @enumToInt(c.NK_COLOR_SELECT);
+pub const COLOR_SELECT_ACTIVE = @enumToInt(c.NK_COLOR_SELECT_ACTIVE);
+pub const COLOR_SLIDER = @enumToInt(c.NK_COLOR_SLIDER);
+pub const COLOR_SLIDER_CURSOR = @enumToInt(c.NK_COLOR_SLIDER_CURSOR);
+pub const COLOR_SLIDER_CURSOR_HOVER = @enumToInt(c.NK_COLOR_SLIDER_CURSOR_HOVER);
+pub const COLOR_SLIDER_CURSOR_ACTIVE = @enumToInt(c.NK_COLOR_SLIDER_CURSOR_ACTIVE);
+pub const COLOR_PROPERTY = @enumToInt(c.NK_COLOR_PROPERTY);
+pub const COLOR_EDIT = @enumToInt(c.NK_COLOR_EDIT);
+pub const COLOR_EDIT_CURSOR = @enumToInt(c.NK_COLOR_EDIT_CURSOR);
+pub const COLOR_COMBO = @enumToInt(c.NK_COLOR_COMBO);
+pub const COLOR_CHART = @enumToInt(c.NK_COLOR_CHART);
+pub const COLOR_CHART_COLOR = @enumToInt(c.NK_COLOR_CHART_COLOR);
+pub const COLOR_CHART_COLOR_HIGHLIGHT = @enumToInt(c.NK_COLOR_CHART_COLOR_HIGHLIGHT);
+pub const COLOR_SCROLLBAR = @enumToInt(c.NK_COLOR_SCROLLBAR);
+pub const COLOR_SCROLLBAR_CURSOR = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR);
+pub const COLOR_SCROLLBAR_CURSOR_HOVER = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR_HOVER);
+pub const COLOR_SCROLLBAR_CURSOR_ACTIVE = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR_ACTIVE);
+pub const COLOR_TAB_HEADER = @enumToInt(c.NK_COLOR_TAB_HEADER);
+pub const COLOR_COUNT = @enumToInt(c.NK_COLOR_COUNT);
+
 pub const Context = c.nk_context;
 pub const Rect = c.struct_nk_rect;
 pub const Vec2 = c.struct_nk_vec2;
@@ -205,4 +236,8 @@ pub fn vec2(x: f32, y: f32) Vec2 {
 
 pub fn rgba(r: u8, g: u8, b: u8, a: u8) Color {
     return Color{ .r = r, .g = g, .b = b, .a = a };
+}
+
+pub fn rgb(r: u8, g: u8, b: u8) Color {
+    return rgba(r, g, b, 255);
 }
