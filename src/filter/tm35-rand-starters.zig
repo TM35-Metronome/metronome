@@ -148,7 +148,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
-    var p = format.StrParser.init(str);
+    var p = format.Parser.init(str);
     const allocator = data.starters.allocator;
 
     if (p.eatField("starters")) |_| {

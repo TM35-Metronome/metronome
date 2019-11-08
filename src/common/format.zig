@@ -14,27 +14,27 @@ const mem = std.mem;
 /// INTEGER <- [0-9]+
 /// IDENTIFIER <- [a-zA-Z][A-Za-z0-9_]*
 ///
-pub const StrParser = struct {
+pub const Parser = struct {
     str: []const u8,
 
-    pub fn init(str: []const u8) StrParser {
-        return StrParser{ .str = str };
+    pub fn init(str: []const u8) Parser {
+        return Parser{ .str = str };
     }
 
-    pub fn peek(parser: StrParser) !u8 {
+    pub fn peek(parser: Parser) !u8 {
         if (parser.str.len == 0)
             return error.EndOfString;
 
         return parser.str[0];
     }
 
-    pub fn eat(parser: *StrParser) !u8 {
+    pub fn eat(parser: *Parser) !u8 {
         const c = try parser.peek();
         parser.str = parser.str[1..];
         return c;
     }
 
-    pub fn eatChar(parser: *StrParser, c: u8) !void {
+    pub fn eatChar(parser: *Parser, c: u8) !void {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -42,7 +42,7 @@ pub const StrParser = struct {
             return error.InvalidCharacter;
     }
 
-    pub fn eatStr(parser: *StrParser, str: []const u8) !void {
+    pub fn eatStr(parser: *Parser, str: []const u8) !void {
         if (parser.str.len < str.len)
             return error.EndOfString;
         if (!mem.startsWith(u8, parser.str, str))
@@ -51,7 +51,7 @@ pub const StrParser = struct {
         parser.str = parser.str[str.len..];
     }
 
-    pub fn eatUnsigned(parser: *StrParser, comptime Int: type, base: u8) !Int {
+    pub fn eatUnsigned(parser: *Parser, comptime Int: type, base: u8) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -66,7 +66,7 @@ pub const StrParser = struct {
         }
     }
 
-    pub fn eatUnsignedMax(parser: *StrParser, comptime Int: type, base: u8, max: var) !Int {
+    pub fn eatUnsignedMax(parser: *Parser, comptime Int: type, base: u8, max: var) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -77,7 +77,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatUntil(parser: *StrParser, c: u8) ![]const u8 {
+    pub fn eatUntil(parser: *Parser, c: u8) ![]const u8 {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -87,7 +87,7 @@ pub const StrParser = struct {
         return reset.str[0..len];
     }
 
-    pub fn eatField(parser: *StrParser, field: []const u8) !void {
+    pub fn eatField(parser: *Parser, field: []const u8) !void {
         const reset = parser.*;
         errdefer parser.* = reset;
         try parser.eatChar('.');
@@ -96,7 +96,7 @@ pub const StrParser = struct {
             return error.InvalidField;
     }
 
-    pub fn eatAnyField(parser: *StrParser) ![]const u8 {
+    pub fn eatAnyField(parser: *Parser) ![]const u8 {
         for (parser.str) |c, i| {
             switch (c) {
                 'a'...'z', 'A'...'Z', '0'...'9', '_' => {},
@@ -110,7 +110,7 @@ pub const StrParser = struct {
         return error.EndOfString;
     }
 
-    pub fn eatIndex(parser: *StrParser) !usize {
+    pub fn eatIndex(parser: *Parser) !usize {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -121,7 +121,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatIndexMax(parser: *StrParser, max: var) !usize {
+    pub fn eatIndexMax(parser: *Parser, max: var) !usize {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -132,7 +132,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatValue(parser: *StrParser) ![]const u8 {
+    pub fn eatValue(parser: *Parser) ![]const u8 {
         const reset = parser.*;
         errdefer parser.* = reset;
         try parser.eatChar('=');
@@ -142,7 +142,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatUnsignedValue(parser: *StrParser, comptime Int: type, base: u8) !Int {
+    pub fn eatUnsignedValue(parser: *Parser, comptime Int: type, base: u8) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -155,7 +155,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatUnsignedValueMax(parser: *StrParser, comptime Int: type, base: u8, max: var) !Int {
+    pub fn eatUnsignedValueMax(parser: *Parser, comptime Int: type, base: u8, max: var) !Int {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -166,7 +166,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatEnumValue(parser: *StrParser, comptime Enum: type) !Enum {
+    pub fn eatEnumValue(parser: *Parser, comptime Enum: type) !Enum {
         const reset = parser.*;
         errdefer parser.* = reset;
 
@@ -175,7 +175,7 @@ pub const StrParser = struct {
         return res;
     }
 
-    pub fn eatBoolValue(parser: *StrParser) !bool {
+    pub fn eatBoolValue(parser: *Parser) !bool {
         const Bool = enum {
             @"true",
             @"false",

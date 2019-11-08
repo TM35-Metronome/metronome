@@ -140,7 +140,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     try parser.eatField("pokemons");
     const pokemon_index = try parser.eatIndex();

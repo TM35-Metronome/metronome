@@ -175,7 +175,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 
 fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("pokemons")) |_| {
         const poke_index = try parser.eatIndex();

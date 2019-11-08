@@ -195,7 +195,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -456,7 +456,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         try parser.eatField("wild");
 
         const Fn = struct {
-            fn applyArea(p: *format.StrParser, g: gen3.Game, area: var) !void {
+            fn applyArea(p: *format.Parser, g: gen3.Game, area: var) !void {
                 if (p.eatField("encounter_rate")) {
                     area.encounter_rate = try p.eatUnsignedValue(u8, 10);
                 } else |_| if (p.eatField("pokemons")) {
@@ -524,7 +524,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
 }
 
 fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -921,7 +921,7 @@ fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void 
 }
 
 fn applyGen5(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
