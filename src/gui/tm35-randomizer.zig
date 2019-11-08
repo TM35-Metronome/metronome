@@ -64,6 +64,7 @@ pub fn main() u8 {
     // fail, the only thing we can do is exit.
     const stderr = std.io.getStdErr() catch |err| return errPrint("Unable to get stderr: {}\n", err);
     var timer = time.Timer.start() catch |err| return errPrint("Could not create timer: {}\n", err);
+    var tmp_buf: [128]u8 = undefined;
 
     const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return errPrint("Could not create nuklear context\n");
     defer c.nkDeinit(ctx);
@@ -215,9 +216,10 @@ pub fn main() u8 {
                         c.nk_layout_row_template_push_dynamic(ctx);
                         c.nk_layout_row_template_end(ctx);
 
-                        const name = path.basename(filter.path);
+                        const filter_name = path.basename(filter.path);
+                        const ui_name = toUserfriendly(&tmp_buf, filter_name[0..math.min(filter_name.len, tmp_buf.len)]);
                         settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
-                        if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
+                        if (c.nk_select_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
                             selected = i;
                     }
                 }
@@ -274,14 +276,15 @@ pub fn main() u8 {
                 }
 
                 for (filter.params) |param, i| {
+                    var bounds: c.struct_nk_rect = undefined;
                     const arg = &settings.filters_args[settings.order[selected]][i];
                     const help = param.id.msg;
                     const value = param.id.value;
-                    const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
-                    var bounds: c.struct_nk_rect = undefined;
-                    if (mem.eql(u8, text, "help"))
+                    const param_name = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
+                    const ui_name = toUserfriendly(&tmp_buf, param_name[0..math.min(param_name.len, tmp_buf.len)]);
+                    if (mem.eql(u8, param_name, "help"))
                         continue;
-                    if (mem.eql(u8, text, "version"))
+                    if (mem.eql(u8, param_name, "version"))
                         continue;
 
                     if (!param.takes_value) {
@@ -293,7 +296,7 @@ pub fn main() u8 {
 
                         // For flags, we only care about whether it's checked or not. We indicate this
                         // by having a slice of len 1 instead of 0.
-                        const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
+                        const checked = c.nk_check_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), @boolToInt(arg.len != 0)) != 0;
                         arg.len = @boolToInt(checked);
                         continue;
                     }
@@ -309,21 +312,24 @@ pub fn main() u8 {
                     if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
                         c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
 
-                    c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
+                    c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), nk.TEXT_LEFT);
 
                     if (mem.eql(u8, value, "NUM")) {
                         _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
                         continue;
                     }
                     if (mem.indexOfScalar(u8, value, '|')) |_| {
-                        if (c.nkComboBeginText(ctx, &arg.items, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
+                        const selected_name = arg.toSliceConst();
+                        const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
+                        if (c.nkComboBeginText(ctx, selected_ui_name.ptr, @intCast(c_int, selected_ui_name.len), &nk.vec2(prompt_width, 500)) != 0) {
                             c.nk_layout_row_dynamic(ctx, 0, 1);
                             if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
                                 arg.len = 0;
 
                             var item_it = mem.separate(value, "|");
                             while (item_it.next()) |item| {
-                                if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) == 0)
+                                const item_ui_name = toUserfriendly(&tmp_buf, item[0..math.min(item.len, tmp_buf.len)]);
+                                if (c.nk_combo_item_text(ctx, item_ui_name.ptr, @intCast(c_int, item_ui_name.len), nk.TEXT_LEFT) == 0)
                                     continue;
 
                                 arg.* = Settings.Arg.fromSlice(item) catch {
@@ -376,7 +382,7 @@ pub fn main() u8 {
                 if (c.nk_button_symbol(ctx, c.NK_SYMBOL_PLUS) != 0)
                     m_file_browser_kind = .LoadRom;
 
-                const rom_slice = if (rom_path) |*i| i.toSliceConst() else "< Add a rom";
+                const rom_slice = if (rom_path) |*i| i.toSliceConst() else "< Open rom (No rom open)";
                 var basename = path.basename(rom_slice);
                 _ = c.nk_edit_string(
                     ctx,
@@ -716,6 +722,39 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     try util.writeEscaped(stream, in, escapes);
     try stream.write(quotes);
     try stream.write("\n");
+}
+
+fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
+    debug.assert(programmer_in.len <= human_out.len);
+
+    const suffixes = [_][]const u8{".exe"};
+    const prefixes = [_][]const u8{"tm35-"};
+
+    var trimmed = programmer_in;
+    for (prefixes) |prefix| {
+        if (mem.startsWith(u8, trimmed, prefix)) {
+            trimmed = trimmed[prefix.len..];
+            break;
+        }
+    }
+    for (suffixes) |suffix| {
+        if (mem.endsWith(u8, trimmed, suffix)) {
+            trimmed = trimmed[0 .. trimmed.len - suffix.len];
+            break;
+        }
+    }
+
+    trimmed = mem.trim(u8, trimmed[0..trimmed.len], " \t");
+    const result = human_out[0..trimmed.len];
+    mem.copy(u8, result, trimmed);
+    for (result) |*char| switch (char.*) {
+        '-', '_' => char.* = ' ',
+        else => {},
+    };
+    if (result.len != 0)
+        result[0] = std.ascii.toUpper(result[0]);
+
+    return result;
 }
 
 const Settings = struct {
