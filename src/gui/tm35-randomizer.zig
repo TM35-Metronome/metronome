@@ -22,6 +22,14 @@ const readLine = @import("readline").readLine;
 // TODO: proper versioning
 const program_version = "0.0.0";
 
+const bug_message =
+    \\Hi user. You have just hit a bug/limitation in the program.
+    \\If you care about this program, please report this to the
+    \\issue tracker here:
+    \\https://github.com/TM35-Metronome/metronome/issues/new
+    \\
+;
+
 const fps = 60;
 const frame_time = time.second / fps;
 const WINDOW_WIDTH = 800;
@@ -266,7 +274,6 @@ pub fn main() u8 {
                 }
 
                 for (filter.params) |param, i| {
-                    const buf = &settings.filters_bufs[settings.order[selected]][i];
                     const arg = &settings.filters_args[settings.order[selected]][i];
                     const help = param.id.msg;
                     const value = param.id.value;
@@ -287,7 +294,7 @@ pub fn main() u8 {
                         // For flags, we only care about whether it's checked or not. We indicate this
                         // by having a slice of len 1 instead of 0.
                         const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
-                        arg.* = buf[0..@boolToInt(checked)];
+                        arg.len = @boolToInt(checked);
                         continue;
                     }
 
@@ -305,21 +312,24 @@ pub fn main() u8 {
                     c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
 
                     if (mem.eql(u8, value, "NUM")) {
-                        // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                        debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_decimal);
+                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
                         continue;
                     }
                     if (mem.indexOfScalar(u8, value, '|')) |_| {
-                        if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
+                        if (c.nkComboBeginText(ctx, &arg.items, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
                             c.nk_layout_row_dynamic(ctx, 0, 1);
                             if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
-                                arg.* = buf[0..0];
+                                arg.len = 0;
 
                             var item_it = mem.separate(value, "|");
                             while (item_it.next()) |item| {
-                                if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) != 0)
-                                    arg.* = item;
+                                if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) == 0)
+                                    continue;
+
+                                arg.* = Settings.Arg.fromSlice(item) catch {
+                                    popups.err("{}", bug_message);
+                                    continue;
+                                };
                             }
                             c.nk_combo_end(ctx);
                         }
@@ -327,8 +337,7 @@ pub fn main() u8 {
                     }
 
                     // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                    debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                    _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_default);
+                    _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_default);
                 }
             }
 
@@ -681,7 +690,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
         for (filter.params) |param, i| {
             const param_pre = if (param.names.long) |_| "--" else "-";
             const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
-            const arg = filter_args[i];
+            const arg = &filter_args[i];
             if (arg.len == 0)
                 continue;
 
@@ -691,7 +700,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
             try stream.write(quotes);
             if (param.takes_value) {
                 try stream.write(" " ++ quotes);
-                try util.writeEscaped(stream, arg, escapes);
+                try util.writeEscaped(stream, arg.toSliceConst(), escapes);
                 try stream.write(quotes);
             }
         }
@@ -719,13 +728,10 @@ const Settings = struct {
     // The filters to call
     checks: []bool = ([*]bool)(undefined)[0..0],
 
-    // Allocate all the memory for the values passed to the commands the user wants to execute.
-    // filters_args will be the slices we pass. filters_bufs are the backend buffers that all
-    // the filters_args will point into. I believe that 64 bytes max for each arg is more than
-    // enough. If this is proven to be false, we can increase that number (or rethink how this
-    // is done).
-    filters_args: [][][]const u8 = ([*][][]const u8)(undefined)[0..0],
-    filters_bufs: [][][64]u8 = ([*][][64]u8)(undefined)[0..0],
+    // Arguments for all filters parameters.
+    filters_args: [][]Arg = ([*][]Arg)(undefined)[0..0],
+
+    const Arg = util.StackArrayList(64, u8);
 
     fn init(allocator: *mem.Allocator, exes: Exes) !Settings {
         const order = try allocator.alloc(usize, exes.filters.len);
@@ -734,29 +740,18 @@ const Settings = struct {
         const checks = try allocator.alloc(bool, exes.filters.len);
         errdefer allocator.free(checks);
 
-        const filters_args = try allocator.alloc([][]const u8, exes.filters.len);
+        const filters_args = try allocator.alloc([]Arg, exes.filters.len);
         errdefer allocator.free(filters_args);
-
-        const filters_bufs = try allocator.alloc([][64]u8, exes.filters.len);
-        errdefer allocator.free(filters_bufs);
 
         for (filters_args) |*filter_args, i| {
             errdefer {
                 for (filters_args[0..i]) |f|
                     allocator.free(f);
-                for (filters_bufs[0..i]) |f|
-                    allocator.free(f);
             }
 
             const params = exes.filters[i].params;
-            filter_args.* = try allocator.alloc([]const u8, params.len);
+            filter_args.* = try allocator.alloc(Arg, params.len);
             errdefer allocator.free(filter_args.*);
-
-            filters_bufs[i] = try allocator.alloc([64]u8, params.len);
-            errdefer allocator.free(filters_bufs[i]);
-
-            for (filter_args.*) |*arg, j|
-                arg.* = filters_bufs[i][j][0..0];
         }
 
         const settings = Settings{
@@ -764,7 +759,6 @@ const Settings = struct {
             .order = order,
             .checks = checks,
             .filters_args = filters_args,
-            .filters_bufs = filters_bufs,
         };
 
         settings.reset();
@@ -776,8 +770,6 @@ const Settings = struct {
 
         for (settings.filters_args) |filter_args|
             allocator.free(filter_args);
-        for (settings.filters_bufs) |filter_bufs|
-            allocator.free(filter_bufs);
 
         allocator.free(settings.order);
         allocator.free(settings.checks);
@@ -790,7 +782,7 @@ const Settings = struct {
 
         for (settings.filters_args) |*filter_args, i| {
             for (filter_args.*) |*arg, j|
-                arg.* = settings.filters_bufs[i][j][0..0];
+                arg.* = Arg{};
         }
     }
 
@@ -823,7 +815,7 @@ const Settings = struct {
                 try util.writeEscaped(out_stream, param_name, escapes);
                 if (param.takes_value) {
                     try out_stream.write(",");
-                    try util.writeEscaped(out_stream, arg, escapes);
+                    try util.writeEscaped(out_stream, arg.toSliceConst(), escapes);
                 }
             }
             try out_stream.write("\n");
@@ -875,7 +867,6 @@ const Settings = struct {
 
             const filter = exes.filters[i];
             const filter_args = settings.filters_args[i];
-            const filter_bufs = settings.filters_bufs[i];
             settings.order[order_i] = i;
             settings.checks[i] = true;
             order_i += 1;
@@ -893,16 +884,11 @@ const Settings = struct {
                     return error.DuplicateParam;
 
                 const filter_arg = &filter_args[param_i];
-                const filter_buf = &filter_bufs[param_i];
 
                 if (arg.value) |value| {
-                    if (filter_buf.len < value.len)
-                        return error.OutOfMemory;
-
-                    mem.copy(u8, filter_buf, value);
-                    filter_arg.* = filter_buf[0..value.len];
+                    filter_arg.* = Arg.fromSlice(value) catch return error.OutOfMemory;
                 } else {
-                    filter_arg.* = filter_buf[0..1];
+                    filter_arg.len = 1;
                 }
             }
 
