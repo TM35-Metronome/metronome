@@ -55,10 +55,10 @@ pub const StrParser = struct {
         const reset = parser.*;
         errdefer parser.* = reset;
 
-        var res: Int = try math.cast(Int, try charToDigit(try parser.eat(), base));
+        var res: Int = try math.cast(Int, try fmt.charToDigit(try parser.eat(), base));
         while (true) {
             const c = parser.peek() catch return res;
-            const digit = charToDigit(c, base) catch return res;
+            const digit = fmt.charToDigit(c, base) catch return res;
             _ = parser.eat() catch unreachable;
 
             res = try math.mul(Int, res, try math.cast(Int, base));
@@ -182,19 +182,5 @@ pub const StrParser = struct {
         };
         const res = try parser.eatEnumValue(Bool);
         return res == Bool.@"true";
-    }
-
-    fn charToDigit(c: u8, base: u8) !u8 {
-        const value = switch (c) {
-            '0'...'9' => c - '0',
-            'A'...'Z' => c - 'A' + 10,
-            'a'...'z' => c - 'a' + 10,
-            else => return error.InvalidCharacter,
-        };
-
-        if (value >= base)
-            return error.InvalidCharacter;
-
-        return value;
     }
 };
