@@ -1,9 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const c = @cImport({
-    @cInclude("impl.h");
-});
+const c = @import("c.zig");
 
 const debug = std.debug;
 const math = std.math;
@@ -36,9 +34,6 @@ export fn zig_cos(value: f32) f32 {
 }
 
 // Custom
-pub const FileBrowser = @import("nuklear/file-browser.zig").FileBrowser;
-pub const fileBrowser = @import("nuklear/file-browser.zig").fileBrowser;
-
 pub fn buttonInactive(ctx: *Context, text: []const u8) void {
     const old_button_style = ctx.style.button;
     ctx.style.button.normal = ctx.style.button.active;

@@ -28,7 +28,16 @@ const gui_tools = [_][]const u8{
     "tm35-randomizer",
 };
 
-pub fn build(b: *Builder) !void {
+const pkgs = [_][2][]const u8{
+    [_][]const u8{ "clap", "lib/zig-clap/clap.zig" },
+    [_][]const u8{ "fun", "lib/fun-with-zig/fun.zig" },
+    [_][]const u8{ "crc", "lib/zig-crc/crc.zig" },
+    [_][]const u8{ "format", "src/common/format.zig" },
+    [_][]const u8{ "readline", "src/common/readline.zig" },
+    [_][]const u8{ "util", "src/common/util.zig" },
+};
+
+pub fn build(b: *Builder) void {
     b.setPreferredReleaseMode(.ReleaseSafe);
     const mode = b.standardReleaseOptions();
     const target = b.standardTargetOptions(null); // TODO: We don't actually support all targets. Provide the actual subset we do support
@@ -37,8 +46,6 @@ pub fn build(b: *Builder) !void {
         .Cross => |c| c.os,
     };
 
-    const version = b.fmt("\"{}\"", mem.trim(u8, try b.exec([_][]const u8{ "git", "describe", "--always" }), "\t\n "));
-
     const fmt_step = b.addFmt([_][]const u8{
         "build.zig",
         "src",
@@ -46,21 +53,11 @@ pub fn build(b: *Builder) !void {
 
     b.default_step.dependOn(&fmt_step.step);
 
-    const pkgs = [_][2][]const u8{
-        [_][]const u8{ "clap", "lib/zig-clap/clap.zig" },
-        [_][]const u8{ "fun", "lib/fun-with-zig/fun.zig" },
-        [_][]const u8{ "crc", "lib/zig-crc/crc.zig" },
-        [_][]const u8{ "format", "src/common/format.zig" },
-        [_][]const u8{ "readline", "src/common/readline.zig" },
-        [_][]const u8{ "util", "src/common/util.zig" },
-    };
-
     inline for (core_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/core/" ++ tool ++ ".zig");
         for (pkgs) |pkg|
             exe.addPackagePath(pkg[0], pkg[1]);
 
-        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);
@@ -71,22 +68,19 @@ pub fn build(b: *Builder) !void {
         for (pkgs) |pkg|
             exe.addPackagePath(pkg[0], pkg[1]);
 
-        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);
     }
 
-    const lib_cflags = [_][]const u8{ "-std=c89", "-D_POSIX_C_SOURCE=200809L" };
+    const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
     inline for (gui_tools) |tool, i| {
         const exe = b.addExecutable(tool, "src/gui/" ++ tool ++ ".zig");
-        for (pkgs) |pkg|
-            exe.addPackagePath(pkg[0], pkg[1]);
-
         switch (os) {
             .windows => {
                 exe.addIncludeDir("lib/nuklear/demo/gdi");
                 exe.addCSourceFile("src/gui/nuklear/gdi.c", lib_cflags);
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", lib_cflags);
                 exe.linkSystemLibrary("user32");
                 exe.linkSystemLibrary("gdi32");
                 exe.linkSystemLibrary("Msimg32");
@@ -95,18 +89,23 @@ pub fn build(b: *Builder) !void {
                 exe.addIncludeDir("lib/nuklear/demo/x11_xft");
                 exe.addIncludeDir("/usr/include/freetype2");
                 exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_gtk.c", lib_cflags);
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
             },
             else => {}, // TODO: More os support
         }
 
+        for (pkgs) |pkg|
+            exe.addPackagePath(pkg[0], pkg[1]);
+
+        exe.addIncludeDir("lib/nativefiledialog/src/include");
         exe.addIncludeDir("lib/nuklear");
         exe.addIncludeDir("src/gui/nuklear");
         exe.addCSourceFile("src/gui/nuklear/impl.c", lib_cflags);
+        exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
-        exe.addBuildOption([]const u8, "version", version);
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);

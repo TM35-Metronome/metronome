@@ -1,9 +1,10 @@
-const build_options = @import("build_options");
 const builtin = @import("builtin");
 const clap = @import("clap");
-const nk = @import("nuklear.zig");
 const std = @import("std");
 const util = @import("util");
+
+const c = @import("c.zig");
+const nk = @import("nuklear.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -14,20 +15,41 @@ const mem = std.mem;
 const process = std.process;
 const time = std.time;
 
-const c = nk.c;
 const path = fs.path;
 
 const readLine = @import("readline").readLine;
+
+// TODO: proper versioning
+const program_version = "0.0.0";
 
 const fps = 60;
 const frame_time = time.second / fps;
 const WINDOW_WIDTH = 800;
 const WINDOW_HEIGHT = 600;
 
+usingnamespace switch (builtin.os) {
+    .windows => struct {
+        pub extern "user32" stdcallcc fn ShowWindow(hwnd: std.os.windows.HANDLE, nCmdShow: c_int) std.os.windows.BOOL;
+        pub extern "kernel32" stdcallcc fn GetConsoleWindow() std.os.windows.HANDLE;
+    },
+    else => struct {},
+};
+
 const border_group = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR;
 const border_title_group = border_group | nk.WINDOW_TITLE;
 
 pub fn main() u8 {
+    // HACK: I don't want to show a console to the user here is someone explaing what
+    //       to pass to the C compiler to make that happen:
+    //       https://stackoverflow.com/a/9619254
+    //       I have no idea how to get the same behavior using the Zig compiler, so instead
+    //       I use this solution:
+    //       https://stackoverflow.com/a/9618984
+    switch (builtin.os) {
+        .windows => _ = ShowWindow(GetConsoleWindow(), 0),
+        else => {},
+    }
+
     const allocator = heap.c_allocator;
 
     // Set up essetial state for the program to run. If any of these
@@ -113,25 +135,7 @@ pub fn main() u8 {
     };
     defer settings.deinit();
 
-    const FileBrowserKind = enum {
-        LoadRom,
-        Randomize,
-        LoadSettings,
-        SaveSettings,
-    };
-
-    var in: ?util.Path = null;
-    var out: ?util.Path = null;
-    var file_browser_kind: FileBrowserKind = undefined; // This should always be written to before read from
-    var file_browser_dir = util.dir.cwd() catch
-        util.dir.home() catch
-        util.dir.selfExeDir() catch blk: {
-        popups.fatal("Could not find a directory to start the file browser in.");
-        break :blk util.Path{};
-    };
-    var file_browser: ?nk.FileBrowser = null;
-    defer if (file_browser) |fb| fb.close();
-
+    var rom_path: ?util.Path = null;
     var selected: usize = 0;
     while (true) {
         timer.reset();
@@ -147,319 +151,310 @@ pub fn main() u8 {
             var total_space: c.struct_nk_rect = undefined;
             c.nkWindowGetContentRegion(ctx, &total_space);
 
-            // If file_browser isn't null, then we are promting the user for a file,
-            // so we just draw the file browser instead of our normal UI.
-            if (file_browser) |*fb| {
-                c.nk_layout_row_dynamic(ctx, total_space.h, 1);
-                if (nk.fileBrowser(ctx, fb)) |pressed| {
-                    switch (pressed) {
-                        .Confirm => err_blk: {
-                            const selected_path = util.path.join([_][]const u8{
-                                fb.curr_dir.toSliceConst(),
-                                fb.selected_file.toSliceConst(),
-                            }) catch {
-                                popups.err("Path '{}/{}' is to long", fb.curr_dir.toSliceConst(), fb.selected_file.toSliceConst());
-                                break :err_blk;
-                            };
-                            switch (file_browser_kind) {
-                                .LoadRom => in = selected_path,
-                                .Randomize => {
-                                    // in should never be null here, because "Randomize"
-                                    const in_path = in.?.toSliceConst();
-                                    const out_path = selected_path.toSliceConst();
+            const group_height = total_space.h - ctx.style.window.padding.y * 2;
+            const inner_height = group_height - groupOuterHeight(ctx);
+            c.nk_layout_row_template_begin(ctx, group_height);
+            c.nk_layout_row_template_push_static(ctx, 300);
+            c.nk_layout_row_template_push_dynamic(ctx);
+            c.nk_layout_row_template_push_static(ctx, 180);
+            c.nk_layout_row_template_end(ctx);
 
-                                    outputScript(&stderr.outStream().stream, exes, settings, in_path, out_path) catch {};
-                                    stderr.write("\n") catch {};
-                                    randomize(exes, settings, in_path, out_path) catch |err| {
-                                        // TODO: Maybe print the stderr from the command we run in the randomizer function
-                                        popups.err("Failed to randomize '{}': {}", in_path, err);
-                                        break :err_blk;
-                                    };
-
-                                    popups.info("Rom has been randomized!");
-                                },
-                                .LoadSettings => {
-                                    const file = fs.File.openRead(selected_path.toSliceConst()) catch |err| {
-                                        popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
-                                        break :err_blk;
-                                    };
-                                    defer file.close();
-                                    settings.load(exes, &file.inStream().stream) catch |err| {
-                                        popups.err("Failed to load from '{}': {}", selected_path.toSliceConst(), err);
-                                        break :err_blk;
-                                    };
-                                },
-                                .SaveSettings => {
-                                    // TODO: Warn if the user tries to overwrite existing file.
-                                    const file = fs.File.openWrite(selected_path.toSliceConst()) catch |err| {
-                                        popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
-                                        break :err_blk;
-                                    };
-                                    defer file.close();
-                                    settings.save(exes, &file.outStream().stream) catch |err| {
-                                        popups.err("Failed to write to '{}': {}", selected_path.toSliceConst(), err);
-                                        break :err_blk;
-                                    };
-                                },
-                            }
-                        },
-                        .Cancel => {},
-                    }
-
-                    file_browser_dir = fb.curr_dir;
-                    fb.close();
-                    file_browser = null;
-                }
-            } else {
-                const group_height = total_space.h - ctx.style.window.padding.y * 2;
-                const inner_height = group_height - groupOuterHeight(ctx);
-                c.nk_layout_row_template_begin(ctx, group_height);
-                c.nk_layout_row_template_push_static(ctx, 300);
+            // +---------------------------+
+            // | Filters                   |
+            // +---------------------------+
+            // | +-+ +-------------------+ |
+            // | |^| | # tm35-rand-stats | |
+            // | +-+ | # tm35-rand-wild  | |
+            // | +-+ |                   | |
+            // | |V| |                   | |
+            // | +-+ |                   | |
+            // |     +-------------------+ |
+            // +---------------------------+
+            if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
+                defer c.nk_group_end(ctx);
+                c.nk_layout_row_template_begin(ctx, inner_height);
+                c.nk_layout_row_template_push_static(ctx, min_height);
                 c.nk_layout_row_template_push_dynamic(ctx);
-                c.nk_layout_row_template_push_static(ctx, 180);
                 c.nk_layout_row_template_end(ctx);
 
-                // +---------------------------+
-                // | Filters                   |
-                // +---------------------------+
-                // | +-+ +-------------------+ |
-                // | |^| | # tm35-rand-stats | |
-                // | +-+ | # tm35-rand-wild  | |
-                // | +-+ |                   | |
-                // | |V| |                   | |
-                // | +-+ |                   | |
-                // |     +-------------------+ |
-                // +---------------------------+
-                if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
-                    defer c.nk_group_end(ctx);
-                    c.nk_layout_row_template_begin(ctx, inner_height);
-                    c.nk_layout_row_template_push_static(ctx, min_height);
-                    c.nk_layout_row_template_push_dynamic(ctx);
-                    c.nk_layout_row_template_end(ctx);
-
-                    if (nk.nonPaddedGroupBegin(ctx, c"filter-buttons", nk.WINDOW_NO_SCROLLBAR)) {
-                        defer nk.nonPaddedGroupEnd(ctx);
-                        c.nk_layout_row_dynamic(ctx, 0, 1);
-                        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
-                            const before = math.sub(usize, selected, 1) catch 0;
-                            mem.swap(usize, &settings.order[before], &settings.order[selected]);
-                            selected = before;
-                        }
-                        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
-                            const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
-                            mem.swap(usize, &settings.order[selected], &settings.order[after]);
-                            selected = after;
-                        }
+                if (nk.nonPaddedGroupBegin(ctx, c"filter-buttons", nk.WINDOW_NO_SCROLLBAR)) {
+                    defer nk.nonPaddedGroupEnd(ctx);
+                    c.nk_layout_row_dynamic(ctx, 0, 1);
+                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
+                        const before = math.sub(usize, selected, 1) catch 0;
+                        mem.swap(usize, &settings.order[before], &settings.order[selected]);
+                        selected = before;
                     }
-
-                    var list_view: c.nk_list_view = undefined;
-                    if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.filters.len)) != 0) {
-                        defer c.nk_list_view_end(&list_view);
-                        for (settings.order) |filter_i, i| {
-                            const filter = exes.filters[filter_i];
-                            if (i < @intCast(usize, list_view.begin))
-                                continue;
-                            if (@intCast(usize, list_view.end) <= i)
-                                break;
-
-                            c.nk_layout_row_template_begin(ctx, 0);
-                            c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
-                            c.nk_layout_row_template_push_dynamic(ctx);
-                            c.nk_layout_row_template_end(ctx);
-
-                            const name = path.basename(filter.path);
-                            settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
-                            if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
-                                selected = i;
-                        }
+                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
+                        const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
+                        mem.swap(usize, &settings.order[selected], &settings.order[after]);
+                        selected = after;
                     }
                 }
 
-                // +---------------------------+
-                // | Options                   |
-                // +---------------------------+
-                // | This is the help message  |
-                // | # flag-a                  |
-                // | # flag-b                  |
-                // | drop-down |            V| |
-                // | field-a   |             | |
-                // | field-b   |             | |
-                // |                           |
-                // +---------------------------+
-                if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
-                    defer c.nk_group_end(ctx);
-                    if (exes.filters.len == 0)
-                        break :blk;
+                var list_view: c.nk_list_view = undefined;
+                if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.filters.len)) != 0) {
+                    defer c.nk_list_view_end(&list_view);
+                    for (settings.order) |filter_i, i| {
+                        const filter = exes.filters[filter_i];
+                        if (i < @intCast(usize, list_view.begin))
+                            continue;
+                        if (@intCast(usize, list_view.end) <= i)
+                            break;
 
-                    const filter = exes.filters[settings.order[selected]];
-                    var it = mem.separate(filter.help, "\n");
-                    while (it.next()) |line_notrim| {
-                        const line = mem.trimRight(u8, line_notrim, " ");
-                        if (line.len == 0)
-                            continue;
-                        if (mem.startsWith(u8, line, "Usage:"))
-                            continue;
-                        if (mem.startsWith(u8, line, "Options:"))
-                            continue;
-                        if (mem.startsWith(u8, line, " "))
-                            continue;
-                        if (mem.startsWith(u8, line, "\t"))
-                            continue;
-
-                        c.nk_layout_row_dynamic(ctx, 0, 1);
-                        c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.TEXT_LEFT);
-                    }
-
-                    var biggest_width: f32 = 0;
-                    for (filter.params) |param, i| {
-                        const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
-                        if (!param.takes_value)
-                            continue;
-                        if (mem.eql(u8, text, "help"))
-                            continue;
-                        if (mem.eql(u8, text, "version"))
-                            continue;
-
-                        const text_width = nk.fontWidth(ctx, text);
-                        if (biggest_width < text_width)
-                            biggest_width = text_width;
-                    }
-
-                    for (filter.params) |param, i| {
-                        const buf = &settings.filters_bufs[settings.order[selected]][i];
-                        const arg = &settings.filters_args[settings.order[selected]][i];
-                        const help = param.id.msg;
-                        const value = param.id.value;
-                        const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
-                        var bounds: c.struct_nk_rect = undefined;
-                        if (mem.eql(u8, text, "help"))
-                            continue;
-                        if (mem.eql(u8, text, "version"))
-                            continue;
-
-                        if (!param.takes_value) {
-                            c.nk_layout_row_dynamic(ctx, 0, 1);
-
-                            c.nkWidgetBounds(ctx, &bounds);
-                            if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-                                c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
-
-                            // For flags, we only care about whether it's checked or not. We indicate this
-                            // by having a slice of len 1 instead of 0.
-                            const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
-                            arg.* = buf[0..@boolToInt(checked)];
-                            continue;
-                        }
-
-                        const prompt_width = nk.fontWidth(ctx, "a" ** 30);
                         c.nk_layout_row_template_begin(ctx, 0);
-                        c.nk_layout_row_template_push_static(ctx, biggest_width);
-                        c.nk_layout_row_template_push_static(ctx, prompt_width);
+                        c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
                         c.nk_layout_row_template_push_dynamic(ctx);
                         c.nk_layout_row_template_end(ctx);
+
+                        const name = path.basename(filter.path);
+                        settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
+                        if (c.nk_select_text(ctx, name.ptr, @intCast(c_int, name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
+                            selected = i;
+                    }
+                }
+            }
+
+            // +---------------------------+
+            // | Options                   |
+            // +---------------------------+
+            // | This is the help message  |
+            // | # flag-a                  |
+            // | # flag-b                  |
+            // | drop-down |            V| |
+            // | field-a   |             | |
+            // | field-b   |             | |
+            // |                           |
+            // +---------------------------+
+            if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
+                defer c.nk_group_end(ctx);
+                if (exes.filters.len == 0)
+                    break :blk;
+
+                const filter = exes.filters[settings.order[selected]];
+                var it = mem.separate(filter.help, "\n");
+                while (it.next()) |line_notrim| {
+                    const line = mem.trimRight(u8, line_notrim, " ");
+                    if (line.len == 0)
+                        continue;
+                    if (mem.startsWith(u8, line, "Usage:"))
+                        continue;
+                    if (mem.startsWith(u8, line, "Options:"))
+                        continue;
+                    if (mem.startsWith(u8, line, " "))
+                        continue;
+                    if (mem.startsWith(u8, line, "\t"))
+                        continue;
+
+                    c.nk_layout_row_dynamic(ctx, 0, 1);
+                    c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), nk.TEXT_LEFT);
+                }
+
+                var biggest_width: f32 = 0;
+                for (filter.params) |param, i| {
+                    const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
+                    if (!param.takes_value)
+                        continue;
+                    if (mem.eql(u8, text, "help"))
+                        continue;
+                    if (mem.eql(u8, text, "version"))
+                        continue;
+
+                    const text_width = nk.fontWidth(ctx, text);
+                    if (biggest_width < text_width)
+                        biggest_width = text_width;
+                }
+
+                for (filter.params) |param, i| {
+                    const buf = &settings.filters_bufs[settings.order[selected]][i];
+                    const arg = &settings.filters_args[settings.order[selected]][i];
+                    const help = param.id.msg;
+                    const value = param.id.value;
+                    const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
+                    var bounds: c.struct_nk_rect = undefined;
+                    if (mem.eql(u8, text, "help"))
+                        continue;
+                    if (mem.eql(u8, text, "version"))
+                        continue;
+
+                    if (!param.takes_value) {
+                        c.nk_layout_row_dynamic(ctx, 0, 1);
 
                         c.nkWidgetBounds(ctx, &bounds);
                         if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
                             c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
 
-                        c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
-
-                        if (mem.eql(u8, value, "NUM")) {
-                            // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                            debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                            _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_decimal);
-                            continue;
-                        }
-                        if (mem.indexOfScalar(u8, value, '|')) |_| {
-                            if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
-                                c.nk_layout_row_dynamic(ctx, 0, 1);
-                                if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
-                                    arg.* = buf[0..0];
-
-                                var item_it = mem.separate(value, "|");
-                                while (item_it.next()) |item| {
-                                    if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) != 0)
-                                        arg.* = item;
-                                }
-                                c.nk_combo_end(ctx);
-                            }
-                            continue;
-                        }
-
-                        // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
-                        debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
-                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_default);
+                        // For flags, we only care about whether it's checked or not. We indicate this
+                        // by having a slice of len 1 instead of 0.
+                        const checked = c.nk_check_text(ctx, text.ptr, @intCast(c_int, text.len), @boolToInt(arg.len != 0)) != 0;
+                        arg.* = buf[0..@boolToInt(checked)];
+                        continue;
                     }
-                }
 
-                // +-------------------+
-                // | Actions           |
-                // +-------------------+
-                // | +---+ +---------+ |
-                // | | f | | in.nds  | |
-                // | +---+ +---------+ |
-                // | +---------------+ |
-                // | |   Randomize   | |
-                // | +---------------+ |
-                // | +---------------+ |
-                // | | Load Settings | |
-                // | +---------------+ |
-                // | +---------------+ |
-                // | | Save Settings | |
-                // | +---------------+ |
-                // +-------------------+
-                if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) {
-                    defer c.nk_group_end(ctx);
+                    const prompt_width = nk.fontWidth(ctx, "a" ** 30);
                     c.nk_layout_row_template_begin(ctx, 0);
-                    c.nk_layout_row_template_push_static(ctx, min_height);
+                    c.nk_layout_row_template_push_static(ctx, biggest_width);
+                    c.nk_layout_row_template_push_static(ctx, prompt_width);
                     c.nk_layout_row_template_push_dynamic(ctx);
                     c.nk_layout_row_template_end(ctx);
 
-                    var open_file_browser: bool = false;
+                    c.nkWidgetBounds(ctx, &bounds);
+                    if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
+                        c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
 
-                    // TODO: Draw folder icon
-                    if (c.nk_button_symbol(ctx, c.NK_SYMBOL_PLUS) != 0) {
-                        open_file_browser = true;
-                        file_browser_kind = .LoadRom;
-                    }
+                    c.nk_text(ctx, text.ptr, @intCast(c_int, text.len), nk.TEXT_LEFT);
 
-                    const in_slice = if (in) |*i| i.toSliceConst() else "< Add a rom";
-                    var basename = path.basename(in_slice);
-                    _ = c.nk_edit_string(
-                        ctx,
-                        nk.EDIT_READ_ONLY,
-                        // with edit_string being READ_ONLY always, it should be safe to cast away const
-                        @intToPtr([*]u8, @ptrToInt(basename.ptr)),
-                        @ptrCast(*c_int, &basename.len),
-                        @intCast(c_int, basename.len + 1),
-                        c.nk_filter_default,
-                    );
+                    if (mem.eql(u8, value, "NUM")) {
+                        // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
+                        debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
+                        _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_decimal);
+                        continue;
+                    }
+                    if (mem.indexOfScalar(u8, value, '|')) |_| {
+                        if (c.nkComboBeginText(ctx, arg.ptr, @intCast(c_int, arg.len), &nk.vec2(prompt_width, 500)) != 0) {
+                            c.nk_layout_row_dynamic(ctx, 0, 1);
+                            if (c.nk_combo_item_label(ctx, c"", nk.TEXT_LEFT) != 0)
+                                arg.* = buf[0..0];
 
-                    c.nk_layout_row_dynamic(ctx, 0, 1);
-                    if (nk.buttonActivatable(ctx, "Randomize", in != null)) {
-                        open_file_browser = true;
-                        file_browser_kind = .Randomize;
-                    }
-                    if (nk.button(ctx, "Load settings")) {
-                        open_file_browser = true;
-                        file_browser_kind = .LoadSettings;
-                    }
-                    if (nk.button(ctx, "Save settings")) {
-                        open_file_browser = true;
-                        file_browser_kind = .SaveSettings;
-                    }
-
-                    if (open_file_browser) {
-                        const mode = switch (file_browser_kind) {
-                            .Randomize, .SaveSettings => nk.FileBrowser.Mode.Save,
-                            .LoadSettings, .LoadRom => nk.FileBrowser.Mode.OpenOne,
-                        };
-                        if (nk.FileBrowser.open(allocator, mode, file_browser_dir.toSliceConst())) |fb| {
-                            file_browser = fb;
-                        } else |err| {
-                            popups.err("Could not open file browser: {}", err);
+                            var item_it = mem.separate(value, "|");
+                            while (item_it.next()) |item| {
+                                if (c.nk_combo_item_text(ctx, item.ptr, @intCast(c_int, item.len), nk.TEXT_LEFT) != 0)
+                                    arg.* = item;
+                            }
+                            c.nk_combo_end(ctx);
                         }
+                        continue;
                     }
+
+                    // It is only safe to pass arg.ptr to nk_edit_string if it is actually pointing into buf.
+                    debug.assert(@ptrToInt(arg.ptr) == @ptrToInt(buf));
+                    _ = c.nk_edit_string(ctx, nk.EDIT_SIMPLE, buf, @ptrCast(*c_int, &arg.len), buf.len, c.nk_filter_default);
+                }
+            }
+
+            // +-------------------+
+            // | Actions           |
+            // +-------------------+
+            // | +---+ +---------+ |
+            // | | f | | in.nds  | |
+            // | +---+ +---------+ |
+            // | +---------------+ |
+            // | |   Randomize   | |
+            // | +---------------+ |
+            // | +---------------+ |
+            // | | Load Settings | |
+            // | +---------------+ |
+            // | +---------------+ |
+            // | | Save Settings | |
+            // | +---------------+ |
+            // +-------------------+
+            if (c.nk_group_begin(ctx, c"Actions", border_title_group) != 0) done: {
+                defer c.nk_group_end(ctx);
+                c.nk_layout_row_template_begin(ctx, 0);
+                c.nk_layout_row_template_push_static(ctx, min_height);
+                c.nk_layout_row_template_push_dynamic(ctx);
+                c.nk_layout_row_template_end(ctx);
+
+                const FileBrowserKind = enum {
+                    LoadRom,
+                    Randomize,
+                    LoadSettings,
+                    SaveSettings,
+                };
+                var m_file_browser_kind: ?FileBrowserKind = null;
+
+                // TODO: Draw folder icon
+                if (c.nk_button_symbol(ctx, c.NK_SYMBOL_PLUS) != 0)
+                    m_file_browser_kind = .LoadRom;
+
+                const rom_slice = if (rom_path) |*i| i.toSliceConst() else "< Add a rom";
+                var basename = path.basename(rom_slice);
+                _ = c.nk_edit_string(
+                    ctx,
+                    nk.EDIT_READ_ONLY,
+                    // with edit_string being READ_ONLY always, it should be safe to cast away const
+                    @intToPtr([*]u8, @ptrToInt(basename.ptr)),
+                    @ptrCast(*c_int, &basename.len),
+                    @intCast(c_int, basename.len + 1),
+                    c.nk_filter_default,
+                );
+
+                c.nk_layout_row_dynamic(ctx, 0, 1);
+                if (nk.buttonActivatable(ctx, "Randomize", rom_path != null))
+                    m_file_browser_kind = .Randomize;
+                if (nk.button(ctx, "Load settings"))
+                    m_file_browser_kind = .LoadSettings;
+                if (nk.button(ctx, "Save settings"))
+                    m_file_browser_kind = .SaveSettings;
+
+                const file_browser_kind = m_file_browser_kind orelse break :done;
+
+                var m_out_path: ?[*]u8 = null;
+                const dialog_result = switch (file_browser_kind) {
+                    .SaveSettings => c.NFD_SaveDialog(null, null, &m_out_path),
+                    .LoadSettings => c.NFD_OpenDialog(null, null, &m_out_path),
+                    .LoadRom => c.NFD_OpenDialog(c"gb,gba,nds", null, &m_out_path),
+                    .Randomize => c.NFD_SaveDialog(c"gb,gba,nds", null, &m_out_path),
+                };
+
+                const selected_path = switch (dialog_result) {
+                    .NFD_ERROR => {
+                        popups.err("Could not open file browser: {s}", c.NFD_GetError());
+                        break :done;
+                    },
+                    .NFD_CANCEL => break :done,
+                    .NFD_OKAY => blk: {
+                        const out_path = m_out_path.?;
+                        defer std.c.free(out_path);
+
+                        break :blk util.Path.fromSlice(mem.toSliceConst(u8, out_path)) catch {
+                            popups.err("File name '{s}' is too long", out_path);
+                            break :done;
+                        };
+                    },
+                };
+
+                switch (file_browser_kind) {
+                    .LoadRom => rom_path = selected_path,
+                    .Randomize => {
+                        // in should never be null here as the "Randomize" button is inactive when
+                        // it is.
+                        const in_path = rom_path.?.toSliceConst();
+                        const out_path = selected_path.toSliceConst();
+
+                        outputScript(&stderr.outStream().stream, exes, settings, in_path, out_path) catch {};
+                        stderr.write("\n") catch {};
+                        randomize(exes, settings, in_path, out_path) catch |err| {
+                            // TODO: Maybe print the stderr from the command we run in the randomizer function
+                            popups.err("Failed to randomize '{}': {}", in_path, err);
+                            break :done;
+                        };
+
+                        popups.info("Rom has been randomized!");
+                    },
+                    .LoadSettings => {
+                        const file = fs.File.openRead(selected_path.toSliceConst()) catch |err| {
+                            popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                            break :done;
+                        };
+                        defer file.close();
+                        settings.load(exes, &file.inStream().stream) catch |err| {
+                            popups.err("Failed to load from '{}': {}", selected_path.toSliceConst(), err);
+                            break :done;
+                        };
+                    },
+                    .SaveSettings => {
+                        // TODO: Warn if the user tries to overwrite existing file.
+                        const file = fs.File.openWrite(selected_path.toSliceConst()) catch |err| {
+                            popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
+                            break :done;
+                        };
+                        defer file.close();
+                        settings.save(exes, &file.outStream().stream) catch |err| {
+                            popups.err("Failed to write to '{}': {}", selected_path.toSliceConst(), err);
+                            break :done;
+                        };
+                    },
                 }
             }
 
