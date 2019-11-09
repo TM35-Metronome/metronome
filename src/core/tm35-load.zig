@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const common = @import("common.zig");
 const fun = @import("fun");
@@ -23,6 +22,9 @@ const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
 const Clap = clap.ComptimeClap(clap.Help, params);
 const Param = clap.Param(clap.Help);
+
+// TODO: proper versioning
+const program_version = "0.0.0";
 
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
@@ -69,7 +71,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }

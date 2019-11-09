@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const common = @import("common.zig");
 const format = @import("format");
@@ -35,12 +34,16 @@ const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
 
+// TODO: proper versioning
+const program_version = "0.0.0";
+
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
         clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.") catch unreachable,
         clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
         clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
+        clap.parseParam("-r, --replace                 Replace output file if it already exists.    ") catch unreachable,
         clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
         Param{ .takes_value = true },
     };
@@ -87,7 +90,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -100,6 +103,7 @@ pub fn main() u8 {
     };
 
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
+    const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
         const res = fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
         break :blk res catch |err| return errPrint("Allocation failed: {}\n", err);
@@ -108,7 +112,10 @@ pub fn main() u8 {
     const file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
     defer file.close();
 
-    var out_file = fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errPrint("Could not create file '{}': {}\n", out, err);
+    var out_file = if (replace)
+        fs.File.openWrite(out) catch |err| return errPrint("Could not open/create file '{}': {}\n", out, err)
+    else
+        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errPrint("Could not create file '{}': {}\n", out, err);
     defer out_file.close();
 
     var line_num: usize = 1;
@@ -188,7 +195,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -449,7 +456,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         try parser.eatField("wild");
 
         const Fn = struct {
-            fn applyArea(p: *format.StrParser, g: gen3.Game, area: var) !void {
+            fn applyArea(p: *format.Parser, g: gen3.Game, area: var) !void {
                 if (p.eatField("encounter_rate")) {
                     area.encounter_rate = try p.eatUnsignedValue(u8, 10);
                 } else |_| if (p.eatField("pokemons")) {
@@ -517,7 +524,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
 }
 
 fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -914,7 +921,7 @@ fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void 
 }
 
 fn applyGen5(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);

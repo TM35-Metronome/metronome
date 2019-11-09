@@ -440,29 +440,31 @@ pub const Trainer = extern struct {
     }
 
     pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
-        const member_size = switch (version) {
+        return switch (version) {
             common.Version.Diamond,
             common.Version.Pearl,
             => switch (trainer.party_type) {
-                .None => usize(@sizeOf(PartyMemberNone)),
-                .Item => usize(@sizeOf(PartyMemberItem)),
-                .Moves => usize(@sizeOf(PartyMemberMoves)),
-                .Both => usize(@sizeOf(PartyMemberBoth)),
+                .None => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
+                .Item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
+                .Moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
+                .Both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
             },
 
             common.Version.Platinum,
             common.Version.HeartGold,
             common.Version.SoulSilver,
             => switch (trainer.party_type) {
-                .None => usize(@sizeOf(HgSsPlatMember(PartyMemberNone))),
-                .Item => usize(@sizeOf(HgSsPlatMember(PartyMemberItem))),
-                .Moves => usize(@sizeOf(HgSsPlatMember(PartyMemberMoves))),
-                .Both => usize(@sizeOf(HgSsPlatMember(PartyMemberBoth))),
+                .None => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberNone)), i),
+                .Item => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberItem)), i),
+                .Moves => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberMoves)), i),
+                .Both => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberBoth)), i),
             },
 
             else => unreachable,
         };
+    }
 
+    fn partyMemberHelper(trainer: Trainer, party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
         const start = i * member_size;
         const end = start + member_size;
         if (party.len < end)

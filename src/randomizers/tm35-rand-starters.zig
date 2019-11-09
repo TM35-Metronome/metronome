@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
@@ -21,10 +20,13 @@ const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
 
+// TODO: proper versioning
+const program_version = "0.0.0";
+
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-e, --evolutions <NUM>       Only pick starters with NUM or more evolutions.                                           ") catch unreachable,
+        clap.parseParam("-e, --evolutions <NUM>       Only pick starters with NUM or more evolutions. (default: 0)                              ") catch unreachable,
         clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
         clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
         clap.parseParam("-s, --seed <NUM>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
@@ -74,7 +76,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -146,7 +148,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
-    var p = format.StrParser.init(str);
+    var p = format.Parser.init(str);
     const allocator = data.starters.allocator;
 
     if (p.eatField("starters")) |_| {

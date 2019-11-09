@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
@@ -19,6 +18,9 @@ const Clap = clap.ComptimeClap(clap.Help, params);
 const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
+
+// TODO: proper versioning
+const program_version = "0.0.0";
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -72,7 +74,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -156,7 +158,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 
 fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("pokemons")) |_| {
         const poke_index = try parser.eatIndex();
@@ -299,7 +301,7 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
 
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const Zones = std.AutoHashMap(usize, Zone);
-const WildAreas = std.HashMap([]const u8, WildArea, mem.hash_slice_u8, mem.eql_slice_u8);
+const WildAreas = std.StringHashMap(WildArea);
 const WildPokemons = std.AutoHashMap(usize, WildPokemon);
 
 const Data = struct {

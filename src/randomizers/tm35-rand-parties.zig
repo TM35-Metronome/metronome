@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
@@ -21,6 +20,9 @@ const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
 
+// TODO: proper versioning
+const program_version = "0.0.0";
+
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
@@ -28,7 +30,7 @@ const params = blk: {
         clap.parseParam("-f, --fix-moves                   Fix party member moves (will pick the best level up moves the pokemon can learn for its level).") catch unreachable,
         clap.parseParam("-s, --seed <NUM>                  The seed to use for random numbers. A random seed will be picked if this is not specified.     ") catch unreachable,
         clap.parseParam("-i, --simular-total-stats         Replaced party members should have simular total stats.                                        ") catch unreachable,
-        clap.parseParam("-t, --types <random|same|themed>  Which types each trainer should use.                                                           ") catch unreachable,
+        clap.parseParam("-t, --types <random|same|themed>  Which types each trainer should use. (default: random)                                         ") catch unreachable,
         clap.parseParam("-v, --version                     Output version information and exit.                                                           ") catch unreachable,
         Param{ .takes_value = true },
     };
@@ -81,7 +83,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -173,7 +175,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 
 fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("pokemons")) |_| {
         const poke_index = try parser.eatIndex();
@@ -419,7 +421,7 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const PokemonByType = std.HashMap([]const u8, std.ArrayList(usize), mem.hash_slice_u8, mem.eql_slice_u8);
+const PokemonByType = std.StringHashMap(std.ArrayList(usize));
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
 const Trainers = std.AutoHashMap(usize, Trainer);

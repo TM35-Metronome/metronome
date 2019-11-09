@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
@@ -20,6 +19,9 @@ const Clap = clap.ComptimeClap(clap.Help, params);
 const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
+
+// TODO: proper versioning
+const program_version = "0.0.0";
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -74,7 +76,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -138,7 +140,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     try parser.eatField("pokemons");
     const pokemon_index = try parser.eatIndex();

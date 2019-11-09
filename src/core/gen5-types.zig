@@ -144,13 +144,15 @@ pub const Trainer = extern struct {
     }
 
     pub fn partyMember(trainer: Trainer, party: []u8, i: usize) ?*PartyMemberBase {
-        const member_size = switch (trainer.party_type) {
-            .None => usize(@sizeOf(PartyMemberNone)),
-            .Item => usize(@sizeOf(PartyMemberItem)),
-            .Moves => usize(@sizeOf(PartyMemberMoves)),
-            .Both => usize(@sizeOf(PartyMemberBoth)),
+        return switch (trainer.party_type) {
+            .None => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
+            .Item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
+            .Moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
+            .Both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
         };
+    }
 
+    fn partyMemberHelper(trainer: Trainer, party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
         const start = i * member_size;
         const end = start + member_size;
         if (party.len < end)

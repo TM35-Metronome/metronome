@@ -1,4 +1,3 @@
-const build_options = @import("build_options");
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
@@ -20,13 +19,16 @@ const Param = clap.Param(clap.Help);
 
 const readLine = @import("readline").readLine;
 
+// TODO: proper versioning
+const program_version = "0.0.0";
+
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-h, --help                      Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random).            ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version                   Output version information and exit.                                                      ") catch unreachable,
+        clap.parseParam("-h, --help                      Display this help text and exit.                                                                ") catch unreachable,
+        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
+        clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
         Param{ .takes_value = true },
     };
 };
@@ -77,7 +79,7 @@ pub fn main() u8 {
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", build_options.version) catch |err| return failedWriteError("<stdout>", err);
+        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
         stdout.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
@@ -94,15 +96,18 @@ pub fn main() u8 {
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
-    const pref = if (args.option("--preference")) |pref| if (mem.eql(u8, pref, "random"))
-        Preference.Random
-    else if (mem.eql(u8, pref, "stab"))
-        Preference.Stab
-    else {
-        debug.warn("--preference does not support '{}'\n", pref);
-        usage(stderr) catch |err| return failedWriteError("<stderr>", err);
-        return 1;
-    } else Preference.Random;
+    const pref = if (args.option("--preference")) |pref|
+        if (mem.eql(u8, pref, "random"))
+            Preference.Random
+        else if (mem.eql(u8, pref, "stab"))
+            Preference.Stab
+        else {
+            debug.warn("--preference does not support '{}'\n", pref);
+            usage(stderr) catch |err| return failedWriteError("<stderr>", err);
+            return 1;
+        }
+    else
+        Preference.Random;
 
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
     var data = Data{
@@ -171,7 +176,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 
 fn parseLine(data: *Data, str: []const u8) !bool {
     const allocator = data.pokemons.allocator;
-    var parser = format.StrParser.init(str);
+    var parser = format.Parser.init(str);
 
     if (parser.eatField("pokemons")) {
         const pokemon_index = try parser.eatIndex();
