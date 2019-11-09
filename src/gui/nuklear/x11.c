@@ -36,7 +36,7 @@ struct nk_context *nkInit(size_t w, size_t h) {
         ExposureMask | KeyPressMask | KeyReleaseMask |
         ButtonPress | ButtonReleaseMask| ButtonMotionMask |
         Button1MotionMask | Button3MotionMask | Button4MotionMask | Button5MotionMask|
-        PointerMotionMask | KeymapStateMask;
+        PointerMotionMask | KeymapStateMask | StructureNotifyMask;
     xw.win = XCreateWindow(xw.dpy, xw.root, 0, 0, w, h, 0,
         XDefaultDepth(xw.dpy, xw.screen), InputOutput,
         xw.vis, CWEventMask | CWColormap, &xw.swa);
