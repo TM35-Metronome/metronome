@@ -1,6 +1,22 @@
-# metronome
+# Metronome
 
-The mono repo for all metronome tools
+A set of tools for randomizing and modifying Pokémon games.
+
+## Build
+
+External dependencies:
+* [Zig `0.5.0`](https://ziglang.org/download/)
+* Linux only:
+  * [zenity](https://github.com/GNOME/zenity) (optional file dialog)
+
+
+After getting the dependencies just clone the repo and its submodules and run:
+```
+zig build
+```
+
+All build artifacts will end up in `zig-cache/bin`.
+See `zig build --help` for build options.
 
 ## Resources
 
