@@ -169,7 +169,7 @@ pub fn main() u8 {
             c.nk_layout_row_template_end(ctx);
 
             // +---------------------------+
-            // | Filters                   |
+            // | Commands                   |
             // +---------------------------+
             // | +-+ +-------------------+ |
             // | |^| | # tm35-rand-stats | |
@@ -179,14 +179,14 @@ pub fn main() u8 {
             // | +-+ |                   | |
             // |     +-------------------+ |
             // +---------------------------+
-            if (c.nk_group_begin(ctx, c"Filters", border_title_group) != 0) {
+            if (c.nk_group_begin(ctx, c"Commands", border_title_group) != 0) {
                 defer c.nk_group_end(ctx);
                 c.nk_layout_row_template_begin(ctx, inner_height);
                 c.nk_layout_row_template_push_static(ctx, min_height);
                 c.nk_layout_row_template_push_dynamic(ctx);
                 c.nk_layout_row_template_end(ctx);
 
-                if (nk.nonPaddedGroupBegin(ctx, c"filter-buttons", nk.WINDOW_NO_SCROLLBAR)) {
+                if (nk.nonPaddedGroupBegin(ctx, c"command-buttons", nk.WINDOW_NO_SCROLLBAR)) {
                     defer nk.nonPaddedGroupEnd(ctx);
                     c.nk_layout_row_dynamic(ctx, 0, 1);
                     if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
@@ -202,10 +202,10 @@ pub fn main() u8 {
                 }
 
                 var list_view: c.nk_list_view = undefined;
-                if (c.nk_list_view_begin(ctx, &list_view, c"filter-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.filters.len)) != 0) {
+                if (c.nk_list_view_begin(ctx, &list_view, c"command-list", nk.WINDOW_BORDER, 0, @intCast(c_int, exes.commands.len)) != 0) {
                     defer c.nk_list_view_end(&list_view);
-                    for (settings.order) |filter_i, i| {
-                        const filter = exes.filters[filter_i];
+                    for (settings.order) |command_i, i| {
+                        const command = exes.commands[command_i];
                         if (i < @intCast(usize, list_view.begin))
                             continue;
                         if (@intCast(usize, list_view.end) <= i)
@@ -216,9 +216,9 @@ pub fn main() u8 {
                         c.nk_layout_row_template_push_dynamic(ctx);
                         c.nk_layout_row_template_end(ctx);
 
-                        const filter_name = path.basename(filter.path);
-                        const ui_name = toUserfriendly(&tmp_buf, filter_name[0..math.min(filter_name.len, tmp_buf.len)]);
-                        settings.checks[filter_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[filter_i])) != 0;
+                        const command_name = path.basename(command.path);
+                        const ui_name = toUserfriendly(&tmp_buf, command_name[0..math.min(command_name.len, tmp_buf.len)]);
+                        settings.checks[command_i] = c.nk_check_label(ctx, c"", @boolToInt(settings.checks[command_i])) != 0;
                         if (c.nk_select_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), nk.TEXT_LEFT, @boolToInt(i == selected)) != 0)
                             selected = i;
                     }
@@ -238,11 +238,11 @@ pub fn main() u8 {
             // +---------------------------+
             if (c.nk_group_begin(ctx, c"Options", border_title_group) != 0) blk: {
                 defer c.nk_group_end(ctx);
-                if (exes.filters.len == 0)
+                if (exes.commands.len == 0)
                     break :blk;
 
-                const filter = exes.filters[settings.order[selected]];
-                var it = mem.separate(filter.help, "\n");
+                const command = exes.commands[settings.order[selected]];
+                var it = mem.separate(command.help, "\n");
                 while (it.next()) |line_notrim| {
                     const line = mem.trimRight(u8, line_notrim, " ");
                     if (line.len == 0)
@@ -261,7 +261,7 @@ pub fn main() u8 {
                 }
 
                 var biggest_width: f32 = 0;
-                for (filter.params) |param, i| {
+                for (command.params) |param, i| {
                     const text = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
                     if (!param.takes_value)
                         continue;
@@ -275,9 +275,9 @@ pub fn main() u8 {
                         biggest_width = text_width;
                 }
 
-                for (filter.params) |param, i| {
+                for (command.params) |param, i| {
                     var bounds: c.struct_nk_rect = undefined;
-                    const arg = &settings.filters_args[settings.order[selected]][i];
+                    const arg = &settings.commands_args[settings.order[selected]][i];
                     const help = param.id.msg;
                     const value = param.id.value;
                     const param_name = param.names.long orelse (*const [1]u8)(&param.names.short.?)[0..];
@@ -684,19 +684,19 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     try stream.write(quotes ++ " | ");
 
     for (settings.order) |order| {
-        const filter = exes.filters[order];
-        const filter_args = settings.filters_args[order];
+        const command = exes.commands[order];
+        const command_args = settings.commands_args[order];
         if (!settings.checks[order])
             continue;
 
         try stream.write(quotes);
-        try util.writeEscaped(stream, filter.path, escapes);
+        try util.writeEscaped(stream, command.path, escapes);
         try stream.write(quotes);
 
-        for (filter.params) |param, i| {
+        for (command.params) |param, i| {
             const param_pre = if (param.names.long) |_| "--" else "-";
             const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
-            const arg = &filter_args[i];
+            const arg = &command_args[i];
             if (arg.len == 0)
                 continue;
 
@@ -760,44 +760,44 @@ fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
 const Settings = struct {
     allocator: *mem.Allocator,
 
-    // The order in which we call the filters. This is an array of indexes into
-    // exes.filters
+    // The order in which we call the commands. This is an array of indexes into
+    // exes.commands
     order: []usize = ([*]usize)(undefined)[0..0],
 
-    // The filters to call
+    // The commands to call
     checks: []bool = ([*]bool)(undefined)[0..0],
 
-    // Arguments for all filters parameters.
-    filters_args: [][]Arg = ([*][]Arg)(undefined)[0..0],
+    // Arguments for all commands parameters.
+    commands_args: [][]Arg = ([*][]Arg)(undefined)[0..0],
 
     const Arg = util.StackArrayList(64, u8);
 
     fn init(allocator: *mem.Allocator, exes: Exes) !Settings {
-        const order = try allocator.alloc(usize, exes.filters.len);
+        const order = try allocator.alloc(usize, exes.commands.len);
         errdefer allocator.free(order);
 
-        const checks = try allocator.alloc(bool, exes.filters.len);
+        const checks = try allocator.alloc(bool, exes.commands.len);
         errdefer allocator.free(checks);
 
-        const filters_args = try allocator.alloc([]Arg, exes.filters.len);
-        errdefer allocator.free(filters_args);
+        const commands_args = try allocator.alloc([]Arg, exes.commands.len);
+        errdefer allocator.free(commands_args);
 
-        for (filters_args) |*filter_args, i| {
+        for (commands_args) |*command_args, i| {
             errdefer {
-                for (filters_args[0..i]) |f|
+                for (commands_args[0..i]) |f|
                     allocator.free(f);
             }
 
-            const params = exes.filters[i].params;
-            filter_args.* = try allocator.alloc(Arg, params.len);
-            errdefer allocator.free(filter_args.*);
+            const params = exes.commands[i].params;
+            command_args.* = try allocator.alloc(Arg, params.len);
+            errdefer allocator.free(command_args.*);
         }
 
         const settings = Settings{
             .allocator = allocator,
             .order = order,
             .checks = checks,
-            .filters_args = filters_args,
+            .commands_args = commands_args,
         };
 
         settings.reset();
@@ -807,8 +807,8 @@ const Settings = struct {
     fn deinit(settings: Settings) void {
         const allocator = settings.allocator;
 
-        for (settings.filters_args) |filter_args|
-            allocator.free(filter_args);
+        for (settings.commands_args) |command_args|
+            allocator.free(command_args);
 
         allocator.free(settings.order);
         allocator.free(settings.checks);
@@ -819,8 +819,8 @@ const Settings = struct {
         for (settings.order) |*o, i|
             o.* = i;
 
-        for (settings.filters_args) |*filter_args, i| {
-            for (filter_args.*) |*arg, j|
+        for (settings.commands_args) |*command_args, i| {
+            for (command_args.*) |*arg, j|
                 arg.* = Arg{};
         }
     }
@@ -839,11 +839,11 @@ const Settings = struct {
             if (!settings.checks[o])
                 continue;
 
-            const filter = exes.filters[o];
-            const args = settings.filters_args[o];
-            try util.writeEscaped(out_stream, path.basename(filter.path), escapes);
+            const command = exes.commands[o];
+            const args = settings.commands_args[o];
+            try util.writeEscaped(out_stream, path.basename(command.path), escapes);
             for (args) |arg, i| {
-                const param = filter.params[i];
+                const param = command.params[i];
                 if (arg.len == 0)
                     continue;
 
@@ -879,9 +879,9 @@ const Settings = struct {
         };
 
         const helpers = struct {
-            fn findFilterIndex(e: Exes, name: []const u8) ?usize {
-                for (e.filters) |filter, i| {
-                    const basename = path.basename(filter.path);
+            fn findCommandIndex(e: Exes, name: []const u8) ?usize {
+                for (e.commands) |command, i| {
+                    const basename = path.basename(command.path);
                     if (mem.eql(u8, basename, name))
                         return i;
                 }
@@ -899,13 +899,13 @@ const Settings = struct {
         while (try readLine(&buf_in_stream, &buffer)) |line| {
             var separator = util.separateEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
-            const i = helpers.findFilterIndex(exes, name) orelse continue;
+            const i = helpers.findCommandIndex(exes, name) orelse continue;
 
             if (mem.indexOfScalar(usize, settings.order[0..order_i], i)) |_|
                 return error.DuplicateEntry;
 
-            const filter = exes.filters[i];
-            const filter_args = settings.filters_args[i];
+            const command = exes.commands[i];
+            const command_args = settings.commands_args[i];
             settings.order[order_i] = i;
             settings.checks[i] = true;
             order_i += 1;
@@ -913,28 +913,28 @@ const Settings = struct {
             var args = EscapedSeparatorArgIterator{ .separator = separator };
             var streaming_clap = clap.StreamingClap(clap.Help, EscapedSeparatorArgIterator){
                 .iter = &args,
-                .params = filter.params,
+                .params = command.params,
             };
 
             // TODO: Better error returned
             while (try streaming_clap.next()) |arg| {
-                const param_i = util.indexOfPtr(clap.Param(clap.Help), filter.params, arg.param);
-                if (filter_args[param_i].len != 0)
+                const param_i = util.indexOfPtr(clap.Param(clap.Help), command.params, arg.param);
+                if (command_args[param_i].len != 0)
                     return error.DuplicateParam;
 
-                const filter_arg = &filter_args[param_i];
+                const command_arg = &command_args[param_i];
 
                 if (arg.value) |value| {
-                    filter_arg.* = Arg.fromSlice(value) catch return error.OutOfMemory;
+                    command_arg.* = Arg.fromSlice(value) catch return error.OutOfMemory;
                 } else {
-                    filter_arg.len = 1;
+                    command_arg.len = 1;
                 }
             }
 
             buffer.shrink(0);
         }
 
-        for (exes.filters) |_, i| {
+        for (exes.commands) |_, i| {
             if (mem.indexOfScalar(usize, settings.order[0..order_i], i)) |_|
                 continue;
 
@@ -960,8 +960,8 @@ const extension = switch (builtin.os) {
     else => @compileError("Unsupported os"),
 };
 const program_name = "tm35-randomizer";
-const filter_file_name = "filters";
-const default_filters = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
+const command_file_name = "commands";
+const default_commands = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
     "tm35-rand-parties" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++
     "tm35-rand-stats" ++ extension ++ "\n" ++
@@ -971,32 +971,32 @@ const Exes = struct {
     allocator: *mem.Allocator,
     load: util.Path = util.Path{},
     apply: util.Path = util.Path{},
-    filters: []const Filter = [_]Filter{},
+    commands: []const Command = [_]Command{},
 
-    const Filter = struct {
+    const Command = struct {
         path: []const u8,
         help: []const u8,
         params: []const clap.Param(clap.Help),
     };
 
     fn deinit(exes: Exes) void {
-        freeFilters(exes.allocator, exes.filters);
-        exes.allocator.free(exes.filters);
+        freeCommands(exes.allocator, exes.commands);
+        exes.allocator.free(exes.commands);
     }
 
     fn find(allocator: *mem.Allocator) !Exes {
         const load_tool = findCore("tm35-load" ++ extension) catch return error.LoadToolNotFound;
         const apply_tool = findCore("tm35-apply" ++ extension) catch return error.ApplyToolNotFound;
 
-        const filters = try findFilters(allocator);
-        errdefer allocator.free(filters);
-        errdefer freeFilters(allocator, filters);
+        const commands = try findCommands(allocator);
+        errdefer allocator.free(commands);
+        errdefer freeCommands(allocator, commands);
 
         return Exes{
             .allocator = allocator,
             .load = load_tool,
             .apply = apply_tool,
-            .filters = filters,
+            .commands = commands,
         };
     }
 
@@ -1008,70 +1008,69 @@ const Exes = struct {
             try findInPath(tool);
     }
 
-    fn findFilters(allocator: *mem.Allocator) ![]Filter {
-        const filter_file = try openFilterFile();
-        defer filter_file.close();
+    fn findCommands(allocator: *mem.Allocator) ![]Command {
+        const command_file = try openCommandFile();
+        defer command_file.close();
 
         const cwd = try util.dir.cwd();
         var env_map = try process.getEnvMap(allocator);
         defer env_map.deinit();
 
-        var res = std.ArrayList(Filter).init(allocator);
+        var res = std.ArrayList(Command).init(allocator);
         defer res.deinit();
-        defer freeFilters(allocator, res.toSlice());
+        defer freeCommands(allocator, res.toSlice());
 
-        var buf_stream = io.BufferedInStream(fs.File.InStream.Error).init(&filter_file.inStream().stream);
+        var buf_stream = io.BufferedInStream(fs.File.InStream.Error).init(&command_file.inStream().stream);
         var buffer = try std.Buffer.initSize(allocator, 0);
         defer buffer.deinit();
 
         while (try readLine(&buf_stream, &buffer)) |line| {
             if (fs.path.isAbsolute(line)) {
-                const filter = pathToFilter(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
-                try res.append(filter);
+                const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
+                try res.append(command);
             } else {
-                const filter_path = findFilter(line) catch continue;
-                const filter = pathToFilter(allocator, filter_path.toSliceConst(), cwd.toSliceConst(), &env_map) catch continue;
-                try res.append(filter);
+                const command_path = findCommand(line) catch continue;
+                const command = pathToCommand(allocator, command_path.toSliceConst(), cwd.toSliceConst(), &env_map) catch continue;
+                try res.append(command);
             }
         }
 
         return res.toOwnedSlice();
     }
 
-    fn findFilter(name: []const u8) !util.Path {
+    fn findCommand(name: []const u8) !util.Path {
         const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
         const config_dir = (try util.dir.config()).toSliceConst();
         const cwd = (try util.dir.cwd()).toSliceConst();
-        return joinExists([_][]const u8{ cwd, "filters", name }) catch
-            joinExists([_][]const u8{ cwd, name }) catch
+        return joinExists([_][]const u8{ cwd, name }) catch
             joinExists([_][]const u8{ config_dir, program_name, name }) catch
-            joinExists([_][]const u8{ self_exe_dir, "filters", name }) catch
+            joinExists([_][]const u8{ self_exe_dir, "randomizers", name }) catch
             joinExists([_][]const u8{ self_exe_dir, name }) catch
             try findInPath(name);
     }
 
-    fn openFilterFile() !fs.File {
+    fn openCommandFile() !fs.File {
         const config_dir = (try util.dir.config()).toSliceConst();
-        const filter_path = (try util.path.join([_][]const u8{
+        const command_path = (try util.path.join([_][]const u8{
             config_dir,
             program_name,
-            filter_file_name,
+            command_file_name,
         })).toSliceConst();
-        if (fs.File.openRead(filter_path)) |file| {
+        if (fs.File.openRead(command_path)) |file| {
             return file;
         } else |_| {
             var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
             var fba = heap.FixedBufferAllocator.init(&buf);
-            const dirname = fs.path.dirname(filter_path) orelse ".";
+            const dirname = fs.path.dirname(command_path) orelse ".";
 
             try fs.makePath(&fba.allocator, dirname);
-            try io.writeFile(filter_path, default_filters);
-            return fs.File.openRead(filter_path);
+            try io.writeFile(command_path, default_commands);
+            return fs.File.openRead(command_path);
         }
     }
 
-    fn pathToFilter(allocator: *mem.Allocator, filter_path: []const u8, cwd: []const u8, env_map: *const std.BufMap) !Filter {
-        const help = try execHelp(allocator, filter_path, cwd, env_map);
+    fn pathToCommand(allocator: *mem.Allocator, command_path: []const u8, cwd: []const u8, env_map: *const std.BufMap) !Command {
+        const help = try execHelp(allocator, command_path, cwd, env_map);
         errdefer allocator.free(help);
 
         var params = std.ArrayList(clap.Param(clap.Help)).init(allocator);
@@ -1106,18 +1105,18 @@ const Exes = struct {
             }
         }.lessThan);
 
-        return Filter{
-            .path = try mem.dupe(allocator, u8, filter_path),
+        return Command{
+            .path = try mem.dupe(allocator, u8, command_path),
             .help = help,
             .params = params.toOwnedSlice(),
         };
     }
 
-    fn freeFilters(allocator: *mem.Allocator, filters: []const Filter) void {
-        for (filters) |filter| {
-            allocator.free(filter.path);
-            allocator.free(filter.help);
-            allocator.free(filter.params);
+    fn freeCommands(allocator: *mem.Allocator, commands: []const Command) void {
+        for (commands) |command| {
+            allocator.free(command.path);
+            allocator.free(command.help);
+            allocator.free(command.params);
         }
     }
 };

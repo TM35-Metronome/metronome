@@ -16,7 +16,7 @@ const core_tools = [_][]const u8{
     "tm35-nds-extract",
 };
 
-const filter_tools = [_][]const u8{
+const randomizer_tools = [_][]const u8{
     "tm35-rand-starters",
     "tm35-rand-learned-moves",
     "tm35-rand-stats",
@@ -63,8 +63,8 @@ pub fn build(b: *Builder) void {
         b.default_step.dependOn(&exe.step);
     }
 
-    inline for (filter_tools) |tool, i| {
-        const exe = b.addExecutable(tool, "src/filter/" ++ tool ++ ".zig");
+    inline for (randomizer_tools) |tool, i| {
+        const exe = b.addExecutable(tool, "src/randomizers/" ++ tool ++ ".zig");
         for (pkgs) |pkg|
             exe.addPackagePath(pkg[0], pkg[1]);
 
