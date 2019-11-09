@@ -59,6 +59,7 @@ pub fn build(b: *Builder) void {
             exe.addPackagePath(pkg[0], pkg[1]);
 
         exe.setBuildMode(mode);
+        exe.single_threaded = true;
         exe.install();
         b.default_step.dependOn(&exe.step);
     }
@@ -69,6 +70,7 @@ pub fn build(b: *Builder) void {
             exe.addPackagePath(pkg[0], pkg[1]);
 
         exe.setBuildMode(mode);
+        exe.single_threaded = true;
         exe.install();
         b.default_step.dependOn(&exe.step);
     }
@@ -106,6 +108,7 @@ pub fn build(b: *Builder) void {
         exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
+        exe.single_threaded = true;
         exe.setBuildMode(mode);
         exe.install();
         b.default_step.dependOn(&exe.step);
