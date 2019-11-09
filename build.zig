@@ -89,7 +89,7 @@ pub fn build(b: *Builder) void {
                 exe.addIncludeDir("lib/nuklear/demo/x11_xft");
                 exe.addIncludeDir("/usr/include/freetype2");
                 exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_gtk.c", lib_cflags);
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
             },

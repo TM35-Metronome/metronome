@@ -24,7 +24,8 @@ struct nk_context *nkInit(size_t w, size_t h) {
     /* X11 */
     memset(&xw, 0, sizeof xw);
     xw.dpy = XOpenDisplay(NULL);
-    if (!xw.dpy) die("Could not open a display; perhaps $DISPLAY is not set?");
+    if (!xw.dpy)
+        return NULL;
     xw.root = DefaultRootWindow(xw.dpy);
     xw.screen = XDefaultScreen(xw.dpy);
     xw.vis = XDefaultVisual(xw.dpy, xw.screen);
@@ -59,17 +60,16 @@ struct nk_context *nkInit(size_t w, size_t h) {
                     xw.width, xw.height);
 }
 
-int nkInput(struct nk_context *ctx) {    
+int nkInput(struct nk_context *ctx) {
     XEvent evt;
-    started = timestamp();
     nk_input_begin(ctx);
     while (XPending(xw.dpy)) {
         XNextEvent(xw.dpy, &evt);
         if (evt.type == ClientMessage) 
             return 0;
-        if (evt.type == c.ConfigureNotify) {
-            width = event.xconfigure.width;
-            height = event.xconfigure.height;
+        if (evt.type == ConfigureNotify) {
+            width = evt.xconfigure.width;
+            height = evt.xconfigure.height;
         }
         if (XFilterEvent(&evt, xw.win)) continue;
         nk_xlib_handle_event(xw.dpy, xw.screen, xw.win, &evt);
