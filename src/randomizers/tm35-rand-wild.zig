@@ -45,13 +45,8 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stdin_file = io.getStdIn() catch |err| return errPrint("Could not aquire stdin: {}\n", err);
-    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}\n", err);
-    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}\n", err);
-
-    const stdin = &BufInStream.init(&stdin_file.inStream().stream);
-    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
-    const stderr = &stderr_file.outStream().stream;
+    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio = stdio_unbuf.getBuffered();
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
@@ -63,26 +58,28 @@ pub fn main() u8 {
 
     var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         debug.warn("{}\n", err);
-        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        usage(&stdio.err.stream) catch {};
+        stdio.err.flush() catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
-            usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+            usage(&stdio.err.stream) catch {};
+            stdio.err.flush() catch {};
             return 1;
         }
     else blk: {
@@ -100,15 +97,15 @@ pub fn main() u8 {
         .zones = Zones.init(allocator),
     };
 
-    while (util.readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+    while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch true;
         if (print_line)
-            stdout.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+            stdio.out.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
 
         line_buf.shrink(0);
     }
-    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
 
     randomize(data, seed, simular_total_stats) catch |err| return errPrint("Failed to randomize data: {}", err);
 
@@ -128,16 +125,16 @@ pub fn main() u8 {
                 const pokemon = poke_kw.value;
 
                 if (pokemon.min_level) |l|
-                    stdout.stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", zone_i, area_name, poke_i, l) catch |err| return failedWriteError("<stdout>", err);
+                    stdio.out.stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", zone_i, area_name, poke_i, l) catch |err| return failedWriteError("<stdout>", err);
                 if (pokemon.max_level) |l|
-                    stdout.stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", zone_i, area_name, poke_i, l) catch |err| return failedWriteError("<stdout>", err);
+                    stdio.out.stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", zone_i, area_name, poke_i, l) catch |err| return failedWriteError("<stdout>", err);
                 if (pokemon.species) |s|
-                    stdout.stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", zone_i, area_name, poke_i, s) catch |err| return failedWriteError("<stdout>", err);
+                    stdio.out.stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", zone_i, area_name, poke_i, s) catch |err| return failedWriteError("<stdout>", err);
             }
         }
     }
 
-    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
 }
 

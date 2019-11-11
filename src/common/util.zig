@@ -25,6 +25,64 @@ test "" {
     _ = readLine;
 }
 
+pub const StdIo = struct {
+    in: fs.File.InStream,
+    out: fs.File.OutStream,
+    err: fs.File.OutStream,
+
+    pub fn getBuffered(stdio: *StdIo) BufferedStdIo {
+        return BufferedStdIo{
+            .in = io.BufferedInStream(fs.File.ReadError).init(&stdio.in.stream),
+            .out = io.BufferedOutStream(fs.File.WriteError).init(&stdio.out.stream),
+            .err = io.BufferedOutStream(fs.File.WriteError).init(&stdio.err.stream),
+        };
+    }
+
+    pub fn getStreams(stdio: *StdIo) StdIoStreams {
+        return StdIoStreams{
+            .in = &stdio.in.stream,
+            .out = &stdio.out.stream,
+            .err = &stdio.err.stream,
+        };
+    }
+};
+
+pub const BufferedStdIo = struct {
+    in: io.BufferedInStream(fs.File.ReadError),
+    out: io.BufferedOutStream(fs.File.WriteError),
+    err: io.BufferedOutStream(fs.File.WriteError),
+
+    pub fn getStreams(stdio: *BufferedStdIo) StdIoStreams {
+        return StdIoStreams{
+            .in = &stdio.in.stream,
+            .out = &stdio.out.stream,
+            .err = &stdio.err.stream,
+        };
+    }
+};
+
+pub const StdIoStreams = CustomStdIoStreams(fs.File.ReadError, fs.File.WriteError);
+pub fn CustomStdIoStreams(comptime ReadError: type, comptime WriteError: type) type {
+    return struct {
+        in: *io.InStream(ReadError),
+        out: *io.OutStream(WriteError),
+        err: *io.OutStream(WriteError),
+    };
+}
+
+pub fn getStdIo() !StdIo {
+    return StdIo{
+        .in = (try io.getStdIn()).inStream(),
+        .out = (try io.getStdOut()).outStream(),
+        .err = (try io.getStdErr()).outStream(),
+    };
+}
+
+test "getStdIo" {
+    var stdio = try getStdIo();
+    var buf_stdio = stdio.getBuffered();
+}
+
 /// Given a slice and a pointer, returns the pointers index into the slice.
 /// ptr has to point into slice.
 pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {

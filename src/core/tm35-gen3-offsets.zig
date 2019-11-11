@@ -1,6 +1,7 @@
+const builtin = @import("builtin");
 const clap = @import("clap");
 const std = @import("std");
-const builtin = @import("builtin");
+const util = @import("util");
 
 const common = @import("common.zig");
 const gen3 = @import("gen3-types.zig");
@@ -50,11 +51,8 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    const stdout_file = io.getStdOut() catch |err| return errPrint("Could not aquire stdout: {}", err);
-    const stderr_file = io.getStdErr() catch |err| return errPrint("Could not aquire stderr: {}", err);
-
-    const stdout = &BufOutStream.init(&stdout_file.outStream().stream);
-    const stderr = &stderr_file.outStream().stream;
+    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio = stdio_unbuf.getBuffered();
 
     var arg_iter = clap.args.OsIterator.init(heap.direct_allocator);
     defer arg_iter.deinit();
@@ -63,20 +61,21 @@ pub fn main() u8 {
 
     var args = Clap.parse(heap.direct_allocator, clap.args.OsIterator, &arg_iter) catch |err| {
         debug.warn("{}\n", err);
-        usage(stderr) catch |err2| return failedWriteError("<stderr>", err2);
+        usage(&stdio.err.stream) catch {};
+        stdio.err.flush() catch {};
         return 1;
     };
     defer args.deinit();
 
     if (args.flag("--help")) {
-        usage(&stdout.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdout.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
         return 0;
     }
 
@@ -93,10 +92,10 @@ pub fn main() u8 {
         const version = getVersion(header.gamecode) catch |err| return errPrint("'{}' is not a gen3 Pokémon game: {}\n", file_name, err);
         const info_err = getInfo(data, version, header.gamecode, header.game_title, header.software_version);
         const info = info_err catch |err| return errPrint("Failed to get offsets from '{}': {}\n", file_name, err);
-        outputInfo(&stdout.stream, i, info) catch |err| return failedWriteError("<stdout>", err);
+        outputInfo(&stdio.out.stream, i, info) catch |err| return failedWriteError("<stdout>", err);
     }
 
-    stdout.flush() catch |err| return failedWriteError("<stdout>", err);
+    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
 }
 
