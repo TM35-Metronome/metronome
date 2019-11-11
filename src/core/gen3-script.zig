@@ -1,9 +1,11 @@
-const fun = @import("fun");
 const builtin = @import("builtin");
+const rom = @import("rom.zig");
 const std = @import("std");
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
+const common = @import("common.zig");
+
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
 
 const meta = std.meta;
 const trait = meta.trait;
@@ -213,10 +215,6 @@ test "packedLength" {
 
 pub const CommandDecoder = struct {
     bytes: []u8,
-
-    pub fn init(bytes: []u8) CommandDecoder {
-        return CommandDecoder{ .bytes = bytes };
-    }
 
     pub fn next(decoder: *CommandDecoder) !?*Command {
         if (decoder.bytes.len == 0)

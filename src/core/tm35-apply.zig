@@ -1,13 +1,13 @@
+const bit = @import("bit");
 const clap = @import("clap");
-const common = @import("common.zig");
 const format = @import("format");
-const fun = @import("fun");
-const gba = @import("gba.zig");
+const rom = @import("rom.zig");
+const std = @import("std");
+
+const common = @import("common.zig");
 const gen3 = @import("gen3-types.zig");
 const gen4 = @import("gen4-types.zig");
 const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -17,15 +17,14 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
+const gba = rom.gba;
+const nds = rom.nds;
 const path = fs.path;
 
-const bits = fun.bits;
-const slice = fun.generic.slice;
-
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
-const lu128 = fun.platform.lu128;
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu64 = rom.int.lu64;
+const lu128 = rom.int.lu128;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
@@ -137,10 +136,10 @@ pub fn main() u8 {
     } else |err| err;
 
     file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
-    if (nds.Rom.fromFile(file, allocator)) |rom| {
-        const gen4_error = if (gen4.Game.fromRom(rom)) |game| {
+    if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
+        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
             while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
-                applyGen4(rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
+                applyGen4(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning)
                         return 1;
@@ -148,13 +147,13 @@ pub fn main() u8 {
                 line_buf.shrink(0);
             }
 
-            rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
+            nds_rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
             return 0;
         } else |err| err;
 
-        if (gen5.Game.fromRom(allocator, rom)) |game| {
+        if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
             while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
-                applyGen5(rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
+                applyGen5(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning) {
                         debug.warn("{}\n", line);
@@ -164,7 +163,7 @@ pub fn main() u8 {
                 line_buf.shrink(0);
             }
 
-            rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
+            nds_rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
             return 0;
         } else |gen5_error| {
             debug.warn("Successfully loaded '{}' as a nds rom.\n", file_name);
@@ -195,7 +194,7 @@ fn errPrint(comptime format_str: []const u8, args: ...) u8 {
 }
 
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser.init(str);
+    var parser = format.Parser{ .str = str };
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -370,22 +369,12 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             const tm_index = try parser.eatIndexMax(game.tms.len);
             const value = try parser.eatBoolValue();
             const learnset = &game.machine_learnsets[pokemon_index];
-            const new = switch (value) {
-                true => bits.set(u64, learnset.value(), @intCast(u6, tm_index)),
-                false => bits.clear(u64, learnset.value(), @intCast(u6, tm_index)),
-                else => unreachable,
-            };
-            learnset.* = lu64.init(new);
+            learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, tm_index), value));
         } else |_| if (parser.eatField("hms")) {
             const hm_index = try parser.eatIndexMax(game.tms.len);
             const value = try parser.eatBoolValue();
             const learnset = &game.machine_learnsets[pokemon_index];
-            const new = switch (value) {
-                true => bits.set(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len)),
-                false => bits.clear(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len)),
-                else => unreachable,
-            };
-            learnset.* = lu64.init(new);
+            learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len), value));
         } else |_| if (parser.eatField("evos")) {
             const evos = &game.evolutions[pokemon_index];
             const evo_index = try parser.eatIndexMax(evos.len);
@@ -523,8 +512,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
     }
 }
 
-fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser.init(str);
+fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
+    var parser = format.Parser{ .str = str };
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -532,12 +521,12 @@ fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void 
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
-        if (!mem.eql(u8, value, rom.header.game_title[0..null_index]))
+        const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, rom.header.gamecode))
+        if (!mem.eql(u8, value, nds_rom.header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
@@ -698,25 +687,17 @@ fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void 
             const tm_index = try parser.eatIndexMax(game.tms.len);
             const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
-            const new = switch (value) {
-                true => bits.set(u128, learnset.value(), @intCast(u7, tm_index)),
-                false => bits.clear(u128, learnset.value(), @intCast(u7, tm_index)),
-                else => unreachable,
-            };
-            learnset.* = lu128.init(new);
+            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, tm_index), value));
         } else |_| if (parser.eatField("hms")) {
             const hm_index = try parser.eatIndexMax(game.hms.len);
             const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
-            const new = switch (value) {
-                true => bits.set(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len)),
-                false => bits.clear(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len)),
-                else => unreachable,
-            };
-            learnset.* = lu128.init(new);
+            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len), value));
         } else |_| if (parser.eatField("evos")) {
             const evos_file = try game.evolutions.nodes.toSlice()[pokemon_index].asFile();
-            const evos = slice.bytesToSliceTrim(gen4.Evolution, evos_file.data);
+            const bytes = evos_file.data;
+            const rem = bytes.len % @sizeOf(gen4.Evolution);
+            const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
 
@@ -920,8 +901,8 @@ fn applyGen4(rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void 
     }
 }
 
-fn applyGen5(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser.init(str);
+fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
+    var parser = format.Parser{ .str = str };
 
     if (parser.eatField("version")) {
         const version = try parser.eatEnumValue(common.Version);
@@ -929,12 +910,12 @@ fn applyGen5(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void 
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
-        if (!mem.eql(u8, value, rom.header.game_title[0..null_index]))
+        const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, rom.header.gamecode))
+        if (!mem.eql(u8, value, nds_rom.header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
@@ -1124,25 +1105,17 @@ fn applyGen5(rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void 
             const real_index = if (tm_index < game.tms1.len) tm_index else tm_index + game.hms.len;
             const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
-            const new = switch (value) {
-                true => bits.set(u128, learnset.value(), @intCast(u7, real_index)),
-                false => bits.clear(u128, learnset.value(), @intCast(u7, real_index)),
-                else => unreachable,
-            };
-            learnset.* = lu128.init(new);
+            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, real_index), value));
         } else |_| if (parser.eatField("hms")) {
             const hm_index = try parser.eatIndexMax(game.hms.len);
             const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
-            const new = switch (value) {
-                true => bits.set(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len)),
-                false => bits.clear(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len)),
-                else => unreachable,
-            };
-            learnset.* = lu128.init(new);
+            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len), value));
         } else |_| if (parser.eatField("evos")) {
             const evos_file = try game.evolutions.nodes.toSlice()[pokemon_index].asFile();
-            const evos = slice.bytesToSliceTrim(gen5.Evolution, evos_file.data);
+            const bytes = evos_file.data;
+            const rem = bytes.len % @sizeOf(gen5.Evolution);
+            const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
 

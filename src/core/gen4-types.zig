@@ -1,15 +1,17 @@
-const common = @import("common.zig");
-const fun = @import("fun");
-const offsets = @import("gen4-offsets.zig");
-const nds = @import("nds.zig");
-const pokemon = @import("index.zig");
+const rom = @import("rom.zig");
 const std = @import("std");
+
+const common = @import("common.zig");
+const offsets = @import("gen4-offsets.zig");
+const pokemon = @import("index.zig");
 
 const mem = std.mem;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu128 = fun.platform.lu128;
+const nds = rom.nds;
+
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
@@ -636,18 +638,18 @@ pub const Game = struct {
     tms: []lu16,
     hms: []lu16,
 
-    pub fn fromRom(rom: nds.Rom) !Game {
-        const info = try getInfo(rom.header.game_title, rom.header.gamecode);
-        const hm_tm_prefix_index = mem.indexOf(u8, rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+    pub fn fromRom(nds_rom: nds.Rom) !Game {
+        const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
+        const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = @bytesToSlice(lu16, rom.arm9[hm_tm_index..][0..hm_tms_len]);
+        const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
 
         return Game{
             .version = info.version,
             .starters = switch (info.starters) {
                 offsets.StarterLocation.Arm9 => |offset| blk: {
-                    const starters_section = @bytesToSlice(lu16, rom.arm9[offset..][0..offsets.starters_len]);
+                    const starters_section = @bytesToSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -655,7 +657,7 @@ pub const Game = struct {
                     };
                 },
                 offsets.StarterLocation.Overlay9 => |overlay| blk: {
-                    const file = rom.arm9_overlay_files[overlay.file];
+                    const file = nds_rom.arm9_overlay_files[overlay.file];
                     const starters_section = @bytesToSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
@@ -664,13 +666,13 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try getNarc(rom.root, info.pokemons),
-            .evolutions = try getNarc(rom.root, info.evolutions),
-            .level_up_moves = try getNarc(rom.root, info.level_up_moves),
-            .moves = try getNarc(rom.root, info.moves),
-            .trainers = try getNarc(rom.root, info.trainers),
-            .parties = try getNarc(rom.root, info.parties),
-            .wild_pokemons = try getNarc(rom.root, info.wild_pokemons),
+            .pokemons = try getNarc(nds_rom.root, info.pokemons),
+            .evolutions = try getNarc(nds_rom.root, info.evolutions),
+            .level_up_moves = try getNarc(nds_rom.root, info.level_up_moves),
+            .moves = try getNarc(nds_rom.root, info.moves),
+            .trainers = try getNarc(nds_rom.root, info.trainers),
+            .parties = try getNarc(nds_rom.root, info.parties),
+            .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
         };

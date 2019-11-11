@@ -1,7 +1,12 @@
+const builtin = @import("builtin");
+const rom = @import("rom.zig");
 const std = @import("std");
-const fun = @import("fun");
 
-const lu16 = fun.platform.lu16;
+const debug = std.debug;
+const mem = std.mem;
+const testing = std.testing;
+
+const lu16 = rom.int.lu16;
 
 pub const Version = enum {
     Red,

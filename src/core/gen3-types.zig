@@ -1,6 +1,5 @@
 const common = @import("common.zig");
-const fun = @import("fun");
-const gba = @import("gba.zig");
+const rom = @import("rom.zig");
 const std = @import("std");
 
 const math = std.math;
@@ -8,9 +7,11 @@ const mem = std.mem;
 const os = std.os;
 const fs = std.fs;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
+const gba = rom.gba;
+
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu64 = rom.int.lu64;
 
 pub const offsets = @import("gen3-offsets.zig");
 pub const script = @import("gen3-script.zig");
@@ -578,12 +579,12 @@ pub const Game = struct {
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
             return error.InvalidRomSize;
 
-        const rom = try allocator.alloc(u8, size);
-        errdefer allocator.free(rom);
+        const gda_rom = try allocator.alloc(u8, size);
+        errdefer allocator.free(gda_rom);
 
-        try in_stream.readNoEof(rom);
+        try in_stream.readNoEof(gda_rom);
 
-        const map_headers = info.map_headers.slice(rom);
+        const map_headers = info.map_headers.slice(gda_rom);
         const ScriptData = struct {
             static_pokemons: std.ArrayList(*script.Command),
             given_items: std.ArrayList(*script.Command),
@@ -609,7 +610,7 @@ pub const Game = struct {
 
         @setEvalBranchQuota(100000);
         for (map_headers) |map_header| {
-            const scripts = try map_header.map_scripts.toSliceTerminated(rom, struct {
+            const scripts = try map_header.map_scripts.toSliceTerminated(gda_rom, struct {
                 fn isTerm(ms: MapScript) bool {
                     return ms.@"type" == 0;
                 }
@@ -619,23 +620,23 @@ pub const Game = struct {
                 if (s.@"type" == 2 or s.@"type" == 4)
                     continue;
 
-                const script_bytes = try s.addr.Other.toSliceEnd(rom);
-                var decoder = script.CommandDecoder.init(script_bytes);
+                const script_bytes = try s.addr.Other.toSliceEnd(gda_rom);
+                var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(command);
             }
 
-            const events = try map_header.map_events.toSingle(rom);
-            for (try events.obj_events.toSlice(rom, events.obj_events_len)) |obj_event| {
-                const script_bytes = obj_event.script.toSliceEnd(rom) catch continue;
-                var decoder = script.CommandDecoder.init(script_bytes);
+            const events = try map_header.map_events.toSingle(gda_rom);
+            for (try events.obj_events.toSlice(gda_rom, events.obj_events_len)) |obj_event| {
+                const script_bytes = obj_event.script.toSliceEnd(gda_rom) catch continue;
+                var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(command);
             }
 
-            for (try events.coord_events.toSlice(rom, events.coord_events_len)) |coord_event| {
-                const script_bytes = coord_event.scripts.toSliceEnd(rom) catch continue;
-                var decoder = script.CommandDecoder.init(script_bytes);
+            for (try events.coord_events.toSlice(gda_rom, events.coord_events_len)) |coord_event| {
+                const script_bytes = coord_event.scripts.toSliceEnd(gda_rom) catch continue;
+                var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(command);
             }
@@ -644,28 +645,28 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
-            .data = rom,
-            .header = @ptrCast(*gba.Header, &rom[0]),
+            .data = gda_rom,
+            .header = @ptrCast(*gba.Header, &gda_rom[0]),
             .starters = [_]*lu16{
-                info.starters[0].ptr(rom),
-                info.starters[1].ptr(rom),
-                info.starters[2].ptr(rom),
+                info.starters[0].ptr(gda_rom),
+                info.starters[1].ptr(gda_rom),
+                info.starters[2].ptr(gda_rom),
             },
             .starters_repeat = [3]*lu16{
-                info.starters_repeat[0].ptr(rom),
-                info.starters_repeat[1].ptr(rom),
-                info.starters_repeat[2].ptr(rom),
+                info.starters_repeat[0].ptr(gda_rom),
+                info.starters_repeat[1].ptr(gda_rom),
+                info.starters_repeat[2].ptr(gda_rom),
             },
-            .trainers = info.trainers.slice(rom),
-            .moves = info.moves.slice(rom),
-            .machine_learnsets = info.machine_learnsets.slice(rom),
-            .pokemons = info.pokemons.slice(rom),
-            .evolutions = info.evolutions.slice(rom),
-            .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(rom),
-            .hms = info.hms.slice(rom),
-            .tms = info.tms.slice(rom),
-            .items = info.items.slice(rom),
-            .wild_pokemon_headers = info.wild_pokemon_headers.slice(rom),
+            .trainers = info.trainers.slice(gda_rom),
+            .moves = info.moves.slice(gda_rom),
+            .machine_learnsets = info.machine_learnsets.slice(gda_rom),
+            .pokemons = info.pokemons.slice(gda_rom),
+            .evolutions = info.evolutions.slice(gda_rom),
+            .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gda_rom),
+            .hms = info.hms.slice(gda_rom),
+            .tms = info.tms.slice(gda_rom),
+            .items = info.items.slice(gda_rom),
+            .wild_pokemon_headers = info.wild_pokemon_headers.slice(gda_rom),
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
             .given_items = script_data.given_items.toOwnedSlice(),

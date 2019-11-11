@@ -4,6 +4,7 @@ const debug = std.debug;
 const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
+const testing = std.testing;
 
 /// Line <- Suffix* '=' .*
 ///
@@ -16,10 +17,6 @@ const mem = std.mem;
 ///
 pub const Parser = struct {
     str: []const u8,
-
-    pub fn init(str: []const u8) Parser {
-        return Parser{ .str = str };
-    }
 
     pub fn peek(parser: Parser) !u8 {
         if (parser.str.len == 0)
@@ -90,24 +87,28 @@ pub const Parser = struct {
     pub fn eatField(parser: *Parser, field: []const u8) !void {
         const reset = parser.*;
         errdefer parser.* = reset;
-        try parser.eatChar('.');
         const f = try parser.eatAnyField();
         if (!mem.eql(u8, f, field))
             return error.InvalidField;
     }
 
     pub fn eatAnyField(parser: *Parser) ![]const u8 {
-        for (parser.str) |c, i| {
+        const reset = parser.*;
+        errdefer parser.* = reset;
+
+        try parser.eatChar('.');
+        if (parser.str.len == 0)
+            return error.EndOfString;
+
+        const end = for (parser.str) |c, i| {
             switch (c) {
                 'a'...'z', 'A'...'Z', '0'...'9', '_' => {},
-                else => {
-                    defer parser.str = parser.str[i..];
-                    return parser.str[0..i];
-                },
+                else => break i,
             }
-        }
+        } else parser.str.len;
 
-        return error.EndOfString;
+        defer parser.str = parser.str[end..];
+        return parser.str[0..end];
     }
 
     pub fn eatIndex(parser: *Parser) !usize {
@@ -159,7 +160,7 @@ pub const Parser = struct {
         const reset = parser.*;
         errdefer parser.* = reset;
 
-        const res = parser.eatUnsignedValue(Int, base);
+        const res = try parser.eatUnsignedValue(Int, base);
         if (max <= res)
             return error.Overflow;
 
@@ -184,3 +185,128 @@ pub const Parser = struct {
         return res == Bool.@"true";
     }
 };
+
+test "peek/eat" {
+    var parser = Parser{ .str = "abcd" };
+    testing.expectEqual(u8('a'), try parser.peek());
+    testing.expectEqual(u8('a'), try parser.eat());
+    testing.expectEqual(u8('b'), try parser.peek());
+    testing.expectEqual(u8('b'), try parser.eat());
+    testing.expectEqual(u8('c'), try parser.peek());
+    testing.expectEqual(u8('c'), try parser.eat());
+    testing.expectEqual(u8('d'), try parser.peek());
+    testing.expectEqual(u8('d'), try parser.eat());
+    testing.expectError(error.EndOfString, parser.peek());
+    testing.expectError(error.EndOfString, parser.eat());
+}
+
+test "eatChar" {
+    var parser = Parser{ .str = "abcd" };
+    try parser.eatChar('a');
+    testing.expectError(error.InvalidCharacter, parser.eatChar('a'));
+    try parser.eatChar('b');
+    testing.expectError(error.InvalidCharacter, parser.eatChar('b'));
+    try parser.eatChar('c');
+    testing.expectError(error.InvalidCharacter, parser.eatChar('c'));
+    try parser.eatChar('d');
+    testing.expectError(error.EndOfString, parser.eatChar('d'));
+}
+
+test "eatStr" {
+    var parser = Parser{ .str = "abcd" };
+    try parser.eatStr("ab");
+    testing.expectError(error.InvalidCharacter, parser.eatStr("ab"));
+    try parser.eatStr("cd");
+    testing.expectError(error.EndOfString, parser.eatStr("cd"));
+}
+
+test "eatUnsigned" {
+    var parser = Parser{ .str = "1234a" };
+    testing.expectEqual(usize(1234), try parser.eatUnsigned(usize, 10));
+    testing.expectError(error.InvalidCharacter, parser.eatUnsigned(usize, 10));
+}
+
+test "eatUnsigned" {
+    var parser = Parser{ .str = "1234a1234" };
+    testing.expectEqual(usize(1234), try parser.eatUnsignedMax(usize, 10, 10000));
+    try parser.eatChar('a');
+    testing.expectError(error.Overflow, parser.eatUnsignedMax(usize, 10, 1000));
+}
+
+test "eatUntil" {
+    var parser = Parser{ .str = "aab" };
+    testing.expectEqualSlices(u8, "aa", try parser.eatUntil('b'));
+    testing.expectError(error.EndOfString, parser.eatUntil('b'));
+}
+
+test "eatAnyField" {
+    var parser = Parser{ .str = ".a.b*" };
+    testing.expectEqualSlices(u8, "a", try parser.eatAnyField());
+    testing.expectEqualSlices(u8, "b", try parser.eatAnyField());
+    testing.expectError(error.InvalidCharacter, parser.eatAnyField());
+}
+
+test "eatField" {
+    var parser = Parser{ .str = ".a.b" };
+    testing.expectError(error.InvalidField, parser.eatField("b"));
+    try parser.eatField("a");
+    try parser.eatField("b");
+}
+
+test "eatIndex" {
+    var parser = Parser{ .str = "[1][2]*" };
+    testing.expectEqual(usize(1), try parser.eatIndex());
+    testing.expectEqual(usize(2), try parser.eatIndex());
+    testing.expectError(error.InvalidCharacter, parser.eatIndex());
+}
+
+test "eatIndexMax" {
+    var parser = Parser{ .str = "[1][2]*" };
+    testing.expectError(error.Overflow, parser.eatIndexMax(0));
+    testing.expectEqual(usize(1), try parser.eatIndexMax(2));
+    testing.expectEqual(usize(2), try parser.eatIndexMax(3));
+    testing.expectError(error.InvalidCharacter, parser.eatIndexMax(2));
+}
+
+test "eatValue" {
+    var parser = Parser{ .str = "=test" };
+    testing.expectEqualSlices(u8, "test", try parser.eatValue());
+    parser = Parser{ .str = "test" };
+    testing.expectError(error.InvalidCharacter, parser.eatValue());
+}
+
+test "eatUnsignedValue" {
+    var parser = Parser{ .str = "=123" };
+    testing.expectEqual(usize(123), try parser.eatUnsignedValue(usize, 10));
+    parser = Parser{ .str = "=abc" };
+    testing.expectError(error.InvalidCharacter, parser.eatUnsignedValue(usize, 10));
+}
+
+test "eatUnsignedValueMax" {
+    var parser = Parser{ .str = "=123" };
+    testing.expectEqual(usize(123), try parser.eatUnsignedValueMax(usize, 10, 124));
+    parser = Parser{ .str = "=124" };
+    testing.expectError(error.Overflow, parser.eatUnsignedValueMax(usize, 10, 124));
+}
+
+test "eatEnumValue" {
+    const E = enum {
+        A,
+    };
+    var parser = Parser{ .str = "=A" };
+    testing.expectEqual(E.A, try parser.eatEnumValue(E));
+    parser = Parser{ .str = "=B" };
+    testing.expectError(error.InvalidValue, parser.eatEnumValue(E));
+}
+
+test "eatBoolValue" {
+    const E = enum {
+        A,
+    };
+    var parser = Parser{ .str = "=true" };
+    testing.expectEqual(true, try parser.eatBoolValue());
+    parser = Parser{ .str = "=false" };
+    testing.expectEqual(false, try parser.eatBoolValue());
+    parser = Parser{ .str = "=A" };
+    testing.expectError(error.InvalidValue, parser.eatBoolValue());
+}

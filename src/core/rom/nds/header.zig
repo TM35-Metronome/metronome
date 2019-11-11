@@ -1,18 +1,17 @@
-// TODO: We can't have packages in tests
+const algorithm = @import("algorithm");
 const crc = @import("crc");
-const fun = @import("fun");
 const std = @import("std");
 
-const ascii = fun.ascii;
+const int = @import("../int.zig");
+
+const ascii = std.ascii;
 const debug = std.debug;
-const generic = fun.generic;
 const io = std.io;
 const mem = std.mem;
-const slice = generic.slice;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
+const lu16 = int.lu16;
+const lu32 = int.lu32;
+const lu64 = int.lu64;
 
 pub const crc_modbus = comptime blk: {
     @setEvalBranchQuota(crc.crcspec_init_backward_cycles);
@@ -214,18 +213,15 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        const game_title = ascii.asAsciiConst(header.game_title) catch return error.InvalidGameTitle;
-        if (!slice.all(game_title, notLower))
+        if (!algorithm.all(u8, header.game_title, notLower))
             return error.InvalidGameTitle;
-
-        const gamecode = ascii.asAsciiConst(header.gamecode) catch return error.InvalidGamecode;
-        if (!slice.all(gamecode[0..], ascii.isUpper))
+        if (!algorithm.all(u8, header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
         //const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        //if (!slice.all(makercode, ascii.isUpper))
+        //if (!algorithm.all(u8, makercode, ascii.isUpper))
         //    return error.InvalidMakercode;
 
         if (header.unitcode > 0x03)
@@ -233,7 +229,7 @@ pub const Header = extern struct {
         if (header.encryption_seed_select > 0x07)
             return error.InvalidEncryptionSeedSelect;
 
-        if (!slice.all(header.reserved1[0..], isZero))
+        if (!algorithm.all(u8, header.reserved1[0..], isZero))
             return error.InvalidReserved1;
 
         // It seems that arm9 (secure area) is always at 0x4000
@@ -267,18 +263,18 @@ pub const Header = extern struct {
         if (header.rom_header_size.value() != 0x4000)
             return error.InvalidRomHeaderSize;
 
-        if (!slice.all(header.reserved3[12..], isZero))
+        if (!algorithm.all(u8, header.reserved3, isZero))
             return error.InvalidReserved3;
 
-        if (!slice.all(header.reserved4[0..], isZero))
+        if (!algorithm.all(u8, header.reserved4, isZero))
             return error.InvalidReserved4;
-        if (!slice.all(header.reserved5[0..], isZero))
+        if (!algorithm.all(u8, header.reserved5, isZero))
             return error.InvalidReserved5;
 
         if (header.isDsi()) {
-            if (!slice.all(header.reserved6[0..], isZero))
+            if (!algorithm.all(u8, header.reserved6[0..], isZero))
                 return error.InvalidReserved6;
-            if (!slice.all(header.reserved7[0..], isZero))
+            if (!algorithm.all(u8, header.reserved7[0..], isZero))
                 return error.InvalidReserved7;
 
             // TODO: (usually same as ARM9 rom offs, 0004000h)
@@ -287,17 +283,17 @@ pub const Header = extern struct {
                 return error.InvalidDigestNtrRegionOffset;
             if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
                 return error.InvalidReserved8;
-            if (!slice.all(header.reserved9[0..], isZero))
+            if (!algorithm.all(u8, header.reserved9, isZero))
                 return error.InvalidReserved9;
             if (!mem.eql(u8, header.title_id_rest, [_]u8{ 0x00, 0x03, 0x00 }))
                 return error.InvalidTitleIdRest;
-            if (!slice.all(header.reserved12[0..], isZero))
+            if (!algorithm.all(u8, header.reserved12, isZero))
                 return error.InvalidReserved12;
-            if (!slice.all(header.reserved16[0..], isZero))
+            if (!algorithm.all(u8, header.reserved16, isZero))
                 return error.InvalidReserved16;
-            if (!slice.all(header.reserved17[0..], isZero))
+            if (!algorithm.all(u8, header.reserved17, isZero))
                 return error.InvalidReserved17;
-            if (!slice.all(header.reserved18[0..], isZero))
+            if (!algorithm.all(u8, header.reserved18, isZero))
                 return error.InvalidReserved18;
         }
     }
@@ -306,7 +302,7 @@ pub const Header = extern struct {
         return b == 0;
     }
 
-    fn notLower(char: u7) bool {
+    fn notLower(char: u8) bool {
         return !ascii.isLower(char);
     }
 };

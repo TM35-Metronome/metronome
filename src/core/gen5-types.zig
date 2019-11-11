@@ -1,17 +1,19 @@
-const common = @import("common.zig");
-const fun = @import("fun");
-const nds = @import("nds.zig");
-const offsets = @import("gen5-offsets.zig");
+const rom = @import("rom.zig");
 const std = @import("std");
 
+const common = @import("common.zig");
+const offsets = @import("gen5-offsets.zig");
+
 const mem = std.mem;
+
+const nds = rom.nds;
 
 const Narc = nds.fs.Narc;
 const Nitro = nds.fs.Nitro;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu128 = fun.platform.lu128;
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
@@ -811,13 +813,13 @@ pub const Game = struct {
     hms: []lu16,
     tms2: []lu16,
 
-    pub fn fromRom(allocator: *mem.Allocator, rom: nds.Rom) !Game {
-        const info = try getInfo(rom.header.gamecode);
-        const hm_tm_prefix_index = mem.indexOf(u8, rom.arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+    pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
+        const info = try getInfo(nds_rom.header.gamecode);
+        const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = @bytesToSlice(lu16, rom.arm9[hm_tm_index..][0..hm_tm_len]);
-        const scripts = try getNarc(rom.root, info.scripts);
+        const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
+        const scripts = try getNarc(nds_rom.root, info.scripts);
 
         return Game{
             .version = info.version,
@@ -842,13 +844,13 @@ pub const Game = struct {
                 break :blk res;
             },
             .scripts = scripts,
-            .pokemons = try getNarc(rom.root, info.pokemons),
-            .evolutions = try getNarc(rom.root, info.evolutions),
-            .level_up_moves = try getNarc(rom.root, info.level_up_moves),
-            .moves = try getNarc(rom.root, info.moves),
-            .trainers = try getNarc(rom.root, info.trainers),
-            .parties = try getNarc(rom.root, info.parties),
-            .wild_pokemons = try getNarc(rom.root, info.wild_pokemons),
+            .pokemons = try getNarc(nds_rom.root, info.pokemons),
+            .evolutions = try getNarc(nds_rom.root, info.evolutions),
+            .level_up_moves = try getNarc(nds_rom.root, info.level_up_moves),
+            .moves = try getNarc(nds_rom.root, info.moves),
+            .trainers = try getNarc(nds_rom.root, info.trainers),
+            .parties = try getNarc(nds_rom.root, info.parties),
+            .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],

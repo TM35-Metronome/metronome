@@ -1,13 +1,13 @@
-const common = @import("common.zig");
-const fs = @import("fs.zig");
-const fun = @import("fun");
 const std = @import("std");
+
+const int = @import("../int.zig");
+const fs = @import("fs.zig");
 
 const io = std.io;
 const mem = std.mem;
 const os = std.os;
 
-const lu32 = fun.platform.lu32;
+const lu32 = int.lu32;
 
 pub const Overlay = extern struct {
     overlay_id: lu32,

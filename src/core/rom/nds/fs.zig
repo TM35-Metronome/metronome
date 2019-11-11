@@ -1,21 +1,18 @@
 const std = @import("std");
 
-// TODO: We can't have packages in tests, so we have to import the fun-with-zig lib manually
-const fun = @import("fun");
 const formats = @import("formats.zig");
+const int = @import("../int.zig");
 
 const debug = std.debug;
 const fmt = std.fmt;
-const generic = fun.generic;
 const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const slice = generic.slice;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
+const lu16 = int.lu16;
+const lu32 = int.lu32;
 
 /// An in memory filesystem used as an abstraction over the filesystems found in the nintendo ds.
 /// The filesystem have the following properties:
@@ -55,8 +52,13 @@ pub fn Folder(comptime TFile: type) type {
 
             pub fn asDataFile(node: Node, comptime T: type) !*T {
                 const file = try asFile(node);
-                const data = slice.bytesToSliceTrim(T, file.data);
-                return slice.at(data, 0) catch error.FileToSmall;
+                const bytes = file.data;
+                const rem = bytes.len % @sizeOf(T);
+                const data = @bytesToSlice(T, bytes[0 .. bytes.len - rem]);
+                if (data.len == 0)
+                    return error.FileToSmall;
+
+                return &data[0];
             }
         };
 
@@ -339,12 +341,16 @@ pub fn readNarc(file: std.fs.File, allocator: *mem.Allocator, fnt: []const u8, f
 
 fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fnt: []const u8, fat: []const FatEntry, img_base: usize) !*F {
     const fnt_main_table = blk: {
-        const fnt_mains = slice.bytesToSliceTrim(FntMainEntry, fnt);
-        const first = slice.at(fnt_mains, 0) catch return error.InvalidFnt;
-        const res = slice.slice(fnt_mains, 0, first.parent_id.value()) catch return error.InvalidFnt;
-        if (res.len > 4096) return error.InvalidFnt;
+        const rem = fnt.len % @sizeOf(FntMainEntry);
+        const fnt_mains = @bytesToSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
+        if (fnt_mains.len == 0)
+            return error.InvalidFnt;
 
-        break :blk res;
+        const len = fnt_mains[0].parent_id.value();
+        if (fnt_mains.len < len or len > 4096)
+            return error.InvalidFnt;
+
+        break :blk fnt_mains[0..len];
     };
 
     const State = struct {
@@ -360,10 +366,14 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
     errdefer root.destroy();
 
     const fnt_first = fnt_main_table[0];
+    const first_offset = fnt_first.offset_to_subtable.value();
+    if (fnt.len < first_offset)
+        return error.InvalidFnt;
+
     try stack.append(State{
         .folder = root,
         .file_id = fnt_first.first_file_id_in_subtable.value(),
-        .fnt_sub_table = slice.slice(fnt, fnt_first.offset_to_subtable.value(), fnt.len) catch return error.InvalidFnt,
+        .fnt_sub_table = fnt[first_offset..],
     });
 
     while (stack.popOrNull()) |state| {
@@ -395,10 +405,13 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
 
         switch (kind) {
             Kind.File => {
-                const fat_entry = slice.at(fat, file_id) catch return error.InvalidFileId;
+                if (fat.len <= file_id)
+                    return error.InvalidFileId;
+
+                const fat_entry = fat[file_id];
                 _ = try folder.createFile(name, switch (F) {
-                    Nitro => try readNitroFile(file, allocator, fat_entry.*, img_base),
-                    Narc => try readNarcFile(file, allocator, fat_entry.*, img_base),
+                    Nitro => try readNitroFile(file, allocator, fat_entry, img_base),
+                    Narc => try readNarcFile(file, allocator, fat_entry, img_base),
                     else => comptime unreachable,
                 });
 
@@ -409,12 +422,20 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
                 }) catch unreachable;
             },
             Kind.Folder => {
-                const id = try stream.readIntLittle(u16);
-                if (id < 0xF001 or id > 0xFFFF)
+                const read_id = try stream.readIntLittle(u16);
+                if (read_id < 0xF001 or read_id > 0xFFFF)
                     return error.InvalidSubDirectoryId;
 
-                const fnt_entry = slice.at(fnt_main_table, id & 0x0FFF) catch return error.InvalidSubDirectoryId;
+                const id = read_id & 0x0FFF;
+                if (fnt_main_table.len <= id)
+                    return error.InvalidSubDirectoryId;
+
+                const fnt_entry = fnt_main_table[id];
                 const sub_folder = try folder.createFolder(name);
+
+                const offset = fnt_entry.offset_to_subtable.value();
+                if (fnt.len < offset)
+                    return error.InvalidFnt;
 
                 stack.append(State{
                     .folder = folder,
@@ -424,7 +445,7 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
                 try stack.append(State{
                     .folder = sub_folder,
                     .file_id = fnt_entry.first_file_id_in_subtable.value(),
-                    .fnt_sub_table = slice.slice(fnt, fnt_entry.offset_to_subtable.value(), fnt.len) catch return error.InvalidFnt,
+                    .fnt_sub_table = fnt[offset..],
                 });
             },
         }
@@ -481,9 +502,12 @@ pub fn readNitroFile(file: std.fs.File, allocator: *mem.Allocator, fat_entry: Fa
         defer allocator.free(fnt);
         try stream.readNoEof(fnt);
 
-        const fnt_mains = slice.bytesToSliceTrim(FntMainEntry, fnt);
-        const first_fnt = slice.at(fnt_mains, 0) catch return error.InvalidChunkSize;
+        const rem = fnt.len % @sizeOf(FntMainEntry);
+        const fnt_mains = @bytesToSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
+        if (fnt_mains.len == 0)
+            return error.InvalidChunkSize;
 
+        const first_fnt = fnt_mains[0];
         const file_data_header = try stream.readStruct(formats.Chunk);
         if (!mem.eql(u8, file_data_header.name, names.file_data))
             return error.InvalidChunkName;

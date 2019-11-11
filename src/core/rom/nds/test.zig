@@ -1,4 +1,3 @@
-const fun = @import("fun");
 const nds = @import("index.zig");
 const std = @import("std");
 

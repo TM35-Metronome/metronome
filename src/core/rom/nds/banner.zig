@@ -1,10 +1,8 @@
-const fun = @import("fun");
+const algorithm = @import("algorithm");
 
-const ascii = fun.ascii;
-const generic = fun.generic;
-const slice = generic.slice;
+const int = @import("../int.zig");
 
-const lu16 = fun.platform.lu16;
+const lu16 = int.lu16;
 
 pub const Banner = extern struct {
     version: u8,
@@ -43,18 +41,18 @@ pub const Banner = extern struct {
         if (banner.version == 0)
             return error.InvalidVersion;
 
-        if (!slice.all(banner.reserved1[0..], isZero))
+        if (!algorithm.all(u8, banner.reserved1, isZero))
             return error.InvalidReserved1;
 
-        //if (!utils.all(u8, banner.reserved2, ascii.isZero))
+        //if (!utils.algorithm.all(u8, banner.reserved2, ascii.isZero))
         //    return error.InvalidReserved2;
 
         //if (!banner.has_animated_dsi_icon) {
-        //    if (!utils.all(u8, banner.icon_animation_bitmap, is0xFF))
+        //    if (!utils.algorithm.all(u8, banner.icon_animation_bitmap, is0xFF))
         //        return error.InvalidIconAnimationBitmap;
-        //    if (!utils.all(u8, banner.icon_animation_palette, is0xFF))
+        //    if (!utils.algorithm.all(u8, banner.icon_animation_palette, is0xFF))
         //        return error.InvalidIconAnimationPalette;
-        //    if (!utils.all(u8, banner.icon_animation_sequence, is0xFF))
+        //    if (!utils.algorithm.all(u8, banner.icon_animation_sequence, is0xFF))
         //        return error.InvalidIconAnimationSequence;
         //}
     }

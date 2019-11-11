@@ -28,14 +28,22 @@ const gui_tools = [_][]const u8{
     "tm35-randomizer",
 };
 
-const pkgs = [_][2][]const u8{
+const lib_pkgs = [_][2][]const u8{
     [_][]const u8{ "clap", "lib/zig-clap/clap.zig" },
     [_][]const u8{ "fun", "lib/fun-with-zig/fun.zig" },
     [_][]const u8{ "crc", "lib/zig-crc/crc.zig" },
+};
+
+const src_pkgs = [_][2][]const u8{
+    [_][]const u8{ "algorithm", "src/common/algorithm.zig" },
+    [_][]const u8{ "bit", "src/common/bit.zig" },
+    [_][]const u8{ "escape", "src/common/escape.zig" },
     [_][]const u8{ "format", "src/common/format.zig" },
     [_][]const u8{ "readline", "src/common/readline.zig" },
     [_][]const u8{ "util", "src/common/util.zig" },
 };
+
+const pkgs = lib_pkgs ++ src_pkgs;
 
 pub fn build(b: *Builder) void {
     b.setPreferredReleaseMode(.ReleaseSafe);
@@ -50,34 +58,62 @@ pub fn build(b: *Builder) void {
         "build.zig",
         "src",
     });
-
     b.default_step.dependOn(&fmt_step.step);
 
-    inline for (core_tools) |tool, i| {
-        const exe = b.addExecutable(tool, "src/core/" ++ tool ++ ".zig");
-        for (pkgs) |pkg|
-            exe.addPackagePath(pkg[0], pkg[1]);
+    const test_step = b.step("test", "Run all tests");
+    b.default_step.dependOn(test_step);
 
-        exe.setBuildMode(mode);
-        exe.single_threaded = true;
+    for (src_pkgs) |pkg| {
+        const pkg_test = b.addTest(pkg[1]);
+        test_step.dependOn(&pkg_test.step);
+    }
+
+    inline for (core_tools) |tool, i| {
+        const source = "src/core/" ++ tool ++ ".zig";
+        const exe_test = b.addTest(source);
+        const exe = b.addExecutable(tool, source);
+        for (pkgs) |pkg| {
+            exe_test.addPackagePath(pkg[0], pkg[1]);
+            exe.addPackagePath(pkg[0], pkg[1]);
+        }
+
         exe.install();
+        exe_test.setBuildMode(mode);
+        exe.setBuildMode(mode);
+        exe_test.single_threaded = true;
+        exe.single_threaded = true;
+        test_step.dependOn(&exe_test.step);
         b.default_step.dependOn(&exe.step);
     }
 
     inline for (randomizer_tools) |tool, i| {
-        const exe = b.addExecutable(tool, "src/randomizers/" ++ tool ++ ".zig");
-        for (pkgs) |pkg|
+        const source = "src/randomizers/" ++ tool ++ ".zig";
+        const exe_test = b.addTest(source);
+        const exe = b.addExecutable(tool, source);
+        for (pkgs) |pkg| {
+            exe_test.addPackagePath(pkg[0], pkg[1]);
             exe.addPackagePath(pkg[0], pkg[1]);
+        }
 
-        exe.setBuildMode(mode);
-        exe.single_threaded = true;
         exe.install();
+        exe_test.setBuildMode(mode);
+        exe.setBuildMode(mode);
+        exe_test.single_threaded = true;
+        exe.single_threaded = true;
+        test_step.dependOn(&exe_test.step);
         b.default_step.dependOn(&exe.step);
     }
 
     const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
     inline for (gui_tools) |tool, i| {
-        const exe = b.addExecutable(tool, "src/gui/" ++ tool ++ ".zig");
+        const source = "src/gui/" ++ tool ++ ".zig";
+        const exe_test = b.addTest(source);
+        const exe = b.addExecutable(tool, source);
+        for (pkgs) |pkg| {
+            exe_test.addPackagePath(pkg[0], pkg[1]);
+            exe.addPackagePath(pkg[0], pkg[1]);
+        }
+
         switch (os) {
             .windows => {
                 exe.addIncludeDir("lib/nuklear/demo/gdi");
@@ -98,9 +134,6 @@ pub fn build(b: *Builder) void {
             else => {}, // TODO: More os support
         }
 
-        for (pkgs) |pkg|
-            exe.addPackagePath(pkg[0], pkg[1]);
-
         exe.addIncludeDir("lib/nativefiledialog/src/include");
         exe.addIncludeDir("lib/nuklear");
         exe.addIncludeDir("src/gui/nuklear");
@@ -108,9 +141,13 @@ pub fn build(b: *Builder) void {
         exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
-        exe.single_threaded = true;
-        exe.setBuildMode(mode);
+
         exe.install();
+        exe_test.setBuildMode(mode);
+        exe.setBuildMode(mode);
+        exe_test.single_threaded = true;
+        exe.single_threaded = true;
+        test_step.dependOn(&exe_test.step);
         b.default_step.dependOn(&exe.step);
     }
 }

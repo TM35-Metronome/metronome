@@ -1,7 +1,7 @@
-const fun = @import("fun");
+const int = @import("../int.zig");
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
+const lu16 = int.lu16;
+const lu32 = int.lu32;
 
 pub const Header = extern struct {
     chunk_name: [4]u8,

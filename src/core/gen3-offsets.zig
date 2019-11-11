@@ -1,14 +1,15 @@
-const common = @import("common.zig");
-const debug = std.debug;
-const fun = @import("fun");
-const gen3 = @import("gen3-types.zig");
-const generic = fun.generic;
-const mem = std.mem;
+const rom = @import("rom.zig");
 const std = @import("std");
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
+const common = @import("common.zig");
+const gen3 = @import("gen3-types.zig");
+
+const debug = std.debug;
+const mem = std.mem;
+
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu64 = rom.int.lu64;
 
 pub fn Offset(comptime T: type) type {
     return struct {

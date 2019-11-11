@@ -1,7 +1,8 @@
-const blz = @import("nds/blz.zig");
-const fun = @import("fun");
-const overlay = @import("nds/overlay.zig");
 const std = @import("std");
+
+const blz = @import("nds/blz.zig");
+const overlay = @import("nds/overlay.zig");
+const int = @import("int.zig");
 
 const debug = std.debug;
 const generic = fun.generic;
@@ -10,8 +11,8 @@ const io = std.io;
 const mem = std.mem;
 const os = std.os;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
+const lu16 = int.lu16;
+const lu32 = int.lu32;
 
 pub const fs = @import("nds/fs.zig");
 

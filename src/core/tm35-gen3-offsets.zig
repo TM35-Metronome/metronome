@@ -1,9 +1,10 @@
 const clap = @import("clap");
-const common = @import("common.zig");
-const fun = @import("fun");
-const gba = @import("gba.zig");
-const gen3 = @import("gen3-types.zig");
 const std = @import("std");
+const builtin = @import("builtin");
+
+const common = @import("common.zig");
+const gen3 = @import("gen3-types.zig");
+const rom = @import("rom.zig");
 
 const debug = std.debug;
 const heap = std.heap;
@@ -11,14 +12,17 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const fs = std.fs;
+const testing = std.testing;
 
+const gba = rom.gba;
 const offsets = gen3.offsets;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
+const lu64 = rom.int.lu64;
 
-const Searcher = fun.searcher.Searcher;
+const TypeId = builtin.TypeId;
+const TypeInfo = builtin.TypeInfo;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
@@ -166,7 +170,7 @@ fn getInfo(
     const trainer_searcher = Searcher(gen3.Trainer, [_][]const []const u8{
         [_][]const u8{"party"},
         [_][]const u8{"name"},
-    }).init(data);
+    }){ .data = data };
     const trainers = switch (version) {
         common.Version.Emerald => trainer_searcher.findSlice3(
             em_first_trainers,
@@ -183,13 +187,13 @@ fn getInfo(
         else => null,
     } orelse return error.UnableToFindTrainerOffset;
 
-    const move_searcher = Searcher(gen3.Move, [_][]const []const u8{}).init(data);
+    const move_searcher = Searcher(gen3.Move, [_][]const []const u8{}){ .data = data };
     const moves = move_searcher.findSlice3(
         first_moves,
         last_moves,
     ) orelse return error.UnableToFindMoveOffset;
 
-    const machine_searcher = Searcher(lu64, [_][]const []const u8{}).init(data);
+    const machine_searcher = Searcher(lu64, [_][]const []const u8{}){ .data = data };
     const machine_learnset = machine_searcher.findSlice3(
         first_machine_learnsets,
         last_machine_learnsets,
@@ -199,13 +203,13 @@ fn getInfo(
         [_][]const u8{"padding"},
         [_][]const u8{"egg_group1_pad"},
         [_][]const u8{"egg_group2_pad"},
-    }).init(data);
+    }){ .data = data };
     const pokemons = pokemons_searcher.findSlice3(
         first_pokemons,
         last_pokemons,
     ) orelse return error.UnableToFindBaseStatsOffset;
 
-    const evolution_searcher = Searcher([5]common.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}).init(data);
+    const evolution_searcher = Searcher([5]common.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}){ .data = data };
     const evolution_table = evolution_searcher.findSlice3(
         first_evolutions,
         last_evolutions,
@@ -213,7 +217,7 @@ fn getInfo(
 
     const level_up_learnset_pointers = blk: {
         const LevelUpRef = gen3.Ptr(gen3.LevelUpMove);
-        const level_up_searcher = Searcher(u8, [_][]const []const u8{}).init(data);
+        const level_up_searcher = Searcher(u8, [_][]const []const u8{}){ .data = data };
 
         var first_pointers: [first_levelup_learnsets.len]LevelUpRef = undefined;
         for (first_levelup_learnsets) |learnset, i| {
@@ -229,11 +233,11 @@ fn getInfo(
             last_pointers[i] = try LevelUpRef.init(@intCast(u32, offset));
         }
 
-        const pointer_searcher = Searcher(LevelUpRef, [_][]const []const u8{}).init(data);
+        const pointer_searcher = Searcher(LevelUpRef, [_][]const []const u8{}){ .data = data };
         break :blk pointer_searcher.findSlice3(first_pointers, last_pointers) orelse return error.UnableToFindLevelUpLearnsetOffset;
     };
 
-    const hm_tm_searcher = Searcher(lu16, [_][]const []const u8{}).init(data);
+    const hm_tm_searcher = Searcher(lu16, [_][]const []const u8{}){ .data = data };
     const hms_slice = hm_tm_searcher.findSlice(hms) orelse return error.UnableToFindHmOffset;
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
@@ -246,7 +250,7 @@ fn getInfo(
         [_][]const u8{"description"},
         [_][]const u8{"field_use_func"},
         [_][]const u8{"battle_use_func"},
-    }).init(data);
+    }){ .data = data };
     const items = switch (version) {
         common.Version.Emerald => items_searcher.findSlice3(
             em_first_items,
@@ -269,7 +273,7 @@ fn getInfo(
         [_][]const u8{"surf"},
         [_][]const u8{"rock_smash"},
         [_][]const u8{"fishing"},
-    }).init(data);
+    }){ .data = data };
     const maybe_wild_pokemon_headers = switch (version) {
         common.Version.Emerald => wild_pokemon_headers_searcher.findSlice3(
             em_first_wild_mon_headers,
@@ -293,7 +297,7 @@ fn getInfo(
         [_][]const u8{"map_scripts"},
         [_][]const u8{"map_connections"},
         [_][]const u8{"pad"},
-    }).init(data);
+    }){ .data = data };
     const maybe_map_headers = switch (version) {
         common.Version.Ruby,
         common.Version.Sapphire,
@@ -335,6 +339,257 @@ fn getInfo(
         .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
         .map_headers = offsets.MapHeaderSection.init(data, map_headers),
     };
+}
+
+// A type for searching binary data for instances of ::T. It also allows ignoring of certain
+// fields and nested fields.
+pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []const u8) type {
+    return struct {
+        data: []const u8,
+
+        pub fn find(searcher: @This(), item: T) ?*const T {
+            const slice = searcher.findSlice([_]T{item}) orelse return null;
+            return &slice[0];
+        }
+
+        pub fn findSlice(searcher: @This(), items: []const T) ?[]const T {
+            return searcher.findSlice3(items, [_]T{});
+        }
+
+        pub fn findSlice2(searcher: @This(), start: T, end: T) ?[]const T {
+            return searcher.findSlice3([_]T{start}, [_]T{end}) orelse return null;
+        }
+
+        pub fn findSlice3(searcher: @This(), start: []const T, end: []const T) ?[]const T {
+            const found_start = searcher.findSliceHelper(0, 1, start) orelse return null;
+            const start_offset = @ptrToInt(found_start.ptr);
+            const next_offset = (start_offset - @ptrToInt(searcher.data.ptr)) + start.len * @sizeOf(T);
+
+            const found_end = searcher.findSliceHelper(next_offset, @sizeOf(T), end) orelse return null;
+            const end_offset = @ptrToInt(found_end.ptr) + found_end.len * @sizeOf(T);
+            const len = @divExact(end_offset - start_offset, @sizeOf(T));
+
+            return found_start.ptr[0..len];
+        }
+
+        fn findSliceHelper(searcher: @This(), offset: usize, skip: usize, items: []const T) ?[]const T {
+            const bytes = items.len * @sizeOf(T);
+            if (searcher.data.len < bytes)
+                return null;
+
+            var i: usize = offset;
+            const end = searcher.data.len - bytes;
+            next: while (i <= end) : (i += skip) {
+                const data_slice = searcher.data[i .. i + bytes];
+                const data_items = @bytesToSlice(T, data_slice);
+                for (items) |item_a, j| {
+                    const item_b = data_items[j];
+                    if (!matches(T, ignored_fields, item_a, item_b))
+                        continue :next;
+                }
+
+                return data_items;
+            }
+
+            return null;
+        }
+    };
+}
+
+fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8, a: T, b: T) bool {
+    const info = @typeInfo(T);
+    switch (info) {
+        .Pointer => |ptr| switch (ptr.size) {
+            .Slice => {
+                return a.ptr == b.ptr and a.len == b.len;
+            },
+            else => return a == b,
+        },
+        .Array => {
+            if (a.len != b.len)
+                return false;
+
+            for (a) |_, i| {
+                if (!matches(T.Child, ignored_fields, a[i], b[i]))
+                    return false;
+            }
+
+            return true;
+        },
+        .Optional => |optional| {
+            const a_value = a orelse {
+                return if (b) |_| false else true;
+            };
+            const b_value = b orelse return false;
+
+            return matches(optional.child, ignored_fields, a_value, b_value);
+        },
+        .ErrorUnion => |err_union| {
+            const a_value = a catch |a_err| {
+                if (b) |_| {
+                    return false;
+                } else |b_err| {
+                    return matches(err_union.error_set, ignored_fields, a_err, b_err);
+                }
+            };
+            const b_value = b catch return false;
+
+            return matches(err_union.payload, ignored_fields, a_value, b_value);
+        },
+        .Struct => |struct_info| {
+            const next_ignored = comptime blk: {
+                var res: []const []const []const u8 = [_][]const []const u8{};
+                for (ignored_fields) |fields| {
+                    if (fields.len > 1)
+                        res = res ++ fields[1..];
+                }
+
+                break :blk res;
+            };
+
+            ignore: inline for (struct_info.fields) |field| {
+                inline for (ignored_fields) |fields| {
+                    if (comptime fields.len == 1 and mem.eql(u8, fields[0], field.name))
+                        continue :ignore;
+                }
+                if (!matches(field.field_type, next_ignored, @field(a, field.name), @field(b, field.name)))
+                    return false;
+            }
+
+            return true;
+        },
+        else => return a == b,
+    }
+}
+
+test "searcher.Searcher.find" {
+    const S = packed struct {
+        a: u16,
+        b: u32,
+    };
+    const s_array = [_]S{
+        S{ .a = 0, .b = 1 },
+        S{ .a = 2, .b = 3 },
+    };
+    const s_byte_array = @sliceToBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"a"},
+    }){ .data = s_byte_array };
+    const s_searcher2 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"b"},
+    }){ .data = s_byte_array };
+
+    const search_for = S{ .a = 0, .b = 3 };
+    testing.expectEqual(s_searcher1.find(search_for).?, &s_array[1]);
+    testing.expectEqual(s_searcher2.find(search_for).?, &s_array[0]);
+}
+
+test "searcher.Searcher.findSlice" {
+    const S = packed struct {
+        a: u16,
+        b: u32,
+    };
+    const s_array = [_]S{
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+        S{ .a = 4, .b = 1 },
+    };
+    const s_byte_array = @sliceToBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"a"},
+    }){ .data = s_byte_array };
+    const s_searcher2 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"b"},
+    }){ .data = s_byte_array };
+
+    const search_for = [_]S{
+        S{ .a = 4, .b = 3 },
+        S{ .a = 0, .b = 1 },
+    };
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[1..3]),
+        @sliceToBytes(s_searcher1.findSlice(search_for).?),
+    );
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[0..2]),
+        @sliceToBytes(s_searcher2.findSlice(search_for).?),
+    );
+}
+
+test "searcher.Searcher.findSlice2" {
+    const S = packed struct {
+        a: u16,
+        b: u32,
+    };
+    const s_array = [_]S{
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+    };
+    const s_byte_array = @sliceToBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"a"},
+    }){ .data = s_byte_array };
+    const s_searcher2 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"b"},
+    }){ .data = s_byte_array };
+
+    const a = S{ .a = 4, .b = 3 };
+    const b = S{ .a = 4, .b = 3 };
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[1..4]),
+        @sliceToBytes(s_searcher1.findSlice2(a, b).?),
+    );
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[0..3]),
+        @sliceToBytes(s_searcher2.findSlice2(a, b).?),
+    );
+}
+
+test "searcher.Searcher.findSlice3" {
+    const S = packed struct {
+        a: u16,
+        b: u32,
+    };
+    const s_array = [_]S{
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+        S{ .a = 4, .b = 1 },
+        S{ .a = 0, .b = 3 },
+    };
+    const s_byte_array = @sliceToBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"a"},
+    }){ .data = s_byte_array };
+    const s_searcher2 = Searcher(S, [_][]const []const u8{
+        [_][]const u8{"b"},
+    }){ .data = s_byte_array };
+
+    const a = [_]S{
+        S{ .a = 4, .b = 3 },
+        S{ .a = 0, .b = 1 },
+    };
+    const b = [_]S{
+        S{ .a = 0, .b = 1 },
+        S{ .a = 4, .b = 3 },
+    };
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[1..6]),
+        @sliceToBytes(s_searcher1.findSlice3(a, b).?),
+    );
+    testing.expectEqualSlices(
+        u8,
+        @sliceToBytes(s_array[0..5]),
+        @sliceToBytes(s_searcher2.findSlice3(a, b).?),
+    );
 }
 
 const em_first_trainers = [_]gen3.Trainer{

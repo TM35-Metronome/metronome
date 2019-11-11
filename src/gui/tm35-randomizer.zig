@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const clap = @import("clap");
+const escape = @import("escape");
 const std = @import("std");
 const util = @import("util");
 
@@ -659,13 +660,13 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     const escapes = switch (builtin.os) {
         .linux => blk: {
             var res: [255][]const u8 = undefined;
-            mem.copy([]const u8, res[0..], util.default_escapes);
+            mem.copy([]const u8, res[0..], escape.default_escapes);
             res['\''] = "'\\''";
             break :blk res;
         },
         .windows => blk: {
             var res: [255][]const u8 = undefined;
-            mem.copy([]const u8, res[0..], util.default_escapes);
+            mem.copy([]const u8, res[0..], escape.default_escapes);
             res['"'] = "\"";
             break :blk res;
         },
@@ -678,9 +679,9 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     };
 
     try stream.write(quotes);
-    try util.writeEscaped(stream, exes.load.toSliceConst(), escapes);
+    try escape.writeEscaped(stream, exes.load.toSliceConst(), escapes);
     try stream.write(quotes ++ " " ++ quotes);
-    try util.writeEscaped(stream, in, escapes);
+    try escape.writeEscaped(stream, in, escapes);
     try stream.write(quotes ++ " | ");
 
     for (settings.order) |order| {
@@ -690,7 +691,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
             continue;
 
         try stream.write(quotes);
-        try util.writeEscaped(stream, command.path, escapes);
+        try escape.writeEscaped(stream, command.path, escapes);
         try stream.write(quotes);
 
         for (command.params) |param, i| {
@@ -702,11 +703,11 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
 
             try stream.write(" " ++ quotes);
             try stream.write(param_pre);
-            try util.writeEscaped(stream, param_name, escapes);
+            try escape.writeEscaped(stream, param_name, escapes);
             try stream.write(quotes);
             if (param.takes_value) {
                 try stream.write(" " ++ quotes);
-                try util.writeEscaped(stream, arg.toSliceConst(), escapes);
+                try escape.writeEscaped(stream, arg.toSliceConst(), escapes);
                 try stream.write(quotes);
             }
         }
@@ -715,11 +716,11 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
     }
 
     try stream.write(quotes);
-    try util.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
+    try escape.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
     try stream.write(quotes ++ " --replace --output " ++ quotes);
-    try util.writeEscaped(stream, out, escapes);
+    try escape.writeEscaped(stream, out, escapes);
     try stream.write(quotes ++ " " ++ quotes);
-    try util.writeEscaped(stream, in, escapes);
+    try escape.writeEscaped(stream, in, escapes);
     try stream.write(quotes);
     try stream.write("\n");
 }
@@ -827,7 +828,7 @@ const Settings = struct {
 
     const escapes = blk: {
         var res: [255][]const u8 = undefined;
-        mem.copy([]const u8, res[0..], util.default_escapes);
+        mem.copy([]const u8, res[0..], escape.default_escapes);
         res['\n'] = "\\n";
         res['\\'] = "\\\\";
         res[','] = "\\,";
@@ -841,7 +842,7 @@ const Settings = struct {
 
             const command = exes.commands[o];
             const args = settings.commands_args[o];
-            try util.writeEscaped(out_stream, path.basename(command.path), escapes);
+            try escape.writeEscaped(out_stream, path.basename(command.path), escapes);
             for (args) |arg, i| {
                 const param = command.params[i];
                 if (arg.len == 0)
@@ -851,10 +852,10 @@ const Settings = struct {
                 const param_pre = if (param.names.long) |_| "--" else "-";
                 const param_name = if (param.names.long) |long| long else (*const [1]u8)(&param.names.short.?)[0..];
                 try out_stream.write(param_pre);
-                try util.writeEscaped(out_stream, param_name, escapes);
+                try escape.writeEscaped(out_stream, param_name, escapes);
                 if (param.takes_value) {
                     try out_stream.write(",");
-                    try util.writeEscaped(out_stream, arg.toSliceConst(), escapes);
+                    try escape.writeEscaped(out_stream, arg.toSliceConst(), escapes);
                 }
             }
             try out_stream.write("\n");
@@ -866,13 +867,13 @@ const Settings = struct {
 
         const EscapedSeparatorArgIterator = struct {
             const Error = io.SliceOutStream.Error;
-            separator: util.EscapedSeparator,
+            separator: escape.EscapedSeparator,
             buf: [100]u8 = undefined,
 
             pub fn next(iter: *@This()) Error!?[]const u8 {
                 const n = iter.separator.next() orelse return null;
                 var sos = io.SliceOutStream.init(&iter.buf);
-                try util.writeUnEscaped(&sos.stream, n, escapes);
+                try escape.writeUnEscaped(&sos.stream, n, escapes);
 
                 return sos.getWritten();
             }
@@ -897,7 +898,7 @@ const Settings = struct {
         var buffer = try std.Buffer.initSize(&fba.allocator, 0);
 
         while (try readLine(&buf_in_stream, &buffer)) |line| {
-            var separator = util.separateEscaped(line, "\\", ",");
+            var separator = escape.separateEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
 

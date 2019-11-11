@@ -1,6 +1,7 @@
 const clap = @import("clap");
-const nds = @import("nds.zig");
 const std = @import("std");
+
+const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -11,6 +12,8 @@ const mem = std.mem;
 const os = std.os;
 
 const path = fs.path;
+
+const nds = rom.nds;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
@@ -85,7 +88,7 @@ pub fn main() u8 {
 
     var rom_file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
     defer rom_file.close();
-    var rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return errPrint("Failed to read nds rom: {}\n", err);
+    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return errPrint("Failed to read nds rom: {}\n", err);
 
     const arm9_file = path.join(allocator, [_][]const u8{ out, "arm9" }) catch return allocFailed();
     const arm7_file = path.join(allocator, [_][]const u8{ out, "arm7" }) catch return allocFailed();
@@ -96,20 +99,20 @@ pub fn main() u8 {
     const root_folder = path.join(allocator, [_][]const u8{ out, "root" }) catch return allocFailed();
 
     fs.makePath(allocator, out) catch |err| return failedToMakePath(out, err);
-    io.writeFile(arm9_file, rom.arm9) catch |err| return failedWriteError(arm9_file, err);
-    io.writeFile(arm7_file, rom.arm7) catch |err| return failedWriteError(arm7_file, err);
-    io.writeFile(banner_file, mem.toBytes(rom.banner)) catch |err| return failedWriteError(banner_file, err);
+    io.writeFile(arm9_file, nds_rom.arm9) catch |err| return failedWriteError(arm9_file, err);
+    io.writeFile(arm7_file, nds_rom.arm7) catch |err| return failedWriteError(arm7_file, err);
+    io.writeFile(banner_file, mem.toBytes(nds_rom.banner)) catch |err| return failedWriteError(banner_file, err);
 
-    if (rom.hasNitroFooter())
-        io.writeFile(nitro_footer_file, mem.toBytes(rom.nitro_footer)) catch |err| return failedWriteError(nitro_footer_file, err);
+    if (nds_rom.hasNitroFooter())
+        io.writeFile(nitro_footer_file, mem.toBytes(nds_rom.nitro_footer)) catch |err| return failedWriteError(nitro_footer_file, err);
 
     fs.makePath(allocator, arm9_overlay_folder) catch |err| return failedToMakePath(arm9_overlay_folder, err);
     fs.makePath(allocator, arm7_overlay_folder) catch |err| return failedToMakePath(arm7_overlay_folder, err);
-    writeOverlays(allocator, arm9_overlay_folder, rom.arm9_overlay_table, rom.arm9_overlay_files) catch |err| return errPrint("Failed to write arm9 overlays: {}", err);
-    writeOverlays(allocator, arm7_overlay_folder, rom.arm7_overlay_table, rom.arm7_overlay_files) catch |err| return errPrint("Failed to write arm7 overlays: {}", err);
+    writeOverlays(allocator, arm9_overlay_folder, nds_rom.arm9_overlay_table, nds_rom.arm9_overlay_files) catch |err| return errPrint("Failed to write arm9 overlays: {}", err);
+    writeOverlays(allocator, arm7_overlay_folder, nds_rom.arm7_overlay_table, nds_rom.arm7_overlay_files) catch |err| return errPrint("Failed to write arm7 overlays: {}", err);
 
     fs.makePath(allocator, root_folder) catch |err| return failedToMakePath(root_folder, err);
-    writeFs(allocator, nds.fs.Nitro, root_folder, rom.root) catch |err| return errPrint("Failed to write root file system: {}", err);
+    writeFs(allocator, nds.fs.Nitro, root_folder, nds_rom.root) catch |err| return errPrint("Failed to write root file system: {}", err);
     return 0;
 }
 

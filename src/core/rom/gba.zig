@@ -1,12 +1,10 @@
-const fun = @import("fun");
+const algorithm = @import("algorithm");
 const std = @import("std");
 
-const ascii = fun.ascii;
+const ascii = std.ascii;
 const debug = std.debug;
-const generic = fun.generic;
 const io = std.io;
 const mem = std.mem;
-const slice = generic.slice;
 
 const assert = debug.assert;
 
@@ -33,25 +31,22 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        const game_title = ascii.asAsciiConst(header.game_title) catch return error.InvalidGameTitle;
-        if (!slice.all(game_title, notLower))
+        if (!algorithm.all(u8, header.game_title, notLower))
             return error.InvalidGameTitle;
-
-        const gamecode = ascii.asAsciiConst(header.gamecode) catch return error.InvalidGamecode;
-        if (!slice.all(gamecode, ascii.isUpper))
+        if (!algorithm.all(u8, header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
         // const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        // if (!slice.all(makercode, ascii.isUpper))
+        // if (!slice.algorithm.all(makercode, ascii.isUpper))
         //     return error.InvalidMakercode;
         if (header.fixed_value != 0x96)
             return error.InvalidFixedValue;
 
-        if (!slice.all(header.reserved1[0..], isZero))
+        if (!algorithm.all(u8, header.reserved1[0..], isZero))
             return error.InvalidReserved1;
-        if (!slice.all(header.reserved2[0..], isZero))
+        if (!algorithm.all(u8, header.reserved2[0..], isZero))
             return error.InvalidReserved2;
     }
 
@@ -59,7 +54,7 @@ pub const Header = extern struct {
         return b == 0;
     }
 
-    fn notLower(char: u7) bool {
+    fn notLower(char: u8) bool {
         return !ascii.isLower(char);
     }
 };

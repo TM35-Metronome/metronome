@@ -1,12 +1,12 @@
+const bit = @import("bit");
 const clap = @import("clap");
+const std = @import("std");
+
 const common = @import("common.zig");
-const fun = @import("fun");
-const gba = @import("gba.zig");
 const gen3 = @import("gen3-types.zig");
 const gen4 = @import("gen4-types.zig");
 const gen5 = @import("gen5-types.zig");
-const nds = @import("nds.zig");
-const std = @import("std");
+const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -15,8 +15,8 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
-const bits = fun.bits;
-const slice = fun.generic.slice;
+const gba = rom.gba;
+const nds = rom.nds;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
@@ -93,15 +93,15 @@ pub fn main() u8 {
     } else |err| err;
 
     file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
-    if (nds.Rom.fromFile(file, allocator)) |rom| {
-        const gen4_error = if (gen4.Game.fromRom(rom)) |game| {
-            outputGen4Data(rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+    if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
+        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
+            outputGen4Data(nds_rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
             stdout.flush() catch |err| return failedWriteError("<stdout>", err);
             return 0;
         } else |err| err;
 
-        if (gen5.Game.fromRom(allocator, rom)) |game| {
-            outputGen5Data(rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
+        if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
+            outputGen5Data(nds_rom, game, &stdout.stream) catch |err| return failedWriteError("<stdout>", err);
             stdout.flush() catch |err| return failedWriteError("<stdout>", err);
             return 0;
         } else |gen5_error| {
@@ -251,10 +251,10 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
             const machine_learnset = game.machine_learnsets[i].value();
             var j: usize = 0;
             while (j < game.tms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bits.isSet(u64, machine_learnset, @intCast(u6, j)));
+                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bit.isSet(u64, machine_learnset, @intCast(u6, j)));
             }
             while (j < game.tms.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bits.isSet(u64, machine_learnset, @intCast(u6, j)));
+                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bit.isSet(u64, machine_learnset, @intCast(u6, j)));
             }
         }
 
@@ -334,12 +334,12 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 }
 
-fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
+fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
 
-    const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
-    try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
-    try stream.print(".gamecode={}\n", rom.header.gamecode);
+    const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+    try stream.print(".game_title={}\n", nds_rom.header.game_title[0..null_index]);
+    try stream.print(".gamecode={}\n", nds_rom.header.gamecode);
 
     for (game.starters) |starter, i| {
         try stream.print(".starters[{}]={}\n", i, starter.value());
@@ -448,15 +448,17 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
             const machine_learnset = pokemon.machine_learnset.value();
             var j: usize = 0;
             while (j < game.tms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
             while (j < game.tms.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
         }
 
         const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
-        const evos = slice.bytesToSliceTrim(gen4.Evolution, evos_file.data);
+        const bytes = evos_file.data;
+        const rem = bytes.len % @sizeOf(gen4.Evolution);
+        const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
             if (evo.method == gen4.Evolution.Method.Unused)
                 continue;
@@ -562,12 +564,12 @@ fn outputGen4Data(rom: nds.Rom, game: gen4.Game, stream: var) !void {
         };
 }
 
-fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
+fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try stream.print(".version={}\n", @tagName(game.version));
 
-    const null_index = mem.indexOfScalar(u8, rom.header.game_title, 0) orelse rom.header.game_title.len;
-    try stream.print(".game_title={}\n", rom.header.game_title[0..null_index]);
-    try stream.print(".gamecode={}\n", rom.header.gamecode);
+    const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+    try stream.print(".game_title={}\n", nds_rom.header.game_title[0..null_index]);
+    try stream.print(".gamecode={}\n", nds_rom.header.gamecode);
 
     for (game.starters) |starter_ptrs, i| {
         const first = starter_ptrs[0];
@@ -718,13 +720,13 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
             const machine_learnset = pokemon.machine_learnset.value();
             var j: usize = 0;
             while (j < game.tms1.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
             while (j < game.tms1.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms1.len, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+                try stream.print(".pokemons[{}].hms[{}]={}\n", i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
             while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j - game.hms.len, bits.isSet(u128, machine_learnset, @intCast(u7, j)));
+                try stream.print(".pokemons[{}].tms[{}]={}\n", i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)));
             }
         }
 
@@ -732,7 +734,9 @@ fn outputGen5Data(rom: nds.Rom, game: gen5.Game, stream: var) !void {
             continue;
 
         const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
-        const evos = slice.bytesToSliceTrim(gen5.Evolution, evos_file.data);
+        const bytes = evos_file.data;
+        const rem = bytes.len % @sizeOf(gen5.Evolution);
+        const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
             if (evo.method == gen5.Evolution.Method.Unused)
                 continue;

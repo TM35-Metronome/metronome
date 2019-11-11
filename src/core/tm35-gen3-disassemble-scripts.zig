@@ -1,15 +1,17 @@
 const clap = @import("clap");
-const fun = @import("fun");
-const gen3 = @import("gen3-types.zig");
 const std = @import("std");
+
+const gen3 = @import("gen3-types.zig");
+const common = @import("common.zig");
+const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
@@ -111,7 +113,7 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
                 continue;
 
             const script_data = try s.addr.Other.toSliceEnd(game.data);
-            var decoder = gen3.script.CommandDecoder.init(script_data);
+            var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*);
@@ -122,7 +124,7 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
         const events = try map_header.map_events.toSingle(game.data);
         for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
             const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
-            var decoder = gen3.script.CommandDecoder.init(script_data);
+            var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].obj_events[{}]:\n", map_id, script_id);
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*);
@@ -132,7 +134,7 @@ fn outputGameScripts(game: gen3.Game, stream: var) !void {
 
         for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
             const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
-            var decoder = gen3.script.CommandDecoder.init(script_data);
+            var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].coord_event[{}]:\n", map_id, script_id);
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*);
