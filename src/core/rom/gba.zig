@@ -1,12 +1,12 @@
-const algorithm = @import("algorithm");
 const std = @import("std");
+const util = @import("util");
 
 const ascii = std.ascii;
 const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
 
-const assert = debug.assert;
+const algorithm = util.algorithm;
 
 pub const Header = extern struct {
     rom_entry_point: [4]u8,

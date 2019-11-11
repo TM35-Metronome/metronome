@@ -1,6 +1,5 @@
 const builtin = @import("builtin");
 const clap = @import("clap");
-const escape = @import("escape");
 const std = @import("std");
 const util = @import("util");
 
@@ -16,9 +15,9 @@ const mem = std.mem;
 const process = std.process;
 const time = std.time;
 
-const path = fs.path;
+const escape = util.escape;
 
-const readLine = @import("readline").readLine;
+const path = fs.path;
 
 // TODO: proper versioning
 const program_version = "0.0.0";
@@ -897,7 +896,7 @@ const Settings = struct {
         var buf_in_stream = io.BufferedInStream(@typeOf(in_stream.read(undefined)).ErrorSet).init(in_stream);
         var buffer = try std.Buffer.initSize(&fba.allocator, 0);
 
-        while (try readLine(&buf_in_stream, &buffer)) |line| {
+        while (try util.readLine(&buf_in_stream, &buffer)) |line| {
             var separator = escape.separateEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
@@ -1025,7 +1024,7 @@ const Exes = struct {
         var buffer = try std.Buffer.initSize(allocator, 0);
         defer buffer.deinit();
 
-        while (try readLine(&buf_stream, &buffer)) |line| {
+        while (try util.readLine(&buf_stream, &buffer)) |line| {
             if (fs.path.isAbsolute(line)) {
                 const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
                 try res.append(command);

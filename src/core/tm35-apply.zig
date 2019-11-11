@@ -1,8 +1,7 @@
-const bit = @import("bit");
 const clap = @import("clap");
-const format = @import("format");
 const rom = @import("rom.zig");
 const std = @import("std");
+const util = @import("util");
 
 const common = @import("common.zig");
 const gen3 = @import("gen3-types.zig");
@@ -17,9 +16,13 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
+const path = fs.path;
+
 const gba = rom.gba;
 const nds = rom.nds;
-const path = fs.path;
+
+const bit = util.bit;
+const format = util.format;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -30,8 +33,6 @@ const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap(clap.Help, params);
 const Param = clap.Param(clap.Help);
-
-const readLine = @import("readline").readLine;
 
 // TODO: proper versioning
 const program_version = "0.0.0";
@@ -121,7 +122,7 @@ pub fn main() u8 {
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}\n", err);
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
+        while (util.readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
             applyGen3(game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                 debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                 if (abort_on_first_warning)
@@ -138,7 +139,7 @@ pub fn main() u8 {
     file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
-            while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
+            while (util.readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
                 applyGen4(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning)
@@ -152,7 +153,7 @@ pub fn main() u8 {
         } else |err| err;
 
         if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
+            while (util.readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
                 applyGen5(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
                     debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
                     if (abort_on_first_warning) {

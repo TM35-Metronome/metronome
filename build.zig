@@ -35,11 +35,6 @@ const lib_pkgs = [_][2][]const u8{
 };
 
 const src_pkgs = [_][2][]const u8{
-    [_][]const u8{ "algorithm", "src/common/algorithm.zig" },
-    [_][]const u8{ "bit", "src/common/bit.zig" },
-    [_][]const u8{ "escape", "src/common/escape.zig" },
-    [_][]const u8{ "format", "src/common/format.zig" },
-    [_][]const u8{ "readline", "src/common/readline.zig" },
     [_][]const u8{ "util", "src/common/util.zig" },
 };
 

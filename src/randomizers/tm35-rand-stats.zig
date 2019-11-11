@@ -1,6 +1,6 @@
 const clap = @import("clap");
-const format = @import("format");
 const std = @import("std");
+const util = @import("util");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -12,13 +12,13 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 
+const format = util.format;
+
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
 const Clap = clap.ComptimeClap(clap.Help, params);
 const Param = clap.Param(clap.Help);
-
-const readLine = @import("readline").readLine;
 
 // TODO: proper versioning
 const program_version = "0.0.0";
@@ -99,7 +99,7 @@ pub fn main() u8 {
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
     var pokemons = PokemonMap.init(allocator);
 
-    while (readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+    while (util.readLine(stdin, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&pokemons, str) catch true;
         if (print_line)

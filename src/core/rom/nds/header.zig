@@ -1,6 +1,6 @@
-const algorithm = @import("algorithm");
 const crc = @import("crc");
 const std = @import("std");
+const util = @import("util");
 
 const int = @import("../int.zig");
 
@@ -8,6 +8,8 @@ const ascii = std.ascii;
 const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
+
+const algorithm = util.algorithm;
 
 const lu16 = int.lu16;
 const lu32 = int.lu32;

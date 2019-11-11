@@ -1,6 +1,6 @@
-const bit = @import("bit");
 const clap = @import("clap");
 const std = @import("std");
+const util = @import("util");
 
 const common = @import("common.zig");
 const gen3 = @import("gen3-types.zig");
@@ -17,6 +17,8 @@ const mem = std.mem;
 
 const gba = rom.gba;
 const nds = rom.nds;
+
+const bit = util.bit;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 

@@ -1,7 +1,7 @@
-const algorithm = @import("algorithm");
-
+const util = @import("util");
 const int = @import("../int.zig");
 
+const algorithm = util.algorithm;
 const lu16 = int.lu16;
 
 pub const Banner = extern struct {

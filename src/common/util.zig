@@ -10,6 +10,21 @@ const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
+pub const algorithm = @import("algorithm.zig");
+pub const bit = @import("bit.zig");
+pub const escape = @import("escape.zig");
+pub const format = @import("format.zig");
+
+pub const readLine = @import("readline.zig").readLine;
+
+test "" {
+    _ = algorithm;
+    _ = bit;
+    _ = escape;
+    _ = format;
+    _ = readLine;
+}
+
 /// Given a slice and a pointer, returns the pointers index into the slice.
 /// ptr has to point into slice.
 pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {
