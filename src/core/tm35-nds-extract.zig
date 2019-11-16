@@ -14,6 +14,8 @@ const os = std.os;
 
 const path = fs.path;
 
+const errors = util.errors;
+
 const nds = rom.nds;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
@@ -43,97 +45,93 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        debug.warn("No file provided\n");
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+        stdio.err.write("No file provided\n") catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     const out = args.option("--output") orelse blk: {
         const res = fmt.allocPrint(allocator, "{}.output", path.basename(file_name));
-        break :blk res catch return allocFailed();
+        break :blk res catch return errors.allocErr(stdio.err);
     };
 
-    var rom_file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
+    var rom_file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer rom_file.close();
-    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return errPrint("Failed to read nds rom: {}\n", err);
+    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return errors.readErr(stdio.err, file_name, err);
 
-    const arm9_file = path.join(allocator, [_][]const u8{ out, "arm9" }) catch return allocFailed();
-    const arm7_file = path.join(allocator, [_][]const u8{ out, "arm7" }) catch return allocFailed();
-    const banner_file = path.join(allocator, [_][]const u8{ out, "banner" }) catch return allocFailed();
-    const nitro_footer_file = path.join(allocator, [_][]const u8{ out, "nitro_footer" }) catch return allocFailed();
-    const arm9_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm9_overlays" }) catch return allocFailed();
-    const arm7_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm7_overlays" }) catch return allocFailed();
-    const root_folder = path.join(allocator, [_][]const u8{ out, "root" }) catch return allocFailed();
+    const arm9_file = path.join(allocator, [_][]const u8{ out, "arm9" }) catch return errors.allocErr(stdio.err);
+    const arm7_file = path.join(allocator, [_][]const u8{ out, "arm7" }) catch return errors.allocErr(stdio.err);
+    const banner_file = path.join(allocator, [_][]const u8{ out, "banner" }) catch return errors.allocErr(stdio.err);
+    const nitro_footer_file = path.join(allocator, [_][]const u8{ out, "nitro_footer" }) catch return errors.allocErr(stdio.err);
+    const arm9_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm9_overlays" }) catch return errors.allocErr(stdio.err);
+    const arm7_overlay_folder = path.join(allocator, [_][]const u8{ out, "arm7_overlays" }) catch return errors.allocErr(stdio.err);
+    const root_folder = path.join(allocator, [_][]const u8{ out, "root" }) catch return errors.allocErr(stdio.err);
 
-    fs.makePath(allocator, out) catch |err| return failedToMakePath(out, err);
-    io.writeFile(arm9_file, nds_rom.arm9) catch |err| return failedWriteError(arm9_file, err);
-    io.writeFile(arm7_file, nds_rom.arm7) catch |err| return failedWriteError(arm7_file, err);
-    io.writeFile(banner_file, mem.toBytes(nds_rom.banner)) catch |err| return failedWriteError(banner_file, err);
+    fs.makePath(allocator, out) catch |err| return errors.makePathErr(stdio.err, out, err);
+    io.writeFile(arm9_file, nds_rom.arm9) catch |err| return errors.writeErr(stdio.err, arm9_file, err);
+    io.writeFile(arm7_file, nds_rom.arm7) catch |err| return errors.writeErr(stdio.err, arm7_file, err);
+    io.writeFile(banner_file, mem.toBytes(nds_rom.banner)) catch |err| return errors.writeErr(stdio.err, banner_file, err);
 
     if (nds_rom.hasNitroFooter())
-        io.writeFile(nitro_footer_file, mem.toBytes(nds_rom.nitro_footer)) catch |err| return failedWriteError(nitro_footer_file, err);
+        io.writeFile(nitro_footer_file, mem.toBytes(nds_rom.nitro_footer)) catch |err| return errors.writeErr(stdio.err, nitro_footer_file, err);
 
-    fs.makePath(allocator, arm9_overlay_folder) catch |err| return failedToMakePath(arm9_overlay_folder, err);
-    fs.makePath(allocator, arm7_overlay_folder) catch |err| return failedToMakePath(arm7_overlay_folder, err);
-    writeOverlays(allocator, arm9_overlay_folder, nds_rom.arm9_overlay_table, nds_rom.arm9_overlay_files) catch |err| return errPrint("Failed to write arm9 overlays: {}", err);
-    writeOverlays(allocator, arm7_overlay_folder, nds_rom.arm7_overlay_table, nds_rom.arm7_overlay_files) catch |err| return errPrint("Failed to write arm7 overlays: {}", err);
+    fs.makePath(allocator, arm9_overlay_folder) catch |err| return errors.makePathErr(stdio.err, arm9_overlay_folder, err);
+    fs.makePath(allocator, arm7_overlay_folder) catch |err| return errors.makePathErr(stdio.err, arm7_overlay_folder, err);
+    writeOverlays(allocator, arm9_overlay_folder, nds_rom.arm9_overlay_table, nds_rom.arm9_overlay_files) catch |err| return errors.writeErr(stdio.err, "arm9 overlays", err);
+    writeOverlays(allocator, arm7_overlay_folder, nds_rom.arm7_overlay_table, nds_rom.arm7_overlay_files) catch |err| return errors.writeErr(stdio.err, "arm7 overlays", err);
 
-    fs.makePath(allocator, root_folder) catch |err| return failedToMakePath(root_folder, err);
-    writeFs(allocator, nds.fs.Nitro, root_folder, nds_rom.root) catch |err| return errPrint("Failed to write root file system: {}", err);
+    fs.makePath(allocator, root_folder) catch |err| return errors.makePathErr(stdio.err, root_folder, err);
+    writeFs(allocator, nds.fs.Nitro, root_folder, nds_rom.root) catch |err| return errors.writeErr(stdio.err, "root file system", err);
     return 0;
-}
-
-fn allocFailed() u8 {
-    debug.warn("Allocation failed\n");
-    return 1;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedToMakePath(path_str: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to make path '{}': {}\n", path_str, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: *Fs) !void {

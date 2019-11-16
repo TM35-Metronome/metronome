@@ -12,6 +12,7 @@ const testing = std.testing;
 
 pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
+pub const errors = @import("errors.zig");
 pub const escape = @import("escape.zig");
 pub const format = @import("format.zig");
 
@@ -80,7 +81,9 @@ pub fn getStdIo() !StdIo {
 
 test "getStdIo" {
     var stdio = try getStdIo();
+    const stdio_streams = stdio.getStreams();
     var buf_stdio = stdio.getBuffered();
+    const buf_stdio_streams = buf_stdio.getStreams();
 }
 
 /// Given a slice and a pointer, returns the pointers index into the slice.

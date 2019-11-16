@@ -19,6 +19,7 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const bit = util.bit;
+const errors = util.errors;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
@@ -46,86 +47,89 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        debug.warn("No file provided\n");
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+        stdio.err.write("No file provided\n") catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
-    const file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
+    const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        outputGen3Data(game, &stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        outputGen3Data(game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     } else |err| err;
 
-    file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
+    file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
-            outputGen4Data(nds_rom, game, &stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-            stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+            outputGen4Data(nds_rom, game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
-        if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            outputGen5Data(nds_rom, game, &stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-            stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
+            outputGen5Data(nds_rom, game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
-        } else |gen5_error| {
-            debug.warn("Successfully loaded '{}' as a nds rom.\n", file_name);
-            debug.warn("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error);
-            debug.warn("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error);
-            return 1;
-        }
+        } else |err| err;
+
+        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", file_name) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error) catch {};
+        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
+        return 1;
     } else |nds_error| {
-        debug.warn("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error);
-        debug.warn("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error);
+        stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error) catch {};
         return 1;
     }
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn outputGen3Data(game: gen3.Game, stream: var) !void {
@@ -775,4 +779,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             }
         }
     }
+}
+
+test "" {
+    _ = @import("load-apply-test.zig");
 }

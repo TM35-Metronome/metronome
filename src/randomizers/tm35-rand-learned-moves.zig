@@ -10,7 +10,9 @@ const io = std.io;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
+const testing = std.testing;
 
+const errors = util.errors;
 const format = util.format;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
@@ -50,40 +52,58 @@ const Preference = enum {
 };
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
-            usage(&stdio.err.stream) catch {};
-            stdio.err.flush() catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
@@ -98,15 +118,14 @@ pub fn main() u8 {
         else if (mem.eql(u8, pref, "stab"))
             Preference.Stab
         else {
-            debug.warn("--preference does not support '{}'\n", pref);
-            usage(&stdio.err.stream) catch {};
-            stdio.err.flush() catch {};
+            stdio.err.print("--preference does not support '{}'\n", pref) catch {};
+            usage(stdio.err) catch {};
             return 1;
         }
     else
         Preference.Random;
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var data = Data{
         .pokemons = Pokemons.init(allocator),
         .moves = Moves.init(allocator),
@@ -114,15 +133,21 @@ pub fn main() u8 {
         .hms = Machines.init(allocator),
     };
 
-    while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch true;
+        const print_line = parseLine(&data, str) catch |err| switch (err) {
+            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.Overflow,
+            error.EndOfString,
+            error.InvalidCharacter,
+            error.InvalidValue,
+            => true,
+        };
         if (print_line)
-            stdio.out.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
         line_buf.shrink(0);
     }
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
 
     randomize(data, seed, pref);
 
@@ -133,42 +158,26 @@ pub fn main() u8 {
 
         var tm_iter = pokemon.tms_learned.iterator();
         while (tm_iter.next()) |tm_kv| {
-            stdio.out.stream.print(
+            stdio.out.print(
                 ".pokemons[{}].tms[{}]={}\n",
                 pokemon_index,
                 tm_kv.key,
                 tm_kv.value,
-            ) catch |err| return failedWriteError("<stdout>", err);
+            ) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         }
 
         var hm_iter = pokemon.hms_learned.iterator();
         while (hm_iter.next()) |hm_kv| {
-            stdio.out.stream.print(
+            stdio.out.print(
                 ".pokemons[{}].hms[{}]={}\n",
                 pokemon_index,
                 hm_kv.key,
                 hm_kv.value,
-            ) catch |err| return failedWriteError("<stdout>", err);
+            ) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         }
     }
 
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedReadError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to read data from '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
@@ -285,3 +294,97 @@ const Move = struct {
     power: ?usize,
     type: ?[]const u8,
 };
+
+test "tm35-rand-learned-moves" {
+    const result_prefix =
+        \\.moves[0].power=10
+        \\.moves[0].type=Normal
+        \\.moves[1].power=30
+        \\.moves[1].type=Grass
+        \\.moves[2].power=30
+        \\.moves[2].type=Dragon
+        \\.moves[3].power=30
+        \\.moves[3].type=Fire
+        \\.moves[4].power=50
+        \\.moves[4].type=Normal
+        \\.moves[5].power=70
+        \\.moves[5].type=Normal
+        \\.tms[0]=0
+        \\.tms[1]=2
+        \\.tms[2]=4
+        \\.hms[0]=1
+        \\.hms[1]=3
+        \\.hms[2]=5
+        \\.pokemons[0].types[0]=Normal
+        \\
+    ;
+    const test_string = result_prefix ++
+        \\.pokemons[0].tms[0]=false
+        \\.pokemons[0].tms[1]=false
+        \\.pokemons[0].tms[2]=false
+        \\.pokemons[0].hms[0]=false
+        \\.pokemons[0].hms[1]=false
+        \\.pokemons[0].hms[2]=false
+        \\
+    ;
+    testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
+        \\.pokemons[0].tms[1]=true
+        \\.pokemons[0].tms[2]=false
+        \\.pokemons[0].tms[0]=true
+        \\.pokemons[0].hms[1]=false
+        \\.pokemons[0].hms[2]=true
+        \\.pokemons[0].hms[0]=false
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
+        \\.pokemons[0].tms[1]=false
+        \\.pokemons[0].tms[2]=true
+        \\.pokemons[0].tms[0]=true
+        \\.pokemons[0].hms[1]=false
+        \\.pokemons[0].hms[2]=true
+        \\.pokemons[0].hms[0]=false
+        \\
+    );
+}
+
+fn testProgram(
+    args: []const []const u8,
+    in: []const u8,
+    out: []const u8,
+) void {
+    var alloc_buf: [1024 * 20]u8 = undefined;
+    var out_buf: [1024]u8 = undefined;
+    var err_buf: [1024]u8 = undefined;
+    var fba = heap.FixedBufferAllocator.init(&alloc_buf);
+    var stdin = io.SliceInStream.init(in);
+    var stdout = io.SliceOutStream.init(&out_buf);
+    var stderr = io.SliceOutStream.init(&err_buf);
+    var arg_iter = clap.args.SliceIterator{ .args = args };
+
+    const StdIo = util.CustomStdIoStreams(anyerror, anyerror);
+
+    const res = main2(
+        &fba.allocator,
+        anyerror,
+        anyerror,
+        StdIo{
+            .in = @ptrCast(*io.InStream(anyerror), &stdin.stream),
+            .out = @ptrCast(*io.OutStream(anyerror), &stdout.stream),
+            .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+        },
+        clap.args.SliceIterator,
+        &arg_iter,
+    );
+    debug.warn("{}", stderr.getWritten());
+    testing.expectEqual(u8(0), res);
+    testing.expectEqualSlices(u8, "", stderr.getWritten());
+    if (!mem.eql(u8, out, stdout.getWritten())) {
+        debug.warn("\n====== expected this output: =========\n");
+        debug.warn("{}", out);
+        debug.warn("\n======== instead found this: =========\n");
+        debug.warn("{}", stdout.getWritten());
+        debug.warn("\n======================================\n");
+        testing.expect(false);
+    }
+    testing.expectEqualSlices(u8, out, stdout.getWritten());
+}

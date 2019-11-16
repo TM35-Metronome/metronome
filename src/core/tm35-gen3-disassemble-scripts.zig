@@ -10,6 +10,9 @@ const debug = std.debug;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const mem = std.mem;
+
+const errors = util.errors;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -41,62 +44,66 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        debug.warn("No file provided\n");
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+        stdio.err.write("No file provided\n") catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
-    var file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
+    var file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    const game = gen3.Game.fromFile(file, allocator) catch |err| return errPrint("Error while loading gen3 game: {}\n", err);
-
-    outputGameScripts(game, &stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+    const game = gen3.Game.fromFile(file, allocator) catch |err| return errors.err(stdio.err, "Error while loading gen3 game: {}\n", err);
+    outputGameScripts(game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
     return 0;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn outputGameScripts(game: gen3.Game, stream: var) !void {

@@ -15,6 +15,8 @@ const mem = std.mem;
 const fs = std.fs;
 const testing = std.testing;
 
+const errors = util.errors;
+
 const gba = rom.gba;
 const offsets = gen3.offsets;
 
@@ -51,31 +53,51 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
-    var arg_iter = clap.args.OsIterator.init(heap.direct_allocator);
-    defer arg_iter.deinit();
+    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    defer arena.deinit();
 
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(heap.direct_allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
     defer args.deinit();
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
@@ -83,35 +105,19 @@ pub fn main() u8 {
         var arena = heap.ArenaAllocator.init(heap.direct_allocator);
         defer arena.deinit();
 
-        const allocator = &arena.allocator;
-        const data = io.readFileAlloc(allocator, file_name) catch |err| return failedReadError(file_name, err);
+        const arena_allocator = &arena.allocator;
+        const data = io.readFileAlloc(arena_allocator, file_name) catch |err| return errors.readErr(stdio.err, file_name, err);
         if (data.len < @sizeOf(gba.Header))
-            return errPrint("'{}' is not a gen3 Pokémon game: {}\n", file_name, error.FileToSmall);
+            return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", file_name, error.FileToSmall);
 
         const header = @bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = getVersion(header.gamecode) catch |err| return errPrint("'{}' is not a gen3 Pokémon game: {}\n", file_name, err);
+        const version = getVersion(header.gamecode) catch |err| return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", file_name, err);
         const info_err = getInfo(data, version, header.gamecode, header.game_title, header.software_version);
-        const info = info_err catch |err| return errPrint("Failed to get offsets from '{}': {}\n", file_name, err);
-        outputInfo(&stdio.out.stream, i, info) catch |err| return failedWriteError("<stdout>", err);
+        const info = info_err catch |err| return errors.err(stdio.err, "Failed to get offsets from '{}': {}\n", file_name, err);
+        outputInfo(stdio.out, i, info) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
     }
 
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedReadError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to read data from '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
