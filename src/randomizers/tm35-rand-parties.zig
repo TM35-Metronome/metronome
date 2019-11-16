@@ -11,7 +11,9 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
+const testing = std.testing;
 
+const errors = util.errors;
 const format = util.format;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
@@ -54,41 +56,58 @@ const TypesOption = enum {
 };
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
-            usage(&stdio.err.stream) catch {};
-            stdio.err.flush() catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
@@ -99,9 +118,8 @@ pub fn main() u8 {
 
     const types = if (args.option("--types")) |types|
         std.meta.stringToEnum(TypesOption, types) orelse {
-            debug.warn("--types does not support '{}'\n", types);
-            usage(&stdio.err.stream) catch {};
-            stdio.err.flush() catch {};
+            stdio.err.print("--types does not support '{}'\n", types) catch {};
+            usage(stdio.err) catch {};
             return 1;
         }
     else
@@ -110,7 +128,7 @@ pub fn main() u8 {
     const fix_moves = args.flag("--fix-moves");
     const simular_total_stats = args.flag("--simular-total-stats");
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var data = Data{
         .types = std.ArrayList([]const u8).init(allocator),
         .pokemons_by_types = PokemonByType.init(allocator),
@@ -119,17 +137,23 @@ pub fn main() u8 {
         .moves = Moves.init(allocator),
     };
 
-    while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch true;
+        const print_line = parseLine(&data, str) catch |err| switch (err) {
+            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.Overflow,
+            error.EndOfString,
+            error.InvalidCharacter,
+            error.InvalidField,
+            => true,
+        };
         if (print_line)
-            stdio.out.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
         line_buf.shrink(0);
     }
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
 
-    randomize(data, seed, fix_moves, simular_total_stats, types) catch |err| return errPrint("Failed to randomize data: {}", err);
+    randomize(data, seed, fix_moves, simular_total_stats, types) catch |err| return errors.randErr(stdio.err, err);
 
     var trainer_iter = data.trainers.iterator();
     while (trainer_iter.next()) |trainer_kv| {
@@ -142,33 +166,17 @@ pub fn main() u8 {
             const member = party_kv.value;
 
             if (member.species) |s|
-                stdio.out.stream.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s) catch |err| return failedWriteError("<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             if (member.level) |l|
-                stdio.out.stream.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l) catch |err| return failedWriteError("<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
             var move_iter = member.moves.iterator();
             while (move_iter.next()) |move_kv| {
-                stdio.out.stream.print(".trainers[{}].party[{}].moves[{}]={}\n", trainer_i, member_i, move_kv.key, move_kv.value) catch |err| return failedWriteError("<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", trainer_i, member_i, move_kv.key, move_kv.value) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             }
         }
     }
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedReadError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to read data from '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
@@ -272,6 +280,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
     const allocator = data.pokemons.allocator;
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
+    var simular = std.ArrayList(usize).init(allocator);
 
     //if (data.types.len == 0)
     //    return;
@@ -336,11 +345,10 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                 };
                 const pokemon = poke_kv.value;
 
-                // TODO: We could probably reuse this ArrayList
-                var simular = std.ArrayList(usize).init(allocator);
                 var min = @intCast(i64, sum(u8, pokemon.stats));
                 var max = min;
 
+                simular.resize(0) catch unreachable;
                 while (simular.len < 5) {
                     min -= 5;
                     max += 5;
@@ -518,3 +526,239 @@ const Pokemon = struct {
         };
     }
 };
+
+test "tm35-rand-parties" {
+    const H = struct {
+        fn pokemon(comptime id: []const u8, comptime stat: []const u8, comptime types: []const u8, comptime move_: []const u8) []const u8 {
+            return ".pokemons[" ++ id ++ "].hp=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].attack=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].defense=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].speed=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].sp_attack=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].sp_defense=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].types[0]=" ++ types ++ "\n" ++
+                ".pokemons[" ++ id ++ "].types[1]=" ++ types ++ "\n" ++
+                ".pokemons[" ++ id ++ "].moves[0].id=" ++ move_ ++ "\n" ++
+                ".pokemons[" ++ id ++ "].moves[0].level=0\n";
+        }
+        fn trainer(comptime id: []const u8, comptime species: []const u8, comptime move_: []const u8) []const u8 {
+            return ".trainers[" ++ id ++ "].party[0].species=" ++ species ++ "\n" ++
+                ".trainers[" ++ id ++ "].party[0].level=5\n" ++
+                ".trainers[" ++ id ++ "].party[0].moves[0]=" ++ move_ ++ "\n" ++
+                ".trainers[" ++ id ++ "].party[1].species=" ++ species ++ "\n" ++
+                ".trainers[" ++ id ++ "].party[1].level=5\n" ++
+                ".trainers[" ++ id ++ "].party[1].moves[0]=" ++ move_ ++ "\n";
+        }
+        fn move(comptime id: []const u8, comptime power: []const u8, comptime type_: []const u8, comptime pp: []const u8, comptime accuracy: []const u8) []const u8 {
+            return ".moves[" ++ id ++ "].power=" ++ power ++ "\n" ++
+                ".moves[" ++ id ++ "].type=" ++ type_ ++ "\n" ++
+                ".moves[" ++ id ++ "].pp=" ++ pp ++ "\n" ++
+                ".moves[" ++ id ++ "].accuracy=" ++ accuracy ++ "\n";
+        }
+    };
+
+    const result_prefix = comptime H.pokemon("0", "10", "Normal", "1") ++
+        H.pokemon("1", "15", "Dragon", "2") ++
+        H.pokemon("2", "20", "Flying", "3") ++
+        H.pokemon("3", "25", "Grass", "4") ++
+        H.pokemon("4", "30", "Fire", "5") ++
+        H.pokemon("5", "35", "Water", "6") ++
+        H.pokemon("6", "40", "Rock", "7") ++
+        H.pokemon("7", "45", "Ground", "8") ++
+        H.move("0", "0", "Normal", "0", "0") ++
+        H.move("1", "10", "Normal", "10", "255") ++
+        H.move("2", "10", "Dragon", "10", "255") ++
+        H.move("3", "10", "Flying", "10", "255") ++
+        H.move("4", "10", "Grass", "10", "255") ++
+        H.move("5", "10", "Fire", "10", "255") ++
+        H.move("6", "10", "Water", "10", "255") ++
+        H.move("7", "10", "Rock", "10", "255") ++
+        H.move("8", "10", "Ground", "10", "255");
+
+    const test_string = comptime result_prefix ++
+        H.trainer("0", "0", "1") ++
+        H.trainer("1", "1", "2") ++
+        H.trainer("2", "2", "3") ++
+        H.trainer("3", "3", "4");
+
+    testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
+        \\.trainers[3].party[1].species=2
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=4
+        \\.trainers[3].party[0].species=0
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[1].party[1].species=3
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[2].party[1].species=6
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[2].party[0].species=7
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[0].party[0].species=3
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=1
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
+        \\.trainers[3].party[1].species=2
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=3
+        \\.trainers[3].party[0].species=0
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=1
+        \\.trainers[1].party[1].species=3
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=4
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[2].party[1].species=6
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=7
+        \\.trainers[2].party[0].species=7
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=8
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[0].party[0].species=3
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=4
+        \\
+    );
+
+    const same_types_result =
+        \\.trainers[3].party[1].species=3
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=4
+        \\.trainers[3].party[0].species=3
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[2].party[1].species=2
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[2].party[0].species=2
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[0].party[0].species=0
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=1
+        \\
+    ;
+    testProgram([_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    testProgram([_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    testProgram([_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
+        \\.trainers[3].party[1].species=2
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=4
+        \\.trainers[3].party[0].species=2
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[2].party[0].species=1
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[0].party[1].species=6
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[0].party[0].species=6
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=1
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
+        \\.trainers[3].party[1].species=2
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=3
+        \\.trainers[3].party[0].species=2
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=3
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=2
+        \\.trainers[2].party[0].species=1
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=2
+        \\.trainers[0].party[1].species=6
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=7
+        \\.trainers[0].party[0].species=6
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=7
+        \\
+    );
+}
+
+fn testProgram(
+    args: []const []const u8,
+    in: []const u8,
+    out: []const u8,
+) void {
+    var alloc_buf: [1024 * 50]u8 = undefined;
+    var out_buf: [1024 * 10]u8 = undefined;
+    var err_buf: [1024]u8 = undefined;
+    var fba = heap.FixedBufferAllocator.init(&alloc_buf);
+    var stdin = io.SliceInStream.init(in);
+    var stdout = io.SliceOutStream.init(&out_buf);
+    var stderr = io.SliceOutStream.init(&err_buf);
+    var arg_iter = clap.args.SliceIterator{ .args = args };
+
+    const StdIo = util.CustomStdIoStreams(anyerror, anyerror);
+
+    const res = main2(
+        &fba.allocator,
+        anyerror,
+        anyerror,
+        StdIo{
+            .in = @ptrCast(*io.InStream(anyerror), &stdin.stream),
+            .out = @ptrCast(*io.OutStream(anyerror), &stdout.stream),
+            .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+        },
+        clap.args.SliceIterator,
+        &arg_iter,
+    );
+    debug.warn("{}", stderr.getWritten());
+    testing.expectEqual(u8(0), res);
+    testing.expectEqualSlices(u8, "", stderr.getWritten());
+    if (!mem.eql(u8, out, stdout.getWritten())) {
+        debug.warn("\n====== expected this output: =========\n");
+        debug.warn("{}", out);
+        debug.warn("\n======== instead found this: =========\n");
+        debug.warn("{}", stdout.getWritten());
+        debug.warn("\n======================================\n");
+        testing.expect(false);
+    }
+    testing.expectEqualSlices(u8, out, stdout.getWritten());
+}

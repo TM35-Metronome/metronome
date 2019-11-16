@@ -11,7 +11,9 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
+const testing = std.testing;
 
+const errors = util.errors;
 const format = util.format;
 
 const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
@@ -47,41 +49,58 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            debug.warn("'{}' could not be parsed as a number to --seed: {}\n", seed, err);
-            usage(&stdio.err.stream) catch {};
-            stdio.err.flush() catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
@@ -93,18 +112,24 @@ pub fn main() u8 {
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}", err);
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var pokemons = PokemonMap.init(allocator);
 
-    while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&pokemons, str) catch true;
+        const print_line = parseLine(&pokemons, str) catch |err| switch (err) {
+            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.Overflow,
+            error.EndOfString,
+            error.InvalidCharacter,
+            error.InvalidField,
+            => true,
+        };
         if (print_line)
-            stdio.out.stream.print("{}\n", str) catch |err| return failedWriteError("<stdout>", err);
+            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
         line_buf.shrink(0);
     }
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
 
     randomize(pokemons, seed, same_total_stats, follow_evos);
 
@@ -113,27 +138,11 @@ pub fn main() u8 {
         inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
             const stat_i = @enumToInt(@field(Pokemon.Stat, stat.name));
             if (kv.value.output[stat_i]) {
-                stdio.out.stream.print(".pokemons[{}].stats.{}={}\n", kv.key, stat.name, kv.value.stats[stat_i]) catch |err| return failedWriteError("<stdout>", err);
+                stdio.out.print(".pokemons[{}].stats.{}={}\n", kv.key, stat.name, kv.value.stats[stat_i]) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             }
         }
     }
-    stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
     return 0;
-}
-
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedReadError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to read data from '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
 }
 
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
@@ -233,8 +242,12 @@ fn randomizeFromChildren(
     const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
-    randomUntilSum(random, u8, &average, new_total);
-    mem.copy(u8, &pokemon.stats, average);
+    pokemon.stats = average;
+    randomUntilSum(random, u8, &pokemon.stats, new_total);
+
+    // After this, the Pokémons stats should be equal or above the average
+    for (average) |_, i|
+        debug.assert(average[i] <= pokemon.stats[i]);
 }
 
 fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) void {
@@ -315,3 +328,189 @@ const Pokemon = struct {
         sp_defense = 5,
     };
 };
+
+test "tm35-rand-stats" {
+    const result_prefix =
+        \\.pokemons[0].evos[0].target=1
+        \\.pokemons[1].evos[0].target=2
+        \\
+    ;
+
+    const test_string = result_prefix ++
+        \\.pokemons[0].stats.hp=10
+        \\.pokemons[0].stats.attack=10
+        \\.pokemons[0].stats.defense=10
+        \\.pokemons[0].stats.speed=10
+        \\.pokemons[0].stats.sp_attack=10
+        \\.pokemons[0].stats.sp_defense=10
+        \\.pokemons[1].stats.hp=20
+        \\.pokemons[1].stats.attack=20
+        \\.pokemons[1].stats.defense=20
+        \\.pokemons[1].stats.speed=20
+        \\.pokemons[1].stats.sp_attack=20
+        \\.pokemons[1].stats.sp_defense=20
+        \\.pokemons[2].stats.hp=30
+        \\.pokemons[2].stats.attack=30
+        \\.pokemons[2].stats.defense=30
+        \\.pokemons[2].stats.speed=30
+        \\.pokemons[2].stats.sp_attack=30
+        \\.pokemons[2].stats.sp_defense=30
+        \\.pokemons[3].stats.hp=40
+        \\.pokemons[3].stats.attack=40
+        \\.pokemons[3].stats.defense=40
+        \\.pokemons[3].stats.speed=40
+        \\.pokemons[3].stats.sp_attack=40
+        \\.pokemons[3].stats.sp_defense=40
+        \\
+    ;
+    testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
+        \\.pokemons[3].stats.hp=89
+        \\.pokemons[3].stats.attack=18
+        \\.pokemons[3].stats.defense=76
+        \\.pokemons[3].stats.speed=117
+        \\.pokemons[3].stats.sp_attack=63
+        \\.pokemons[3].stats.sp_defense=119
+        \\.pokemons[1].stats.hp=208
+        \\.pokemons[1].stats.attack=169
+        \\.pokemons[1].stats.defense=255
+        \\.pokemons[1].stats.speed=215
+        \\.pokemons[1].stats.sp_attack=62
+        \\.pokemons[1].stats.sp_defense=255
+        \\.pokemons[2].stats.hp=99
+        \\.pokemons[2].stats.attack=195
+        \\.pokemons[2].stats.defense=196
+        \\.pokemons[2].stats.speed=105
+        \\.pokemons[2].stats.sp_attack=175
+        \\.pokemons[2].stats.sp_defense=150
+        \\.pokemons[0].stats.hp=80
+        \\.pokemons[0].stats.attack=4
+        \\.pokemons[0].stats.defense=115
+        \\.pokemons[0].stats.speed=34
+        \\.pokemons[0].stats.sp_attack=82
+        \\.pokemons[0].stats.sp_defense=67
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
+        \\.pokemons[3].stats.hp=89
+        \\.pokemons[3].stats.attack=18
+        \\.pokemons[3].stats.defense=76
+        \\.pokemons[3].stats.speed=117
+        \\.pokemons[3].stats.sp_attack=63
+        \\.pokemons[3].stats.sp_defense=119
+        \\.pokemons[1].stats.hp=255
+        \\.pokemons[1].stats.attack=255
+        \\.pokemons[1].stats.defense=178
+        \\.pokemons[1].stats.speed=255
+        \\.pokemons[1].stats.sp_attack=255
+        \\.pokemons[1].stats.sp_defense=255
+        \\.pokemons[2].stats.hp=255
+        \\.pokemons[2].stats.attack=255
+        \\.pokemons[2].stats.defense=222
+        \\.pokemons[2].stats.speed=255
+        \\.pokemons[2].stats.sp_attack=255
+        \\.pokemons[2].stats.sp_defense=255
+        \\.pokemons[0].stats.hp=80
+        \\.pokemons[0].stats.attack=4
+        \\.pokemons[0].stats.defense=115
+        \\.pokemons[0].stats.speed=34
+        \\.pokemons[0].stats.sp_attack=82
+        \\.pokemons[0].stats.sp_defense=67
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
+        \\.pokemons[3].stats.hp=44
+        \\.pokemons[3].stats.attack=9
+        \\.pokemons[3].stats.defense=37
+        \\.pokemons[3].stats.speed=58
+        \\.pokemons[3].stats.sp_attack=33
+        \\.pokemons[3].stats.sp_defense=59
+        \\.pokemons[1].stats.hp=11
+        \\.pokemons[1].stats.attack=23
+        \\.pokemons[1].stats.defense=17
+        \\.pokemons[1].stats.speed=2
+        \\.pokemons[1].stats.sp_attack=31
+        \\.pokemons[1].stats.sp_defense=36
+        \\.pokemons[2].stats.hp=0
+        \\.pokemons[2].stats.attack=22
+        \\.pokemons[2].stats.defense=49
+        \\.pokemons[2].stats.speed=53
+        \\.pokemons[2].stats.sp_attack=26
+        \\.pokemons[2].stats.sp_defense=30
+        \\.pokemons[0].stats.hp=3
+        \\.pokemons[0].stats.attack=2
+        \\.pokemons[0].stats.defense=13
+        \\.pokemons[0].stats.speed=8
+        \\.pokemons[0].stats.sp_attack=21
+        \\.pokemons[0].stats.sp_defense=13
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
+        \\.pokemons[3].stats.hp=44
+        \\.pokemons[3].stats.attack=9
+        \\.pokemons[3].stats.defense=37
+        \\.pokemons[3].stats.speed=58
+        \\.pokemons[3].stats.sp_attack=33
+        \\.pokemons[3].stats.sp_defense=59
+        \\.pokemons[1].stats.hp=11
+        \\.pokemons[1].stats.attack=13
+        \\.pokemons[1].stats.defense=15
+        \\.pokemons[1].stats.speed=22
+        \\.pokemons[1].stats.sp_attack=38
+        \\.pokemons[1].stats.sp_defense=21
+        \\.pokemons[2].stats.hp=15
+        \\.pokemons[2].stats.attack=24
+        \\.pokemons[2].stats.defense=16
+        \\.pokemons[2].stats.speed=31
+        \\.pokemons[2].stats.sp_attack=60
+        \\.pokemons[2].stats.sp_defense=34
+        \\.pokemons[0].stats.hp=3
+        \\.pokemons[0].stats.attack=2
+        \\.pokemons[0].stats.defense=13
+        \\.pokemons[0].stats.speed=8
+        \\.pokemons[0].stats.sp_attack=21
+        \\.pokemons[0].stats.sp_defense=13
+        \\
+    );
+}
+
+fn testProgram(
+    args: []const []const u8,
+    in: []const u8,
+    out: []const u8,
+) void {
+    var alloc_buf: [1024 * 20]u8 = undefined;
+    var out_buf: [1024]u8 = undefined;
+    var err_buf: [1024]u8 = undefined;
+    var fba = heap.FixedBufferAllocator.init(&alloc_buf);
+    var stdin = io.SliceInStream.init(in);
+    var stdout = io.SliceOutStream.init(&out_buf);
+    var stderr = io.SliceOutStream.init(&err_buf);
+    var arg_iter = clap.args.SliceIterator{ .args = args };
+
+    const StdIo = util.CustomStdIoStreams(anyerror, anyerror);
+
+    const res = main2(
+        &fba.allocator,
+        anyerror,
+        anyerror,
+        StdIo{
+            .in = @ptrCast(*io.InStream(anyerror), &stdin.stream),
+            .out = @ptrCast(*io.OutStream(anyerror), &stdout.stream),
+            .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+        },
+        clap.args.SliceIterator,
+        &arg_iter,
+    );
+    debug.warn("{}", stderr.getWritten());
+    testing.expectEqual(u8(0), res);
+    testing.expectEqualSlices(u8, "", stderr.getWritten());
+    if (!mem.eql(u8, out, stdout.getWritten())) {
+        debug.warn("\n====== expected this output: =========\n");
+        debug.warn("{}", out);
+        debug.warn("\n======== instead found this: =========\n");
+        debug.warn("{}", stdout.getWritten());
+        debug.warn("\n======================================\n");
+        testing.expect(false);
+    }
+    testing.expectEqualSlices(u8, out, stdout.getWritten());
+}

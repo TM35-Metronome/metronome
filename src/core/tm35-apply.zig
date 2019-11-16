@@ -22,6 +22,7 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const bit = util.bit;
+const errors = util.errors;
 const format = util.format;
 
 const lu16 = rom.int.lu16;
@@ -61,41 +62,58 @@ fn usage(stream: var) !void {
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return errPrint("Could not aquire stdio: {}\n", err);
+    var stdio_unbuf = util.getStdIo() catch |err| return 1;
     var stdio = stdio_unbuf.getBuffered();
+    defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    const allocator = &arena.allocator;
-
-    var arg_iter = clap.args.OsIterator.init(allocator);
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
     _ = arg_iter.next() catch undefined;
 
-    var args = Clap.parse(allocator, clap.args.OsIterator, &arg_iter) catch |err| {
-        debug.warn("{}\n", err);
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+    const res = main2(
+        &arena.allocator,
+        fs.File.ReadError,
+        fs.File.WriteError,
+        stdio.getStreams(),
+        clap.args.OsIterator,
+        &arg_iter,
+    );
+
+    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    return res;
+}
+
+pub fn main2(
+    allocator: *mem.Allocator,
+    comptime ReadError: type,
+    comptime WriteError: type,
+    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime ArgIterator: type,
+    arg_iter: *ArgIterator,
+) u8 {
+    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
+        stdio.err.print("{}\n", err) catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
     if (args.flag("--help")) {
-        usage(&stdio.out.stream) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     if (args.flag("--version")) {
-        stdio.out.stream.print("{}\n", program_version) catch |err| return failedWriteError("<stdout>", err);
-        stdio.out.flush() catch |err| return failedWriteError("<stdout>", err);
+        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        debug.warn("No file provided\n");
-        usage(&stdio.err.stream) catch {};
-        stdio.err.flush() catch {};
+        stdio.err.write("No file provided\n") catch {};
+        usage(stdio.err) catch {};
         return 1;
     };
 
@@ -103,93 +121,78 @@ pub fn main() u8 {
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
         const res = fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
-        break :blk res catch |err| return errPrint("Allocation failed: {}\n", err);
+        break :blk res catch |err| return errors.allocErr(stdio.err);
     };
 
-    const file = fs.File.openRead(file_name) catch |err| return errPrint("Unable to open '{}': {}\n", file_name, err);
+    const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
     var out_file = if (replace)
-        fs.File.openWrite(out) catch |err| return errPrint("Could not open/create file '{}': {}\n", out, err)
+        fs.File.openWrite(out) catch |err| return errors.openErr(stdio.err, out, err)
     else
-        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errPrint("Could not create file '{}': {}\n", out, err);
+        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errors.createErr(stdio.err, out, err);
     defer out_file.close();
 
     var line_num: usize = 1;
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errPrint("Allocation failed: {}\n", err);
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
 
-    const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
-            applyGen3(game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
-                debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
-                if (abort_on_first_warning)
-                    return 1;
-            };
-            line_buf.shrink(0);
-        }
-
-        var out_stream = out_file.outStream();
-        game.writeToStream(&out_stream.stream) catch |err| return failedWriteError(out, err);
-        return 0;
-    } else |err| err;
-
-    file.seekTo(0) catch |err| return errPrint("Failure while read from '{}': {}\n", file_name, err);
-    if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
-        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
-            while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
-                applyGen4(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
-                    debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
-                    if (abort_on_first_warning)
-                        return 1;
-                };
-                line_buf.shrink(0);
-            }
-
-            nds_rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
-            return 0;
+    var nds_rom: nds.Rom = undefined;
+    const game: Game = blk: {
+        const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
+            break :blk Game{ .Gen3 = game };
         } else |err| err;
 
-        if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            while (util.readLine(&stdio.in, &line_buf) catch |err| return failedReadError("<stdin>", err)) |line| : (line_num += 1) {
-                applyGen5(nds_rom, game, line_num, mem.trimRight(u8, line, "\r\n")) catch |err| {
-                    debug.warn("(stdin):{}:1: warning: {}\n", line_num, @errorName(err));
-                    if (abort_on_first_warning) {
-                        debug.warn("{}\n", line);
-                        return 1;
-                    }
-                };
-                line_buf.shrink(0);
-            }
-
-            nds_rom.writeToFile(out_file) catch |err| return failedWriteError(out, err);
-            return 0;
-        } else |gen5_error| {
-            debug.warn("Successfully loaded '{}' as a nds rom.\n", file_name);
-            debug.warn("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error);
-            debug.warn("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error);
+        file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
+        nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
+            stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error) catch {};
+            stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error) catch {};
             return 1;
-        }
-    } else |nds_error| {
-        debug.warn("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error);
-        debug.warn("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error);
+        };
+
+        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
+            break :blk Game{ .Gen4 = game };
+        } else |err| err;
+
+        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
+            break :blk Game{ .Gen5 = game };
+        } else |err| err;
+
+        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", file_name) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error) catch {};
+        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
         return 1;
+    };
+
+    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| : (line_num += 1) {
+        const trimmed = mem.trimRight(u8, line, "\r\n");
+        _ = switch (game) {
+            .Gen3 => |gen3_game| applyGen3(gen3_game, line_num, trimmed),
+            .Gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
+            .Gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
+        } catch |err| {
+            stdio.err.print("(stdin):{}:1: warning: {}\n", line_num, @errorName(err)) catch {};
+            if (abort_on_first_warning) {
+                stdio.err.print("{}\n", line) catch {};
+                return 1;
+            }
+        };
+        line_buf.shrink(0);
     }
+
+    var out_stream = &out_file.outStream().stream;
+    switch (game) {
+        .Gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return errors.writeErr(stdio.err, out, err),
+        .Gen4, .Gen5 => nds_rom.writeToFile(out_file) catch |err| return errors.writeErr(stdio.err, out, err),
+    }
+
+    return 0;
 }
 
-fn failedWriteError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to write data to '{}': {}\n", file, err);
-    return 1;
-}
-
-fn failedReadError(file: []const u8, err: anyerror) u8 {
-    debug.warn("Failed to read data from '{}': {}\n", file, err);
-    return 1;
-}
-
-fn errPrint(comptime format_str: []const u8, args: ...) u8 {
-    debug.warn(format_str, args);
-    return 1;
-}
+const Game = union(enum) {
+    Gen3: gen3.Game,
+    Gen4: gen4.Game,
+    Gen5: gen5.Game,
+};
 
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
     var parser = format.Parser{ .str = str };
@@ -1186,4 +1189,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
     } else |_| {
         return error.NoField;
     }
+}
+
+test "" {
+    // tm35-load imports the "load-apply-test.zig" file, which
+    // tests both tm35-load and tm35-apply
 }
