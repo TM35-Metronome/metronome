@@ -1,5 +1,6 @@
-# Metronome
+Metronome  
 [![Scc Count Badge](https://sloc.xyz/github/TM35-Metronome/metronome/)](https://github.com/TM35-Metronome/metronome/)
+====
 
 A set of tools for randomizing and modifying Pokémon games.
 
