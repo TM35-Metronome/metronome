@@ -1,4 +1,5 @@
-const nds = @import("index.zig");
+const nds = @import("../nds.zig");
+const int = @import("../int.zig");
 const std = @import("std");
 
 const debug = std.debug;
@@ -9,10 +10,10 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 
-const lu16 = fun.platform.lu16;
-const lu32 = fun.platform.lu32;
-const lu64 = fun.platform.lu64;
-const lu128 = fun.platform.lu128;
+const lu16 = int.lu16;
+const lu32 = int.lu32;
+const lu64 = int.lu64;
+const lu128 = int.lu128;
 
 fn countParents(comptime Folder: type, folder: *Folder) usize {
     var res: usize = 0;

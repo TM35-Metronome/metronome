@@ -1,9 +1,9 @@
+const common = @import("common.zig");
 const rom = @import("rom.zig");
 const std = @import("std");
 
-const common = @import("common.zig");
-const offsets = @import("gen4-offsets.zig");
-const pokemon = @import("index.zig");
+pub const offsets = @import("gen4-offsets.zig");
+pub const pokemon = @import("index.zig");
 
 const mem = std.mem;
 
@@ -523,12 +523,12 @@ pub const Move = extern struct {
 };
 
 pub const LevelUpMove = extern struct {
-    move_id: u9,
-    level: u7,
+    //move_id: u9,
+    //level: u7,
+    data: lu16,
 
     comptime {
-        @compileLog(@sizeOf(@This()));
-        std.debug.assert(@sizeOf(@This()) == 8);
+        std.debug.assert(@sizeOf(@This()) == 2);
     }
 };
 
@@ -648,7 +648,9 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .starters = switch (info.starters) {
-                offsets.StarterLocation.Arm9 => |offset| blk: {
+                .Arm9 => |offset| blk: {
+                    if (nds_rom.arm9.len < offset + offsets.starters_len)
+                        unreachable; //return error.CouldNotFindStarters;
                     const starters_section = @bytesToSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
@@ -656,8 +658,14 @@ pub const Game = struct {
                         &starters_section[4],
                     };
                 },
-                offsets.StarterLocation.Overlay9 => |overlay| blk: {
+                .Overlay9 => |overlay| blk: {
+                    if (nds_rom.arm9_overlay_files.len <= overlay.file)
+                        return error.CouldNotFindStarters;
+
                     const file = nds_rom.arm9_overlay_files[overlay.file];
+                    if (file.len < overlay.offset + offsets.starters_len)
+                        return error.CouldNotFindStarters;
+
                     const starters_section = @bytesToSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],

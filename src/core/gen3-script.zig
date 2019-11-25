@@ -12,6 +12,7 @@ const trait = meta.trait;
 const mem = std.mem;
 const debug = std.debug;
 const math = std.math;
+const testing = std.testing;
 
 /// Find the field name which is most likly to be the tag of 'union_field'.
 /// This function looks at all fields declared before 'union_field'. If one
@@ -63,10 +64,9 @@ pub fn findTagFieldName(comptime Container: type, comptime union_field: []const 
 
 fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) void {
     if (comptime findTagFieldName(Container, union_field)) |actual| {
-        debug.assertOrPanic(expect != null);
-        debug.assertOrPanic(mem.eql(u8, expect.?, actual));
+        testing.expectEqualSlices(u8, expect.?, actual);
     } else {
-        debug.assertOrPanic(expect == null);
+        testing.expectEqual(expect, null);
     }
 }
 
@@ -182,10 +182,10 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
 fn testPackedLength(value: var, expect: error{InvalidTag}!usize) void {
     if (packedLength(value)) |size| {
         const expected_size = expect catch unreachable;
-        debug.assertOrPanic(size == expected_size);
+        testing.expectEqual(expected_size, size);
     } else |err| {
         const expected_err = if (expect) |_| unreachable else |e| e;
-        debug.assertOrPanic(expected_err == err);
+        testing.expectEqual(expected_err, err);
     }
 }
 

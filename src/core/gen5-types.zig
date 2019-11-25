@@ -2,7 +2,8 @@ const rom = @import("rom.zig");
 const std = @import("std");
 
 const common = @import("common.zig");
-const offsets = @import("gen5-offsets.zig");
+
+pub const offsets = @import("gen5-offsets.zig");
 
 const mem = std.mem;
 
@@ -207,8 +208,7 @@ pub const LevelUpMove = extern struct {
     level: lu16,
 
     comptime {
-        @compileLog(@This(), @sizeOf(@This()));
-        std.debug.assert(@sizeOf(@This()) == 55);
+        std.debug.assert(@sizeOf(@This()) == 4);
     }
 };
 
@@ -820,6 +820,7 @@ pub const Game = struct {
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
         const scripts = try getNarc(nds_rom.root, info.scripts);
+        const script_files = scripts.nodes.toSlice();
 
         return Game{
             .version = info.version,
@@ -835,8 +836,14 @@ pub const Game = struct {
                     filled += 1;
 
                     for (offs) |offset, j| {
-                        const node = scripts.nodes.toSlice()[offset.file];
+                        if (script_files.len <= offset.file)
+                            return error.CouldNotFindStarter;
+
+                        const node = script_files[offset.file];
                         const file = try nodeAsFile(node);
+                        if (file.data.len < offset.offset + 2)
+                            return error.CouldNotFindStarter;
+
                         res[i][j] = &@bytesToSlice(lu16, file.data[offset.offset..][0..2])[0];
                     }
                 }

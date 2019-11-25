@@ -264,7 +264,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         }
 
         for (game.evolutions[i]) |evo, j| {
-            if (evo.method == common.Evolution.Method.Unused)
+            if (evo.method == .Unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
@@ -366,7 +366,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         if (parties.len <= i)
             continue;
 
-        const party_file = node.asFile() catch continue;
+        const party_file = parties[i].asFile() catch continue;
         const party_data = party_file.data;
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {

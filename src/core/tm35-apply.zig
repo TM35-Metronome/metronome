@@ -127,12 +127,6 @@ pub fn main2(
     const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    var out_file = if (replace)
-        fs.File.openWrite(out) catch |err| return errors.openErr(stdio.err, out, err)
-    else
-        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errors.createErr(stdio.err, out, err);
-    defer out_file.close();
-
     var line_num: usize = 1;
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
 
@@ -178,6 +172,12 @@ pub fn main2(
         };
         line_buf.shrink(0);
     }
+
+    var out_file = if (replace)
+        fs.File.openWrite(out) catch |err| return errors.openErr(stdio.err, out, err)
+    else
+        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errors.createErr(stdio.err, out, err);
+    defer out_file.close();
 
     var out_stream = &out_file.outStream().stream;
     switch (game) {
@@ -372,7 +372,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             const learnset = &game.machine_learnsets[pokemon_index];
             learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, tm_index), value));
         } else |_| if (parser.eatField("hms")) {
-            const hm_index = try parser.eatIndexMax(game.tms.len);
+            const hm_index = try parser.eatIndexMax(game.hms.len);
             const value = try parser.eatBoolValue();
             const learnset = &game.machine_learnsets[pokemon_index];
             learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len), value));
@@ -382,7 +382,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             const evo = &evos[evo_index];
 
             if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(common.Evolution.Method);
+                evo.method = try parser.eatEnumValue(gen3.Evolution.Method);
             } else |_| if (parser.eatField("param")) {
                 evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("target")) {
@@ -1138,7 +1138,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         if (tm_index < game.tms1.len) {
             game.tms1[tm_index] = value;
         } else {
-            game.tms1[tm_index - game.tms1.len] = value;
+            game.tms2[tm_index - game.tms1.len] = value;
         }
     } else |_| if (parser.eatField("hms")) {
         const hm_index = try parser.eatIndexMax(game.hms.len);
