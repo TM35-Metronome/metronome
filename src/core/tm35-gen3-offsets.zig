@@ -214,7 +214,7 @@ fn getInfo(
         last_pokemons,
     ) orelse return error.UnableToFindBaseStatsOffset;
 
-    const evolution_searcher = Searcher([5]common.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}){ .data = data };
+    const evolution_searcher = Searcher([5]gen3.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}){ .data = data };
     const evolution_table = evolution_searcher.findSlice3(
         first_evolutions,
         last_evolutions,
@@ -946,22 +946,22 @@ fn percentFemale(percent: f64) u8 {
     return @floatToInt(u8, math.min(f64(254), (percent * 255) / 100));
 }
 
-const unused_evo = common.Evolution{
-    .method = common.Evolution.Method.Unused,
+const unused_evo = gen3.Evolution{
+    .method = gen3.Evolution.Method.Unused,
     .param = lu16.init(0),
     .target = lu16.init(0),
     .padding = undefined,
 };
-const unused_evo5 = [_]common.Evolution{unused_evo} ** 5;
+const unused_evo5 = [_]gen3.Evolution{unused_evo} ** 5;
 
-const first_evolutions = [_][5]common.Evolution{
+const first_evolutions = [_][5]gen3.Evolution{
     // Dummy
     unused_evo5,
 
     // Bulbasaur
-    [_]common.Evolution{
-        common.Evolution{
-            .method = common.Evolution.Method.LevelUp,
+    [_]gen3.Evolution{
+        gen3.Evolution{
+            .method = gen3.Evolution.Method.LevelUp,
             .param = lu16.init(16),
             .target = lu16.init(2),
             .padding = undefined,
@@ -973,9 +973,9 @@ const first_evolutions = [_][5]common.Evolution{
     },
 
     // Ivysaur
-    [_]common.Evolution{
-        common.Evolution{
-            .method = common.Evolution.Method.LevelUp,
+    [_]gen3.Evolution{
+        gen3.Evolution{
+            .method = gen3.Evolution.Method.LevelUp,
             .param = lu16.init(32),
             .target = lu16.init(3),
             .padding = undefined,
@@ -987,11 +987,11 @@ const first_evolutions = [_][5]common.Evolution{
     },
 };
 
-const last_evolutions = [_][5]common.Evolution{
+const last_evolutions = [_][5]gen3.Evolution{
     // Beldum
-    [_]common.Evolution{
-        common.Evolution{
-            .method = common.Evolution.Method.LevelUp,
+    [_]gen3.Evolution{
+        gen3.Evolution{
+            .method = gen3.Evolution.Method.LevelUp,
             .param = lu16.init(20),
             .target = lu16.init(399),
             .padding = undefined,
@@ -1003,9 +1003,9 @@ const last_evolutions = [_][5]common.Evolution{
     },
 
     // Metang
-    [_]common.Evolution{
-        common.Evolution{
-            .method = common.Evolution.Method.LevelUp,
+    [_]gen3.Evolution{
+        gen3.Evolution{
+            .method = gen3.Evolution.Method.LevelUp,
             .param = lu16.init(45),
             .target = lu16.init(400),
             .padding = undefined,

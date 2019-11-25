@@ -11,8 +11,10 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
-pub fn Offset(comptime T: type) type {
+pub fn Offset(comptime _T: type) type {
     return struct {
+        pub const T = _T;
+
         offset: usize,
 
         pub fn init(data_slice: []const u8, ptr: *const T) @This() {
@@ -24,14 +26,20 @@ pub fn Offset(comptime T: type) type {
             return @This(){ .offset = item_ptr - data_ptr };
         }
 
+        pub fn end(offset: @This()) usize {
+            return sec.offset + @sizeOf(T);
+        }
+
         pub fn ptr(offset: @This(), data: []u8) *T {
             return &@bytesToSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
         }
     };
 }
 
-pub fn Section(comptime Item: type) type {
+pub fn Section(comptime _Item: type) type {
     return struct {
+        pub const Item = _Item;
+
         start: usize,
         len: usize,
 
@@ -62,7 +70,7 @@ pub const TrainerSection = Section(gen3.Trainer);
 pub const MoveSection = Section(gen3.Move);
 pub const MachineLearnsetSection = Section(lu64);
 pub const BaseStatsSection = Section(gen3.BasePokemon);
-pub const EvolutionSection = Section([5]common.Evolution);
+pub const EvolutionSection = Section([5]gen3.Evolution);
 pub const LevelUpLearnsetPointerSection = Section(gen3.Ptr(gen3.LevelUpMove));
 pub const HmSection = Section(lu16);
 pub const TmSection = Section(lu16);

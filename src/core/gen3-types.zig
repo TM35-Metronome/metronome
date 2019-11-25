@@ -152,9 +152,9 @@ pub fn Slice(comptime T: type) type {
         }
 
         /// Initialize a 'Slice' from an 'addr' and a 'len'.
-        pub fn init(addr: u32, len: u32) !Self {
+        pub fn init(addr: u32, l: u32) !Self {
             return Self{
-                .l = lu32.init(len),
+                .l = lu32.init(l),
                 .ptr = try Ptr(T).init(addr),
             };
         }
@@ -414,6 +414,36 @@ pub const WildPokemonHeader = extern struct {
     }
 };
 
+pub const Evolution = packed struct {
+    method: Evolution.Method,
+    param: lu16,
+    target: lu16,
+    padding: [2]u8,
+
+    pub const Method = enum(u16) {
+        Unused = lu16.init(0x00).value(),
+        FriendShip = lu16.init(0x01).value(),
+        FriendShipDuringDay = lu16.init(0x02).value(),
+        FriendShipDuringNight = lu16.init(0x03).value(),
+        LevelUp = lu16.init(0x04).value(),
+        Trade = lu16.init(0x05).value(),
+        TradeHoldingItem = lu16.init(0x06).value(),
+        UseItem = lu16.init(0x07).value(),
+        AttackGthDefense = lu16.init(0x08).value(),
+        AttackEqlDefense = lu16.init(0x09).value(),
+        AttackLthDefense = lu16.init(0x0A).value(),
+        PersonalityValue1 = lu16.init(0x0B).value(),
+        PersonalityValue2 = lu16.init(0x0C).value(),
+        LevelUpMaySpawnPokemon = lu16.init(0x0D).value(),
+        LevelUpSpawnIfCond = lu16.init(0x0E).value(),
+        Beauty = lu16.init(0x0F).value(),
+    };
+
+    comptime {
+        std.debug.assert(@sizeOf(Evolution) == 8);
+    }
+};
+
 pub const MapHeader = extern struct {
     map_data: Ref(c_void),
     map_events: Ref(MapEvents),
@@ -555,7 +585,7 @@ pub const Game = struct {
     moves: []Move,
     machine_learnsets: []lu64,
     pokemons: []BasePokemon,
-    evolutions: [][5]common.Evolution,
+    evolutions: [][5]Evolution,
     level_up_learnset_pointers: []Ptr(LevelUpMove),
     hms: []lu16,
     tms: []lu16,

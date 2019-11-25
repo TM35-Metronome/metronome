@@ -3,6 +3,7 @@ const std = @import("std");
 
 const debug = std.debug;
 const mem = std.mem;
+const testing = std.testing;
 
 pub const lu16 = Int(u16, builtin.Endian.Little);
 pub const lu32 = Int(u32, builtin.Endian.Little);
