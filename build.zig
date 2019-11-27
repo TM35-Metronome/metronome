@@ -56,8 +56,6 @@ pub fn build(b: *Builder) void {
     b.default_step.dependOn(&fmt_step.step);
 
     const test_step = b.step("test", "Run all tests");
-    b.default_step.dependOn(test_step);
-
     for (src_pkgs) |pkg| {
         const pkg_test = b.addTest(pkg[1]);
         test_step.dependOn(&pkg_test.step);
