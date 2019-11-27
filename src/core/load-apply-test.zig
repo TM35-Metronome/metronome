@@ -41,10 +41,8 @@ test "load/apply" {
     deleteFakeRoms(&gen_fba.allocator);
     const roms = try generateFakeRoms(&gen_fba.allocator);
 
+    var stderr_buf: [1024]u8 = undefined;
     for (roms) |rom_path| {
-        debug.warn("{}\n", rom_path);
-
-        var stderr_buf: [1024]u8 = undefined;
         var stderr = io.SliceOutStream.init(&stderr_buf);
         var fba = heap.FixedBufferAllocator.init(program_buf);
 
@@ -70,32 +68,43 @@ test "load/apply" {
 
         // Validate that certain entries are outputted for
         // all generations of games
-        {
-            for ([_][]const u8{
-                ".starters[0]=",
-                ".trainers[0].party[0].iv=",
-                ".trainers[0].party[0].level=",
-                ".trainers[0].party[0].species=",
-                ".moves[0].power=",
-                ".pokemons[0].stats.hp=",
-                ".pokemons[0].stats.attack=",
-                ".pokemons[0].stats.defense=",
-                ".pokemons[0].stats.speed=",
-                ".pokemons[0].stats.sp_attack=",
-                ".pokemons[0].stats.sp_defense=",
-                ".pokemons[0].types[0]=",
-                ".pokemons[0].evos[0].target=",
-                ".tms[0]=",
-                ".hms[0]=",
-                ".zones[0].wild.surf.pokemons[0].min_level=",
-                ".zones[0].wild.surf.pokemons[0].max_level=",
-                ".zones[0].wild.surf.pokemons[0].species=",
-            }) |expected_string| {
-                if (mem.indexOf(u8, load_written, expected_string) == null) {
-                    debug.warn("Could not find {}\n\n", expected_string);
-                    debug.warn("{}\n", load_written);
-                    testing.expect(false);
-                }
+        for ([_][]const u8{
+            ".starters[0]=",
+            ".starters[1]=",
+            ".starters[2]=",
+            ".trainers[0].party[0].iv=",
+            ".trainers[0].party[0].level=",
+            ".trainers[0].party[0].species=",
+            ".trainers[0].items[0]=",
+            ".moves[0].power=",
+            ".moves[0].type=",
+            ".moves[0].accuracy=",
+            ".moves[0].pp=",
+            ".pokemons[0].stats.hp=",
+            ".pokemons[0].stats.attack=",
+            ".pokemons[0].stats.defense=",
+            ".pokemons[0].stats.speed=",
+            ".pokemons[0].stats.sp_attack=",
+            ".pokemons[0].stats.sp_defense=",
+            ".pokemons[0].types[0]=",
+            ".pokemons[0].items[0]=",
+            ".pokemons[0].abilities[0]=",
+            ".pokemons[0].evos[0].target=",
+            ".pokemons[0].evos[0].method=",
+            ".pokemons[0].tms[0]=",
+            ".pokemons[0].hms[0]=",
+            ".tms[0]=",
+            ".hms[0]=",
+            ".zones[0].wild.surf.encounter_rate=",
+            ".zones[0].wild.surf.pokemons[0].min_level=",
+            ".zones[0].wild.surf.pokemons[0].max_level=",
+            ".zones[0].wild.surf.pokemons[0].species=",
+        }) |expected_string| {
+            if (mem.indexOf(u8, load_written, expected_string) == null) {
+                debug.warn("{}\n", load_written);
+                debug.warn("{}\n", rom_path);
+                debug.warn("Could not find {}\n", expected_string);
+                testing.expect(false);
             }
         }
 
