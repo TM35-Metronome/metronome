@@ -124,14 +124,11 @@ pub fn main2(
         break :blk res catch |err| return errors.allocErr(stdio.err);
     };
 
+    var nds_rom: nds.Rom = undefined;
+    const game: Game = blk: {
     const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    var line_num: usize = 1;
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
-
-    var nds_rom: nds.Rom = undefined;
-    const game: Game = blk: {
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
             break :blk Game{ .Gen3 = game };
         } else |err| err;
@@ -156,6 +153,9 @@ pub fn main2(
         stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
         return 1;
     };
+
+    var line_num: usize = 1;
+    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
