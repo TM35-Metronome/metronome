@@ -382,7 +382,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             const evo = &evos[evo_index];
 
             if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(gen3.Evolution.Method);
+                evo.method = try parser.eatEnumValue(common.EvoMethod);
             } else |_| if (parser.eatField("param")) {
                 evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("target")) {
@@ -703,7 +703,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const evo = &evos[evo_index];
 
             if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(gen4.Evolution.Method);
+                evo.method = try parser.eatEnumValue(common.EvoMethod);
             } else |_| if (parser.eatField("param")) {
                 evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("target")) {

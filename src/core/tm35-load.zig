@@ -465,7 +465,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         const rem = bytes.len % @sizeOf(gen4.Evolution);
         const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
-            if (evo.method == gen4.Evolution.Method.Unused)
+            if (evo.method == .Unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
@@ -743,7 +743,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         const rem = bytes.len % @sizeOf(gen5.Evolution);
         const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
-            if (evo.method == gen5.Evolution.Method.Unused)
+            if (evo.method == .Unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());

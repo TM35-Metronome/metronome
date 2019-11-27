@@ -947,10 +947,11 @@ fn percentFemale(percent: f64) u8 {
 }
 
 const unused_evo = gen3.Evolution{
-    .method = gen3.Evolution.Method.Unused,
+    .method = .Unused,
+    .padding1 = undefined,
     .param = lu16.init(0),
     .target = lu16.init(0),
-    .padding = undefined,
+    .padding2 = undefined,
 };
 const unused_evo5 = [_]gen3.Evolution{unused_evo} ** 5;
 
@@ -961,10 +962,11 @@ const first_evolutions = [_][5]gen3.Evolution{
     // Bulbasaur
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = gen3.Evolution.Method.LevelUp,
+            .method = .LevelUp,
+            .padding1 = undefined,
             .param = lu16.init(16),
             .target = lu16.init(2),
-            .padding = undefined,
+            .padding2 = undefined,
         },
         unused_evo,
         unused_evo,
@@ -975,10 +977,11 @@ const first_evolutions = [_][5]gen3.Evolution{
     // Ivysaur
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = gen3.Evolution.Method.LevelUp,
+            .method = .LevelUp,
+            .padding1 = undefined,
             .param = lu16.init(32),
             .target = lu16.init(3),
-            .padding = undefined,
+            .padding2 = undefined,
         },
         unused_evo,
         unused_evo,
@@ -991,10 +994,11 @@ const last_evolutions = [_][5]gen3.Evolution{
     // Beldum
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = gen3.Evolution.Method.LevelUp,
+            .padding1 = undefined,
+            .method = .LevelUp,
             .param = lu16.init(20),
             .target = lu16.init(399),
-            .padding = undefined,
+            .padding2 = undefined,
         },
         unused_evo,
         unused_evo,
@@ -1005,10 +1009,11 @@ const last_evolutions = [_][5]gen3.Evolution{
     // Metang
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = gen3.Evolution.Method.LevelUp,
+            .method = .LevelUp,
+            .padding1 = undefined,
             .param = lu16.init(45),
             .target = lu16.init(400),
-            .padding = undefined,
+            .padding2 = undefined,
         },
         unused_evo,
         unused_evo,

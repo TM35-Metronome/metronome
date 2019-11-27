@@ -231,8 +231,8 @@ pub const Header = extern struct {
         if (header.encryption_seed_select > 0x07)
             return error.InvalidEncryptionSeedSelect;
 
-        if (!algorithm.all(u8, header.reserved1[0..], isZero))
-            return error.InvalidReserved1;
+        //if (!algorithm.all(u8, header.reserved1[0..], isZero))
+        //    return error.InvalidReserved1;
 
         // It seems that arm9 (secure area) is always at 0x4000
         // http://problemkaputt.de/gbatek.htm#dscartridgesecurearea
@@ -265,38 +265,37 @@ pub const Header = extern struct {
         if (header.rom_header_size.value() != 0x4000)
             return error.InvalidRomHeaderSize;
 
-        if (!algorithm.all(u8, header.reserved3, isZero))
-            return error.InvalidReserved3;
-
-        if (!algorithm.all(u8, header.reserved4, isZero))
-            return error.InvalidReserved4;
-        if (!algorithm.all(u8, header.reserved5, isZero))
-            return error.InvalidReserved5;
+        //if (!algorithm.all(u8, header.reserved3, isZero))
+        //    return error.InvalidReserved3;
+        //if (!algorithm.all(u8, header.reserved4, isZero))
+        //    return error.InvalidReserved4;
+        //if (!algorithm.all(u8, header.reserved5, isZero))
+        //    return error.InvalidReserved5;
 
         if (header.isDsi()) {
-            if (!algorithm.all(u8, header.reserved6[0..], isZero))
-                return error.InvalidReserved6;
-            if (!algorithm.all(u8, header.reserved7[0..], isZero))
-                return error.InvalidReserved7;
+            //if (!algorithm.all(u8, header.reserved6[0..], isZero))
+            //    return error.InvalidReserved6;
+            //if (!algorithm.all(u8, header.reserved7[0..], isZero))
+            //    return error.InvalidReserved7;
 
             // TODO: (usually same as ARM9 rom offs, 0004000h)
             //       Does that mean that it also always 0x4000?
             if (header.digest_ntr_region_offset.value() != 0x4000)
                 return error.InvalidDigestNtrRegionOffset;
-            if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
-                return error.InvalidReserved8;
-            if (!algorithm.all(u8, header.reserved9, isZero))
-                return error.InvalidReserved9;
+            //if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
+            //    return error.InvalidReserved8;
+            //if (!algorithm.all(u8, header.reserved9, isZero))
+            //    return error.InvalidReserved9;
             if (!mem.eql(u8, header.title_id_rest, [_]u8{ 0x00, 0x03, 0x00 }))
                 return error.InvalidTitleIdRest;
-            if (!algorithm.all(u8, header.reserved12, isZero))
-                return error.InvalidReserved12;
-            if (!algorithm.all(u8, header.reserved16, isZero))
-                return error.InvalidReserved16;
-            if (!algorithm.all(u8, header.reserved17, isZero))
-                return error.InvalidReserved17;
-            if (!algorithm.all(u8, header.reserved18, isZero))
-                return error.InvalidReserved18;
+            //if (!algorithm.all(u8, header.reserved12, isZero))
+            //    return error.InvalidReserved12;
+            //if (!algorithm.all(u8, header.reserved16, isZero))
+            //    return error.InvalidReserved16;
+            //if (!algorithm.all(u8, header.reserved17, isZero))
+            //    return error.InvalidReserved17;
+            //if (!algorithm.all(u8, header.reserved18, isZero))
+            //    return error.InvalidReserved18;
         }
     }
 
