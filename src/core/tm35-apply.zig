@@ -126,8 +126,8 @@ pub fn main2(
 
     var nds_rom: nds.Rom = undefined;
     const game: Game = blk: {
-    const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
-    defer file.close();
+        const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
+        defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
             break :blk Game{ .Gen3 = game };
