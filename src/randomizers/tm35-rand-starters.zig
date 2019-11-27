@@ -56,9 +56,8 @@ pub fn main() u8 {
     var arena = heap.ArenaAllocator.init(heap.direct_allocator);
     defer arena.deinit();
 
-    var arg_iter = clap.args.OsIterator.init(&arena.allocator);
-    _ = arg_iter.next() catch undefined;
-
+    var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
+        return errors.allocErr(&stdio.err.stream);
     const res = main2(
         &arena.allocator,
         fs.File.ReadError,
