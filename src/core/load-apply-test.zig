@@ -551,7 +551,7 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
 
     comptime checklist.set("evolutions", true) catch unreachable;
     var evo = zeroInit(gen4.Evolution);
-    evo.method = .Unknown_0x01;
+    evo.method = .LevelUp;
     try createNarc(allocator, root, info.evolutions, evo, 10, "");
 
     comptime checklist.set("wild_pokemons", true) catch unreachable;
@@ -625,7 +625,7 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
 
     comptime checklist.set("evolutions", true) catch unreachable;
     var evo = zeroInit(gen5.Evolution);
-    evo.method = .Unknown_0x01;
+    evo.method = .LevelUp;
     try createNarc(allocator, root, info.evolutions, evo, 10, "");
 
     comptime checklist.set("level_up_moves", true) catch unreachable;
