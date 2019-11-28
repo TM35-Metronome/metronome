@@ -1,8 +1,8 @@
-const rom = @import("rom.zig");
 const std = @import("std");
 
-const common = @import("common.zig");
-const gen3 = @import("gen3-types.zig");
+const common = @import("../common.zig");
+const gen3 = @import("../gen3.zig");
+const rom = @import("../rom.zig");
 
 const debug = std.debug;
 const mem = std.mem;

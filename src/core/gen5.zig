@@ -1,9 +1,9 @@
-const rom = @import("rom.zig");
 const std = @import("std");
 
 const common = @import("common.zig");
+const rom = @import("rom.zig");
 
-pub const offsets = @import("gen5-offsets.zig");
+pub const offsets = @import("gen5/offsets.zig");
 
 const mem = std.mem;
 

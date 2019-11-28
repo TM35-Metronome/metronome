@@ -3,9 +3,9 @@ const std = @import("std");
 const util = @import("util");
 
 const common = @import("common.zig");
-const gen3 = @import("gen3-types.zig");
-const gen4 = @import("gen4-types.zig");
-const gen5 = @import("gen5-types.zig");
+const gen3 = @import("gen3.zig");
+const gen4 = @import("gen4.zig");
+const gen5 = @import("gen5.zig");
 const rom = @import("rom.zig");
 
 const debug = std.debug;

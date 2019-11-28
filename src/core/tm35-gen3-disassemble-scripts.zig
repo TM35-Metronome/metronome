@@ -2,7 +2,7 @@ const clap = @import("clap");
 const std = @import("std");
 const util = @import("util");
 
-const gen3 = @import("gen3-types.zig");
+const gen3 = @import("gen3.zig");
 const common = @import("common.zig");
 const rom = @import("rom.zig");
 

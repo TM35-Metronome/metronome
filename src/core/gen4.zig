@@ -1,9 +1,9 @@
-const common = @import("common.zig");
-const rom = @import("rom.zig");
 const std = @import("std");
 
-pub const offsets = @import("gen4-offsets.zig");
-pub const pokemon = @import("index.zig");
+const common = @import("common.zig");
+const rom = @import("rom.zig");
+
+pub const offsets = @import("gen4/offsets.zig");
 
 const mem = std.mem;
 

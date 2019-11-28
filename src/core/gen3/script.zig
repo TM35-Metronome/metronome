@@ -1,5 +1,5 @@
 const builtin = @import("builtin");
-const rom = @import("rom.zig");
+const rom = @import("../rom.zig");
 const std = @import("std");
 
 const common = @import("common.zig");

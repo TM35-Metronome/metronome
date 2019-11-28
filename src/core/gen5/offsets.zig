@@ -1,4 +1,4 @@
-const common = @import("common.zig");
+const common = @import("../common.zig");
 
 pub const NarcOffset = struct {
     file: usize,

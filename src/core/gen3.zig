@@ -13,8 +13,8 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
-pub const offsets = @import("gen3-offsets.zig");
-pub const script = @import("gen3-script.zig");
+pub const offsets = @import("gen3/offsets.zig");
+pub const script = @import("gen3/script.zig");
 
 /// A pointer to an unknown number of elements.
 /// In GBA games pointers are 32 bits and the game rom is loaded into address
