@@ -3,10 +3,9 @@ const std = @import("std");
 const util = @import("util");
 
 const gen3 = @import("gen3.zig");
-const common = @import("common.zig");
 const rom = @import("rom.zig");
+const script = @import("script.zig");
 
-const debug = std.debug;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
@@ -182,7 +181,7 @@ pub fn printCommandHelper(stream: var, value: var) !void {
                             @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
 
                         // Find the field most likly to be this unions tag.
-                        const tag_field = (comptime gen3.script.findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
+                        const tag_field = (comptime script.findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
                         const tag = @field(value, tag_field);
                         const union_value = @field(value, struct_field.name);
                         const TagEnum = @typeOf(tag);
