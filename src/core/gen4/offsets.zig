@@ -24,6 +24,7 @@ pub const Info = struct {
     parties: []const u8,
     evolutions: []const u8,
     wild_pokemons: []const u8,
+    scripts: []const u8,
 };
 
 pub const infos = [_]Info{
@@ -48,6 +49,7 @@ const hg_info = Info{
     .parties = "/a/0/5/6",
     .evolutions = "/a/0/3/4",
     .wild_pokemons = "a/0/3/7",
+    .scripts = "a/0/1/2",
 };
 
 const ss_info = Info{
@@ -64,6 +66,7 @@ const ss_info = Info{
     .parties = hg_info.parties,
     .evolutions = hg_info.evolutions,
     .wild_pokemons = "a/1/3/6",
+    .scripts = hg_info.scripts,
 };
 
 const diamond_info = Info{
@@ -85,6 +88,7 @@ const diamond_info = Info{
     .parties = "/poketool/trainer/trpoke.narc",
     .evolutions = "/poketool/personal/evo.narc",
     .wild_pokemons = "fielddata/encountdata/d_enc_data.narc",
+    .scripts = "fielddata/script/scr_seq_release.narc",
 };
 
 const pearl_info = Info{
@@ -101,6 +105,7 @@ const pearl_info = Info{
     .parties = diamond_info.parties,
     .evolutions = diamond_info.evolutions,
     .wild_pokemons = "fielddata/encountdata/p_enc_data.narc",
+    .scripts = diamond_info.scripts,
 };
 
 const platinum_info = Info{
@@ -122,6 +127,7 @@ const platinum_info = Info{
     .parties = diamond_info.parties,
     .evolutions = diamond_info.evolutions,
     .wild_pokemons = "fielddata/encountdata/pl_enc_data.narc",
+    .scripts = "fielddata/script/scr_seq.narc",
 };
 
 pub const tm_count = 92;

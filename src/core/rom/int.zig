@@ -41,6 +41,10 @@ pub fn Int(comptime Inner: type, comptime endian: builtin.Endian) type {
         pub fn value(int: Self) Inner {
             return mem.readInt(Inner, &int.bytes, endian);
         }
+
+        pub fn valueNative(int: Self) Inner {
+            return mem.readInt(Inner, &int.bytes, builtin.endian);
+        }
     };
 }
 
