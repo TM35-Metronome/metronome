@@ -4,6 +4,7 @@ const common = @import("common.zig");
 const rom = @import("rom.zig");
 
 pub const offsets = @import("gen4/offsets.zig");
+pub const script = @import("gen4/script.zig");
 
 const mem = std.mem;
 
@@ -62,7 +63,6 @@ pub const MoveTutor = extern struct {
     tutor: u8,
 
     comptime {
-        @compileLog(@This(), @sizeOf(@This()));
         std.debug.assert(@sizeOf(@This()) == 8);
     }
 };
@@ -373,6 +373,7 @@ pub const Game = struct {
     trainers: *const nds.fs.Narc,
     parties: *const nds.fs.Narc,
     wild_pokemons: *const nds.fs.Narc,
+    scripts: *const nds.fs.Narc,
     tms: []lu16,
     hms: []lu16,
 
@@ -419,6 +420,7 @@ pub const Game = struct {
             .trainers = try getNarc(nds_rom.root, info.trainers),
             .parties = try getNarc(nds_rom.root, info.parties),
             .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
+            .scripts = try getNarc(nds_rom.root, info.scripts),
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
         };

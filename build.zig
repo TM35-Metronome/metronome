@@ -3,20 +3,28 @@ const std = @import("std");
 
 const mem = std.mem;
 
+const Step = std.build.Step;
 const Builder = std.build.Builder;
 const RunStep = std.build.RunStep;
 const LibExeObjStep = std.build.LibExeObjStep;
 
-const folder = "src";
-const core_tools = [_][]const u8{
+const src_folder = "src";
+const lib_folder = "lib";
+const tools_folder = "tools";
+
+const tool_exes = [_][]const u8{
+    "asm-macros-to-zig-struct",
+};
+
+const core_exes = [_][]const u8{
     "tm35-apply",
-    "tm35-gen3-disassemble-scripts",
+    "tm35-disassemble-scripts",
     "tm35-gen3-offsets",
     "tm35-load",
     "tm35-nds-extract",
 };
 
-const randomizer_tools = [_][]const u8{
+const randomizer_exes = [_][]const u8{
     "tm35-rand-starters",
     "tm35-rand-learned-moves",
     "tm35-rand-stats",
@@ -24,18 +32,18 @@ const randomizer_tools = [_][]const u8{
     "tm35-rand-parties",
 };
 
-const gui_tools = [_][]const u8{
+const gui_exes = [_][]const u8{
     "tm35-randomizer",
 };
 
 const lib_pkgs = [_][2][]const u8{
-    [_][]const u8{ "clap", "lib/zig-clap/clap.zig" },
-    [_][]const u8{ "fun", "lib/fun-with-zig/fun.zig" },
-    [_][]const u8{ "crc", "lib/zig-crc/crc.zig" },
+    [_][]const u8{ "clap", lib_folder ++ "/zig-clap/clap.zig" },
+    [_][]const u8{ "fun", lib_folder ++ "/fun-with-zig/fun.zig" },
+    [_][]const u8{ "crc", lib_folder ++ "/zig-crc/crc.zig" },
 };
 
 const src_pkgs = [_][2][]const u8{
-    [_][]const u8{ "util", "src/common/util.zig" },
+    [_][]const u8{ "util", src_folder ++ "/common/util.zig" },
 };
 
 const pkgs = lib_pkgs ++ src_pkgs;
@@ -51,7 +59,8 @@ pub fn build(b: *Builder) void {
 
     const fmt_step = b.addFmt([_][]const u8{
         "build.zig",
-        "src",
+        src_folder,
+        tools_folder,
     });
     b.default_step.dependOn(&fmt_step.step);
 
@@ -61,45 +70,16 @@ pub fn build(b: *Builder) void {
         test_step.dependOn(&pkg_test.step);
     }
 
-    inline for (core_tools) |tool, i| {
-        const source = "src/core/" ++ tool ++ ".zig";
-        const exe_test = b.addTest(source);
-        const exe = b.addExecutable(tool, source);
-        for (pkgs) |pkg| {
-            exe_test.addPackagePath(pkg[0], pkg[1]);
-            exe.addPackagePath(pkg[0], pkg[1]);
-        }
-
-        exe.install();
-        exe_test.setBuildMode(mode);
-        exe.setBuildMode(mode);
-        exe_test.single_threaded = true;
-        exe.single_threaded = true;
-        test_step.dependOn(&exe_test.step);
-        b.default_step.dependOn(&exe.step);
-    }
-
-    inline for (randomizer_tools) |tool, i| {
-        const source = "src/randomizers/" ++ tool ++ ".zig";
-        const exe_test = b.addTest(source);
-        const exe = b.addExecutable(tool, source);
-        for (pkgs) |pkg| {
-            exe_test.addPackagePath(pkg[0], pkg[1]);
-            exe.addPackagePath(pkg[0], pkg[1]);
-        }
-
-        exe.install();
-        exe_test.setBuildMode(mode);
-        exe.setBuildMode(mode);
-        exe_test.single_threaded = true;
-        exe.single_threaded = true;
-        test_step.dependOn(&exe_test.step);
-        b.default_step.dependOn(&exe.step);
-    }
+    inline for (tool_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, test_step, false, mode, name, tools_folder ++ "/" ++ name ++ ".zig");
+    inline for (core_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, test_step, true, mode, name, src_folder ++ "/core/" ++ name ++ ".zig");
+    inline for (randomizer_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, test_step, true, mode, name, src_folder ++ "/randomizers/" ++ name ++ ".zig");
 
     const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
-    inline for (gui_tools) |tool, i| {
-        const source = "src/gui/" ++ tool ++ ".zig";
+    inline for (gui_exes) |tool, i| {
+        const source = src_folder ++ "/gui/" ++ tool ++ ".zig";
         const exe_test = b.addTest(source);
         const exe = b.addExecutable(tool, source);
         for (pkgs) |pkg| {
@@ -109,29 +89,29 @@ pub fn build(b: *Builder) void {
 
         switch (os) {
             .windows => {
-                exe.addIncludeDir("lib/nuklear/demo/gdi");
-                exe.addCSourceFile("src/gui/nuklear/gdi.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", lib_cflags);
+                exe.addIncludeDir(lib_folder ++ "/nuklear/demo/gdi");
+                exe.addCSourceFile(src_folder ++ "/gui/nuklear/gdi.c", lib_cflags);
+                exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_win.cpp", lib_cflags);
                 exe.linkSystemLibrary("user32");
                 exe.linkSystemLibrary("gdi32");
                 exe.linkSystemLibrary("Msimg32");
             },
             .linux => {
-                exe.addIncludeDir("lib/nuklear/demo/x11_xft");
+                exe.addIncludeDir(lib_folder ++ "/nuklear/demo/x11_xft");
                 exe.addIncludeDir("/usr/include/freetype2");
-                exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
+                exe.addCSourceFile(src_folder ++ "/gui/nuklear/x11.c", lib_cflags);
+                exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_zenity.c", lib_cflags);
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
             },
             else => {}, // TODO: More os support
         }
 
-        exe.addIncludeDir("lib/nativefiledialog/src/include");
-        exe.addIncludeDir("lib/nuklear");
-        exe.addIncludeDir("src/gui/nuklear");
-        exe.addCSourceFile("src/gui/nuklear/impl.c", lib_cflags);
-        exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
+        exe.addIncludeDir(lib_folder ++ "/nativefiledialog/src/include");
+        exe.addIncludeDir(lib_folder ++ "/nuklear");
+        exe.addIncludeDir(src_folder ++ "/gui/nuklear");
+        exe.addCSourceFile(src_folder ++ "/gui/nuklear/impl.c", lib_cflags);
+        exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_common.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
@@ -143,4 +123,22 @@ pub fn build(b: *Builder) void {
         test_step.dependOn(&exe_test.step);
         b.default_step.dependOn(&exe.step);
     }
+}
+
+fn buildAndInstallCmdlineProgram(b: *Builder, test_step: *Step, install: bool, mode: builtin.Mode, name: []const u8, src: []const u8) void {
+    const exe_test = b.addTest(src);
+    const exe = b.addExecutable(name, src);
+    for (pkgs) |pkg| {
+        exe_test.addPackagePath(pkg[0], pkg[1]);
+        exe.addPackagePath(pkg[0], pkg[1]);
+    }
+
+    if (install)
+        exe.install();
+    exe_test.setBuildMode(mode);
+    exe.setBuildMode(mode);
+    exe_test.single_threaded = true;
+    exe.single_threaded = true;
+    test_step.dependOn(&exe_test.step);
+    b.default_step.dependOn(&exe.step);
 }

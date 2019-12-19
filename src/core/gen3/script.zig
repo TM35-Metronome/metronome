@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const rom = @import("../rom.zig");
 const script = @import("../script.zig");
 

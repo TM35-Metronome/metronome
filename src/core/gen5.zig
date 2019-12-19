@@ -4,6 +4,7 @@ const common = @import("common.zig");
 const rom = @import("rom.zig");
 
 pub const offsets = @import("gen5/offsets.zig");
+pub const script = @import("gen5/script.zig");
 
 const mem = std.mem;
 

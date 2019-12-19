@@ -141,7 +141,8 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
                             @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
 
                         // Find the field most likly to be this unions tag.
-                        const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse @compileError("Could not find a tag for " ++ struct_field.name);
+                        const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse
+                            @compileError("Could not find a tag for " ++ struct_field.name);
                         const tag = @field(value, tag_field);
                         const union_value = @field(value, struct_field.name);
                         const TagEnum = @typeOf(tag);
@@ -209,9 +210,10 @@ test "packedLength" {
 pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool) type {
     return struct {
         bytes: []u8,
+        i: usize = 0,
 
         pub fn next(decoder: *@This()) !?*Command {
-            const bytes = decoder.bytes;
+            const bytes = decoder.bytes[decoder.i..];
             if (bytes.len == 0)
                 return null;
 
@@ -231,7 +233,10 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             if (decoder.bytes.len < command_len)
                 return error.InvalidCommand;
 
-            defer decoder.bytes = if (isEnd(command)) bytes[0..0] else bytes[command_len..];
+            decoder.i += command_len;
+            if (isEnd(command))
+                decoder.bytes = decoder.bytes[0..decoder.i];
+
             return @ptrCast(*Command, bytes.ptr);
         }
     };
