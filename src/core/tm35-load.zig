@@ -103,20 +103,23 @@ pub fn main2(
     const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        outputGen3Data(game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+    const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
+        defer game.deinit();
+        outputGen3Data(game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     } else |err| err;
 
     file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
-        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
-            outputGen4Data(nds_rom, game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
+            defer game.deinit();
+            outputGen4Data(nds_rom, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
-        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            outputGen5Data(nds_rom, game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
+            defer game.deinit();
+            outputGen5Data(nds_rom, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
@@ -307,6 +310,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.wild_pokemon_headers) |header, i| {
+        // TODO: Get rid of inline for in favor of a function to call
         inline for ([_][]const u8{
             "land",
             "surf",
@@ -374,8 +378,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, base.gender_ability.gender);
             try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, base.gender_ability.ability);
             try stream.print(".trainers[{}].party[{}].level={}\n", i, j, base.level.value());
-            try stream.print(".trainers[{}].party[{}].species={}\n", i, j, base.species.species());
-            try stream.print(".trainers[{}].party[{}].form={}\n", i, j, base.species.form());
+            try stream.print(".trainers[{}].party[{}].species={}\n", i, j, base.species.value());
 
             switch (trainer.party_type) {
                 gen4.PartyType.None => {},
@@ -480,7 +483,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".hms[{}]={}\n", i, hm.value());
     }
 
-    for (game.wild_pokemons.nodes.toSlice()) |node, i|
+    for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         switch (game.version) {
             common.Version.Diamond,
             common.Version.Pearl,
@@ -492,10 +495,10 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 for (wild_mons.grass) |grass, j| {
                     try stream.print(".zones[{}].wild.grass.pokemons[{}].min_level={}\n", i, j, grass.level);
                     try stream.print(".zones[{}].wild.grass.pokemons[{}].max_level={}\n", i, j, grass.level);
-                    try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", i, j, grass.species.species());
-                    try stream.print(".zones[{}].wild.grass.pokemons[{}].form={}\n", i, j, grass.species.form());
+                    try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", i, j, grass.species.value());
                 }
 
+                // TODO: Get rid of inline for in favor of a function to call
                 inline for ([_][]const u8{
                     "swarm_replacements",
                     "day_replacements",
@@ -505,11 +508,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                     "gba_replacements",
                 }) |area_name| {
                     for (@field(wild_mons, area_name)) |replacement, k| {
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, replacement.species.species());
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, replacement.species.form());
+                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, replacement.species.value());
                     }
                 }
 
+                // TODO: Get rid of inline for in favor of a function to call
                 inline for ([_][]const u8{
                     "surf",
                     "sea_unknown",
@@ -521,8 +524,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                     for (@field(wild_mons, area_name)) |sea, k| {
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.species());
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, sea.species.form());
+                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
                     }
                 }
             },
@@ -531,6 +533,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             common.Version.SoulSilver,
             => {
                 const wild_mons = node.asDataFile(gen4.HgssWildPokemons) catch continue;
+                // TODO: Get rid of inline for in favor of a function to call
                 inline for ([_][]const u8{
                     "grass_morning",
                     "grass_day",
@@ -540,11 +543,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                     for (@field(wild_mons, area_name)) |species, j| {
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, j, wild_mons.grass_levels[j]);
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, j, species.species());
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, j, species.form());
+                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, j, species.value());
                     }
                 }
 
+                // TODO: Get rid of inline for in favor of a function to call
                 inline for ([_][]const u8{
                     "surf",
                     "sea_unknown",
@@ -556,8 +559,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                     for (@field(wild_mons, area_name)) |sea, k| {
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", i, area_name, k, sea.min_level);
                         try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", i, area_name, k, sea.max_level);
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.species());
-                        try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", i, area_name, k, sea.species.form());
+                        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", i, area_name, k, sea.species.value());
                     }
                 }
 
@@ -565,7 +567,20 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             },
 
             else => unreachable,
-        };
+        }
+    }
+
+    for (game.static_pokemons) |static_mon, i| {
+        const data = static_mon.data;
+        try stream.print(".static_pokemons[{}].species={}\n", i, data.WildBattle.species.value());
+        try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level.value());
+    }
+
+    for (game.given_items) |given_item, i| {
+        const data = given_item.data;
+        try stream.print(".given_items[{}].item={}\n", i, data.GiveItem.itemid.value());
+        try stream.print(".given_items[{}].quantity={}\n", i, data.GiveItem.quantity.value());
+    }
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
@@ -759,6 +774,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         const wild_mons = node.asDataFile(gen5.WildPokemons) catch continue;
+        // TODO: Get rid of inline for in favor of a function to call
         inline for ([_][]const u8{
             "grass",
             "dark_grass",
@@ -778,6 +794,14 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             }
         }
     }
+
+    for (game.static_pokemons) |static_mon, i| {
+        const data = static_mon.data;
+        try stream.print(".static_pokemons[{}].species={}\n", i, data.WildBattle.species.value());
+        try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level);
+    }
+
+    // TODO: Given items
 }
 
 test "" {

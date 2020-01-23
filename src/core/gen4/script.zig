@@ -661,7 +661,7 @@ pub const Command = packed struct {
         CheckBattleUnion: CheckBattleUnion,
         Cmd_2BB: Cmd_2BB,
         CheckWildBattle2: CheckWildBattle2,
-        WildBattle2: WildBattle2,
+        WildBattle2: WildBattle,
         StoreTrainerCardStar: StoreTrainerCardStar,
         BikeRide: BikeRide,
         Cmd_2c0: Cmd_2c0,
@@ -748,7 +748,7 @@ pub const Command = packed struct {
         Cmd_315: Cmd_315,
         Cmd_316: Cmd_316,
         Cmd_317: Cmd_317,
-        WildBattle3: WildBattle3,
+        WildBattle3: WildBattle,
         Cmd_319: Cmd_319,
         Cmd_31a: Cmd_31a,
         Cmd_31b: Cmd_31b,
@@ -3592,10 +3592,6 @@ pub const Command = packed struct {
     pub const CheckWildBattle2 = packed struct {
         a: lu16,
     };
-    pub const WildBattle2 = packed struct {
-        species: lu16,
-        level: lu16,
-    };
     pub const StoreTrainerCardStar = packed struct {
         a: lu16,
     };
@@ -3883,10 +3879,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
         c: lu16,
-    };
-    pub const WildBattle3 = packed struct {
-        species: lu16,
-        level: lu16,
     };
     pub const Cmd_319 = packed struct {
         a: lu16,

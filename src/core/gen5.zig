@@ -811,6 +811,8 @@ pub const Game = struct {
     tms1: []lu16,
     hms: []lu16,
     tms2: []lu16,
+    static_pokemons: []*script.Command,
+    given_items: []*script.Command,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
         const info = try getInfo(nds_rom.header.gamecode);
@@ -820,6 +822,12 @@ pub const Game = struct {
         const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
         const scripts = try getNarc(nds_rom.root, info.scripts);
         const script_files = scripts.nodes.toSlice();
+
+        const commands = try findScriptCommands(info.version, scripts, allocator);
+        errdefer {
+            allocator.free(commands.static_pokemons);
+            allocator.free(commands.given_items);
+        }
 
         return Game{
             .version = info.version,
@@ -860,12 +868,90 @@ pub const Game = struct {
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
+            .static_pokemons = commands.static_pokemons,
+            .given_items = commands.given_items,
         };
     }
 
-    pub fn deinit(game: *@This()) void {
+    pub fn deinit(game: Game) void {
         for (game.starters) |starter_ptrs|
             game.allocator.free(starter_ptrs);
+        game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_items);
+    }
+
+    const ScriptCommands = struct {
+        static_pokemons: []*script.Command,
+        given_items: []*script.Command,
+    };
+
+    fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
+        if (version == .Black or version == .White) {
+            // We don't support decoding scripts for hg/ss yet.
+            return ScriptCommands{
+                .static_pokemons = ([*]*script.Command)(undefined)[0..0],
+                .given_items = ([*]*script.Command)(undefined)[0..0],
+            };
+        }
+
+        var static_pokemons = std.ArrayList(*script.Command).init(allocator);
+        errdefer static_pokemons.deinit();
+        var given_items = std.ArrayList(*script.Command).init(allocator);
+        errdefer given_items.deinit();
+
+        var script_offsets = std.ArrayList(isize).init(allocator);
+        defer script_offsets.deinit();
+
+        for (scripts.nodes.toSlice()) |node, script_i| {
+            const script_file = node.asFile() catch continue;
+            const script_data = script_file.data;
+            defer script_offsets.resize(0) catch unreachable;
+
+            for (script.getScriptOffsets(script_data)) |relative_offset, i| {
+                const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
+                if (@intCast(isize, script_data.len) < offset)
+                    continue;
+                if (offset < 0)
+                    continue;
+                try script_offsets.append(offset);
+            }
+
+            var offset_i: usize = 0;
+            while (offset_i < script_offsets.count()) : (offset_i += 1) {
+                const offset = script_offsets.at(offset_i);
+                if (@intCast(isize, script_data.len) < offset)
+                    return error.Error;
+                if (offset < 0)
+                    return error.Error;
+
+                var decoder = script.CommandDecoder{
+                    .bytes = script_data,
+                    .i = @intCast(usize, offset),
+                };
+                while (decoder.next() catch continue) |command| {
+                    switch (command.tag) {
+                        // TODO: We're not finding any given items yet
+                        .WildBattle => try static_pokemons.append(command),
+                        .Jump => {
+                            const off = command.data.Jump.offset.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        .If => {
+                            const off = command.data.If.offset.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        else => {},
+                    }
+                }
+            }
+        }
+
+        return ScriptCommands{
+            .static_pokemons = static_pokemons.toOwnedSlice(),
+            .given_items = given_items.toOwnedSlice(),
+        };
     }
 
     fn nodeAsFile(node: nds.fs.Narc.Node) !*nds.fs.Narc.File {

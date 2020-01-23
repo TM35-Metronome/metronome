@@ -105,20 +105,23 @@ pub fn main2(
     const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-        outputGen3GameScripts(game, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+    const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
+        defer game.deinit();
+        outputGen3GameScripts(game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     } else |err| err;
 
     file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
-        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
-            outputGen4GameScripts(game, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
+            defer game.deinit();
+            outputGen4GameScripts(game.*, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
-        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            outputGen5GameScripts(game, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
+            defer game.deinit();
+            outputGen5GameScripts(game.*, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 

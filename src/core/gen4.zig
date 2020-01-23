@@ -74,35 +74,11 @@ pub const PartyType = packed enum(u8) {
     Both = 0b11,
 };
 
-pub const Species = extern struct {
-    value: lu16,
-
-    comptime {
-        std.debug.assert(@sizeOf(@This()) == 2);
-    }
-
-    pub fn species(s: Species) u10 {
-        return @truncate(u10, s.value.value());
-    }
-
-    pub fn setSpecies(s: *Species, spe: u10) void {
-        s.value = lu16.init((u16(s.form()) << u4(10)) | spe);
-    }
-
-    pub fn form(s: Species) u6 {
-        return @truncate(u6, s.value.value() >> 10);
-    }
-
-    pub fn setForm(s: *Species, f: u10) void {
-        s.value = lu16.init((u16(f) << u4(10)) | s.species());
-    }
-};
-
 pub const PartyMemberBase = extern struct {
     iv: u8,
     gender_ability: GenderAbilityPair, // 4 msb are gender, 4 lsb are ability
     level: lu16,
-    species: Species,
+    species: lu16,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 6);
@@ -302,7 +278,7 @@ pub const DpptWildPokemons = extern struct {
     pub const Grass = extern struct {
         level: u8,
         pad1: [3]u8,
-        species: Species,
+        species: lu16,
         pad2: [2]u8,
 
         comptime {
@@ -314,7 +290,7 @@ pub const DpptWildPokemons = extern struct {
         max_level: u8,
         min_level: u8,
         pad1: [2]u8,
-        species: Species,
+        species: lu16,
         pad2: [2]u8,
 
         comptime {
@@ -323,7 +299,7 @@ pub const DpptWildPokemons = extern struct {
     };
 
     pub const Replacement = extern struct {
-        species: Species,
+        species: lu16,
         pad: [2]u8,
 
         comptime {
@@ -337,16 +313,16 @@ pub const HgssWildPokemons = extern struct {
     sea_rates: [5]u8,
     unknown: [2]u8,
     grass_levels: [12]u8,
-    grass_morning: [12]Species,
-    grass_day: [12]Species,
-    grass_night: [12]Species,
-    radio: [4]Species,
+    grass_morning: [12]lu16,
+    grass_day: [12]lu16,
+    grass_night: [12]lu16,
+    radio: [4]lu16,
     surf: [5]Sea,
     sea_unknown: [2]Sea,
     old_rod: [5]Sea,
     good_rod: [5]Sea,
     super_rod: [5]Sea,
-    swarm: [4]Species,
+    swarm: [4]lu16,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 196);
@@ -355,7 +331,7 @@ pub const HgssWildPokemons = extern struct {
     pub const Sea = extern struct {
         min_level: u8,
         max_level: u8,
-        species: Species,
+        species: lu16,
 
         comptime {
             std.debug.assert(@sizeOf(@This()) == 4);
@@ -365,6 +341,8 @@ pub const HgssWildPokemons = extern struct {
 
 pub const Game = struct {
     version: common.Version,
+    allocator: *mem.Allocator,
+
     starters: [3]*lu16,
     pokemons: *const nds.fs.Narc,
     evolutions: *const nds.fs.Narc,
@@ -376,20 +354,31 @@ pub const Game = struct {
     scripts: *const nds.fs.Narc,
     tms: []lu16,
     hms: []lu16,
+    static_pokemons: []*script.Command,
+    given_items: []*script.Command,
 
-    pub fn fromRom(nds_rom: nds.Rom) !Game {
+    pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
         const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
 
+        const scripts = try getNarc(nds_rom.root, info.scripts);
+        const commands = try findScriptCommands(info.version, scripts, allocator);
+        errdefer {
+            allocator.free(commands.static_pokemons);
+            allocator.free(commands.given_items);
+        }
+
         return Game{
             .version = info.version,
+            .allocator = allocator,
+
             .starters = switch (info.starters) {
                 .Arm9 => |offset| blk: {
                     if (nds_rom.arm9.len < offset + offsets.starters_len)
-                        unreachable; //return error.CouldNotFindStarters;
+                        return error.CouldNotFindStarters;
                     const starters_section = @bytesToSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
@@ -420,9 +409,103 @@ pub const Game = struct {
             .trainers = try getNarc(nds_rom.root, info.trainers),
             .parties = try getNarc(nds_rom.root, info.parties),
             .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
-            .scripts = try getNarc(nds_rom.root, info.scripts),
+            .scripts = scripts,
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
+            .static_pokemons = commands.static_pokemons,
+            .given_items = commands.given_items,
+        };
+    }
+
+    pub fn deinit(game: Game) void {
+        game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_items);
+    }
+
+    const ScriptCommands = struct {
+        static_pokemons: []*script.Command,
+        given_items: []*script.Command,
+    };
+
+    fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
+        if (version == .HeartGold or version == .SoulSilver) {
+            // We don't support decoding scripts for hg/ss yet.
+            return ScriptCommands{
+                .static_pokemons = ([*]*script.Command)(undefined)[0..0],
+                .given_items = ([*]*script.Command)(undefined)[0..0],
+            };
+        }
+
+        var static_pokemons = std.ArrayList(*script.Command).init(allocator);
+        errdefer static_pokemons.deinit();
+        var given_items = std.ArrayList(*script.Command).init(allocator);
+        errdefer given_items.deinit();
+
+        var script_offsets = std.ArrayList(isize).init(allocator);
+        defer script_offsets.deinit();
+
+        for (scripts.nodes.toSlice()) |node, script_i| {
+            const script_file = node.asFile() catch continue;
+            const script_data = script_file.data;
+            defer script_offsets.resize(0) catch unreachable;
+
+            for (script.getScriptOffsets(script_data)) |relative_offset, i| {
+                const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
+                if (@intCast(isize, script_data.len) < offset)
+                    continue;
+                if (offset < 0)
+                    continue;
+                try script_offsets.append(offset);
+            }
+
+            var offset_i: usize = 0;
+            while (offset_i < script_offsets.count()) : (offset_i += 1) {
+                const offset = script_offsets.at(offset_i);
+                if (@intCast(isize, script_data.len) < offset)
+                    return error.Error;
+                if (offset < 0)
+                    return error.Error;
+
+                var decoder = script.CommandDecoder{
+                    .bytes = script_data,
+                    .i = @intCast(usize, offset),
+                };
+                while (decoder.next() catch continue) |command| {
+                    switch (command.tag) {
+                        .GiveItem => try given_items.append(command),
+                        .WildBattle,
+                        .WildBattle2,
+                        .WildBattle3,
+                        => try static_pokemons.append(command),
+                        .Jump => {
+                            const off = command.data.Jump.adr.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        .CompareLastResultJump => {
+                            const off = command.data.CompareLastResultJump.adr.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        .Call => {
+                            const off = command.data.Call.adr.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        .CompareLastResultCall => {
+                            const off = command.data.CompareLastResultCall.adr.value();
+                            if (off >= 0)
+                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        },
+                        else => {},
+                    }
+                }
+            }
+        }
+
+        return ScriptCommands{
+            .static_pokemons = static_pokemons.toOwnedSlice(),
+            .given_items = given_items.toOwnedSlice(),
         };
     }
 
