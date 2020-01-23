@@ -26,6 +26,7 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
     }
 }.isEnd);
 
+// These commands are only valid in black2/white2
 pub const Command = packed struct {
     tag: Kind,
     data: extern union {

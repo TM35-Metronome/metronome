@@ -124,7 +124,7 @@ pub fn main2(
     };
 
     var nds_rom: nds.Rom = undefined;
-    const game: Game = blk: {
+    var game: Game = blk: {
         const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
         defer file.close();
 
@@ -139,7 +139,7 @@ pub fn main2(
             return 1;
         };
 
-        const gen4_error = if (gen4.Game.fromRom(nds_rom)) |game| {
+        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |game| {
             break :blk Game{ .Gen4 = game };
         } else |err| err;
 
@@ -151,6 +151,11 @@ pub fn main2(
         stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error) catch {};
         stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
         return 1;
+    };
+    defer switch (game) {
+        .Gen3 => |*gen3_game| gen3_game.deinit(),
+        .Gen4 => |*gen4_game| gen4_game.deinit(),
+        .Gen5 => |*gen5_game| gen5_game.deinit(),
     };
 
     var line_num: usize = 1;
@@ -481,32 +486,28 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         }
     } else |_| if (parser.eatField("static_pokemons")) {
         const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
-        var static_mon = game.static_pokemons[static_mon_index].data;
+        const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data.setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
+            static_mon.data.setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("item")) {
-            static_mon.setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data.setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
-
-        game.static_pokemons[static_mon_index].data = static_mon;
     } else |_| if (parser.eatField("given_items")) {
         const given_index = try parser.eatIndexMax(game.given_items.len);
-        var given_item = game.given_items[given_index].data;
+        const given_item = game.given_items[given_index];
 
         if (parser.eatField("item")) {
-            given_item.giveitem.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.data.giveitem.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("quantity")) {
-            given_item.giveitem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.data.giveitem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
-
-        game.given_items[given_index].data = given_item;
     } else |_| {
         return error.NoField;
     }
@@ -563,9 +564,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             } else |_| if (parser.eatField("level")) {
                 member.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("species")) {
-                member.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-            } else |_| if (parser.eatField("form")) {
-                member.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                member.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
             } else |_| if (parser.eatField("item")) {
                 const item = try parser.eatUnsignedValue(u16, 10);
                 switch (trainer.party_type) {
@@ -745,10 +744,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                             wild.level = try parser.eatUnsignedValue(u8, 10);
                             return;
                         } else |_| if (parser.eatField("species")) {
-                            wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                            return;
-                        } else |_| if (parser.eatField("form")) {
-                            wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
                             return;
                         } else |_| {
                             return error.NoField;
@@ -774,10 +770,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                     const wild = &area[wild_index];
 
                     if (parser.eatField("species")) {
-                        wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                        return;
-                    } else |_| if (parser.eatField("form")) {
-                        wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                        wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
                         return;
                     } else |_| {
                         return error.NoField;
@@ -807,10 +800,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                             wild.max_level = try parser.eatUnsignedValue(u8, 10);
                             return;
                         } else |_| if (parser.eatField("species")) {
-                            wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                            return;
-                        } else |_| if (parser.eatField("form")) {
-                            wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
                             return;
                         } else |_| {
                             return error.NoField;
@@ -846,10 +836,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                             wilds.grass_levels[wild_index] = try parser.eatUnsignedValue(u8, 10);
                             return;
                         } else |_| if (parser.eatField("species")) {
-                            wild.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                            return;
-                        } else |_| if (parser.eatField("form")) {
-                            wild.setForm(try parser.eatUnsignedValue(u6, 10));
+                            wild.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
                             return;
                         } else |_| {
                             return error.NoField;
@@ -880,10 +867,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                             wild.max_level = try parser.eatUnsignedValue(u8, 10);
                             return;
                         } else |_| if (parser.eatField("species")) {
-                            wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                            return;
-                        } else |_| if (parser.eatField("form")) {
-                            wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
+                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
                             return;
                         } else |_| {
                             return error.NoField;
@@ -895,6 +879,28 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             },
             else => unreachable,
+        }
+    } else |_| if (parser.eatField("static_pokemons")) {
+        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
+        const static_mon = game.static_pokemons[static_mon_index];
+
+        if (parser.eatField("species")) {
+            static_mon.data.WildBattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("level")) {
+            static_mon.data.WildBattle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
+        }
+    } else |_| if (parser.eatField("given_items")) {
+        const given_index = try parser.eatIndexMax(game.given_items.len);
+        const given_item = game.given_items[given_index];
+
+        if (parser.eatField("item")) {
+            given_item.data.GiveItem.itemid = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("quantity")) {
+            given_item.data.GiveItem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
         }
     } else |err| {
         return error.NoField;
@@ -1185,7 +1191,20 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         }
 
         return error.NoField;
-    } else |_| {
+    } else |_| if (parser.eatField("static_pokemons")) {
+        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
+        const static_mon = game.static_pokemons[static_mon_index];
+
+        if (parser.eatField("species")) {
+            static_mon.data.WildBattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("level")) {
+            static_mon.data.WildBattle.level = try parser.eatUnsignedValue(u8, 10);
+        } else |_| {
+            return error.NoField;
+        }
+    }
+    // TODO: Given items
+    else |_| {
         return error.NoField;
     }
 }
