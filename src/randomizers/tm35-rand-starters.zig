@@ -33,7 +33,6 @@ const params = blk: {
         clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
         clap.parseParam("-s, --seed <NUM>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
         clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
-        Param{ .takes_value = true },
     };
 };
 

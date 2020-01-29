@@ -34,7 +34,6 @@ const params = blk: {
         clap.parseParam("-i, --simular-total-stats         Replaced party members should have simular total stats.                                        ") catch unreachable,
         clap.parseParam("-t, --types <random|same|themed>  Which types each trainer should use. (default: random)                                         ") catch unreachable,
         clap.parseParam("-v, --version                     Output version information and exit.                                                           ") catch unreachable,
-        Param{ .takes_value = true },
     };
 };
 
@@ -115,14 +114,12 @@ pub fn main2(
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
-    const types = if (args.option("--types")) |types|
-        std.meta.stringToEnum(TypesOption, types) orelse {
-            stdio.err.print("--types does not support '{}'\n", types) catch {};
-            usage(stdio.err) catch {};
-            return 1;
-        }
-    else
-        TypesOption.random;
+    const types_arg = args.option("--types") orelse "random";
+    const types = std.meta.stringToEnum(TypesOption, types_arg) orelse {
+        stdio.err.print("--types does not support '{}'\n", types_arg) catch {};
+        usage(stdio.err) catch {};
+        return 1;
+    };
 
     const fix_moves = args.flag("--fix-moves");
     const simular_total_stats = args.flag("--simular-total-stats");
@@ -348,10 +345,10 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                 var max = min;
 
                 simular.resize(0) catch unreachable;
-                while (simular.len < 5) {
+                while (simular.len < 25) : ({
                     min -= 5;
                     max += 5;
-
+                }) {
                     for (pick_from) |s| {
                         const p = data.pokemons.get(s).?.value;
                         const total = @intCast(i64, sum(u8, p.stats));

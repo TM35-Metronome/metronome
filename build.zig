@@ -28,6 +28,7 @@ const randomizer_exes = [_][]const u8{
     "tm35-rand-starters",
     "tm35-rand-learned-moves",
     "tm35-rand-stats",
+    "tm35-rand-static",
     "tm35-rand-wild",
     "tm35-rand-parties",
 };
