@@ -31,7 +31,6 @@ const params = blk: {
         clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
         clap.parseParam("-s, --seed <NUM>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
         clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
-        Param{ .takes_value = true },
     };
 };
 

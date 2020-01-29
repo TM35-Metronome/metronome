@@ -253,7 +253,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();
 
-        for (gen4.script.getScriptOffsets(script_data)) |relative_offset, i| {
+        for (gen5.script.getScriptOffsets(script_data)) |relative_offset, i| {
             const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
             if (@intCast(isize, script_data.len) < offset)
                 continue;

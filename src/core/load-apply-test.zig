@@ -520,13 +520,16 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
     const root = nds_rom.root;
 
     // We use a checklist to assert at comptime that we generate info
-    // for all fields in gen3.offsets.Info
+    // for all fields in gen4.offsets.Info
     comptime var checklist = checklistFromT(gen4.offsets.Info);
     comptime checklist.set("game_title", true) catch unreachable;
     comptime checklist.set("gamecode", true) catch unreachable;
     comptime checklist.set("version", true) catch unreachable;
     comptime checklist.set("hm_tm_prefix", true) catch unreachable;
     comptime checklist.set("starters", true) catch unreachable;
+
+    comptime checklist.set("scripts", true) catch unreachable;
+    try createNarcData(allocator, root, info.scripts, "", 10, "");
 
     comptime checklist.set("pokemons", true) catch unreachable;
     try createNarc(allocator, root, info.pokemons, zeroInit(gen4.BasePokemon), 10, "");
