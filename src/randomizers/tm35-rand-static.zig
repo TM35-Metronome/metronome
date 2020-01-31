@@ -229,25 +229,22 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
+    const species = try data.species();
+
     switch (method) {
         .random => switch (_type) {
             .random => {
-                var pokemons = std.ArrayList(usize).init(allocator);
-                var p_it = data.pokemons.iterator();
-                while (p_it.next()) |kv|
-                    try pokemons.append(kv.key);
-
-                if (pokemons.len == 0)
+                if (species.len == 0)
                     return;
 
-                var s_it = data.static_mons.iterator();
-                while (s_it.next()) |kv|
-                    kv.value = pokemons.toSlice()[random.range(usize, 0, pokemons.len)];
+                var it = data.static_mons.iterator();
+                while (it.next()) |kv|
+                    kv.value = species[random.range(usize, 0, species.len)];
             },
             .same => {
-                const by_type = try data.pokemonsByType();
-                var s_it = data.static_mons.iterator();
-                while (s_it.next()) |kv| {
+                const by_type = try data.speciesByType(species);
+                var it = data.static_mons.iterator();
+                while (it.next()) |kv| {
                     const pokemon = data.pokemons.get(kv.value).?.value;
                     if (pokemon.types.len == 0)
                         continue;
@@ -263,19 +260,19 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 // When we do random, we should never actually touch the 'by_type'
                 // table, so let's just avoid doing the work of constructing it :)
                 .random => undefined,
-                .same => try data.pokemonsByType(),
+                .same => try data.speciesByType(species),
             };
 
             var simular = std.ArrayList(usize).init(allocator);
-            var pokemons = std.ArrayList(usize).init(allocator);
-            var p_it = data.pokemons.iterator();
-            while (p_it.next()) |kv|
-                try pokemons.append(kv.key);
-
-            var s_it = data.static_mons.iterator();
-            while (s_it.next()) |kv| {
+            var it = data.static_mons.iterator();
+            while (it.next()) |kv| {
                 defer simular.resize(0) catch unreachable;
 
+                // If the static Pokémon does not exist in the data
+                // we received, then there is no way for us to compare
+                // its stats with other Pokémons. The only thing we can
+                // assume is that the Pokémon it currently is
+                // simular/same as itself.
                 const prev_pokemon = (data.pokemons.get(kv.value) orelse continue).value;
 
                 var min = @intCast(i64, sum(u8, prev_pokemon.stats));
@@ -289,7 +286,7 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                     max += 5;
                 }) {
                     switch (_type) {
-                        .random => for (pokemons.toSlice()) |s| {
+                        .random => for (species) |s| {
                             const pokemon = data.pokemons.get(s).?.value;
 
                             const total = @intCast(i64, sum(u8, pokemon.stats));
@@ -336,37 +333,100 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
             //    and other patterns common for legendaires
             //
             // I have chosen the latter method.
-            //var legendaries = std.ArrayList(usize).init(allocator);
-            //var rest = std.ArrayList(usize).init(allocator);
-            //var rating_to_be_legendary: i8 = 0;
-            //
-            //var p_it = data.pokemons.iterator();
-            //while (p_it.next()) |kv|
-            //    rating_to_be_legendary = math.max(rating_to_be_legendary, kv.value.legendary_rating);
-            //
-            //rating_to_be_legendary -= 1; // Some legendaries don't match in one area, so let's still accept those
-            //p_it = data.pokemons.iterator();
-            //while (p_it.next()) |kv| {
-            //    if (kv.value.legendary_rating >= rating_to_be_legendary) {
-            //        try legendaries.append(kv.key);
-            //    } else {
-            //        try rest.append(kv.key);
-            //    }
-            //}
-            //
-            //var s_it = data.static_mons.iterator();
-            //while (s_it.next()) |kv| {
-            //    const pokemon = data.pokemons.get(kv.value).?.value;
-            //    const pick_from = if (pokemon.legendary_rating >= rating_to_be_legendary) legendaries else rest;
-            //    if (pick_from.len == 0)
-            //        continue;
-            //
-            //    switch (_type) {
-            //        .random => kv.value = rest.toSlice()[random.range(usize, 0, rest.len)],
-            //        .same => unreachable, // TODO: Implement
-            //    }
-            //}
-            unreachable; // TODO: Implement
+
+            // First, lets give each Pokémon a "legendary rating" which
+            // is a meassure as to how many "legendary" criteria this
+            // Pokémon fits into. This rating can be negative.
+            var ratings = std.AutoHashMap(usize, isize).init(allocator);
+            var p_it = data.pokemons.iterator();
+            while (p_it.next()) |kv| {
+                const _species = kv.key;
+                const pokemon = kv.value;
+                const rating_entry = try ratings.getOrPutValue(_species, 0);
+
+                // Legendaries are generally in the "Slow" to "MediumSlow"
+                // growth rating
+                if (pokemon.growth_rate) |growth_rate|
+                    rating_entry.value += isize(@boolToInt(mem.eql(u8, growth_rate, "Slow") or
+                        mem.eql(u8, growth_rate, "MediumSlow")));
+
+                // They generally have a catch rate of 45 or less
+                if (pokemon.catch_rate) |catch_rate|
+                    rating_entry.value += isize(@boolToInt(catch_rate <= 45));
+
+                // They tend to not have a gender (255 in gender_ratio means
+                // genderless).
+                if (pokemon.gender_ratio) |gender_ratio|
+                    rating_entry.value += isize(@boolToInt(gender_ratio == 255));
+
+                // Most are part of the "Undiscovered" egg group
+                if (pokemon.egg_group) |egg_group|
+                    rating_entry.value += isize(@boolToInt(mem.eql(u8, egg_group, "Undiscovered")));
+
+                // They don't have evolutions.
+                if (pokemon.evos.len != 0)
+                    rating_entry.value -= 10;
+
+                // And they don't evolve from anything. Suptract
+                // score from this Pokémons evolutions.
+                for (pokemon.evos.toSlice()) |evo| {
+                    const evo_rating = try ratings.getOrPutValue(evo, 0);
+                    evo_rating.value -= 10;
+                }
+            }
+
+            const rating_to_be_legendary = blk: {
+                var res: isize = 0;
+                var r_it = ratings.iterator();
+                while (r_it.next()) |r_kv|
+                    res = math.max(res, r_kv.value);
+
+                // Not all legendaries match all criteria.
+                break :blk res - 1;
+            };
+
+            var legendaries = std.ArrayList(usize).init(allocator);
+            var rest = std.ArrayList(usize).init(allocator);
+
+            var r_it = ratings.iterator();
+            while (r_it.next()) |kv| {
+                if (kv.value >= rating_to_be_legendary) {
+                    try legendaries.append(kv.key);
+                } else {
+                    try rest.append(kv.key);
+                }
+            }
+
+            const legendaries_by_type = switch (_type) {
+                .random => undefined,
+                .same => try data.speciesByType(legendaries.toSlice()),
+            };
+            const rest_by_type = switch (_type) {
+                .random => undefined,
+                .same => try data.speciesByType(rest.toSlice()),
+            };
+
+            var s_it = data.static_mons.iterator();
+            while (s_it.next()) |kv| {
+                const pokemon = (data.pokemons.get(kv.value) orelse continue).value;
+                const rating = (ratings.get(kv.value) orelse continue).value;
+                const pick_from = switch (_type) {
+                    .random => if (rating >= rating_to_be_legendary) legendaries else rest,
+                    .same => blk: {
+                        if (pokemon.types.len == 0)
+                            continue;
+
+                        const types = pokemon.types.toSlice();
+                        const picked_type = types[random.range(usize, 0, types.len)];
+                        const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
+                        break :blk (pick_from_by_type.get(picked_type) orelse continue).value;
+                    },
+                };
+
+                if (pick_from.len == 0)
+                    continue;
+                kv.value = pick_from.toSlice()[random.range(usize, 0, pick_from.len)];
+            }
         },
     }
 }
@@ -387,7 +447,7 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const PokemonByType = std.StringHashMap(std.ArrayList(usize));
+const SpeciesByType = std.StringHashMap(std.ArrayList(usize));
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const StaticMons = std.AutoHashMap(usize, usize);
 
@@ -395,19 +455,32 @@ const Data = struct {
     pokemons: Pokemons,
     static_mons: StaticMons,
 
-    fn pokemonsByType(d: Data) !PokemonByType {
-        var res = PokemonByType.init(d.allocator());
+    fn species(d: Data) ![]const usize {
+        var res = std.ArrayList(usize).init(d.allocator());
+        errdefer res.deinit();
+
         var p_it = d.pokemons.iterator();
-        while (p_it.next()) |kv| {
-            const species = kv.key;
-            const pokemon = kv.value;
+        while (p_it.next()) |kv|
+            try res.append(kv.key);
+
+        return res.toOwnedSlice();
+    }
+
+    fn speciesByType(d: Data, _species: []const usize) !SpeciesByType {
+        var res = SpeciesByType.init(d.allocator());
+        errdefer {
+            var it = res.iterator();
+            while (it.next()) |kv|
+                kv.value.deinit();
+            res.deinit();
+        }
+
+        for (_species) |s| {
+            const pokemon = (d.pokemons.get(s) orelse continue).value;
 
             for (pokemon.types.toSlice()) |t| {
-                const entry = try res.getOrPut(t);
-                if (!entry.found_existing)
-                    entry.kv.value = std.ArrayList(usize).init(d.allocator());
-
-                try entry.kv.value.append(species);
+                const entry = try res.getOrPutValue(t, std.ArrayList(usize).init(d.allocator()));
+                try entry.value.append(s);
             }
         }
 
@@ -422,11 +495,11 @@ const Data = struct {
 const Pokemon = struct {
     stats: [6]u8,
     types: std.ArrayList([]const u8),
-    growth_rate: ?[]const u8, // legendaries are "Slow" or "MediumSlow"
-    catch_rate: ?usize, // Legendaries are <= 45
-    gender_ratio: ?usize, //  Legendaries are == 255
-    egg_group: ?[]const u8, // legendaries are "Undiscovered"
-    evos: std.ArrayList(usize), // legendaries have no evos, and are not
+    growth_rate: ?[]const u8,
+    catch_rate: ?usize,
+    gender_ratio: ?usize,
+    egg_group: ?[]const u8,
+    evos: std.ArrayList(usize),
 
     fn init(allocator: *mem.Allocator) Pokemon {
         return Pokemon{
@@ -465,8 +538,8 @@ test "tm35-rand-static" {
                 ".pokemons[" ++ id ++ "].growth_rate=" ++ growth_rate ++ "\n" ++
                 ".pokemons[" ++ id ++ "].catch_rate=" ++ catch_rate ++ "\n" ++
                 ".pokemons[" ++ id ++ "].gender_ratio=" ++ gender_ratio ++ "\n" ++
-                ".pokemons[" ++ id ++ "].egg_groups=" ++ egg_groups ++ "\n" ++
-                if (evo) |e| ".pokemons[" ++ id ++ "].evos[0]=" ++ e ++ "\n" else "";
+                ".pokemons[" ++ id ++ "].egg_groups[0]=" ++ egg_groups ++ "\n" ++
+                if (evo) |e| ".pokemons[" ++ id ++ "].evos[0].target=" ++ e ++ "\n" else "";
         }
         fn static(
             comptime id: []const u8,
@@ -563,15 +636,24 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=0
         \\
     );
-    //testProgram([_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
-    //    \\.static_pokemons[4].species=15
-    //    \\.static_pokemons[5].species=4
-    //    \\.static_pokemons[3].species=11
-    //    \\.static_pokemons[1].species=6
-    //    \\.static_pokemons[2].species=0
-    //    \\.static_pokemons[0].species=11
-    //    \\
-    //);
+    testProgram([_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+        \\.static_pokemons[4].species=0
+        \\.static_pokemons[5].species=18
+        \\.static_pokemons[3].species=0
+        \\.static_pokemons[1].species=1
+        \\.static_pokemons[2].species=6
+        \\.static_pokemons[0].species=5
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
+        \\.static_pokemons[4].species=4
+        \\.static_pokemons[5].species=13
+        \\.static_pokemons[3].species=1
+        \\.static_pokemons[1].species=0
+        \\.static_pokemons[2].species=2
+        \\.static_pokemons[0].species=6
+        \\
+    );
 }
 
 fn testProgram(
