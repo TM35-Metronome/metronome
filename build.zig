@@ -53,6 +53,9 @@ pub fn build(b: *Builder) void {
     b.setPreferredReleaseMode(.ReleaseSafe);
     const mode = b.standardReleaseOptions();
     const target = b.standardTargetOptions(null); // TODO: We don't actually support all targets. Provide the actual subset we do support
+
+    const skip_release = b.option(bool, "skip-release", "Main test suite skips release builds") orelse false;
+
     const os = switch (target) {
         .Native => builtin.os,
         .Cross => |c| c.os,
@@ -65,81 +68,107 @@ pub fn build(b: *Builder) void {
     });
     b.default_step.dependOn(&fmt_step.step);
 
+    const modes_to_test = if (skip_release)
+        ([]builtin.Mode)(&[_]builtin.Mode{.Debug})
+    else
+        ([]builtin.Mode)(&[_]builtin.Mode{ .Debug, .ReleaseFast, .ReleaseSafe, .ReleaseSmall });
+
     const test_step = b.step("test", "Run all tests");
-    for (src_pkgs) |pkg| {
-        const pkg_test = b.addTest(pkg[1]);
-        test_step.dependOn(&pkg_test.step);
+    for (modes_to_test) |test_mode| {
+        for (src_pkgs) |pkg| {
+            const pkg_test = b.addTest(pkg[1]);
+            pkg_test.setNamePrefix(b.fmt("{}-", @tagName(mode)));
+            test_step.dependOn(&pkg_test.step);
+        }
+
+        for (tool_exes) |name|
+            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/{}.zig", tools_folder, name));
+        for (core_exes) |name|
+            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/core/{}.zig", src_folder, name));
+        for (randomizer_exes) |name|
+            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/randomizers/{}.zig", src_folder, name));
+
+        for (gui_exes) |tool, i| {
+            const source = b.fmt("{}/gui/{}.zig", src_folder, tool);
+            const exe_test = b.addTest(source);
+            for (pkgs) |pkg|
+                exe_test.addPackagePath(pkg[0], pkg[1]);
+
+            exe_test.setNamePrefix(b.fmt("{}-", @tagName(mode)));
+            exe_test.setBuildMode(test_mode);
+            exe_test.single_threaded = true;
+            test_step.dependOn(&exe_test.step);
+        }
     }
 
-    inline for (tool_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, test_step, false, mode, name, tools_folder ++ "/" ++ name ++ ".zig");
-    inline for (core_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, test_step, true, mode, name, src_folder ++ "/core/" ++ name ++ ".zig");
-    inline for (randomizer_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, test_step, true, mode, name, src_folder ++ "/randomizers/" ++ name ++ ".zig");
+    for (tool_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, false, mode, name, b.fmt("{}/{}.zig", tools_folder, name));
+    for (core_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, true, mode, name, b.fmt("{}/core/{}.zig", src_folder, name));
+    for (randomizer_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, true, mode, name, b.fmt("{}/randomizers/{}.zig", src_folder, name));
 
     const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
-    inline for (gui_exes) |tool, i| {
-        const source = src_folder ++ "/gui/" ++ tool ++ ".zig";
-        const exe_test = b.addTest(source);
+    for (gui_exes) |tool, i| {
+        const source = b.fmt("{}/gui/{}.zig", src_folder, tool);
         const exe = b.addExecutable(tool, source);
-        for (pkgs) |pkg| {
-            exe_test.addPackagePath(pkg[0], pkg[1]);
+        for (pkgs) |pkg|
             exe.addPackagePath(pkg[0], pkg[1]);
-        }
 
         switch (os) {
             .windows => {
-                exe.addIncludeDir(lib_folder ++ "/nuklear/demo/gdi");
-                exe.addCSourceFile(src_folder ++ "/gui/nuklear/gdi.c", lib_cflags);
-                exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_win.cpp", lib_cflags);
+                exe.addIncludeDir(b.fmt("{}/nuklear/demo/gdi", lib_folder));
+                exe.addCSourceFile(b.fmt("{}/gui/nuklear/gdi.c", src_folder), lib_cflags);
+                exe.addCSourceFile(b.fmt("{}/nativefiledialog/src/nfd_win.cpp", lib_folder), lib_cflags);
                 exe.linkSystemLibrary("user32");
                 exe.linkSystemLibrary("gdi32");
                 exe.linkSystemLibrary("Msimg32");
             },
             .linux => {
-                exe.addIncludeDir(lib_folder ++ "/nuklear/demo/x11_xft");
+                exe.addIncludeDir(b.fmt("{}/nuklear/demo/x11_xft", lib_folder));
                 exe.addIncludeDir("/usr/include/freetype2");
-                exe.addCSourceFile(src_folder ++ "/gui/nuklear/x11.c", lib_cflags);
-                exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_zenity.c", lib_cflags);
+                exe.addCSourceFile(b.fmt("{}/gui/nuklear/x11.c", src_folder), lib_cflags);
+                exe.addCSourceFile(b.fmt("{}/nativefiledialog/src/nfd_zenity.c", lib_folder), lib_cflags);
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
             },
             else => {}, // TODO: More os support
         }
 
-        exe.addIncludeDir(lib_folder ++ "/nativefiledialog/src/include");
-        exe.addIncludeDir(lib_folder ++ "/nuklear");
-        exe.addIncludeDir(src_folder ++ "/gui/nuklear");
-        exe.addCSourceFile(src_folder ++ "/gui/nuklear/impl.c", lib_cflags);
-        exe.addCSourceFile(lib_folder ++ "/nativefiledialog/src/nfd_common.c", lib_cflags);
+        exe.addIncludeDir(b.fmt("{}/nativefiledialog/src/include", lib_folder));
+        exe.addIncludeDir(b.fmt("{}/nuklear", lib_folder));
+        exe.addIncludeDir(b.fmt("{}/gui/nuklear", src_folder));
+        exe.addCSourceFile(b.fmt("{}/gui/nuklear/impl.c", src_folder), lib_cflags);
+        exe.addCSourceFile(b.fmt("{}/nativefiledialog/src/nfd_common.c", lib_folder), lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
         exe.install();
-        exe_test.setBuildMode(mode);
         exe.setBuildMode(mode);
-        exe_test.single_threaded = true;
         exe.single_threaded = true;
-        test_step.dependOn(&exe_test.step);
         b.default_step.dependOn(&exe.step);
     }
 }
 
-fn buildAndInstallCmdlineProgram(b: *Builder, test_step: *Step, install: bool, mode: builtin.Mode, name: []const u8, src: []const u8) void {
-    const exe_test = b.addTest(src);
+fn buildAndInstallCmdlineProgram(b: *Builder, install: bool, mode: builtin.Mode, name: []const u8, src: []const u8) void {
     const exe = b.addExecutable(name, src);
-    for (pkgs) |pkg| {
-        exe_test.addPackagePath(pkg[0], pkg[1]);
+    for (pkgs) |pkg|
         exe.addPackagePath(pkg[0], pkg[1]);
-    }
 
     if (install)
         exe.install();
-    exe_test.setBuildMode(mode);
     exe.setBuildMode(mode);
-    exe_test.single_threaded = true;
     exe.single_threaded = true;
-    test_step.dependOn(&exe_test.step);
     b.default_step.dependOn(&exe.step);
+}
+
+fn testCmdlineProgram(b: *Builder, test_step: *Step, mode: builtin.Mode, src: []const u8) void {
+    const exe_test = b.addTest(src);
+    for (pkgs) |pkg|
+        exe_test.addPackagePath(pkg[0], pkg[1]);
+
+    exe_test.setNamePrefix(b.fmt("{}-", @tagName(mode)));
+    exe_test.setBuildMode(mode);
+    exe_test.single_threaded = true;
+    test_step.dependOn(&exe_test.step);
 }
