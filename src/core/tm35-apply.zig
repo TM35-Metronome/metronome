@@ -497,9 +497,9 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatField("given_items")) {
-        const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
 
         if (parser.eatField("item")) {
             given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
@@ -891,9 +891,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatField("given_items")) {
-        const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
 
         if (parser.eatField("item")) {
             given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
@@ -1202,9 +1202,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatField("given_items")) {
-        const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
 
         if (parser.eatField("item")) {
             given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));

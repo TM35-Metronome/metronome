@@ -553,7 +553,7 @@ pub const MapScript2 = extern struct {
     }
 };
 
-const GivenItem = struct {
+const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
 };
@@ -580,7 +580,7 @@ pub const Game = struct {
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
     static_pokemons: []*script.Command,
-    given_items: []GivenItem,
+    pokeball_items: []PokeballItem,
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
         var file_in_stream = file.inStream();
@@ -610,7 +610,7 @@ pub const Game = struct {
             VAR_0x8000: ?*lu16 = null,
             VAR_0x8001: ?*lu16 = null,
             static_pokemons: std.ArrayList(*script.Command),
-            given_items: std.ArrayList(GivenItem),
+            pokeball_items: std.ArrayList(PokeballItem),
 
             fn processCommand(data: *@This(), command: *script.Command) !void {
                 if (command.tag == .setwildbattle)
@@ -625,7 +625,7 @@ pub const Game = struct {
                     (command.data.callstd.function == script.STD_OBTAIN_ITEM or
                     command.data.callstd.function == script.STD_FIND_ITEM))
                 blk: {
-                    try data.given_items.append(GivenItem{
+                    try data.pokeball_items.append(PokeballItem{
                         .item = data.VAR_0x8000 orelse break :blk,
                         .amount = data.VAR_0x8001 orelse break :blk,
                     });
@@ -634,13 +634,13 @@ pub const Game = struct {
 
             fn deinit(data: *@This()) void {
                 data.static_pokemons.deinit();
-                data.given_items.deinit();
+                data.pokeball_items.deinit();
                 data.* = undefined;
             }
         };
         var script_data = ScriptData{
             .static_pokemons = std.ArrayList(*script.Command).init(allocator),
-            .given_items = std.ArrayList(GivenItem).init(allocator),
+            .pokeball_items = std.ArrayList(PokeballItem).init(allocator),
         };
         errdefer script_data.deinit();
 
@@ -705,7 +705,7 @@ pub const Game = struct {
             .wild_pokemon_headers = info.wild_pokemon_headers.slice(gda_rom),
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
-            .given_items = script_data.given_items.toOwnedSlice(),
+            .pokeball_items = script_data.pokeball_items.toOwnedSlice(),
         };
     }
 
@@ -717,7 +717,7 @@ pub const Game = struct {
     pub fn deinit(game: *Game) void {
         game.allocator.free(game.data);
         game.allocator.free(game.static_pokemons);
-        game.allocator.free(game.given_items);
+        game.allocator.free(game.pokeball_items);
         game.* = undefined;
     }
 

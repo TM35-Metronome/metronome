@@ -339,7 +339,7 @@ pub const HgssWildPokemons = extern struct {
     };
 };
 
-const GivenItem = struct {
+const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
 };
@@ -360,7 +360,7 @@ pub const Game = struct {
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
-    given_items: []GivenItem,
+    pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
         const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
@@ -373,7 +373,7 @@ pub const Game = struct {
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
-            allocator.free(commands.given_items);
+            allocator.free(commands.pokeball_items);
         }
 
         return Game{
@@ -418,18 +418,18 @@ pub const Game = struct {
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
             .static_pokemons = commands.static_pokemons,
-            .given_items = commands.given_items,
+            .pokeball_items = commands.pokeball_items,
         };
     }
 
     pub fn deinit(game: Game) void {
         game.allocator.free(game.static_pokemons);
-        game.allocator.free(game.given_items);
+        game.allocator.free(game.pokeball_items);
     }
 
     const ScriptCommands = struct {
         static_pokemons: []*script.Command,
-        given_items: []GivenItem,
+        pokeball_items: []PokeballItem,
     };
 
     fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
@@ -437,14 +437,14 @@ pub const Game = struct {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
                 .static_pokemons = ([*]*script.Command)(undefined)[0..0],
-                .given_items = ([*]GivenItem)(undefined)[0..0],
+                .pokeball_items = ([*]PokeballItem)(undefined)[0..0],
             };
         }
 
         var static_pokemons = std.ArrayList(*script.Command).init(allocator);
         errdefer static_pokemons.deinit();
-        var given_items = std.ArrayList(GivenItem).init(allocator);
-        errdefer given_items.deinit();
+        var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
+        errdefer pokeball_items.deinit();
 
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
@@ -502,7 +502,7 @@ pub const Game = struct {
                             0x8008 => Var_8008_tmp = &command.data.SetVar.value,
                             0x8009 => if (Var_8008) |item| {
                                 const amount = &command.data.SetVar.value;
-                                try given_items.append(GivenItem{
+                                try pokeball_items.append(PokeballItem{
                                     .item = item,
                                     .amount = amount,
                                 });
@@ -537,7 +537,7 @@ pub const Game = struct {
 
         return ScriptCommands{
             .static_pokemons = static_pokemons.toOwnedSlice(),
-            .given_items = given_items.toOwnedSlice(),
+            .pokeball_items = pokeball_items.toOwnedSlice(),
         };
     }
 
