@@ -336,9 +336,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.given_items) |given_item, i| {
-        const data = given_item.data;
-        try stream.print(".given_items[{}].item={}\n", i, data.giveitem.index.value());
-        try stream.print(".given_items[{}].quantity={}\n", i, data.giveitem.quantity.value());
+        try stream.print(".given_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".given_items[{}].amount={}\n", i, given_item.amount.value());
     }
 }
 
@@ -577,9 +576,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     for (game.given_items) |given_item, i| {
-        const data = given_item.data;
-        try stream.print(".given_items[{}].item={}\n", i, data.GiveItem.itemid.value());
-        try stream.print(".given_items[{}].quantity={}\n", i, data.GiveItem.quantity.value());
+        try stream.print(".given_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".given_items[{}].amount={}\n", i, given_item.amount.value());
     }
 }
 
@@ -801,7 +799,10 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level);
     }
 
-    // TODO: Given items
+    for (game.given_items) |given_item, i| {
+        try stream.print(".given_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".given_items[{}].amount={}\n", i, given_item.amount.value());
+    }
 }
 
 test "" {

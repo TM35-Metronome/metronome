@@ -502,9 +502,9 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         const given_item = game.given_items[given_index];
 
         if (parser.eatField("item")) {
-            given_item.data.giveitem.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("quantity")) {
-            given_item.data.giveitem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -896,9 +896,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         const given_item = game.given_items[given_index];
 
         if (parser.eatField("item")) {
-            given_item.data.GiveItem.itemid = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("quantity")) {
-            given_item.data.GiveItem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -1202,9 +1202,18 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         } else |_| {
             return error.NoField;
         }
-    }
-    // TODO: Given items
-    else |_| {
+    } else |_| if (parser.eatField("given_items")) {
+        const given_index = try parser.eatIndexMax(game.given_items.len);
+        const given_item = game.given_items[given_index];
+
+        if (parser.eatField("item")) {
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
+        }
+    } else |err| {
         return error.NoField;
     }
 }

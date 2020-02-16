@@ -40,7 +40,8 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.write(
         \\Usage: tm35-rand-parties [-hv] [-s <NUM>] [-m <METHOD>] [-t <random|same>]
-        \\Randomizes trainer parties.
+        \\Randomizes static Pokémons.
+        \\Only works properly for dppt and b2w2.
         \\
         \\Options:
         \\

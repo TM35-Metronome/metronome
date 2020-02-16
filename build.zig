@@ -74,6 +74,19 @@ pub fn build(b: *Builder) void {
         ([]builtin.Mode)(&[_]builtin.Mode{ .Debug, .ReleaseFast, .ReleaseSafe, .ReleaseSmall });
 
     const test_step = b.step("test", "Run all tests");
+    const build_all_step = b.step("build-all", "Build all programs");
+    const build_cli_step = b.step("build-cli", "Build cli programs");
+    const build_gui_step = b.step("build-gui", "Build gui programs");
+    const build_tools_step = b.step("build-tools", "Build development tools");
+    const build_core_step = b.step("build-core", "Build core programs (tm35-load, tm35-store)");
+    const build_randomizers_step = b.step("build-randomizers", "Build randomizers");
+    b.default_step.dependOn(build_all_step);
+    build_all_step.dependOn(build_cli_step);
+    build_all_step.dependOn(build_gui_step);
+    build_cli_step.dependOn(build_tools_step);
+    build_cli_step.dependOn(build_core_step);
+    build_cli_step.dependOn(build_randomizers_step);
+
     for (modes_to_test) |test_mode| {
         for (src_pkgs) |pkg| {
             const pkg_test = b.addTest(pkg[1]);
@@ -102,11 +115,11 @@ pub fn build(b: *Builder) void {
     }
 
     for (tool_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, false, mode, name, b.fmt("{}/{}.zig", tools_folder, name));
+        buildAndInstallCmdlineProgram(b, build_tools_step, false, target, mode, name, b.fmt("{}/{}.zig", tools_folder, name));
     for (core_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, true, mode, name, b.fmt("{}/core/{}.zig", src_folder, name));
+        buildAndInstallCmdlineProgram(b, build_core_step, true, target, mode, name, b.fmt("{}/core/{}.zig", src_folder, name));
     for (randomizer_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, true, mode, name, b.fmt("{}/randomizers/{}.zig", src_folder, name));
+        buildAndInstallCmdlineProgram(b, build_randomizers_step, true, target, mode, name, b.fmt("{}/randomizers/{}.zig", src_folder, name));
 
     const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
     for (gui_exes) |tool, i| {
@@ -127,6 +140,7 @@ pub fn build(b: *Builder) void {
             .linux => {
                 exe.addIncludeDir(b.fmt("{}/nuklear/demo/x11_xft", lib_folder));
                 exe.addIncludeDir("/usr/include/freetype2");
+                exe.addIncludeDir("/usr/include/");
                 exe.addCSourceFile(b.fmt("{}/gui/nuklear/x11.c", src_folder), lib_cflags);
                 exe.addCSourceFile(b.fmt("{}/nativefiledialog/src/nfd_zenity.c", lib_folder), lib_cflags);
                 exe.linkSystemLibrary("X11");
@@ -143,26 +157,36 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
-        exe.install();
+        //exe.install();
+        exe.setTheTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        b.default_step.dependOn(&exe.step);
+        //build_gui_step.dependOn(&exe.step);
     }
 }
 
-fn buildAndInstallCmdlineProgram(b: *Builder, install: bool, mode: builtin.Mode, name: []const u8, src: []const u8) void {
+fn buildAndInstallCmdlineProgram(
+    b: *Builder,
+    parent_step: *Step,
+    install: bool,
+    target: std.build.Target,
+    mode: builtin.Mode,
+    name: []const u8,
+    src: []const u8,
+) void {
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
         exe.addPackagePath(pkg[0], pkg[1]);
 
     if (install)
         exe.install();
+    exe.setTheTarget(target);
     exe.setBuildMode(mode);
     exe.single_threaded = true;
-    b.default_step.dependOn(&exe.step);
+    parent_step.dependOn(&exe.step);
 }
 
-fn testCmdlineProgram(b: *Builder, test_step: *Step, mode: builtin.Mode, src: []const u8) void {
+fn testCmdlineProgram(b: *Builder, parent_step: *Step, mode: builtin.Mode, src: []const u8) void {
     const exe_test = b.addTest(src);
     for (pkgs) |pkg|
         exe_test.addPackagePath(pkg[0], pkg[1]);
@@ -170,5 +194,5 @@ fn testCmdlineProgram(b: *Builder, test_step: *Step, mode: builtin.Mode, src: []
     exe_test.setNamePrefix(b.fmt("{}-", @tagName(mode)));
     exe_test.setBuildMode(mode);
     exe_test.single_threaded = true;
-    test_step.dependOn(&exe_test.step);
+    parent_step.dependOn(&exe_test.step);
 }

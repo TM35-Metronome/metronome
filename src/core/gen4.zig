@@ -339,6 +339,11 @@ pub const HgssWildPokemons = extern struct {
     };
 };
 
+const GivenItem = struct {
+    item: *lu16,
+    amount: *lu16,
+};
+
 pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
@@ -355,7 +360,7 @@ pub const Game = struct {
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
-    given_items: []*script.Command,
+    given_items: []GivenItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
         const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
@@ -424,7 +429,7 @@ pub const Game = struct {
 
     const ScriptCommands = struct {
         static_pokemons: []*script.Command,
-        given_items: []*script.Command,
+        given_items: []GivenItem,
     };
 
     fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
@@ -432,13 +437,13 @@ pub const Game = struct {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
                 .static_pokemons = ([*]*script.Command)(undefined)[0..0],
-                .given_items = ([*]*script.Command)(undefined)[0..0],
+                .given_items = ([*]GivenItem)(undefined)[0..0],
             };
         }
 
         var static_pokemons = std.ArrayList(*script.Command).init(allocator);
         errdefer static_pokemons.deinit();
-        var given_items = std.ArrayList(*script.Command).init(allocator);
+        var given_items = std.ArrayList(GivenItem).init(allocator);
         errdefer given_items.deinit();
 
         var script_offsets = std.ArrayList(isize).init(allocator);
@@ -458,6 +463,10 @@ pub const Game = struct {
                 try script_offsets.append(offset);
             }
 
+            // The variable 0x8008 is the variables that stores items given
+            // from Pokéballs.
+            var Var_8008: ?*lu16 = null;
+
             var offset_i: usize = 0;
             while (offset_i < script_offsets.count()) : (offset_i += 1) {
                 const offset = script_offsets.at(offset_i);
@@ -471,12 +480,35 @@ pub const Game = struct {
                     .i = @intCast(usize, offset),
                 };
                 while (decoder.next() catch continue) |command| {
+                    // If we hit var 0x8008, the Var_8008_tmp will be set and
+                    // Var_8008 will become Var_8008_tmp. Then the next iteration
+                    // of this loop will set Var_8008 to null again. This allows us
+                    // to store this state for only the next iteration of the loop.
+                    var Var_8008_tmp: ?*lu16 = null;
+                    defer Var_8008 = Var_8008_tmp;
+
                     switch (command.tag) {
-                        .GiveItem => try given_items.append(command),
                         .WildBattle,
                         .WildBattle2,
                         .WildBattle3,
                         => try static_pokemons.append(command),
+
+                        // In scripts, field items are two SetVar commands
+                        // followed by a jump to the code that gives this item:
+                        //   SetVar 0x8008 // Item given
+                        //   SetVar 0x8009 // Amount of items
+                        //   Jump ???
+                        .SetVar => switch (command.data.SetVar.destination.value()) {
+                            0x8008 => Var_8008_tmp = &command.data.SetVar.value,
+                            0x8009 => if (Var_8008) |item| {
+                                const amount = &command.data.SetVar.value;
+                                try given_items.append(GivenItem{
+                                    .item = item,
+                                    .amount = amount,
+                                });
+                            },
+                            else => {},
+                        },
                         .Jump => {
                             const off = command.data.Jump.adr.value();
                             if (off >= 0)
