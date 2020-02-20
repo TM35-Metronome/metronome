@@ -795,6 +795,70 @@ pub const WildPokemons = extern struct {
     }
 };
 
+pub const Pocket = packed struct {
+    pocket: PocketKind,
+    unknown: u4,
+};
+
+pub const PocketKind = packed enum(u4) {
+    Items = 0x00,
+    TmsHms = 0x01,
+    Unknown_0x02 = 0x02,
+    Unknown_0x03 = 0x03,
+    Unknown_0x04 = 0x04,
+    Unknown_0x05 = 0x05,
+    Unknown_0x06 = 0x06,
+    Unknown_0x07 = 0x07,
+    Balls = 0x08,
+    Unknown_0x9 = 0x9,
+    Unknown_0xA = 0xA,
+    Unknown_0xB = 0xB,
+    Unknown_0xC = 0xC,
+    Unknown_0xD = 0xD,
+    Unknown_0xE = 0xE,
+    Unknown_0xF = 0xF,
+};
+
+pub const Item = extern struct {
+    price: lu16,
+    battle_effect: u8,
+    gain: u8,
+    berry: u8,
+    fling_effect: u8,
+    fling_power: u8,
+    natural_gift_power: u8,
+    flag: u8,
+    pocket: Pocket,
+    type: u8,
+    category: u8,
+    category2: lu16,
+    category3: u8,
+    index: u8,
+    anti_index: u8,
+    statboosts: Boost,
+    ev_yield: common.EvYield,
+    hp_restore: u8,
+    pp_restore: u8,
+    happy: [3]u8,
+    padding: [2]u8,
+
+    pub const Boost = packed struct {
+        hp: u2,
+        level: u1,
+        evolution: u1,
+        attack: u4,
+        defense: u4,
+        sp_attack: u4,
+        sp_defense: u4,
+        speed: u4,
+        accuracy: u4,
+        crit: u2,
+        pp: u2,
+        target: u8,
+        target2: u8,
+    };
+};
+
 const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
@@ -813,6 +877,7 @@ pub const Game = struct {
     trainers: *const nds.fs.Narc,
     parties: *const nds.fs.Narc,
     wild_pokemons: *const nds.fs.Narc,
+    itemdata: *const nds.fs.Narc,
     tms1: []lu16,
     hms: []lu16,
     tms2: []lu16,
@@ -870,6 +935,7 @@ pub const Game = struct {
             .trainers = try getNarc(nds_rom.root, info.trainers),
             .parties = try getNarc(nds_rom.root, info.parties),
             .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
+            .itemdata = try getNarc(nds_rom.root, info.itemdata),
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],

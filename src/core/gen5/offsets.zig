@@ -19,6 +19,7 @@ pub const Info = struct {
     trainers: []const u8,
     parties: []const u8,
     wild_pokemons: []const u8,
+    itemdata: []const u8,
 };
 
 pub const infos = [_]Info{
@@ -50,14 +51,15 @@ const black2_info = Info{
             NarcOffset{ .file = 854, .offset = 0x5EC },
         },
     },
-    .scripts = "a/0/5/6",
-    .pokemons = "a/0/1/6",
-    .evolutions = "a/0/1/9",
-    .level_up_moves = "a/0/1/8",
-    .moves = "a/0/2/1",
-    .trainers = "a/0/9/1",
-    .parties = "a/0/9/2",
-    .wild_pokemons = "a/1/2/7",
+    .scripts = "/a/0/5/6",
+    .pokemons = "/a/0/1/6",
+    .evolutions = "/a/0/1/9",
+    .level_up_moves = "/a/0/1/8",
+    .moves = "/a/0/2/1",
+    .trainers = "/a/0/9/1",
+    .parties = "/a/0/9/2",
+    .wild_pokemons = "/a/1/2/7",
+    .itemdata = "/a/0/2/4",
 };
 
 const white2_info = Info{
@@ -74,6 +76,7 @@ const white2_info = Info{
     .trainers = black2_info.trainers,
     .parties = black2_info.parties,
     .wild_pokemons = black2_info.wild_pokemons,
+    .itemdata = black2_info.itemdata,
 };
 
 const black_info = Info{
@@ -107,14 +110,15 @@ const black_info = Info{
             NarcOffset{ .file = 304, .offset = 0x1D9 },
         },
     },
-    .scripts = "a/0/5/7",
+    .scripts = "/a/0/5/7",
     .pokemons = black2_info.pokemons,
     .evolutions = black2_info.evolutions,
     .level_up_moves = black2_info.level_up_moves,
     .moves = black2_info.moves,
-    .trainers = "a/0/9/2",
-    .parties = "a/0/9/3",
-    .wild_pokemons = "a/1/2/6",
+    .trainers = "/a/0/9/2",
+    .parties = "/a/0/9/3",
+    .wild_pokemons = "/a/1/2/6",
+    .itemdata = black2_info.itemdata,
 };
 
 const white_info = Info{
@@ -131,6 +135,7 @@ const white_info = Info{
     .trainers = black_info.trainers,
     .parties = black_info.parties,
     .wild_pokemons = black_info.wild_pokemons,
+    .itemdata = black_info.itemdata,
 };
 
 pub const tm_count = 95;

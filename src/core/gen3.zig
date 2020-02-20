@@ -327,6 +327,29 @@ pub const Move = extern struct {
     }
 };
 
+pub const FRLGPocket = packed enum(u8) {
+    None = 0x00,
+    Items = 0x01,
+    KeyItems = 0x02,
+    PokeBalls = 0x03,
+    TmHms = 0x04,
+    Berries = 0x05,
+};
+
+pub const RSEPocket = packed enum(u8) {
+    None = 0x00,
+    Items = 0x01,
+    PokeBalls = 0x02,
+    TmHms = 0x03,
+    Berries = 0x04,
+    KeyItems = 0x05,
+};
+
+pub const Pocket = packed union {
+    FRLG: FRLGPocket,
+    RSE: RSEPocket,
+};
+
 pub const Item = extern struct {
     name: [14]u8,
     id: lu16,
@@ -336,7 +359,7 @@ pub const Item = extern struct {
     description: Ptr(u8),
     importance: u8,
     unknown: u8,
-    pocked: u8,
+    pocket: Pocket,
     type: u8,
     field_use_func: Ref(u8),
     battle_usage: lu32,

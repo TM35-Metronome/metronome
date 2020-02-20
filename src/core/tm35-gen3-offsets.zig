@@ -462,6 +462,18 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return true;
         },
+        .Union => |union_info| {
+            const first_field = union_info.fields[0];
+            comptime {
+                // Only allow comparing unions that have all fields of the same
+                // size.
+                const size = @sizeOf(first_field.field_type);
+                for (union_info.fields) |f|
+                    debug.assert(@sizeOf(f.field_type) == size);
+            }
+
+            return matches(first_field.field_type, ignored_fields, @field(a, first_field.name), @field(b, first_field.name));
+        },
         else => return a == b,
     }
 }
@@ -1144,7 +1156,7 @@ const em_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 1,
+        .pocket = gen3.Pocket{ .RSE = .Items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1161,7 +1173,7 @@ const em_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 2,
+        .pocket = gen3.Pocket{ .RSE = .PokeBalls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1181,7 +1193,7 @@ const em_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocked = 5,
+        .pocket = gen3.Pocket{ .RSE = .KeyItems },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1198,7 +1210,7 @@ const em_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocked = 5,
+        .pocket = gen3.Pocket{ .RSE = .KeyItems },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1218,7 +1230,7 @@ const rs_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 1,
+        .pocket = gen3.Pocket{ .RSE = .Items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1235,7 +1247,7 @@ const rs_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 2,
+        .pocket = gen3.Pocket{ .RSE = .PokeBalls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1255,7 +1267,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 0,
-        .pocked = 3,
+        .pocket = gen3.Pocket{ .RSE = .TmHms },
         .@"type" = 1,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1272,7 +1284,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 1,
+        .pocket = gen3.Pocket{ .RSE = .Items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1289,7 +1301,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 1,
+        .pocket = gen3.Pocket{ .RSE = .Items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1308,7 +1320,7 @@ const frlg_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 1,
+        .pocket = gen3.Pocket{ .FRLG = .Items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1324,7 +1336,7 @@ const frlg_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocked = 3,
+        .pocket = gen3.Pocket{ .FRLG = .PokeBalls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1343,7 +1355,7 @@ const frlg_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocked = 2,
+        .pocket = gen3.Pocket{ .FRLG = .KeyItems },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1359,7 +1371,7 @@ const frlg_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocked = 2,
+        .pocket = gen3.Pocket{ .FRLG = .KeyItems },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
