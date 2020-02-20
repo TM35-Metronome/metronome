@@ -31,6 +31,7 @@ const randomizer_exes = [_][]const u8{
     "tm35-rand-static",
     "tm35-rand-wild",
     "tm35-rand-parties",
+    "tm35-rand-pokeball-items",
 };
 
 const gui_exes = [_][]const u8{
@@ -157,11 +158,11 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
-        exe.install();
+        //exe.install();
         exe.setTheTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        build_gui_step.dependOn(&exe.step);
+        //build_gui_step.dependOn(&exe.step);
     }
 }
 

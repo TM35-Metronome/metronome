@@ -540,6 +540,9 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
     comptime checklist.set("moves", true) catch unreachable;
     try createNarc(allocator, root, info.moves, zeroInit(gen4.Move), 10, "");
 
+    comptime checklist.set("itemdata", true) catch unreachable;
+    try createNarc(allocator, root, info.itemdata, zeroInit(gen4.Item), 10, "");
+
     comptime checklist.set("trainers", true) catch unreachable;
     var trainer = zeroInit(gen4.Trainer);
     trainer.party_size = 1;
@@ -636,6 +639,9 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
 
     comptime checklist.set("moves", true) catch unreachable;
     try createNarc(allocator, root, info.moves, zeroInit(gen5.Move), 10, "");
+
+    comptime checklist.set("itemdata", true) catch unreachable;
+    try createNarc(allocator, root, info.itemdata, zeroInit(gen5.Item), 10, "");
 
     comptime checklist.set("trainers", true) catch unreachable;
     var trainer = zeroInit(gen5.Trainer);
