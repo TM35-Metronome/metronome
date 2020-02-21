@@ -145,7 +145,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         const ball_item = try parser.eatUnsignedValue(usize, 10);
         _ = try data.pokeballs.put(ball_index, ball_item);
         return false;
-   } else |_| if (parser.eatField("items")) |_| {
+    } else |_| if (parser.eatField("items")) |_| {
         const index = try parser.eatIndex();
         const item_entry = try data.items.getOrPutValue(index, Item{ .pocket = null });
 
@@ -194,7 +194,7 @@ const Data = struct {
 
             try res.append(item_kv.key);
         }
-        
+
         return res.toOwnedSlice();
     }
 };
@@ -241,7 +241,7 @@ test "tm35-rand-pokeball-items" {
         \\.pokeball_items[0]=0
         \\
     );
-    
+
     testProgram([_][]const u8{"--seed=2"}, test_string, result_prefix ++
         \\.pokeball_items[3]=1
         \\.pokeball_items[1]=2

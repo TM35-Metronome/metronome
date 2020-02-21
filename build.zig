@@ -158,11 +158,11 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
-        //exe.install();
+        exe.install();
         exe.setTheTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        //build_gui_step.dependOn(&exe.step);
+        build_gui_step.dependOn(&exe.step);
     }
 }
 
