@@ -1633,8 +1633,8 @@ pub const Command = packed struct {
         b: lu16,
     };
     pub const SetVar = packed struct {
-        a: lu16,
-        b: lu16,
+        destination: lu16,
+        value: lu16,
     };
     pub const CopyVar = packed struct {
         a: lu16,

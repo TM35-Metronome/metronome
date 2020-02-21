@@ -169,10 +169,9 @@ pub fn main2(
             .Gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
         } catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", line_num, @errorName(err)) catch {};
-            if (abort_on_first_warning) {
-                stdio.err.print("{}\n", line) catch {};
+            stdio.err.print("{}\n", line) catch {};
+            if (abort_on_first_warning)
                 return 1;
-            }
         };
         line_buf.shrink(0);
     }
@@ -433,8 +432,10 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             item.hold_effect_param = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("importance")) {
             item.importance = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pocked")) {
-            item.pocked = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pocket")) switch (game.version) {
+            .Ruby, .Sapphire, .Emerald => item.pocket = gen3.Pocket{ .RSE = try parser.eatEnumValue(gen3.RSEPocket) },
+            .FireRed, .LeafGreen => item.pocket = gen3.Pocket{ .FRLG = try parser.eatEnumValue(gen3.FRLGPocket) },
+            else => unreachable,
         } else |_| if (parser.eatField("type")) {
             item.@"type" = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("battle_usage")) {
@@ -497,14 +498,14 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatField("given_items")) {
-        const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
 
         if (parser.eatField("item")) {
-            given_item.data.giveitem.index = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("quantity")) {
-            given_item.data.giveitem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -718,6 +719,90 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
     } else |_| if (parser.eatField("hms")) {
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
+    } else |_| if (parser.eatField("items")) {
+        const items = game.itemdata.nodes.toSlice();
+        const item_index = try parser.eatIndexMax(items.len);
+        const item = try items[item_index].asDataFile(gen4.Item);
+
+        if (parser.eatField("price")) {
+            item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("battle_effect")) {
+            item.battle_effect = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("gain")) {
+            item.gain = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("berry")) {
+            item.berry = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("fling_effect")) {
+            item.fling_effect = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("fling_power")) {
+            item.fling_power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("natural_gift_power")) {
+            item.natural_gift_power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("flag")) {
+            item.flag = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pocket")) {
+            item.pocket.pocket = try parser.eatEnumValue(gen4.PocketKind);
+        } else |_| if (parser.eatField("type")) {
+            item.type = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("category")) {
+            item.category = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("category2")) {
+            item.category2 = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("index")) {
+            item.index = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("statboosts")) {
+            if (parser.eatField("hp")) {
+                item.statboosts.hp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("level")) {
+                item.statboosts.level = try parser.eatUnsignedValue(u1, 10);
+            } else |_| if (parser.eatField("evolution")) {
+                item.statboosts.evolution = try parser.eatUnsignedValue(u1, 10);
+            } else |_| if (parser.eatField("attack")) {
+                item.statboosts.attack = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("defense")) {
+                item.statboosts.defense = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("sp_attack")) {
+                item.statboosts.sp_attack = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("sp_defense")) {
+                item.statboosts.sp_defense = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("speed")) {
+                item.statboosts.speed = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("accuracy")) {
+                item.statboosts.accuracy = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("crit")) {
+                item.statboosts.crit = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("pp")) {
+                item.statboosts.pp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("target")) {
+                item.statboosts.target = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("target2")) {
+                item.statboosts.target2 = try parser.eatUnsignedValue(u8, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatField("ev_yield")) {
+            if (parser.eatField("hp")) {
+                item.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("attack")) {
+                item.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("defense")) {
+                item.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("speed")) {
+                item.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("sp_attack")) {
+                item.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("sp_defense")) {
+                item.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatField("hp_restore")) {
+            item.hp_restore = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pp_restore")) {
+            item.pp_restore = try parser.eatUnsignedValue(u8, 10);
+        } else |_| {
+            return error.NoField;
+        }
     } else |_| if (parser.eatField("zones")) {
         const wild_pokemons = game.wild_pokemons.nodes.toSlice();
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
@@ -891,14 +976,14 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         } else |_| {
             return error.NoField;
         }
-    } else |_| if (parser.eatField("given_items")) {
-        const given_index = try parser.eatIndexMax(game.given_items.len);
-        const given_item = game.given_items[given_index];
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
 
         if (parser.eatField("item")) {
-            given_item.data.GiveItem.itemid = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("quantity")) {
-            given_item.data.GiveItem.quantity = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -1148,6 +1233,94 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
     } else |_| if (parser.eatField("hms")) {
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
+    } else |_| if (parser.eatField("items")) {
+        const items = game.itemdata.nodes.toSlice();
+        const item_index = try parser.eatIndexMax(items.len);
+        const item = try items[item_index].asDataFile(gen5.Item);
+
+        if (parser.eatField("price")) {
+            item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("battle_effect")) {
+            item.battle_effect = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("gain")) {
+            item.gain = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("berry")) {
+            item.berry = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("fling_effect")) {
+            item.fling_effect = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("fling_power")) {
+            item.fling_power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("natural_gift_power")) {
+            item.natural_gift_power = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("flag")) {
+            item.flag = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pocket")) {
+            item.pocket.pocket = try parser.eatEnumValue(gen5.PocketKind);
+        } else |_| if (parser.eatField("type")) {
+            item.type = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("category")) {
+            item.category = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("category2")) {
+            item.category2 = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("category3")) {
+            item.category3 = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("index")) {
+            item.index = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("anti_index")) {
+            item.anti_index = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("statboosts")) {
+            if (parser.eatField("hp")) {
+                item.statboosts.hp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("level")) {
+                item.statboosts.level = try parser.eatUnsignedValue(u1, 10);
+            } else |_| if (parser.eatField("evolution")) {
+                item.statboosts.evolution = try parser.eatUnsignedValue(u1, 10);
+            } else |_| if (parser.eatField("attack")) {
+                item.statboosts.attack = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("defense")) {
+                item.statboosts.defense = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("sp_attack")) {
+                item.statboosts.sp_attack = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("sp_defense")) {
+                item.statboosts.sp_defense = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("speed")) {
+                item.statboosts.speed = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("accuracy")) {
+                item.statboosts.accuracy = try parser.eatUnsignedValue(u4, 10);
+            } else |_| if (parser.eatField("crit")) {
+                item.statboosts.crit = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("pp")) {
+                item.statboosts.pp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("target")) {
+                item.statboosts.target = try parser.eatUnsignedValue(u8, 10);
+            } else |_| if (parser.eatField("target2")) {
+                item.statboosts.target2 = try parser.eatUnsignedValue(u8, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatField("ev_yield")) {
+            if (parser.eatField("hp")) {
+                item.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("attack")) {
+                item.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("defense")) {
+                item.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("speed")) {
+                item.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("sp_attack")) {
+                item.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
+            } else |_| if (parser.eatField("sp_defense")) {
+                item.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
+            } else |_| {
+                return error.NoField;
+            }
+        } else |_| if (parser.eatField("hp_restore")) {
+            item.hp_restore = try parser.eatUnsignedValue(u8, 10);
+        } else |_| if (parser.eatField("pp_restore")) {
+            item.pp_restore = try parser.eatUnsignedValue(u8, 10);
+        } else |_| {
+            return error.NoField;
+        }
     } else |_| if (parser.eatField("zones")) {
         const wild_pokemons = game.wild_pokemons.nodes.toSlice();
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
@@ -1202,9 +1375,18 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         } else |_| {
             return error.NoField;
         }
-    }
-    // TODO: Given items
-    else |_| {
+    } else |_| if (parser.eatField("pokeball_items")) {
+        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
+        const given_item = game.pokeball_items[given_index];
+
+        if (parser.eatField("item")) {
+            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| if (parser.eatField("amount")) {
+            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
+        } else |_| {
+            return error.NoField;
+        }
+    } else |err| {
         return error.NoField;
     }
 }

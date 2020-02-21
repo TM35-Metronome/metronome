@@ -15,6 +15,11 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
     }
 }.isEnd);
 
+pub const STD_OBTAIN_ITEM = 0;
+pub const STD_FIND_ITEM = 1;
+pub const STD_OBTAIN_DECORATION = 7;
+pub const STD_REGISTER_MATCH_CALL = 8;
+
 pub const Command = packed struct {
     tag: Kind,
     data: extern union {
@@ -44,12 +49,6 @@ pub const Command = packed struct {
 
         // Jumps to the standard function at index function.
         gotostd: gotostd,
-
-        // callstd function names
-        //  STD_OBTAIN_ITEM = 0
-        //  STD_FIND_ITEM = 1
-        //  STD_OBTAIN_DECORATION = 7
-        //  STD_REGISTER_MATCH_CALL = 8
 
         // Calls the standard function at index function.
         callstd: callstd,
@@ -229,10 +228,10 @@ pub const Command = packed struct {
         getpartysize: getpartysize,
 
         // Attempts to add quantity of item index to the player's Bag. If the player has enough room, the item will be added and variable 0x800D (LASTRESULT) will be set to 0x0001; otherwise, LASTRESULT is set to 0x0000.
-        giveitem: giveitem,
+        additem: additem,
 
         // Removes quantity of item index from the player's Bag.
-        takeitem: takeitem,
+        removeitem: removeitem,
 
         // Checks if the player has enough space in their Bag to hold quantity more of item index. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room.
         checkitemspace: checkitemspace,
@@ -691,8 +690,8 @@ pub const Command = packed struct {
         setholewarp = 0x41,
         getplayerxy = 0x42,
         getpartysize = 0x43,
-        giveitem = 0x44,
-        takeitem = 0x45,
+        additem = 0x44,
+        removeitem = 0x45,
         checkitemspace = 0x46,
         checkitem = 0x47,
         checkitemtype = 0x48,
@@ -1082,11 +1081,11 @@ pub const Command = packed struct {
         Y: lu16,
     };
     pub const getpartysize = packed struct {};
-    pub const giveitem = packed struct {
+    pub const additem = packed struct {
         index: lu16,
         quantity: lu16,
     };
-    pub const takeitem = packed struct {
+    pub const removeitem = packed struct {
         index: lu16,
         quantity: lu16,
     };

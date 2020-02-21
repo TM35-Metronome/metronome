@@ -339,6 +339,73 @@ pub const HgssWildPokemons = extern struct {
     };
 };
 
+pub const Pocket = packed struct {
+    pocket: PocketKind,
+    unknown: u4,
+};
+
+pub const PocketKind = packed enum(u4) {
+    Items = 0x00,
+    TmHms = 0x01,
+    Berries = 0x02,
+    KeyItems = 0x03,
+    Unknown_0x04 = 0x04,
+    Unknown_0x05 = 0x05,
+    Unknown_0x06 = 0x06,
+    Unknown_0x07 = 0x07,
+    Unknown_0x08 = 0x08,
+    Balls = 0x09,
+    Unknown_0xA = 0xA,
+    Unknown_0xB = 0xB,
+    Unknown_0xC = 0xC,
+    Unknown_0xD = 0xD,
+    Unknown_0xE = 0xE,
+    Unknown_0xF = 0xF,
+};
+
+pub const Item = extern struct {
+    price: lu16,
+    battle_effect: u8,
+    gain: u8,
+    berry: u8,
+    fling_effect: u8,
+    fling_power: u8,
+    natural_gift_power: u8,
+    flag: u8,
+    pocket: Pocket,
+    type: u8,
+    category: u8,
+    category2: lu16,
+    index: u8,
+    statboosts: Boost,
+    ev_yield: common.EvYield,
+    hp_restore: u8,
+    pp_restore: u8,
+    happy: [3]u8,
+    padding: [2]u8,
+
+    pub const Boost = packed struct {
+        hp: u2,
+        level: u1,
+        evolution: u1,
+        attack: u4,
+        defense: u4,
+        sp_attack: u4,
+        sp_defense: u4,
+        speed: u4,
+        accuracy: u4,
+        crit: u2,
+        pp: u2,
+        target: u8,
+        target2: u8,
+    };
+};
+
+const PokeballItem = struct {
+    item: *lu16,
+    amount: *lu16,
+};
+
 pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
@@ -351,11 +418,12 @@ pub const Game = struct {
     trainers: *const nds.fs.Narc,
     parties: *const nds.fs.Narc,
     wild_pokemons: *const nds.fs.Narc,
+    itemdata: *const nds.fs.Narc,
     scripts: *const nds.fs.Narc,
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
-    given_items: []*script.Command,
+    pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
         const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
@@ -368,7 +436,7 @@ pub const Game = struct {
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
-            allocator.free(commands.given_items);
+            allocator.free(commands.pokeball_items);
         }
 
         return Game{
@@ -409,22 +477,23 @@ pub const Game = struct {
             .trainers = try getNarc(nds_rom.root, info.trainers),
             .parties = try getNarc(nds_rom.root, info.parties),
             .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
+            .itemdata = try getNarc(nds_rom.root, info.itemdata),
             .scripts = scripts,
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
             .static_pokemons = commands.static_pokemons,
-            .given_items = commands.given_items,
+            .pokeball_items = commands.pokeball_items,
         };
     }
 
     pub fn deinit(game: Game) void {
         game.allocator.free(game.static_pokemons);
-        game.allocator.free(game.given_items);
+        game.allocator.free(game.pokeball_items);
     }
 
     const ScriptCommands = struct {
         static_pokemons: []*script.Command,
-        given_items: []*script.Command,
+        pokeball_items: []PokeballItem,
     };
 
     fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
@@ -432,14 +501,14 @@ pub const Game = struct {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
                 .static_pokemons = ([*]*script.Command)(undefined)[0..0],
-                .given_items = ([*]*script.Command)(undefined)[0..0],
+                .pokeball_items = ([*]PokeballItem)(undefined)[0..0],
             };
         }
 
         var static_pokemons = std.ArrayList(*script.Command).init(allocator);
         errdefer static_pokemons.deinit();
-        var given_items = std.ArrayList(*script.Command).init(allocator);
-        errdefer given_items.deinit();
+        var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
+        errdefer pokeball_items.deinit();
 
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
@@ -458,6 +527,10 @@ pub const Game = struct {
                 try script_offsets.append(offset);
             }
 
+            // The variable 0x8008 is the variables that stores items given
+            // from Pokéballs.
+            var Var_8008: ?*lu16 = null;
+
             var offset_i: usize = 0;
             while (offset_i < script_offsets.count()) : (offset_i += 1) {
                 const offset = script_offsets.at(offset_i);
@@ -471,12 +544,35 @@ pub const Game = struct {
                     .i = @intCast(usize, offset),
                 };
                 while (decoder.next() catch continue) |command| {
+                    // If we hit var 0x8008, the Var_8008_tmp will be set and
+                    // Var_8008 will become Var_8008_tmp. Then the next iteration
+                    // of this loop will set Var_8008 to null again. This allows us
+                    // to store this state for only the next iteration of the loop.
+                    var Var_8008_tmp: ?*lu16 = null;
+                    defer Var_8008 = Var_8008_tmp;
+
                     switch (command.tag) {
-                        .GiveItem => try given_items.append(command),
                         .WildBattle,
                         .WildBattle2,
                         .WildBattle3,
                         => try static_pokemons.append(command),
+
+                        // In scripts, field items are two SetVar commands
+                        // followed by a jump to the code that gives this item:
+                        //   SetVar 0x8008 // Item given
+                        //   SetVar 0x8009 // Amount of items
+                        //   Jump ???
+                        .SetVar => switch (command.data.SetVar.destination.value()) {
+                            0x8008 => Var_8008_tmp = &command.data.SetVar.value,
+                            0x8009 => if (Var_8008) |item| {
+                                const amount = &command.data.SetVar.value;
+                                try pokeball_items.append(PokeballItem{
+                                    .item = item,
+                                    .amount = amount,
+                                });
+                            },
+                            else => {},
+                        },
                         .Jump => {
                             const off = command.data.Jump.adr.value();
                             if (off >= 0)
@@ -505,7 +601,7 @@ pub const Game = struct {
 
         return ScriptCommands{
             .static_pokemons = static_pokemons.toOwnedSlice(),
-            .given_items = given_items.toOwnedSlice(),
+            .pokeball_items = pokeball_items.toOwnedSlice(),
         };
     }
 

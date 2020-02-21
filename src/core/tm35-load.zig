@@ -301,7 +301,11 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         // try stream.print(".items[{}].description={}\n", i, item.description);
         try stream.print(".items[{}].importance={}\n", i, item.importance);
         // try stream.print(".items[{}].unknown={}\n", i, item.unknown);
-        try stream.print(".items[{}].pocked={}\n", i, item.pocked);
+        try stream.print(".items[{}].pocket={}\n", i, switch (game.version) {
+            .Ruby, .Sapphire, .Emerald => @tagName(item.pocket.RSE),
+            .FireRed, .LeafGreen => @tagName(item.pocket.FRLG),
+            else => unreachable,
+        });
         try stream.print(".items[{}].type={}\n", i, item.@"type");
         // try stream.print(".items[{}].field_use_func={}\n", i, item.field_use_func);
         try stream.print(".items[{}].battle_usage={}\n", i, item.battle_usage.value());
@@ -335,10 +339,9 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".static_pokemons[{}].item={}\n", i, data.setwildbattle.item.value());
     }
 
-    for (game.given_items) |given_item, i| {
-        const data = given_item.data;
-        try stream.print(".given_items[{}].item={}\n", i, data.giveitem.index.value());
-        try stream.print(".given_items[{}].quantity={}\n", i, data.giveitem.quantity.value());
+    for (game.pokeball_items) |given_item, i| {
+        try stream.print(".pokeball_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".pokeball_items[{}].amount={}\n", i, given_item.amount.value());
     }
 }
 
@@ -483,6 +486,44 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".hms[{}]={}\n", i, hm.value());
     }
 
+    for (game.itemdata.nodes.toSlice()) |node, i| {
+        const item = node.asDataFile(gen4.Item) catch continue;
+        try stream.print(".items[{}].price={}\n", i, item.price.value());
+        try stream.print(".items[{}].battle_effect={}\n", i, item.battle_effect); // TODO: Is this the same as gen3 hold_effect?
+        try stream.print(".items[{}].gain={}\n", i, item.gain);
+        try stream.print(".items[{}].berry={}\n", i, item.berry);
+        try stream.print(".items[{}].fling_effect={}\n", i, item.fling_effect);
+        try stream.print(".items[{}].fling_power={}\n", i, item.fling_power);
+        try stream.print(".items[{}].natural_gift_power={}\n", i, item.natural_gift_power);
+        try stream.print(".items[{}].flag={}\n", i, item.flag);
+        try stream.print(".items[{}].pocket={}\n", i, @tagName(item.pocket.pocket));
+        try stream.print(".items[{}].type={}\n", i, item.type);
+        try stream.print(".items[{}].category={}\n", i, item.category);
+        try stream.print(".items[{}].category2={}\n", i, item.category2.value());
+        try stream.print(".items[{}].index={}\n", i, item.index);
+        try stream.print(".items[{}].statboosts.hp={}\n", i, item.statboosts.hp);
+        try stream.print(".items[{}].statboosts.level={}\n", i, item.statboosts.level);
+        try stream.print(".items[{}].statboosts.evolution={}\n", i, item.statboosts.evolution);
+        try stream.print(".items[{}].statboosts.attack={}\n", i, item.statboosts.attack);
+        try stream.print(".items[{}].statboosts.defense={}\n", i, item.statboosts.defense);
+        try stream.print(".items[{}].statboosts.sp_attack={}\n", i, item.statboosts.sp_attack);
+        try stream.print(".items[{}].statboosts.sp_defense={}\n", i, item.statboosts.sp_defense);
+        try stream.print(".items[{}].statboosts.speed={}\n", i, item.statboosts.speed);
+        try stream.print(".items[{}].statboosts.accuracy={}\n", i, item.statboosts.accuracy);
+        try stream.print(".items[{}].statboosts.crit={}\n", i, item.statboosts.crit);
+        try stream.print(".items[{}].statboosts.pp={}\n", i, item.statboosts.pp);
+        try stream.print(".items[{}].statboosts.target={}\n", i, item.statboosts.target);
+        try stream.print(".items[{}].statboosts.target2={}\n", i, item.statboosts.target2);
+        try stream.print(".items[{}].ev_yield.hp={}\n", i, item.ev_yield.hp);
+        try stream.print(".items[{}].ev_yield.attack={}\n", i, item.ev_yield.attack);
+        try stream.print(".items[{}].ev_yield.defense={}\n", i, item.ev_yield.defense);
+        try stream.print(".items[{}].ev_yield.speed={}\n", i, item.ev_yield.speed);
+        try stream.print(".items[{}].ev_yield.sp_attack={}\n", i, item.ev_yield.sp_attack);
+        try stream.print(".items[{}].ev_yield.sp_defense={}\n", i, item.ev_yield.sp_defense);
+        try stream.print(".items[{}].hp_restore={}\n", i, item.hp_restore);
+        try stream.print(".items[{}].pp_restore={}\n", i, item.pp_restore);
+    }
+
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         switch (game.version) {
             common.Version.Diamond,
@@ -576,10 +617,9 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level.value());
     }
 
-    for (game.given_items) |given_item, i| {
-        const data = given_item.data;
-        try stream.print(".given_items[{}].item={}\n", i, data.GiveItem.itemid.value());
-        try stream.print(".given_items[{}].quantity={}\n", i, data.GiveItem.quantity.value());
+    for (game.pokeball_items) |given_item, i| {
+        try stream.print(".pokeball_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".pokeball_items[{}].amount={}\n", i, given_item.amount.value());
     }
 }
 
@@ -772,6 +812,46 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     for (game.hms) |hm, i|
         try stream.print(".hms[{}]={}\n", i, hm.value());
 
+    for (game.itemdata.nodes.toSlice()) |node, i| {
+        const item = node.asDataFile(gen5.Item) catch continue;
+        try stream.print(".items[{}].price={}\n", i, item.price.value());
+        try stream.print(".items[{}].battle_effect={}\n", i, item.battle_effect); // TODO: Is this the same as gen3 hold_effect?
+        try stream.print(".items[{}].gain={}\n", i, item.gain);
+        try stream.print(".items[{}].berry={}\n", i, item.berry);
+        try stream.print(".items[{}].fling_effect={}\n", i, item.fling_effect);
+        try stream.print(".items[{}].fling_power={}\n", i, item.fling_power);
+        try stream.print(".items[{}].natural_gift_power={}\n", i, item.natural_gift_power);
+        try stream.print(".items[{}].flag={}\n", i, item.flag);
+        try stream.print(".items[{}].pocket={}\n", i, @tagName(item.pocket.pocket));
+        try stream.print(".items[{}].type={}\n", i, item.type);
+        try stream.print(".items[{}].category={}\n", i, item.category);
+        try stream.print(".items[{}].category2={}\n", i, item.category2.value());
+        try stream.print(".items[{}].category3={}\n", i, item.category3);
+        try stream.print(".items[{}].index={}\n", i, item.index);
+        try stream.print(".items[{}].anti_index={}\n", i, item.anti_index);
+        try stream.print(".items[{}].statboosts.hp={}\n", i, item.statboosts.hp);
+        try stream.print(".items[{}].statboosts.level={}\n", i, item.statboosts.level);
+        try stream.print(".items[{}].statboosts.evolution={}\n", i, item.statboosts.evolution);
+        try stream.print(".items[{}].statboosts.attack={}\n", i, item.statboosts.attack);
+        try stream.print(".items[{}].statboosts.defense={}\n", i, item.statboosts.defense);
+        try stream.print(".items[{}].statboosts.sp_attack={}\n", i, item.statboosts.sp_attack);
+        try stream.print(".items[{}].statboosts.sp_defense={}\n", i, item.statboosts.sp_defense);
+        try stream.print(".items[{}].statboosts.speed={}\n", i, item.statboosts.speed);
+        try stream.print(".items[{}].statboosts.accuracy={}\n", i, item.statboosts.accuracy);
+        try stream.print(".items[{}].statboosts.crit={}\n", i, item.statboosts.crit);
+        try stream.print(".items[{}].statboosts.pp={}\n", i, item.statboosts.pp);
+        try stream.print(".items[{}].statboosts.target={}\n", i, item.statboosts.target);
+        try stream.print(".items[{}].statboosts.target2={}\n", i, item.statboosts.target2);
+        try stream.print(".items[{}].ev_yield.hp={}\n", i, item.ev_yield.hp);
+        try stream.print(".items[{}].ev_yield.attack={}\n", i, item.ev_yield.attack);
+        try stream.print(".items[{}].ev_yield.defense={}\n", i, item.ev_yield.defense);
+        try stream.print(".items[{}].ev_yield.speed={}\n", i, item.ev_yield.speed);
+        try stream.print(".items[{}].ev_yield.sp_attack={}\n", i, item.ev_yield.sp_attack);
+        try stream.print(".items[{}].ev_yield.sp_defense={}\n", i, item.ev_yield.sp_defense);
+        try stream.print(".items[{}].hp_restore={}\n", i, item.hp_restore);
+        try stream.print(".items[{}].pp_restore={}\n", i, item.pp_restore);
+    }
+
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         const wild_mons = node.asDataFile(gen5.WildPokemons) catch continue;
         // TODO: Get rid of inline for in favor of a function to call
@@ -801,7 +881,10 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level);
     }
 
-    // TODO: Given items
+    for (game.pokeball_items) |given_item, i| {
+        try stream.print(".pokeball_items[{}].item={}\n", i, given_item.item.value());
+        try stream.print(".pokeball_items[{}].amount={}\n", i, given_item.amount.value());
+    }
 }
 
 test "" {
