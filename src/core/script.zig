@@ -65,15 +65,15 @@ fn testFindTagFieldName(comptime Container: type, comptime union_field: []const 
 
 test "findTagFieldName" {
     const Union = union {
-        A: void,
-        B: u8,
-        C: u16,
+        a: void,
+        b: u8,
+        c: u16,
     };
 
     const Tag = enum {
-        A,
-        B,
-        C,
+        a,
+        b,
+        c,
     };
     testFindTagFieldName(struct {
         tag: Tag,
@@ -85,9 +85,9 @@ test "findTagFieldName" {
         un: Union,
         not_tag2: struct {},
         not_tag3: enum {
-            A,
-            B,
-            Q,
+            a,
+            b,
+            q,
         },
     }, "un", "tag");
     testFindTagFieldName(struct {
@@ -95,9 +95,9 @@ test "findTagFieldName" {
         un: Union,
         not_tag2: struct {},
         not_tag3: enum {
-            A,
-            B,
-            Q,
+            a,
+            b,
+            q,
         },
     }, "un", null);
 }
@@ -185,15 +185,15 @@ fn testPackedLength(value: var, expect: error{InvalidTag}!usize) void {
 
 test "packedLength" {
     const E = packed enum(u8) {
-        A,
-        B,
-        C,
+        a,
+        b,
+        c,
     };
 
     const U = packed union {
-        A: void,
-        B: u8,
-        C: u16,
+        a: void,
+        b: u8,
+        c: u16,
     };
 
     const S = packed struct {
@@ -202,9 +202,9 @@ test "packedLength" {
         data: U,
     };
 
-    testPackedLength(S{ .tag = E.A, .pad = 0, .data = U{ .A = {} } }, 2);
-    testPackedLength(S{ .tag = E.B, .pad = 0, .data = U{ .B = 0 } }, 3);
-    testPackedLength(S{ .tag = E.C, .pad = 0, .data = U{ .C = 0 } }, 4);
+    testPackedLength(S{ .tag = E.a, .pad = 0, .data = U{ .a = {} } }, 2);
+    testPackedLength(S{ .tag = E.b, .pad = 0, .data = U{ .b = 0 } }, 3);
+    testPackedLength(S{ .tag = E.c, .pad = 0, .data = U{ .c = 0 } }, 4);
 }
 
 pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool) type {

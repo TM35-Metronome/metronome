@@ -553,23 +553,23 @@ test "tm35-rand-parties" {
         }
     };
 
-    const result_prefix = comptime H.pokemon("0", "10", "Normal", "1") ++
-        H.pokemon("1", "15", "Dragon", "2") ++
-        H.pokemon("2", "20", "Flying", "3") ++
-        H.pokemon("3", "25", "Grass", "4") ++
-        H.pokemon("4", "30", "Fire", "5") ++
-        H.pokemon("5", "35", "Water", "6") ++
-        H.pokemon("6", "40", "Rock", "7") ++
-        H.pokemon("7", "45", "Ground", "8") ++
-        H.move("0", "0", "Normal", "0", "0") ++
-        H.move("1", "10", "Normal", "10", "255") ++
-        H.move("2", "10", "Dragon", "10", "255") ++
-        H.move("3", "10", "Flying", "10", "255") ++
-        H.move("4", "10", "Grass", "10", "255") ++
-        H.move("5", "10", "Fire", "10", "255") ++
-        H.move("6", "10", "Water", "10", "255") ++
-        H.move("7", "10", "Rock", "10", "255") ++
-        H.move("8", "10", "Ground", "10", "255");
+    const result_prefix = comptime H.pokemon("0", "10", "normal", "1") ++
+        H.pokemon("1", "15", "dragon", "2") ++
+        H.pokemon("2", "20", "flying", "3") ++
+        H.pokemon("3", "25", "grass", "4") ++
+        H.pokemon("4", "30", "fire", "5") ++
+        H.pokemon("5", "35", "water", "6") ++
+        H.pokemon("6", "40", "rock", "7") ++
+        H.pokemon("7", "45", "ground", "8") ++
+        H.move("0", "0", "normal", "0", "0") ++
+        H.move("1", "10", "normal", "10", "255") ++
+        H.move("2", "10", "dragon", "10", "255") ++
+        H.move("3", "10", "flying", "10", "255") ++
+        H.move("4", "10", "grass", "10", "255") ++
+        H.move("5", "10", "fire", "10", "255") ++
+        H.move("6", "10", "water", "10", "255") ++
+        H.move("7", "10", "rock", "10", "255") ++
+        H.move("8", "10", "ground", "10", "255");
 
     const test_string = comptime result_prefix ++
         H.trainer("0", "0", "1") ++

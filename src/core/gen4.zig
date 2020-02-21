@@ -68,10 +68,10 @@ pub const MoveTutor = extern struct {
 };
 
 pub const PartyType = packed enum(u8) {
-    None = 0b00,
-    Item = 0b10,
-    Moves = 0b01,
-    Both = 0b11,
+    none = 0b00,
+    item = 0b10,
+    moves = 0b01,
+    both = 0b11,
 };
 
 pub const PartyMemberBase = extern struct {
@@ -157,23 +157,23 @@ pub const Trainer = extern struct {
 
     pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
         return switch (version) {
-            common.Version.Diamond,
-            common.Version.Pearl,
+            .diamond,
+            .pearl,
             => switch (trainer.party_type) {
-                .None => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
-                .Item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
-                .Moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
-                .Both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
+                .none => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
+                .item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
+                .moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
+                .both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
             },
 
-            common.Version.Platinum,
-            common.Version.HeartGold,
-            common.Version.SoulSilver,
+            .platinum,
+            .heart_gold,
+            .soul_silver,
             => switch (trainer.party_type) {
-                .None => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberNone)), i),
-                .Item => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberItem)), i),
-                .Moves => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberMoves)), i),
-                .Both => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberBoth)), i),
+                .none => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberNone)), i),
+                .item => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberItem)), i),
+                .moves => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberMoves)), i),
+                .both => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberBoth)), i),
             },
 
             else => unreachable,
@@ -191,24 +191,24 @@ pub const Trainer = extern struct {
 };
 
 pub const Type = packed enum(u8) {
-    Normal = 0x00,
-    Fighting = 0x01,
-    Flying = 0x02,
-    Poison = 0x03,
-    Ground = 0x04,
-    Rock = 0x05,
-    Bug = 0x06,
-    Ghost = 0x07,
-    Steel = 0x08,
-    Unknown = 0x09,
-    Fire = 0x0A,
-    Water = 0x0B,
-    Grass = 0x0C,
-    Electric = 0x0D,
-    Psychic = 0x0E,
-    Ice = 0x0F,
-    Dragon = 0x10,
-    Dark = 0x11,
+    normal = 0x00,
+    fighting = 0x01,
+    flying = 0x02,
+    poison = 0x03,
+    ground = 0x04,
+    rock = 0x05,
+    bug = 0x06,
+    ghost = 0x07,
+    steel = 0x08,
+    unknown = 0x09,
+    fire = 0x0A,
+    water = 0x0B,
+    grass = 0x0C,
+    electric = 0x0D,
+    psychic = 0x0E,
+    ice = 0x0F,
+    dragon = 0x10,
+    dark = 0x11,
 };
 
 // TODO: This is the first data structure I had to decode from scratch as I couldn't find a proper
@@ -345,22 +345,22 @@ pub const Pocket = packed struct {
 };
 
 pub const PocketKind = packed enum(u4) {
-    Items = 0x00,
-    TmHms = 0x01,
-    Berries = 0x02,
-    KeyItems = 0x03,
-    Unknown_0x04 = 0x04,
-    Unknown_0x05 = 0x05,
-    Unknown_0x06 = 0x06,
-    Unknown_0x07 = 0x07,
-    Unknown_0x08 = 0x08,
-    Balls = 0x09,
-    Unknown_0xA = 0xA,
-    Unknown_0xB = 0xB,
-    Unknown_0xC = 0xC,
-    Unknown_0xD = 0xD,
-    Unknown_0xE = 0xE,
-    Unknown_0xF = 0xF,
+    items = 0x00,
+    tm_hms = 0x01,
+    berries = 0x02,
+    key_items = 0x03,
+    unknown_0x04 = 0x04,
+    unknown_0x05 = 0x05,
+    unknown_0x06 = 0x06,
+    unknown_0x07 = 0x07,
+    unknown_0x08 = 0x08,
+    balls = 0x09,
+    unknown_0xa = 0xA,
+    unknown_0xb = 0xB,
+    unknown_0xc = 0xC,
+    unknown_0xd = 0xD,
+    unknown_0xe = 0xE,
+    unknown_0xf = 0xF,
 };
 
 pub const Item = extern struct {
@@ -444,7 +444,7 @@ pub const Game = struct {
             .allocator = allocator,
 
             .starters = switch (info.starters) {
-                .Arm9 => |offset| blk: {
+                .arm9 => |offset| blk: {
                     if (nds_rom.arm9.len < offset + offsets.starters_len)
                         return error.CouldNotFindStarters;
                     const starters_section = @bytesToSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
@@ -454,7 +454,7 @@ pub const Game = struct {
                         &starters_section[4],
                     };
                 },
-                .Overlay9 => |overlay| blk: {
+                .overlay9 => |overlay| blk: {
                     if (nds_rom.arm9_overlay_files.len <= overlay.file)
                         return error.CouldNotFindStarters;
 
@@ -497,7 +497,7 @@ pub const Game = struct {
     };
 
     fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
-        if (version == .HeartGold or version == .SoulSilver) {
+        if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
                 .static_pokemons = ([*]*script.Command)(undefined)[0..0],
@@ -529,7 +529,7 @@ pub const Game = struct {
 
             // The variable 0x8008 is the variables that stores items given
             // from Pokéballs.
-            var Var_8008: ?*lu16 = null;
+            var var_8008: ?*lu16 = null;
 
             var offset_i: usize = 0;
             while (offset_i < script_offsets.count()) : (offset_i += 1) {
@@ -544,17 +544,17 @@ pub const Game = struct {
                     .i = @intCast(usize, offset),
                 };
                 while (decoder.next() catch continue) |command| {
-                    // If we hit var 0x8008, the Var_8008_tmp will be set and
-                    // Var_8008 will become Var_8008_tmp. Then the next iteration
-                    // of this loop will set Var_8008 to null again. This allows us
+                    // If we hit var 0x8008, the var_8008_tmp will be set and
+                    // Var_8008 will become var_8008_tmp. Then the next iteration
+                    // of this loop will set var_8008 to null again. This allows us
                     // to store this state for only the next iteration of the loop.
-                    var Var_8008_tmp: ?*lu16 = null;
-                    defer Var_8008 = Var_8008_tmp;
+                    var var_8008_tmp: ?*lu16 = null;
+                    defer var_8008 = var_8008_tmp;
 
                     switch (command.tag) {
-                        .WildBattle,
-                        .WildBattle2,
-                        .WildBattle3,
+                        .wild_battle,
+                        .wild_battle2,
+                        .wild_battle3,
                         => try static_pokemons.append(command),
 
                         // In scripts, field items are two SetVar commands
@@ -562,10 +562,10 @@ pub const Game = struct {
                         //   SetVar 0x8008 // Item given
                         //   SetVar 0x8009 // Amount of items
                         //   Jump ???
-                        .SetVar => switch (command.data.SetVar.destination.value()) {
-                            0x8008 => Var_8008_tmp = &command.data.SetVar.value,
-                            0x8009 => if (Var_8008) |item| {
-                                const amount = &command.data.SetVar.value;
+                        .set_var => switch (command.data.set_var.destination.value()) {
+                            0x8008 => var_8008_tmp = &command.data.set_var.value,
+                            0x8009 => if (var_8008) |item| {
+                                const amount = &command.data.set_var.value;
                                 try pokeball_items.append(PokeballItem{
                                     .item = item,
                                     .amount = amount,
@@ -573,23 +573,23 @@ pub const Game = struct {
                             },
                             else => {},
                         },
-                        .Jump => {
-                            const off = command.data.Jump.adr.value();
+                        .jump => {
+                            const off = command.data.jump.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
-                        .CompareLastResultJump => {
-                            const off = command.data.CompareLastResultJump.adr.value();
+                        .compare_last_result_jump => {
+                            const off = command.data.compare_last_result_jump.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
-                        .Call => {
-                            const off = command.data.Call.adr.value();
+                        .call => {
+                            const off = command.data.call.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
-                        .CompareLastResultCall => {
-                            const off = command.data.CompareLastResultCall.adr.value();
+                        .compare_last_result_call => {
+                            const off = command.data.compare_last_result_call.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
@@ -620,11 +620,9 @@ pub const Game = struct {
 
     pub fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
         const file = file_system.getFile(path) orelse return error.FileNotFound;
-
-        const Tag = @TagType(nds.fs.Nitro.File);
         switch (file.*) {
-            Tag.Binary => return error.FileNotNarc,
-            Tag.Narc => |res| return res,
+            .binary => return error.FileNotNarc,
+            .narc => |res| return res,
         }
     }
 };

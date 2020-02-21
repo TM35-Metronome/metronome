@@ -345,11 +345,11 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 const pokemon = kv.value;
                 const rating_entry = try ratings.getOrPutValue(_species, 0);
 
-                // Legendaries are generally in the "Slow" to "MediumSlow"
+                // Legendaries are generally in the "slow" to "medium_slow"
                 // growth rating
                 if (pokemon.growth_rate) |growth_rate|
-                    rating_entry.value += isize(@boolToInt(mem.eql(u8, growth_rate, "Slow") or
-                        mem.eql(u8, growth_rate, "MediumSlow")));
+                    rating_entry.value += isize(@boolToInt(mem.eql(u8, growth_rate, "slow") or
+                        mem.eql(u8, growth_rate, "medium_slow")));
 
                 // They generally have a catch rate of 45 or less
                 if (pokemon.catch_rate) |catch_rate|
@@ -360,9 +360,9 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 if (pokemon.gender_ratio) |gender_ratio|
                     rating_entry.value += isize(@boolToInt(gender_ratio == 255));
 
-                // Most are part of the "Undiscovered" egg group
+                // Most are part of the "undiscovered" egg group
                 if (pokemon.egg_group) |egg_group|
-                    rating_entry.value += isize(@boolToInt(mem.eql(u8, egg_group, "Undiscovered")));
+                    rating_entry.value += isize(@boolToInt(mem.eql(u8, egg_group, "undiscovered")));
 
                 // They don't have evolutions.
                 if (pokemon.evos.len != 0)
@@ -550,29 +550,29 @@ test "tm35-rand-static" {
         }
     };
 
-    const legendaries = comptime H.pokemon("0", "10", "Ice", "Flying", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("1", "10", "Electric", "Flying", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("2", "10", "Fire", "Flying", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("3", "10", "Electric", "Electric", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("4", "11", "Water", "Water", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("5", "11", "Rock", "Rock", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("6", "11", "Ice", "Ice", "Slow", "3", "255", "Undiscovered", null) ++
-        H.pokemon("7", "12", "Dragon", "Psychic", "Slow", "3", "254", "Undiscovered", null) ++
-        H.pokemon("8", "12", "Dragon", "Psychic", "Slow", "3", "0", "Undiscovered", null) ++
-        H.pokemon("9", "12", "Water", "Water", "Slow", "3", "255", "Water1", null);
+    const legendaries = comptime H.pokemon("0", "10", "ice", "flying", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("1", "10", "electric", "flying", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("2", "10", "fire", "flying", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("3", "10", "electric", "electric", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("4", "11", "water", "water", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("5", "11", "rock", "rock", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("6", "11", "ice", "ice", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("7", "12", "dragon", "psychic", "slow", "3", "254", "undiscovered", null) ++
+        H.pokemon("8", "12", "dragon", "psychic", "slow", "3", "0", "undiscovered", null) ++
+        H.pokemon("9", "12", "water", "water", "slow", "3", "255", "water1", null);
 
-    const pseudo_legendaries = comptime H.pokemon("10", "10", "Dragon", "Dragon", "Slow", "45", "127", "Water1", "11") ++
-        H.pokemon("11", "10", "Dragon", "Flying", "Slow", "45", "127", "Water1", null) ++
-        H.pokemon("12", "10", "Rock", "Ground", "Slow", "45", "127", "Monster", "13") ++
-        H.pokemon("13", "10", "Rock", "Dark", "Slow", "45", "127", "Monster", null) ++
-        H.pokemon("14", "11", "Dragon", "Dragon", "Slow", "45", "127", "Dragon", "15") ++
-        H.pokemon("15", "11", "Dragon", "Flying2", "Slow", "45", "127", "Dragon", null) ++
-        H.pokemon("16", "11", "Steel", "Psychic", "Slow", "3", "255", "Mineral", "17") ++
-        H.pokemon("17", "11", "Steel", "Psychic", "Slow", "3", "255", "Mineral", null) ++
-        H.pokemon("18", "12", "Dragon", "Ground", "Slow", "45", "127", "Monster", "19") ++
-        H.pokemon("19", "12", "Dragon", "Ground", "Slow", "45", "127", "Monster", null) ++
-        H.pokemon("20", "12", "Dark", "Dragon", "Slow", "45", "127", "Dragon", "21") ++
-        H.pokemon("21", "12", "Dark", "Dragon", "Slow", "45", "127", "Dragon", null);
+    const pseudo_legendaries = comptime H.pokemon("10", "10", "dragon", "dragon", "slow", "45", "127", "water1", "11") ++
+        H.pokemon("11", "10", "dragon", "flying", "slow", "45", "127", "water1", null) ++
+        H.pokemon("12", "10", "rock", "ground", "slow", "45", "127", "monster", "13") ++
+        H.pokemon("13", "10", "rock", "dark", "slow", "45", "127", "monster", null) ++
+        H.pokemon("14", "11", "dragon", "dragon", "slow", "45", "127", "dragon", "15") ++
+        H.pokemon("15", "11", "dragon", "flying2", "slow", "45", "127", "dragon", null) ++
+        H.pokemon("16", "11", "steel", "psychic", "slow", "3", "255", "mineral", "17") ++
+        H.pokemon("17", "11", "steel", "psychic", "slow", "3", "255", "mineral", null) ++
+        H.pokemon("18", "12", "dragon", "ground", "slow", "45", "127", "monster", "19") ++
+        H.pokemon("19", "12", "dragon", "ground", "slow", "45", "127", "monster", null) ++
+        H.pokemon("20", "12", "dark", "dragon", "slow", "45", "127", "dragon", "21") ++
+        H.pokemon("21", "12", "dark", "dragon", "slow", "45", "127", "dragon", null);
 
     const result_prefix = legendaries ++ pseudo_legendaries;
     const test_string = comptime result_prefix ++

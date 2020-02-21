@@ -46,8 +46,8 @@ fn usage(stream: var) !void {
 }
 
 const Preference = enum {
-    Random,
-    Stab,
+    random,
+    stab,
 };
 
 pub fn main() u8 {
@@ -112,16 +112,16 @@ pub fn main2(
 
     const pref = if (args.option("--preference")) |pref|
         if (mem.eql(u8, pref, "random"))
-            Preference.Random
+            Preference.random
         else if (mem.eql(u8, pref, "stab"))
-            Preference.Stab
+            Preference.stab
         else {
             stdio.err.print("--preference does not support '{}'\n", pref) catch {};
             usage(stdio.err) catch {};
             return 1;
         }
     else
-        Preference.Random;
+        Preference.random;
 
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var data = Data{
@@ -243,8 +243,8 @@ fn randomize(data: Data, seed: u64, pref: Preference) void {
 fn randomizeMachinesLearned(data: Data, pokemon: Pokemon, random: *rand.Random, pref: Preference, machines: Machines, learned: MachinesLearned) void {
     var iter = learned.iterator();
     while (iter.next()) |kv| switch (pref) {
-        .Random => kv.value = random.boolean(),
-        .Stab => {
+        .random => kv.value = random.boolean(),
+        .stab => {
             const low_chance = 0.1;
             const chance: f64 = blk: {
                 const move_index = machines.get(kv.key) orelse break :blk low_chance;
@@ -296,24 +296,24 @@ const Move = struct {
 test "tm35-rand-learned-moves" {
     const result_prefix =
         \\.moves[0].power=10
-        \\.moves[0].type=Normal
+        \\.moves[0].type=normal
         \\.moves[1].power=30
-        \\.moves[1].type=Grass
+        \\.moves[1].type=grass
         \\.moves[2].power=30
-        \\.moves[2].type=Dragon
+        \\.moves[2].type=dragon
         \\.moves[3].power=30
-        \\.moves[3].type=Fire
+        \\.moves[3].type=fire
         \\.moves[4].power=50
-        \\.moves[4].type=Normal
+        \\.moves[4].type=normal
         \\.moves[5].power=70
-        \\.moves[5].type=Normal
+        \\.moves[5].type=normal
         \\.tms[0]=0
         \\.tms[1]=2
         \\.tms[2]=4
         \\.hms[0]=1
         \\.hms[1]=3
         \\.hms[2]=5
-        \\.pokemons[0].types[0]=Normal
+        \\.pokemons[0].types[0]=normal
         \\
     ;
     const test_string = result_prefix ++

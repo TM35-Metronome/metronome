@@ -39,14 +39,14 @@ pub fn Folder(comptime TFile: type) type {
             kind: Kind,
 
             pub const Kind = union(enum) {
-                File: *File,
-                Folder: *Self,
+                file: *File,
+                folder: *Self,
             };
 
             pub fn asFile(node: Node) !*File {
                 switch (node.kind) {
-                    .File => |file| return file,
-                    .Folder => return error.NotAFile,
+                    .file => |file| return file,
+                    .folder => return error.NotAFile,
                 }
             }
 
@@ -99,11 +99,11 @@ pub fn Folder(comptime TFile: type) type {
                 const a = f.allocator();
                 if (f.nodes.popOrNull()) |node| {
                     switch (node.kind) {
-                        Node.Kind.File => |file| {
+                        .file => |file| {
                             file.deinit();
                             a.destroy(file);
                         },
-                        Node.Kind.Folder => |sub_folder| curr = sub_folder,
+                        .folder => |sub_folder| curr = sub_folder,
                     }
                 } else {
                     var it = f.indexs.iterator();
@@ -143,8 +143,8 @@ pub fn Folder(comptime TFile: type) type {
         pub fn getFile(folder: *Self, path: []const u8) ?*File {
             const node = folder.get(path) orelse return null;
             switch (node) {
-                Node.Kind.File => |res| return res,
-                Node.Kind.Folder => return null,
+                .file => |res| return res,
+                .folder => return null,
             }
         }
 
@@ -153,8 +153,8 @@ pub fn Folder(comptime TFile: type) type {
         pub fn getFolder(folder: *Self, path: []const u8) ?*Self {
             const node = folder.get(path) orelse return null;
             switch (node) {
-                Node.Kind.File => return null,
-                Node.Kind.Folder => |res| return res,
+                .file => return null,
+                .folder => |res| return res,
             }
         }
 
@@ -164,12 +164,12 @@ pub fn Folder(comptime TFile: type) type {
         }
 
         fn get(folder: *Self, path: []const u8) ?Node.Kind {
-            var res = Node.Kind{ .Folder = folder.startFolder(path) };
+            var res = Node.Kind{ .folder = folder.startFolder(path) };
             var it = mem.tokenize(path, "/");
             while (it.next()) |name| {
                 switch (res) {
-                    Node.Kind.File => return null,
-                    Node.Kind.Folder => |tmp| {
+                    .file => return null,
+                    .folder => |tmp| {
                         const entry = tmp.indexs.get(name) orelse return null;
                         const index = entry.value;
                         res = tmp.nodes.toSlice()[index].kind;
@@ -190,10 +190,10 @@ pub fn Folder(comptime TFile: type) type {
         /// Create a file in the current folder.
         pub fn createFile(folder: *Self, name: []const u8, file: File) !*File {
             const res = try folder.createNode(name);
-            res.kind = Node.Kind{ .File = try folder.allocator().create(File) };
-            res.kind.File.* = file;
+            res.kind = Node.Kind{ .file = try folder.allocator().create(File) };
+            res.kind.file.* = file;
 
-            return res.kind.File;
+            return res.kind.file;
         }
 
         /// Create a folder in the current folder.
@@ -201,9 +201,9 @@ pub fn Folder(comptime TFile: type) type {
             const res = try folder.createNode(name);
             const fold = try Self.create(folder.allocator());
             fold.parent = folder;
-            res.kind = Node.Kind{ .Folder = fold };
+            res.kind = Node.Kind{ .folder = fold };
 
-            return res.kind.Folder;
+            return res.kind.folder;
         }
 
         /// Create all none existing folders in `path`.
@@ -214,8 +214,8 @@ pub fn Folder(comptime TFile: type) type {
                 if (res.indexs.get(name)) |entry| {
                     const node = res.nodes.toSliceConst()[entry.value];
                     switch (node.kind) {
-                        Node.Kind.File => return error.FileInPath,
-                        Node.Kind.Folder => |sub_folder| res = sub_folder,
+                        .file => return error.FileInPath,
+                        .folder => |sub_folder| res = sub_folder,
                     }
                 } else {
                     res = res.createFolder(name) catch |err| {
@@ -287,13 +287,13 @@ pub const Narc = Folder(struct {
 pub const Nitro = Folder(union(enum) {
     const Self = @This();
 
-    Binary: Binary,
-    Narc: *Narc,
+    binary: Binary,
+    narc: *Narc,
 
     pub fn deinit(file: *Self) void {
         switch (file.*) {
-            @TagType(Self).Binary => |bin| bin.allocator.free(bin.data),
-            @TagType(Self).Narc => |narc| narc.destroy(),
+            .binary => |bin| bin.allocator.free(bin.data),
+            .narc => |narc| narc.destroy(),
         }
 
         file.* = undefined;
@@ -385,8 +385,8 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
         const stream = &mem_stream.stream;
 
         const Kind = enum(u8) {
-            File = 0x00,
-            Folder = 0x80,
+            file = 0x00,
+            folder = 0x80,
         };
         const type_length = try stream.readByte();
 
@@ -397,14 +397,12 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
 
         const length = type_length & 0x7F;
         const kind = @intToEnum(Kind, type_length & 0x80);
-        debug.assert(kind == Kind.File or kind == Kind.Folder);
-
         const name = try allocator.alloc(u8, length);
         defer allocator.free(name);
         try stream.readNoEof(name);
 
         switch (kind) {
-            Kind.File => {
+            .file => {
                 if (fat.len <= file_id)
                     return error.InvalidFileId;
 
@@ -421,7 +419,7 @@ fn readHelper(comptime F: type, file: std.fs.File, allocator: *mem.Allocator, fn
                     .fnt_sub_table = mem_stream.slice[mem_stream.pos..],
                 }) catch unreachable;
             },
-            Kind.Folder => {
+            .folder => {
                 const read_id = try stream.readIntLittle(u16);
                 if (read_id < 0xF001 or read_id > 0xFFFF)
                     return error.InvalidSubDirectoryId;
@@ -530,9 +528,9 @@ pub fn readNitroFile(file: std.fs.File, allocator: *mem.Allocator, fat_entry: Fa
                 _ = try narc.createFile(sub_file_name, sub_file);
             }
 
-            return Nitro.File{ .Narc = narc };
+            return Nitro.File{ .narc = narc };
         } else {
-            return Nitro.File{ .Narc = try readNarc(file, allocator, fnt, fat, narc_img_base) };
+            return Nitro.File{ .narc = try readNarc(file, allocator, fnt, fat, narc_img_base) };
         }
     }
 
@@ -542,7 +540,7 @@ pub fn readNitroFile(file: std.fs.File, allocator: *mem.Allocator, fat_entry: Fa
     try file_in_stream.stream.readNoEof(data);
 
     return Nitro.File{
-        .Binary = Nitro.File.Binary{
+        .binary = Nitro.File.Binary{
             .allocator = allocator,
             .data = data,
         },
@@ -609,7 +607,7 @@ pub fn getFntAndFiles(comptime F: type, root: *F, allocator: *mem.Allocator) !Fn
             debug.assert(node.name.len != 0x00);
 
             switch (node.kind) {
-                F.Node.Kind.Folder => |folder| {
+                .folder => |folder| {
                     try sub_fnt.appendByte(@intCast(u8, node.name.len + 0x80));
                     try sub_fnt.append(node.name);
                     try sub_fnt.append(lu16.init(@intCast(u16, states.len + 0xF000)).bytes);
@@ -619,7 +617,7 @@ pub fn getFntAndFiles(comptime F: type, root: *F, allocator: *mem.Allocator) !Fn
                         .parent_id = current_state + 0xF000,
                     });
                 },
-                F.Node.Kind.File => |f| {
+                .file => |f| {
                     try sub_fnt.appendByte(@intCast(u8, node.name.len));
                     try sub_fnt.append(node.name);
                     try files.append(f);
@@ -648,12 +646,11 @@ pub fn getFntAndFiles(comptime F: type, root: *F, allocator: *mem.Allocator) !Fn
 }
 
 pub fn writeNitroFile(file: std.fs.File, allocator: *mem.Allocator, fs_file: Nitro.File) !void {
-    const Tag = @TagType(Nitro.File);
     switch (fs_file) {
-        Tag.Binary => |bin| {
+        .binary => |bin| {
             try file.write(bin.data);
         },
-        Tag.Narc => |narc| {
+        .narc => |narc| {
             const fntAndFiles = try getFntAndFiles(Narc, narc, allocator);
             const files = fntAndFiles.files;
             const main_fnt = fntAndFiles.main_fnt;

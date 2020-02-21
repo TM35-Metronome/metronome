@@ -52,13 +52,13 @@ fn randomFs(allocator: *mem.Allocator, random: *rand.Random, comptime Folder: ty
                         const is_narc = random.scalar(bool);
 
                         if (is_narc) {
-                            break :blk fs.Nitro.File{ .Narc = try randomFs(allocator, random, fs.Narc) };
+                            break :blk fs.Nitro.File{ .narc = try randomFs(allocator, random, fs.Narc) };
                         }
 
                         const data = try allocator.alloc(u8, random.range(usize, 10, 100));
                         random.bytes(data);
                         break :blk fs.Nitro.File{
-                            .Binary = fs.Nitro.File.Binary{
+                            .binary = fs.Nitro.File.Binary{
                                 .allocator = allocator,
                                 .data = data,
                             },
@@ -101,22 +101,22 @@ fn fsEqual(allocator: *mem.Allocator, comptime Folder: type, fs1: *Folder, fs2: 
     while (folders_to_compare.popOrNull()) |pair| {
         for (pair.f1.nodes.toSliceConst()) |n1| {
             switch (n1.kind) {
-                Folder.Node.Kind.File => |f1| {
+                .file => |f1| {
                     const f2 = pair.f2.getFile(n1.name) orelse return false;
                     switch (Folder) {
                         fs.Nitro => {
                             const Tag = @TagType(fs.Nitro.File);
                             switch (f1.*) {
-                                Tag.Binary => {
-                                    if (f2.* != Tag.Binary)
+                                .binary => {
+                                    if (f2.* != .binary)
                                         return false;
-                                    if (!mem.eql(u8, f1.Binary.data, f2.Binary.data))
+                                    if (!mem.eql(u8, f1.binary.data, f2.binary.data))
                                         return false;
                                 },
-                                Tag.Narc => {
-                                    if (f2.* != Tag.Narc)
+                                .narc => {
+                                    if (f2.* != .narc)
                                         return false;
-                                    if (!try fsEqual(allocator, fs.Narc, f1.Narc, f2.Narc))
+                                    if (!try fsEqual(allocator, fs.Narc, f1.narc, f2.narc))
                                         return false;
                                 },
                             }
@@ -128,7 +128,7 @@ fn fsEqual(allocator: *mem.Allocator, comptime Folder: type, fs1: *Folder, fs2: 
                         else => comptime unreachable,
                     }
                 },
-                Folder.Node.Kind.Folder => |f1| {
+                .folder => |f1| {
                     const f2 = pair.f2.getFolder(n1.name) orelse return false;
                     try folders_to_compare.append(FolderPair{
                         .f1 = f1,
@@ -361,8 +361,8 @@ test "nds.Rom" {
             .arm9_overlay_size = lu32.init(0x00),
             .arm7_overlay_offset = lu32.init(0x00),
             .arm7_overlay_size = lu32.init(0x00),
-            .port_40001A4h_setting_for_normal_commands = [_]u8{0} ** 4,
-            .port_40001A4h_setting_for_key1_commands = [_]u8{0} ** 4,
+            .port_40001a4h_setting_for_normal_commands = [_]u8{0} ** 4,
+            .port_40001a4h_setting_for_key1_commands = [_]u8{0} ** 4,
             .banner_offset = lu32.init(0x00),
             .secure_area_checksum = lu16.init(0x00),
             .secure_area_delay = lu16.init(0x051E),
@@ -450,10 +450,10 @@ test "nds.Rom" {
         .banner = nds.Banner{
             .version = 0x1,
             .has_animated_dsi_icon = 0,
-            .crc16_across_0020h_083Fh = lu16.init(0x00),
-            .crc16_across_0020h_093Fh = lu16.init(0x00),
-            .crc16_across_0020h_0A3Fh = lu16.init(0x00),
-            .crc16_across_1240h_23BFh = lu16.init(0x00),
+            .crc16_across_0020h_083fh = lu16.init(0x00),
+            .crc16_across_0020h_093fh = lu16.init(0x00),
+            .crc16_across_0020h_0a3fh = lu16.init(0x00),
+            .crc16_across_1240h_23bfh = lu16.init(0x00),
             .reserved1 = [_]u8{0x00} ** 0x16,
             .icon_bitmap = [_]u8{0x00} ** 0x200,
             .icon_palette = [_]u8{0x00} ** 0x20,

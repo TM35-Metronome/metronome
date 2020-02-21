@@ -161,13 +161,13 @@ fn randomize(data: Data, seed: u64) !void {
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    const pick_from = try data.nonKeyItems();
+    const pick_from = try data.nonkey_items();
 
     var it = data.pokeballs.iterator();
     while (it.next()) |kv| {
         const item = (data.items.get(kv.value) orelse continue).value;
         const pocket = item.pocket orelse continue;
-        if (mem.eql(u8, pocket, "KeyItems"))
+        if (mem.eql(u8, pocket, "key_items"))
             continue; // Don't randomize items that are key items (they are probably needed for progression)
 
         kv.value = pick_from[random.range(usize, 0, pick_from.len)];
@@ -181,7 +181,7 @@ const Data = struct {
     pokeballs: Pokeballs,
     items: Items,
 
-    fn nonKeyItems(d: Data) ![]usize {
+    fn nonkey_items(d: Data) ![]usize {
         var res = std.ArrayList(usize).init(d.pokeballs.allocator);
         errdefer res.deinit();
 
@@ -189,7 +189,7 @@ const Data = struct {
         while (it.next()) |item_kv| {
             const item = item_kv.value;
             const pocket = item.pocket orelse continue;
-            if (mem.eql(u8, pocket, "KeyItems"))
+            if (mem.eql(u8, pocket, "key_items"))
                 continue;
 
             try res.append(item_kv.key);
@@ -214,10 +214,10 @@ test "tm35-rand-pokeball-items" {
         }
     };
 
-    const items = H.item("0", "KeyItems") ++
-        H.item("1", "Items") ++
-        H.item("2", "HmTms") ++
-        H.item("3", "Berries");
+    const items = H.item("0", "key_items") ++
+        H.item("1", "items") ++
+        H.item("2", "hmtms") ++
+        H.item("3", "berries");
 
     const result_prefix = items;
     const test_string = comptime result_prefix ++

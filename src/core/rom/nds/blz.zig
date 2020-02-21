@@ -109,8 +109,8 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
 }
 
 pub const Mode = enum {
-    Normal,
-    Best,
+    normal,
+    best,
 };
 
 pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocator) ![]u8 {

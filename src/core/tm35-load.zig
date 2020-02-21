@@ -163,23 +163,23 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".trainers[{}].ai={}\n", i, trainer.ai.value());
 
         switch (trainer.party_type) {
-            gen3.PartyType.None => {
-                for (try trainer.party.None.toSlice(game.data)) |member, j| {
+            .none => {
+                for (try trainer.party.none.toSlice(game.data)) |member, j| {
                     try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.base.iv.value());
                     try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
                     try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
                 }
             },
-            gen3.PartyType.Item => {
-                for (try trainer.party.Item.toSlice(game.data)) |member, j| {
+            .item => {
+                for (try trainer.party.item.toSlice(game.data)) |member, j| {
                     try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.base.iv.value());
                     try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
                     try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                 }
             },
-            gen3.PartyType.Moves => {
-                for (try trainer.party.Moves.toSlice(game.data)) |member, j| {
+            .moves => {
+                for (try trainer.party.moves.toSlice(game.data)) |member, j| {
                     try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.base.iv.value());
                     try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
                     try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
@@ -188,8 +188,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
                     }
                 }
             },
-            gen3.PartyType.Both => {
-                for (try trainer.party.Both.toSlice(game.data)) |member, j| {
+            .both => {
+                for (try trainer.party.both.toSlice(game.data)) |member, j| {
                     try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, member.base.iv.value());
                     try stream.print(".trainers[{}].party[{}].level={}\n", i, j, member.base.level.value());
                     try stream.print(".trainers[{}].party[{}].species={}\n", i, j, member.base.species.value());
@@ -266,7 +266,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         }
 
         for (game.evolutions[i]) |evo, j| {
-            if (evo.method == .Unused)
+            if (evo.method == .unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
@@ -302,8 +302,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".items[{}].importance={}\n", i, item.importance);
         // try stream.print(".items[{}].unknown={}\n", i, item.unknown);
         try stream.print(".items[{}].pocket={}\n", i, switch (game.version) {
-            .Ruby, .Sapphire, .Emerald => @tagName(item.pocket.RSE),
-            .FireRed, .LeafGreen => @tagName(item.pocket.FRLG),
+            .ruby, .sapphire, .emerald => @tagName(item.pocket.rse),
+            .fire_red, .leaf_green => @tagName(item.pocket.frlg),
             else => unreachable,
         });
         try stream.print(".items[{}].type={}\n", i, item.@"type");
@@ -384,18 +384,18 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             try stream.print(".trainers[{}].party[{}].species={}\n", i, j, base.species.value());
 
             switch (trainer.party_type) {
-                gen4.PartyType.None => {},
-                gen4.PartyType.Item => {
+                .none => {},
+                .item => {
                     const member = base.toParent(gen4.PartyMemberItem);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                 },
-                gen4.PartyType.Moves => {
+                .moves => {
                     const member = base.toParent(gen4.PartyMemberMoves);
                     for (member.moves) |move, k| {
                         try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
                 },
-                gen4.PartyType.Both => {
+                .both => {
                     const member = base.toParent(gen4.PartyMemberBoth);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                     for (member.moves) |move, k| {
@@ -470,7 +470,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         const rem = bytes.len % @sizeOf(gen4.Evolution);
         const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
-            if (evo.method == .Unused)
+            if (evo.method == .unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
@@ -526,9 +526,9 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
     for (game.wild_pokemons.nodes.toSlice()) |node, i| {
         switch (game.version) {
-            common.Version.Diamond,
-            common.Version.Pearl,
-            common.Version.Platinum,
+            .diamond,
+            .pearl,
+            .platinum,
             => {
                 const wild_mons = node.asDataFile(gen4.DpptWildPokemons) catch continue;
 
@@ -570,8 +570,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 }
             },
 
-            common.Version.HeartGold,
-            common.Version.SoulSilver,
+            .heart_gold,
+            .soul_silver,
             => {
                 const wild_mons = node.asDataFile(gen4.HgssWildPokemons) catch continue;
                 // TODO: Get rid of inline for in favor of a function to call
@@ -613,8 +613,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
     for (game.static_pokemons) |static_mon, i| {
         const data = static_mon.data;
-        try stream.print(".static_pokemons[{}].species={}\n", i, data.WildBattle.species.value());
-        try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level.value());
+        try stream.print(".static_pokemons[{}].species={}\n", i, data.wild_battle.species.value());
+        try stream.print(".static_pokemons[{}].level={}\n", i, data.wild_battle.level.value());
     }
 
     for (game.pokeball_items) |given_item, i| {
@@ -672,18 +672,18 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             try stream.print(".trainers[{}].party[{}].form={}\n", i, j, base.form.value());
 
             switch (trainer.party_type) {
-                gen5.PartyType.None => {},
-                gen5.PartyType.Item => {
+                .none => {},
+                .item => {
                     const member = base.toParent(gen5.PartyMemberItem);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                 },
-                gen5.PartyType.Moves => {
+                .moves => {
                     const member = base.toParent(gen5.PartyMemberMoves);
                     for (member.moves) |move, k| {
                         try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", i, j, k, move.value());
                     }
                 },
-                gen5.PartyType.Both => {
+                .both => {
                     const member = base.toParent(gen5.PartyMemberBoth);
                     try stream.print(".trainers[{}].party[{}].item={}\n", i, j, member.item.value());
                     for (member.moves) |move, k| {
@@ -797,7 +797,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         const rem = bytes.len % @sizeOf(gen5.Evolution);
         const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
         for (evos) |evo, j| {
-            if (evo.method == .Unused)
+            if (evo.method == .unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
             try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
@@ -877,8 +877,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     for (game.static_pokemons) |static_mon, i| {
         const data = static_mon.data;
-        try stream.print(".static_pokemons[{}].species={}\n", i, data.WildBattle.species.value());
-        try stream.print(".static_pokemons[{}].level={}\n", i, data.WildBattle.level);
+        try stream.print(".static_pokemons[{}].species={}\n", i, data.wild_battle.species.value());
+        try stream.print(".static_pokemons[{}].level={}\n", i, data.wild_battle.level);
     }
 
     for (game.pokeball_items) |given_item, i| {

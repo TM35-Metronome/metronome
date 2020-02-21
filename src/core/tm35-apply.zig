@@ -129,7 +129,7 @@ pub fn main2(
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-            break :blk Game{ .Gen3 = game };
+            break :blk Game{ .gen3 = game };
         } else |err| err;
 
         file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
@@ -140,11 +140,11 @@ pub fn main2(
         };
 
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |game| {
-            break :blk Game{ .Gen4 = game };
+            break :blk Game{ .gen4 = game };
         } else |err| err;
 
         const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
-            break :blk Game{ .Gen5 = game };
+            break :blk Game{ .gen5 = game };
         } else |err| err;
 
         stdio.err.print("Successfully loaded '{}' as a nds rom.\n", file_name) catch {};
@@ -153,9 +153,9 @@ pub fn main2(
         return 1;
     };
     defer switch (game) {
-        .Gen3 => |*gen3_game| gen3_game.deinit(),
-        .Gen4 => |*gen4_game| gen4_game.deinit(),
-        .Gen5 => |*gen5_game| gen5_game.deinit(),
+        .gen3 => |*gen3_game| gen3_game.deinit(),
+        .gen4 => |*gen4_game| gen4_game.deinit(),
+        .gen5 => |*gen5_game| gen5_game.deinit(),
     };
 
     var line_num: usize = 1;
@@ -164,9 +164,9 @@ pub fn main2(
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         _ = switch (game) {
-            .Gen3 => |gen3_game| applyGen3(gen3_game, line_num, trimmed),
-            .Gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
-            .Gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
+            .gen3 => |gen3_game| applyGen3(gen3_game, line_num, trimmed),
+            .gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
+            .gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
         } catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", line_num, @errorName(err)) catch {};
             stdio.err.print("{}\n", line) catch {};
@@ -184,17 +184,17 @@ pub fn main2(
 
     var out_stream = &out_file.outStream().stream;
     switch (game) {
-        .Gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return errors.writeErr(stdio.err, out, err),
-        .Gen4, .Gen5 => nds_rom.writeToFile(out_file) catch |err| return errors.writeErr(stdio.err, out, err),
+        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return errors.writeErr(stdio.err, out, err),
+        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return errors.writeErr(stdio.err, out, err),
     }
 
     return 0;
 }
 
 const Game = union(enum) {
-    Gen3: gen3.Game,
-    Gen4: gen4.Game,
-    Gen5: gen5.Game,
+    gen3: gen3.Game,
+    gen4: gen4.Game,
+    gen5: gen5.Game,
 };
 
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
@@ -247,18 +247,18 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             } else |_| if (parser.eatField("item")) {
                 const item = try parser.eatUnsignedValue(u16, 10);
                 switch (trainer.party_type) {
-                    gen3.PartyType.Item => member.toParent(gen3.PartyMemberItem).item = lu16.init(item),
-                    gen3.PartyType.Both => member.toParent(gen3.PartyMemberBoth).item = lu16.init(item),
+                    .item => member.toParent(gen3.PartyMemberItem).item = lu16.init(item),
+                    .both => member.toParent(gen3.PartyMemberBoth).item = lu16.init(item),
                     else => return error.NoField,
                 }
             } else |_| if (parser.eatField("moves")) {
                 const mv_ptr = switch (trainer.party_type) {
-                    gen3.PartyType.Moves => blk: {
+                    .moves => blk: {
                         const move_member = member.toParent(gen3.PartyMemberMoves);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
                     },
-                    gen3.PartyType.Both => blk: {
+                    .both => blk: {
                         const move_member = member.toParent(gen3.PartyMemberBoth);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
@@ -433,8 +433,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         } else |_| if (parser.eatField("importance")) {
             item.importance = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("pocket")) switch (game.version) {
-            .Ruby, .Sapphire, .Emerald => item.pocket = gen3.Pocket{ .RSE = try parser.eatEnumValue(gen3.RSEPocket) },
-            .FireRed, .LeafGreen => item.pocket = gen3.Pocket{ .FRLG = try parser.eatEnumValue(gen3.FRLGPocket) },
+            .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.eatEnumValue(gen3.RSEPocket) },
+            .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.eatEnumValue(gen3.FRLGPocket) },
             else => unreachable,
         } else |_| if (parser.eatField("type")) {
             item.@"type" = try parser.eatUnsignedValue(u8, 10);
@@ -569,18 +569,18 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             } else |_| if (parser.eatField("item")) {
                 const item = try parser.eatUnsignedValue(u16, 10);
                 switch (trainer.party_type) {
-                    gen4.PartyType.Item => member.toParent(gen4.PartyMemberItem).item = lu16.init(item),
-                    gen4.PartyType.Both => member.toParent(gen4.PartyMemberBoth).item = lu16.init(item),
+                    .item => member.toParent(gen4.PartyMemberItem).item = lu16.init(item),
+                    .both => member.toParent(gen4.PartyMemberBoth).item = lu16.init(item),
                     else => return error.NoField,
                 }
             } else |_| if (parser.eatField("moves")) {
                 const mv_ptr = switch (trainer.party_type) {
-                    gen4.PartyType.Moves => blk: {
+                    .moves => blk: {
                         const move_member = member.toParent(gen4.PartyMemberMoves);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
                     },
-                    gen4.PartyType.Both => blk: {
+                    .both => blk: {
                         const move_member = member.toParent(gen4.PartyMemberBoth);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
@@ -809,9 +809,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         try parser.eatField("wild");
 
         switch (game.version) {
-            common.Version.Diamond,
-            common.Version.Pearl,
-            common.Version.Platinum,
+            .diamond,
+            .pearl,
+            .platinum,
             => {
                 const wilds = try wild_pokemons[zone_index].asDataFile(gen4.DpptWildPokemons);
                 if (parser.eatField("grass")) {
@@ -896,8 +896,8 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             },
 
-            common.Version.HeartGold,
-            common.Version.SoulSilver,
+            .heart_gold,
+            .soul_silver,
             => {
                 const wilds = try wild_pokemons[zone_index].asDataFile(gen4.HgssWildPokemons);
                 inline for ([_][]const u8{
@@ -970,9 +970,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.data.WildBattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data.wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.data.WildBattle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data.wild_battle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -1054,18 +1054,18 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             } else |_| if (parser.eatField("item")) {
                 const item = try parser.eatUnsignedValue(u16, 10);
                 switch (trainer.party_type) {
-                    gen5.PartyType.Item => member.toParent(gen5.PartyMemberItem).item = lu16.init(item),
-                    gen5.PartyType.Both => member.toParent(gen5.PartyMemberBoth).item = lu16.init(item),
+                    .item => member.toParent(gen5.PartyMemberItem).item = lu16.init(item),
+                    .both => member.toParent(gen5.PartyMemberBoth).item = lu16.init(item),
                     else => return error.NoField,
                 }
             } else |_| if (parser.eatField("moves")) {
                 const mv_ptr = switch (trainer.party_type) {
-                    gen5.PartyType.Moves => blk: {
+                    .moves => blk: {
                         const move_member = member.toParent(gen5.PartyMemberMoves);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
                     },
-                    gen5.PartyType.Both => blk: {
+                    .both => blk: {
                         const move_member = member.toParent(gen5.PartyMemberBoth);
                         const move_index = try parser.eatIndexMax(move_member.moves.len);
                         break :blk &move_member.moves[move_index];
@@ -1369,9 +1369,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.data.WildBattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data.wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.data.WildBattle.level = try parser.eatUnsignedValue(u8, 10);
+            static_mon.data.wild_battle.level = try parser.eatUnsignedValue(u8, 10);
         } else |_| {
             return error.NoField;
         }

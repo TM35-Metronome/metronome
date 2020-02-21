@@ -153,13 +153,13 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
         for (state.folder.nodes.toSliceConst()) |node| {
             const node_path = try path.join(allocator, [_][]const u8{ state.path, node.name });
             switch (node.kind) {
-                Fs.Node.Kind.File => |f| {
+                .file => |f| {
                     defer allocator.free(node_path);
                     const Tag = @TagType(nds.fs.Nitro.File);
                     switch (Fs) {
                         nds.fs.Nitro => switch (f.*) {
-                            Tag.Binary => |bin| try io.writeFile(node_path, bin.data),
-                            Tag.Narc => |narc| {
+                            .binary => |bin| try io.writeFile(node_path, bin.data),
+                            .narc => |narc| {
                                 try fs.makePath(allocator, node_path);
                                 try writeFs(allocator, nds.fs.Narc, node_path, narc);
                             },
@@ -168,7 +168,7 @@ fn writeFs(allocator: *mem.Allocator, comptime Fs: type, p: []const u8, folder: 
                         else => comptime unreachable,
                     }
                 },
-                Fs.Node.Kind.Folder => |f| {
+                .folder => |f| {
                     try fs.makePath(allocator, node_path);
                     try stack.append(State{
                         .path = node_path,

@@ -150,15 +150,15 @@ fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
 
 fn getVersion(gamecode: []const u8) !common.Version {
     if (mem.startsWith(u8, gamecode, "BPE"))
-        return common.Version.Emerald;
+        return .emerald;
     if (mem.startsWith(u8, gamecode, "BPR"))
-        return common.Version.FireRed;
+        return .fire_red;
     if (mem.startsWith(u8, gamecode, "BPG"))
-        return common.Version.LeafGreen;
+        return .leaf_green;
     if (mem.startsWith(u8, gamecode, "AXV"))
-        return common.Version.Ruby;
+        return .ruby;
     if (mem.startsWith(u8, gamecode, "AXP"))
-        return common.Version.Sapphire;
+        return .sapphire;
 
     return error.UnknownPokemonVersion;
 }
@@ -176,15 +176,15 @@ fn getInfo(
         [_][]const u8{"name"},
     }){ .data = data };
     const trainers = switch (version) {
-        common.Version.Emerald => trainer_searcher.findSlice3(
+        .emerald => trainer_searcher.findSlice3(
             em_first_trainers,
             em_last_trainers,
         ),
-        common.Version.Ruby, common.Version.Sapphire => trainer_searcher.findSlice3(
+        .ruby, .sapphire => trainer_searcher.findSlice3(
             rs_first_trainers,
             rs_last_trainers,
         ),
-        common.Version.FireRed, common.Version.LeafGreen => trainer_searcher.findSlice3(
+        .fire_red, .leaf_green => trainer_searcher.findSlice3(
             frls_first_trainers,
             frls_last_trainers,
         ),
@@ -220,25 +220,25 @@ fn getInfo(
     ) orelse return error.UnableToFindEvolutionTableOffset;
 
     const level_up_learnset_pointers = blk: {
-        const LevelUpRef = gen3.Ptr(gen3.LevelUpMove);
+        const level_upRef = gen3.Ptr(gen3.LevelUpMove);
         const level_up_searcher = Searcher(u8, [_][]const []const u8{}){ .data = data };
 
-        var first_pointers: [first_levelup_learnsets.len]LevelUpRef = undefined;
+        var first_pointers: [first_levelup_learnsets.len]level_upRef = undefined;
         for (first_levelup_learnsets) |learnset, i| {
-            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindLevelUpLearnsetOffset;
+            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindlevel_upLearnsetOffset;
             const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            first_pointers[i] = try LevelUpRef.init(@intCast(u32, offset));
+            first_pointers[i] = try level_upRef.init(@intCast(u32, offset));
         }
 
-        var last_pointers: [last_levelup_learnsets.len]LevelUpRef = undefined;
+        var last_pointers: [last_levelup_learnsets.len]level_upRef = undefined;
         for (last_levelup_learnsets) |learnset, i| {
-            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindLevelUpLearnsetOffset;
+            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindlevel_upLearnsetOffset;
             const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            last_pointers[i] = try LevelUpRef.init(@intCast(u32, offset));
+            last_pointers[i] = try level_upRef.init(@intCast(u32, offset));
         }
 
-        const pointer_searcher = Searcher(LevelUpRef, [_][]const []const u8{}){ .data = data };
-        break :blk pointer_searcher.findSlice3(first_pointers, last_pointers) orelse return error.UnableToFindLevelUpLearnsetOffset;
+        const pointer_searcher = Searcher(level_upRef, [_][]const []const u8{}){ .data = data };
+        break :blk pointer_searcher.findSlice3(first_pointers, last_pointers) orelse return error.UnableToFindlevel_upLearnsetOffset;
     };
 
     const hm_tm_searcher = Searcher(lu16, [_][]const []const u8{}){ .data = data };
@@ -256,15 +256,15 @@ fn getInfo(
         [_][]const u8{"battle_use_func"},
     }){ .data = data };
     const items = switch (version) {
-        common.Version.Emerald => items_searcher.findSlice3(
+        .emerald => items_searcher.findSlice3(
             em_first_items,
             em_last_items,
         ),
-        common.Version.Ruby, common.Version.Sapphire => items_searcher.findSlice3(
+        .ruby, .sapphire => items_searcher.findSlice3(
             rs_first_items,
             rs_last_items,
         ),
-        common.Version.FireRed, common.Version.LeafGreen => items_searcher.findSlice3(
+        .fire_red, .leaf_green => items_searcher.findSlice3(
             frlg_first_items,
             frlg_last_items,
         ),
@@ -279,15 +279,15 @@ fn getInfo(
         [_][]const u8{"fishing"},
     }){ .data = data };
     const maybe_wild_pokemon_headers = switch (version) {
-        common.Version.Emerald => wild_pokemon_headers_searcher.findSlice3(
+        .emerald => wild_pokemon_headers_searcher.findSlice3(
             em_first_wild_mon_headers,
             em_last_wild_mon_headers,
         ),
-        common.Version.Ruby, common.Version.Sapphire => wild_pokemon_headers_searcher.findSlice3(
+        .ruby, .sapphire => wild_pokemon_headers_searcher.findSlice3(
             rs_first_wild_mon_headers,
             rs_last_wild_mon_headers,
         ),
-        common.Version.FireRed, common.Version.LeafGreen => wild_pokemon_headers_searcher.findSlice3(
+        .fire_red, .leaf_green => wild_pokemon_headers_searcher.findSlice3(
             frlg_first_wild_mon_headers,
             frlg_last_wild_mon_headers,
         ),
@@ -303,18 +303,18 @@ fn getInfo(
         [_][]const u8{"pad"},
     }){ .data = data };
     const maybe_map_headers = switch (version) {
-        common.Version.Ruby,
-        common.Version.Sapphire,
+        .ruby,
+        .sapphire,
         => map_header_searcher.findSlice3(
             rs_first_map_headers,
             rs_last_map_headers,
         ),
-        common.Version.Emerald => map_header_searcher.findSlice3(
+        .emerald => map_header_searcher.findSlice3(
             em_first_map_headers,
             em_last_map_headers,
         ),
-        common.Version.FireRed,
-        common.Version.LeafGreen,
+        .fire_red,
+        .leaf_green,
         => map_header_searcher.findSlice3(
             frlg_first_map_headers,
             frlg_last_map_headers,
@@ -610,7 +610,7 @@ test "searcher.Searcher.findSlice3" {
 
 const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -621,7 +621,7 @@ const em_first_trainers = [_]gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0x02,
         .encounter_music = 0x0b,
         .trainer_picture = 0,
@@ -634,7 +634,7 @@ const em_first_trainers = [_]gen3.Trainer{
 };
 
 const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
-    .party_type = gen3.PartyType.None,
+    .party_type = .none,
     .class = 0x41,
     .encounter_music = 0x80,
     .trainer_picture = 0x5c,
@@ -647,7 +647,7 @@ const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
 
 const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -658,7 +658,7 @@ const rs_first_trainers = [_]gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0x02,
         .encounter_music = 0x06,
         .trainer_picture = 0x46,
@@ -671,7 +671,7 @@ const rs_first_trainers = [_]gen3.Trainer{
 };
 
 const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
-    .party_type = gen3.PartyType.None,
+    .party_type = .none,
     .class = 0x21,
     .encounter_music = 0x0B,
     .trainer_picture = 0x06,
@@ -684,7 +684,7 @@ const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
 
 const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0,
         .encounter_music = 0,
         .trainer_picture = 0,
@@ -700,7 +700,7 @@ const frls_first_trainers = [_]gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 2,
         .encounter_music = 6,
         .trainer_picture = 0,
@@ -719,7 +719,7 @@ const frls_first_trainers = [_]gen3.Trainer{
 
 const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
-        .party_type = gen3.PartyType.Both,
+        .party_type = .both,
         .class = 90,
         .encounter_music = 0,
         .trainer_picture = 125,
@@ -735,7 +735,7 @@ const frls_last_trainers = [_]gen3.Trainer{
         .party = undefined,
     },
     gen3.Trainer{
-        .party_type = gen3.PartyType.None,
+        .party_type = .none,
         .class = 0x47,
         .encounter_music = 0,
         .trainer_picture = 0x60,
@@ -757,7 +757,7 @@ const first_moves = [_]gen3.Move{
     gen3.Move{
         .effect = 0,
         .power = 0,
-        .@"type" = gen3.Type.Normal,
+        .@"type" = .normal,
         .accuracy = 0,
         .pp = 0,
         .side_effect_chance = 0,
@@ -769,7 +769,7 @@ const first_moves = [_]gen3.Move{
     gen3.Move{
         .effect = 0,
         .power = 40,
-        .@"type" = gen3.Type.Normal,
+        .@"type" = .normal,
         .accuracy = 100,
         .pp = 35,
         .side_effect_chance = 0,
@@ -784,7 +784,7 @@ const last_moves = [_]gen3.Move{
 gen3.Move{
     .effect = 204,
     .power = 140,
-    .@"type" = gen3.Type.Psychic,
+    .@"type" = .psychic,
     .accuracy = 90,
     .pp = 5,
     .side_effect_chance = 100,
@@ -819,7 +819,7 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_defense = 0,
         },
 
-        .types = [_]gen3.Type{ gen3.Type.Normal, gen3.Type.Normal },
+        .types = [_]gen3.Type{ .normal, .normal },
 
         .catch_rate = 0,
         .base_exp_yield = 0,
@@ -840,16 +840,16 @@ const first_pokemons = [_]gen3.BasePokemon{
         .egg_cycles = 0,
         .base_friendship = 0,
 
-        .growth_rate = common.GrowthRate.MediumFast,
+        .growth_rate = .medium_fast,
 
-        .egg_group1 = common.EggGroup.Invalid,
-        .egg_group2 = common.EggGroup.Invalid,
+        .egg_group1 = .invalid,
+        .egg_group2 = .invalid,
 
         .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
 
         .color_flip = gen3.BasePokemon.ColorFlip{
-            .color = common.Color.Red,
+            .color = .red,
             .flip = false,
         },
 
@@ -866,7 +866,7 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_defense = 65,
         },
 
-        .types = [_]gen3.Type{ gen3.Type.Grass, gen3.Type.Poison },
+        .types = [_]gen3.Type{ .grass, .poison },
 
         .catch_rate = 45,
         .base_exp_yield = 64,
@@ -887,16 +887,16 @@ const first_pokemons = [_]gen3.BasePokemon{
         .egg_cycles = 20,
         .base_friendship = 70,
 
-        .growth_rate = common.GrowthRate.MediumSlow,
+        .growth_rate = .medium_slow,
 
-        .egg_group1 = common.EggGroup.Monster,
-        .egg_group2 = common.EggGroup.Grass,
+        .egg_group1 = .monster,
+        .egg_group2 = .grass,
 
         .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
 
         .color_flip = gen3.BasePokemon.ColorFlip{
-            .color = common.Color.Green,
+            .color = .green,
             .flip = false,
         },
 
@@ -916,7 +916,7 @@ gen3.BasePokemon{
         .sp_defense = 80,
     },
 
-    .types = [_]gen3.Type{ gen3.Type.Psychic, gen3.Type.Psychic },
+    .types = [_]gen3.Type{ .psychic, .psychic },
 
     .catch_rate = 45,
     .base_exp_yield = 147,
@@ -937,16 +937,16 @@ gen3.BasePokemon{
     .egg_cycles = 25,
     .base_friendship = 70,
 
-    .growth_rate = common.GrowthRate.Fast,
+    .growth_rate = .fast,
 
-    .egg_group1 = common.EggGroup.Amorphous,
-    .egg_group2 = common.EggGroup.Amorphous,
+    .egg_group1 = .amorphous,
+    .egg_group2 = .amorphous,
 
     .abilities = [_]u8{ 26, 0 },
     .safari_zone_rate = 0,
 
     .color_flip = gen3.BasePokemon.ColorFlip{
-        .color = common.Color.Blue,
+        .color = .blue,
         .flip = false,
     },
 
@@ -958,7 +958,7 @@ fn percentFemale(percent: f64) u8 {
 }
 
 const unused_evo = gen3.Evolution{
-    .method = .Unused,
+    .method = .unused,
     .padding1 = undefined,
     .param = lu16.init(0),
     .target = lu16.init(0),
@@ -973,7 +973,7 @@ const first_evolutions = [_][5]gen3.Evolution{
     // Bulbasaur
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = .LevelUp,
+            .method = .level_up,
             .padding1 = undefined,
             .param = lu16.init(16),
             .target = lu16.init(2),
@@ -988,7 +988,7 @@ const first_evolutions = [_][5]gen3.Evolution{
     // Ivysaur
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = .LevelUp,
+            .method = .level_up,
             .padding1 = undefined,
             .param = lu16.init(32),
             .target = lu16.init(3),
@@ -1006,7 +1006,7 @@ const last_evolutions = [_][5]gen3.Evolution{
     [_]gen3.Evolution{
         gen3.Evolution{
             .padding1 = undefined,
-            .method = .LevelUp,
+            .method = .level_up,
             .param = lu16.init(20),
             .target = lu16.init(399),
             .padding2 = undefined,
@@ -1020,7 +1020,7 @@ const last_evolutions = [_][5]gen3.Evolution{
     // Metang
     [_]gen3.Evolution{
         gen3.Evolution{
-            .method = .LevelUp,
+            .method = .level_up,
             .padding1 = undefined,
             .param = lu16.init(45),
             .target = lu16.init(400),
@@ -1156,7 +1156,7 @@ const em_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .Items },
+        .pocket = gen3.Pocket{ .rse = .items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1173,7 +1173,7 @@ const em_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .PokeBalls },
+        .pocket = gen3.Pocket{ .rse = .poke_balls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1193,7 +1193,7 @@ const em_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocket = gen3.Pocket{ .RSE = .KeyItems },
+        .pocket = gen3.Pocket{ .rse = .key_items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1210,7 +1210,7 @@ const em_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocket = gen3.Pocket{ .RSE = .KeyItems },
+        .pocket = gen3.Pocket{ .rse = .key_items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1230,7 +1230,7 @@ const rs_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .Items },
+        .pocket = gen3.Pocket{ .rse = .items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1247,7 +1247,7 @@ const rs_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .PokeBalls },
+        .pocket = gen3.Pocket{ .rse = .poke_balls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1267,7 +1267,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .TmHms },
+        .pocket = gen3.Pocket{ .rse = .tm_hms },
         .@"type" = 1,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1284,7 +1284,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .Items },
+        .pocket = gen3.Pocket{ .rse = .items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1301,7 +1301,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .RSE = .Items },
+        .pocket = gen3.Pocket{ .rse = .items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1320,7 +1320,7 @@ const frlg_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .FRLG = .Items },
+        .pocket = gen3.Pocket{ .frlg = .items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1336,7 +1336,7 @@ const frlg_first_items = [_]gen3.Item{
         .description = undefined,
         .importance = 0,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .FRLG = .PokeBalls },
+        .pocket = gen3.Pocket{ .frlg = .poke_balls },
         .@"type" = 0,
         .field_use_func = undefined,
         .battle_usage = lu32.init(2),
@@ -1355,7 +1355,7 @@ const frlg_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocket = gen3.Pocket{ .FRLG = .KeyItems },
+        .pocket = gen3.Pocket{ .frlg = .key_items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),
@@ -1371,7 +1371,7 @@ const frlg_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 1,
-        .pocket = gen3.Pocket{ .FRLG = .KeyItems },
+        .pocket = gen3.Pocket{ .frlg = .key_items },
         .@"type" = 4,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),

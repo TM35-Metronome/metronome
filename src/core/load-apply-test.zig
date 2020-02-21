@@ -337,14 +337,14 @@ fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
     for (info.trainers.slice(buf)) |*trainer, i| {
         const party_offset = free_space_offset;
         const party_len = 3;
-        trainer.party = gen3.Party{ .None = try gen3.Slice(gen3.PartyMemberNone).init(party_offset, party_len) };
+        trainer.party = gen3.Party{ .none = try gen3.Slice(gen3.PartyMemberNone).init(party_offset, party_len) };
         trainer.party_type = @intToEnum(gen3.PartyType, @intCast(u8, i % 4));
 
         switch (trainer.party_type) {
-            .None => free_space_offset += party_len * @sizeOf(gen3.PartyMemberNone),
-            .Item => free_space_offset += party_len * @sizeOf(gen3.PartyMemberItem),
-            .Moves => free_space_offset += party_len * @sizeOf(gen3.PartyMemberMoves),
-            .Both => free_space_offset += party_len * @sizeOf(gen3.PartyMemberBoth),
+            .none => free_space_offset += party_len * @sizeOf(gen3.PartyMemberNone),
+            .item => free_space_offset += party_len * @sizeOf(gen3.PartyMemberItem),
+            .moves => free_space_offset += party_len * @sizeOf(gen3.PartyMemberMoves),
+            .both => free_space_offset += party_len * @sizeOf(gen3.PartyMemberBoth),
         }
     }
 
@@ -383,7 +383,7 @@ fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
 
     comptime checklist.set("evolutions", true) catch unreachable;
     for (info.evolutions.slice(buf)) |*evos|
-        evos[0].method = .LevelUp;
+        evos[0].method = .level_up;
 
     // Assert that we have generated data for all fields
     comptime std.debug.assert(checklist.all(true));
@@ -433,10 +433,10 @@ fn ndsHeader(game_title: [12]u8, gamecode: [4]u8) rom.nds.Header {
 const ndsBanner = rom.nds.Banner{
     .version = 1,
     .has_animated_dsi_icon = 0,
-    .crc16_across_0020h_083Fh = lu16.init(0x00),
-    .crc16_across_0020h_093Fh = lu16.init(0x00),
-    .crc16_across_0020h_0A3Fh = lu16.init(0x00),
-    .crc16_across_1240h_23BFh = lu16.init(0x00),
+    .crc16_across_0020h_083fh = lu16.init(0x00),
+    .crc16_across_0020h_093fh = lu16.init(0x00),
+    .crc16_across_0020h_0a3fh = lu16.init(0x00),
+    .crc16_across_1240h_23bfh = lu16.init(0x00),
     .reserved1 = [_]u8{0x00} ** 0x16,
     .icon_bitmap = [_]u8{0x00} ** 0x200,
     .icon_palette = [_]u8{0x00} ** 0x20,
@@ -455,7 +455,7 @@ fn createNarc(alloc: *mem.Allocator, root: *rom.nds.fs.Nitro, path: []const u8, 
 fn createNarcData(alloc: *mem.Allocator, root: *rom.nds.fs.Nitro, path: []const u8, data: []const u8, count: usize, term: []const u8) !void {
     const narc = try rom.nds.fs.Narc.create(alloc);
     try narc.ensureCapacity(count);
-    _ = try root.createPathAndFile(path, rom.nds.fs.Nitro.File{ .Narc = narc });
+    _ = try root.createPathAndFile(path, rom.nds.fs.Nitro.File{ .narc = narc });
 
     var i: usize = 0;
     while (i < count) : (i += 1) {
@@ -483,8 +483,8 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
             const machine_len = (gen4.offsets.tm_count + gen4.offsets.hm_count) * @sizeOf(u16) +
                 info.hm_tm_prefix.len;
             const len = switch (info.starters) {
-                .Arm9 => |offset| offset + gen4.offsets.starters_len + machine_len,
-                .Overlay9 => machine_len,
+                .arm9 => |offset| offset + gen4.offsets.starters_len + machine_len,
+                .overlay9 => machine_len,
             };
             const res = try allocator.alloc(u8, len);
             mem.set(u8, res, 0);
@@ -494,16 +494,16 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
         .arm7 = [_]u8{},
         .nitro_footer = [_]lu32{comptime lu32.init(0)} ** 3,
         .arm9_overlay_table = switch (info.starters) {
-            .Arm9 => [_]rom.nds.Overlay{},
-            .Overlay9 => |overlay| blk: {
+            .arm9 => [_]rom.nds.Overlay{},
+            .overlay9 => |overlay| blk: {
                 const res = try allocator.alloc(rom.nds.Overlay, overlay.file + 1);
                 mem.set(u8, @sliceToBytes(res), 0);
                 break :blk res;
             },
         },
         .arm9_overlay_files = switch (info.starters) {
-            .Arm9 => [_][]u8{},
-            .Overlay9 => |overlay| blk: {
+            .arm9 => [_][]u8{},
+            .overlay9 => |overlay| blk: {
                 const res = try allocator.alloc([]u8, overlay.file + 1);
                 for (res) |*bytes|
                     bytes.* = ([*]u8)(undefined)[0..0];
@@ -550,20 +550,20 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
 
     comptime checklist.set("parties", true) catch unreachable;
     switch (info.version) {
-        .Diamond, .Pearl => try createNarc(allocator, root, info.parties, zeroInit(gen4.PartyMemberNone), 10, ""),
-        .HeartGold, .SoulSilver, .Platinum => try createNarc(allocator, root, info.parties, zeroInit(gen4.HgSsPlatMember(gen4.PartyMemberNone)), 10, ""),
+        .diamond, .pearl => try createNarc(allocator, root, info.parties, zeroInit(gen4.PartyMemberNone), 10, ""),
+        .heart_gold, .soul_silver, .platinum => try createNarc(allocator, root, info.parties, zeroInit(gen4.HgSsPlatMember(gen4.PartyMemberNone)), 10, ""),
         else => unreachable,
     }
 
     comptime checklist.set("evolutions", true) catch unreachable;
     var evo = zeroInit(gen4.Evolution);
-    evo.method = .LevelUp;
+    evo.method = .level_up;
     try createNarc(allocator, root, info.evolutions, evo, 10, "");
 
     comptime checklist.set("wild_pokemons", true) catch unreachable;
     switch (info.version) {
-        .Diamond, .Pearl, .Platinum => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.DpptWildPokemons), 10, ""),
-        .HeartGold, .SoulSilver => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.HgssWildPokemons), 10, ""),
+        .diamond, .pearl, .platinum => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.DpptWildPokemons), 10, ""),
+        .heart_gold, .soul_silver => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.HgssWildPokemons), 10, ""),
         else => unreachable,
     }
 
@@ -631,7 +631,7 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
 
     comptime checklist.set("evolutions", true) catch unreachable;
     var evo = zeroInit(gen5.Evolution);
-    evo.method = .LevelUp;
+    evo.method = .level_up;
     try createNarc(allocator, root, info.evolutions, evo, 10, "");
 
     comptime checklist.set("level_up_moves", true) catch unreachable;

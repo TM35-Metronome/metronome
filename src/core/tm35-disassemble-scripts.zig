@@ -149,7 +149,7 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
             if (s.@"type" == 2 or s.@"type" == 4)
                 continue;
 
-            const script_data = try s.addr.Other.toSliceEnd(game.data);
+            const script_data = try s.addr.other.toSliceEnd(game.data);
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
             while (try decoder.next()) |command|
@@ -218,23 +218,23 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
-                    .Jump => {
-                        const off = command.data.Jump.adr.value();
+                    .jump => {
+                        const off = command.data.jump.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
-                    .CompareLastResultJump => {
-                        const off = command.data.CompareLastResultJump.adr.value();
+                    .compare_last_result_jump => {
+                        const off = command.data.compare_last_result_jump.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
-                    .Call => {
-                        const off = command.data.Call.adr.value();
+                    .call => {
+                        const off = command.data.call.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
-                    .CompareLastResultCall => {
-                        const off = command.data.CompareLastResultCall.adr.value();
+                    .compare_last_result_call => {
+                        const off = command.data.compare_last_result_call.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
@@ -282,13 +282,13 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
-                    .Jump => {
-                        const off = command.data.Jump.offset.value();
+                    .jump => {
+                        const off = command.data.jump.offset.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
-                    .If => {
-                        const off = command.data.If.offset.value();
+                    .@"if" => {
+                        const off = command.data.@"if".offset.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
@@ -349,7 +349,7 @@ fn printCommandHelper(stream: var, value: var) !void {
                             }
                         }
 
-                        // If no member of 'TagEnum' match, then 'tag' must be a value
+                        // @"if" no member of 'TagEnum' match, then 'tag' must be a value
                         // it is not suppose to be.
                         if (!found)
                             return error.InvalidTag;

@@ -1,8 +1,8 @@
 const common = @import("../common.zig");
 
 pub const StarterLocation = union(enum) {
-    Arm9: usize,
-    Overlay9: Overlay,
+    arm9: usize,
+    overlay9: Overlay,
 
     pub const Overlay = struct {
         offset: usize,
@@ -39,9 +39,9 @@ pub const infos = [_]Info{
 const hg_info = Info{
     .game_title = "POKEMON HG\x00\x00",
     .gamecode = "IPKE",
-    .version = common.Version.HeartGold,
+    .version = .heart_gold,
 
-    .starters = StarterLocation{ .Arm9 = 0x00108514 },
+    .starters = StarterLocation{ .arm9 = 0x00108514 },
     .hm_tm_prefix = "\x1E\x00\x32\x00",
     .pokemons = "/a/0/0/2",
     .level_up_moves = "/a/0/3/3",
@@ -57,7 +57,7 @@ const hg_info = Info{
 const ss_info = Info{
     .game_title = "POKEMON SS\x00\x00",
     .gamecode = "IPGE",
-    .version = common.Version.SoulSilver,
+    .version = .soul_silver,
 
     .starters = hg_info.starters,
     .hm_tm_prefix = hg_info.hm_tm_prefix,
@@ -75,10 +75,10 @@ const ss_info = Info{
 const diamond_info = Info{
     .game_title = "POKEMON D\x00\x00\x00",
     .gamecode = "ADAE",
-    .version = common.Version.Diamond,
+    .version = .diamond,
 
     .starters = StarterLocation{
-        .Overlay9 = StarterLocation.Overlay{
+        .overlay9 = StarterLocation.Overlay{
             .offset = 0x1B88,
             .file = 64,
         },
@@ -98,7 +98,7 @@ const diamond_info = Info{
 const pearl_info = Info{
     .game_title = "POKEMON P\x00\x00\x00",
     .gamecode = "APAE",
-    .version = common.Version.Pearl,
+    .version = .pearl,
 
     .starters = diamond_info.starters,
     .hm_tm_prefix = diamond_info.hm_tm_prefix,
@@ -116,10 +116,10 @@ const pearl_info = Info{
 const platinum_info = Info{
     .game_title = "POKEMON PL\x00\x00",
     .gamecode = "CPUE",
-    .version = common.Version.Platinum,
+    .version = .platinum,
 
     .starters = StarterLocation{
-        .Overlay9 = StarterLocation.Overlay{
+        .overlay9 = StarterLocation.Overlay{
             .offset = 0x1BC0,
             .file = 78,
         },

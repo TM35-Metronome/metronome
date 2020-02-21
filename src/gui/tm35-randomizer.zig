@@ -371,16 +371,16 @@ pub fn main() u8 {
                 c.nk_layout_row_template_end(ctx);
 
                 const FileBrowserKind = enum {
-                    LoadRom,
-                    Randomize,
-                    LoadSettings,
-                    SaveSettings,
+                    load_rom,
+                    randomize,
+                    load_settings,
+                    save_settings,
                 };
                 var m_file_browser_kind: ?FileBrowserKind = null;
 
                 // TODO: Draw folder icon
                 if (c.nk_button_symbol(ctx, c.NK_SYMBOL_PLUS) != 0)
-                    m_file_browser_kind = .LoadRom;
+                    m_file_browser_kind = .load_rom;
 
                 const rom_slice = if (rom_path) |*i| i.toSliceConst() else "< Open rom (No rom open)";
                 var basename = path.basename(rom_slice);
@@ -396,20 +396,20 @@ pub fn main() u8 {
 
                 c.nk_layout_row_dynamic(ctx, 0, 1);
                 if (nk.buttonActivatable(ctx, "Randomize", rom_path != null))
-                    m_file_browser_kind = .Randomize;
+                    m_file_browser_kind = .randomize;
                 if (nk.button(ctx, "Load settings"))
-                    m_file_browser_kind = .LoadSettings;
+                    m_file_browser_kind = .load_settings;
                 if (nk.button(ctx, "Save settings"))
-                    m_file_browser_kind = .SaveSettings;
+                    m_file_browser_kind = .save_settings;
 
                 const file_browser_kind = m_file_browser_kind orelse break :done;
 
                 var m_out_path: ?[*]u8 = null;
                 const dialog_result = switch (file_browser_kind) {
-                    .SaveSettings => c.NFD_SaveDialog(null, null, &m_out_path),
-                    .LoadSettings => c.NFD_OpenDialog(null, null, &m_out_path),
-                    .LoadRom => c.NFD_OpenDialog(c"gb,gba,nds", null, &m_out_path),
-                    .Randomize => c.NFD_SaveDialog(c"gb,gba,nds", null, &m_out_path),
+                    .save_settings => c.NFD_SaveDialog(null, null, &m_out_path),
+                    .load_settings => c.NFD_OpenDialog(null, null, &m_out_path),
+                    .load_rom => c.NFD_OpenDialog(c"gb,gba,nds", null, &m_out_path),
+                    .randomize => c.NFD_SaveDialog(c"gb,gba,nds", null, &m_out_path),
                 };
 
                 const selected_path = switch (dialog_result) {
@@ -430,8 +430,8 @@ pub fn main() u8 {
                 };
 
                 switch (file_browser_kind) {
-                    .LoadRom => rom_path = selected_path,
-                    .Randomize => {
+                    .load_rom => rom_path = selected_path,
+                    .randomize => {
                         // in should never be null here as the "Randomize" button is inactive when
                         // it is.
                         const in_path = rom_path.?.toSliceConst();
@@ -447,7 +447,7 @@ pub fn main() u8 {
 
                         popups.info("Rom has been randomized!");
                     },
-                    .LoadSettings => {
+                    .load_settings => {
                         const file = fs.File.openRead(selected_path.toSliceConst()) catch |err| {
                             popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
                             break :done;
@@ -458,7 +458,7 @@ pub fn main() u8 {
                             break :done;
                         };
                     },
-                    .SaveSettings => {
+                    .save_settings => {
                         // TODO: Warn if the user tries to overwrite existing file.
                         const file = fs.File.openWrite(selected_path.toSliceConst()) catch |err| {
                             popups.err("Could not open '{}': {}", selected_path.toSliceConst(), err);
@@ -503,7 +503,7 @@ pub fn main() u8 {
                     c.nk_layout_row_dynamic(ctx, text_height, 1);
                     c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
 
-                    switch (nk.buttons(ctx, .Right, nk.buttonWidth(ctx, "Quit"), 0, [_]nk.Button{
+                    switch (nk.buttons(ctx, .right, nk.buttonWidth(ctx, "Quit"), 0, [_]nk.Button{
                         nk.Button{ .text = if (fatal_err) |_| "Quit" else "Ok" },
                     })) {
                         0 => {

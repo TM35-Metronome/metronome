@@ -606,8 +606,8 @@ pub const Command = packed struct {
         mossdeepgym3: mossdeepgym3,
         mossdeepgym4: mossdeepgym4,
         warp7: warp7,
-        cmdD8: cmdD8,
-        cmdD9: cmdD9,
+        cmd_d8: cmdD8,
+        cmd_d9: cmdD9,
         hidebox2: hidebox2,
         message3: message3,
         fadescreenswapbuffers: fadescreenswapbuffers,
@@ -838,8 +838,8 @@ pub const Command = packed struct {
         mossdeepgym3 = 0xd5,
         mossdeepgym4 = 0xd6,
         warp7 = 0xd7,
-        cmdD8 = 0xd8,
-        cmdD9 = 0xd9,
+        cmd_d8 = 0xd8,
+        cmd_d9 = 0xd9,
         hidebox2 = 0xda,
         message3 = 0xdb,
         fadescreenswapbuffers = 0xdc,
@@ -1028,20 +1028,20 @@ pub const Command = packed struct {
     pub const warp = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const warpsilent = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const warpdoor = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const warphole = packed struct {
         map: lu16,
@@ -1049,36 +1049,36 @@ pub const Command = packed struct {
     pub const warpteleport = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const setwarp = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const setdynamicwarp = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const setdivewarp = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const setholewarp = packed struct {
         map: lu16,
         warp: u8,
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const getplayerxy = packed struct {
-        X: lu16,
-        Y: lu16,
+        x: lu16,
+        y: lu16,
     };
     pub const getpartysize = packed struct {};
     pub const additem = packed struct {
@@ -1170,19 +1170,19 @@ pub const Command = packed struct {
     };
 
     pub const TrainerBattleType = packed enum(u8) {
-        TRAINER_BATTLE_SINGLE = 0,
-        TRAINER_BATTLE_CONTINUE_SCRIPT_NO_MUSIC = 1,
-        TRAINER_BATTLE_CONTINUE_SCRIPT = 2,
-        TRAINER_BATTLE_SINGLE_NO_INTRO_TEXT = 3,
-        TRAINER_BATTLE_DOUBLE = 4,
-        TRAINER_BATTLE_REMATCH = 5,
-        TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE = 6,
-        TRAINER_BATTLE_REMATCH_DOUBLE = 7,
-        TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE_NO_MUSIC = 8,
-        TRAINER_BATTLE_PYRAMID = 9,
-        TRAINER_BATTLE_SET_TRAINER_A = 10,
-        TRAINER_BATTLE_SET_TRAINER_B = 11,
-        TRAINER_BATTLE_12 = 12,
+        trainer_battle_single = 0,
+        trainer_battle_continue_script_no_music = 1,
+        trainer_battle_continue_script = 2,
+        trainer_battle_single_no_intro_text = 3,
+        trainer_battle_double = 4,
+        trainer_battle_rematch = 5,
+        trainer_battle_continue_script_double = 6,
+        trainer_battle_rematch_double = 7,
+        trainer_battle_continue_script_double_no_music = 8,
+        trainer_battle_pyramid = 9,
+        trainer_battle_set_trainer_a = 10,
+        trainer_battle_set_trainer_b = 11,
+        trainer_battle12 = 12,
     };
 
     pub const trainerbattle = packed struct {
@@ -1190,62 +1190,62 @@ pub const Command = packed struct {
         trainer: lu16,
         local_id: lu16,
         pointers: packed union {
-            TRAINER_BATTLE_SINGLE: packed struct {
+            trainer_battle_single: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
-            TRAINER_BATTLE_CONTINUE_SCRIPT_NO_MUSIC: packed struct {
-                pointer1: lu32, // text
-                pointer2: lu32, // text
-                pointer3: lu32, // event script
-            },
-            TRAINER_BATTLE_CONTINUE_SCRIPT: packed struct {
+            trainer_battle_continue_script_no_music: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // event script
             },
-            TRAINER_BATTLE_SINGLE_NO_INTRO_TEXT: packed struct {
+            trainer_battle_continue_script: packed struct {
+                pointer1: lu32, // text
+                pointer2: lu32, // text
+                pointer3: lu32, // event script
+            },
+            trainer_battle_single_no_intro_text: packed struct {
                 pointer1: lu32, // text
             },
-            TRAINER_BATTLE_DOUBLE: packed struct {
+            trainer_battle_double: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
             },
-            TRAINER_BATTLE_REMATCH: packed struct {
+            trainer_battle_rematch: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
-            TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE: packed struct {
+            trainer_battle_continue_script_double: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
                 pointer4: lu32, // event script
             },
-            TRAINER_BATTLE_REMATCH_DOUBLE: packed struct {
+            trainer_battle_rematch_double: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
             },
-            TRAINER_BATTLE_CONTINUE_SCRIPT_DOUBLE_NO_MUSIC: packed struct {
+            trainer_battle_continue_script_double_no_music: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
                 pointer4: lu32, // event script
             },
-            TRAINER_BATTLE_PYRAMID: packed struct {
+            trainer_battle_pyramid: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
-            TRAINER_BATTLE_SET_TRAINER_A: packed struct {
+            trainer_battle_set_trainer_a: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
-            TRAINER_BATTLE_SET_TRAINER_B: packed struct {
+            trainer_battle_set_trainer_b: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
-            TRAINER_BATTLE_12: packed struct {
+            trainer_battle12: packed struct {
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
@@ -1307,7 +1307,7 @@ pub const Command = packed struct {
         y: u8,
         list: u8,
         per_row: u8,
-        B: u8,
+        b: u8,
     };
     pub const drawbox = packed struct {};
     pub const erasebox = packed struct {

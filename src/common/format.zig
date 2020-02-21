@@ -291,17 +291,17 @@ test "eatUnsignedValueMax" {
 
 test "eatEnumValue" {
     const E = enum {
-        A,
+        a,
     };
-    var parser = Parser{ .str = "=A" };
-    testing.expectEqual(E.A, try parser.eatEnumValue(E));
-    parser = Parser{ .str = "=B" };
+    var parser = Parser{ .str = "=a" };
+    testing.expectEqual(E.a, try parser.eatEnumValue(E));
+    parser = Parser{ .str = "=b" };
     testing.expectError(error.InvalidValue, parser.eatEnumValue(E));
 }
 
 test "eatBoolValue" {
     const E = enum {
-        A,
+        a,
     };
     var parser = Parser{ .str = "=true" };
     testing.expectEqual(true, try parser.eatBoolValue());

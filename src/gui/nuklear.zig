@@ -78,8 +78,8 @@ pub fn fontWidth(ctx: *Context, text: []const u8) f32 {
 }
 
 pub const Align = enum {
-    Left,
-    Right,
+    left,
+    right,
 };
 
 pub const no_button_clicked = math.maxInt(usize);
@@ -105,17 +105,17 @@ pub fn buttonsAutoWidth(ctx: *Context, alignment: Align, height: f32, buttons_: 
 
 pub fn buttons(ctx: *Context, alignment: Align, width: f32, height: f32, buttons_: []const Button) usize {
     c.nk_layout_row_template_begin(ctx, height);
-    if (alignment == .Right)
+    if (alignment == .right)
         c.nk_layout_row_template_push_dynamic(ctx);
 
     for (buttons_) |_|
         c.nk_layout_row_template_push_static(ctx, width);
 
-    if (alignment == .Left)
+    if (alignment == .left)
         c.nk_layout_row_template_push_dynamic(ctx);
     c.nk_layout_row_template_end(ctx);
 
-    if (alignment == .Right)
+    if (alignment == .right)
         c.nk_label(ctx, c"", TEXT_LEFT);
 
     var res: usize = no_button_clicked;
@@ -124,7 +124,7 @@ pub fn buttons(ctx: *Context, alignment: Align, width: f32, height: f32, buttons
             res = i;
     }
 
-    if (alignment == .Left)
+    if (alignment == .left)
         c.nk_label(ctx, c"", TEXT_LEFT);
 
     return res;

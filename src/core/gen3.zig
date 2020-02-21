@@ -225,35 +225,35 @@ pub const Trainer = extern struct {
 
     pub fn partyAt(trainer: *Trainer, index: usize, data: []u8) !*PartyMemberBase {
         return switch (trainer.party_type) {
-            PartyType.None => &(try trainer.party.None.toSlice(data))[index].base,
-            PartyType.Item => &(try trainer.party.Item.toSlice(data))[index].base,
-            PartyType.Moves => &(try trainer.party.Moves.toSlice(data))[index].base,
-            PartyType.Both => &(try trainer.party.Both.toSlice(data))[index].base,
+            .none => &(try trainer.party.none.toSlice(data))[index].base,
+            .item => &(try trainer.party.item.toSlice(data))[index].base,
+            .moves => &(try trainer.party.moves.toSlice(data))[index].base,
+            .both => &(try trainer.party.both.toSlice(data))[index].base,
         };
     }
 
     pub fn partyLen(trainer: Trainer) usize {
         return switch (trainer.party_type) {
-            PartyType.None => trainer.party.None.len(),
-            PartyType.Item => trainer.party.Item.len(),
-            PartyType.Moves => trainer.party.Moves.len(),
-            PartyType.Both => trainer.party.Both.len(),
+            .none => trainer.party.none.len(),
+            .item => trainer.party.item.len(),
+            .moves => trainer.party.moves.len(),
+            .both => trainer.party.both.len(),
         };
     }
 };
 
 pub const PartyType = packed enum(u8) {
-    None = 0b00,
-    Item = 0b10,
-    Moves = 0b01,
-    Both = 0b11,
+    none = 0b00,
+    item = 0b10,
+    moves = 0b01,
+    both = 0b11,
 };
 
 pub const Party = packed union {
-    None: Slice(PartyMemberNone),
-    Item: Slice(PartyMemberItem),
-    Moves: Slice(PartyMemberMoves),
-    Both: Slice(PartyMemberBoth),
+    none: Slice(PartyMemberNone),
+    item: Slice(PartyMemberItem),
+    moves: Slice(PartyMemberMoves),
+    both: Slice(PartyMemberBoth),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -328,26 +328,26 @@ pub const Move = extern struct {
 };
 
 pub const FRLGPocket = packed enum(u8) {
-    None = 0x00,
-    Items = 0x01,
-    KeyItems = 0x02,
-    PokeBalls = 0x03,
-    TmHms = 0x04,
-    Berries = 0x05,
+    none = 0x00,
+    items = 0x01,
+    key_items = 0x02,
+    poke_balls = 0x03,
+    tm_hms = 0x04,
+    berries = 0x05,
 };
 
 pub const RSEPocket = packed enum(u8) {
-    None = 0x00,
-    Items = 0x01,
-    PokeBalls = 0x02,
-    TmHms = 0x03,
-    Berries = 0x04,
-    KeyItems = 0x05,
+    none = 0x00,
+    items = 0x01,
+    poke_balls = 0x02,
+    tm_hms = 0x03,
+    berries = 0x04,
+    key_items = 0x05,
 };
 
 pub const Pocket = packed union {
-    FRLG: FRLGPocket,
-    RSE: RSEPocket,
+    frlg: FRLGPocket,
+    rse: RSEPocket,
 };
 
 pub const Item = extern struct {
@@ -372,24 +372,24 @@ pub const Item = extern struct {
 };
 
 pub const Type = packed enum(u8) {
-    Normal = 0x00,
-    Fighting = 0x01,
-    Flying = 0x02,
-    Poison = 0x03,
-    Ground = 0x04,
-    Rock = 0x05,
-    Bug = 0x06,
-    Ghost = 0x07,
-    Steel = 0x08,
-    Unknown = 0x09,
-    Fire = 0x0A,
-    Water = 0x0B,
-    Grass = 0x0C,
-    Electric = 0x0D,
-    Psychic = 0x0E,
-    Ice = 0x0F,
-    Dragon = 0x10,
-    Dark = 0x11,
+    normal = 0x00,
+    fighting = 0x01,
+    flying = 0x02,
+    poison = 0x03,
+    ground = 0x04,
+    rock = 0x05,
+    bug = 0x06,
+    ghost = 0x07,
+    steel = 0x08,
+    unknown = 0x09,
+    fire = 0x0A,
+    water = 0x0B,
+    grass = 0x0C,
+    electric = 0x0D,
+    psychic = 0x0E,
+    ice = 0x0F,
+    dragon = 0x10,
+    dark = 0x11,
 };
 
 pub const LevelUpMove = packed struct {
@@ -558,7 +558,7 @@ pub const MapScript = extern struct {
     addr: packed union {
         @"0": void,
         @"2": Ptr(MapScript2),
-        Other: Ptr(u8),
+        other: Ptr(u8),
     },
 
     comptime {
@@ -679,7 +679,7 @@ pub const Game = struct {
                 if (s.@"type" == 2 or s.@"type" == 4)
                     continue;
 
-                const script_bytes = try s.addr.Other.toSliceEnd(gda_rom);
+                const script_bytes = try s.addr.other.toSliceEnd(gda_rom);
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(command);

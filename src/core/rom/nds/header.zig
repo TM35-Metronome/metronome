@@ -64,8 +64,8 @@ pub const Header = extern struct {
     arm7_overlay_size: lu32,
 
     // TODO: Rename when I know exactly what his means.
-    port_40001A4h_setting_for_normal_commands: [4]u8,
-    port_40001A4h_setting_for_key1_commands: [4]u8,
+    port_40001a4h_setting_for_normal_commands: [4]u8,
+    port_40001a4h_setting_for_key1_commands: [4]u8,
 
     banner_offset: lu32,
 

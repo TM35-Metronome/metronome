@@ -8,10 +8,10 @@ pub const Banner = extern struct {
     version: u8,
     has_animated_dsi_icon: u8,
 
-    crc16_across_0020h_083Fh: lu16,
-    crc16_across_0020h_093Fh: lu16,
-    crc16_across_0020h_0A3Fh: lu16,
-    crc16_across_1240h_23BFh: lu16,
+    crc16_across_0020h_083fh: lu16,
+    crc16_across_0020h_093fh: lu16,
+    crc16_across_0020h_0a3fh: lu16,
+    crc16_across_1240h_23bfh: lu16,
 
     reserved1: [0x16]u8,
 

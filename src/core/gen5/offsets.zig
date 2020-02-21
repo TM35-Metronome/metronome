@@ -32,7 +32,7 @@ pub const infos = [_]Info{
 const black2_info = Info{
     .game_title = "POKEMON B2\x00\x00",
     .gamecode = "IREO",
-    .version = common.Version.Black2,
+    .version = .black2,
 
     .starters = [_][]const NarcOffset{
         [_]NarcOffset{
@@ -65,7 +65,7 @@ const black2_info = Info{
 const white2_info = Info{
     .game_title = "POKEMON W2\x00\x00",
     .gamecode = "IRDO",
-    .version = common.Version.White2,
+    .version = .white2,
 
     .starters = black2_info.starters,
     .scripts = black2_info.scripts,
@@ -82,7 +82,7 @@ const white2_info = Info{
 const black_info = Info{
     .game_title = "POKEMON B\x00\x00\x00",
     .gamecode = "IRBO",
-    .version = common.Version.Black,
+    .version = .black,
 
     .starters = [_][]const NarcOffset{
         [_]NarcOffset{
@@ -124,7 +124,7 @@ const black_info = Info{
 const white_info = Info{
     .game_title = "POKEMON W\x00\x00\x00",
     .gamecode = "IRAO",
-    .version = common.Version.Black,
+    .version = .white,
 
     .starters = black_info.starters,
     .scripts = black_info.scripts,
