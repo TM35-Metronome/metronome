@@ -109,7 +109,6 @@ pub fn main2(
 
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var data = Data{
-        .pokemon_list = std.ArrayList(usize).init(allocator),
         .pokemons = Pokemons.init(allocator),
         .zones = Zones.init(allocator),
     };
@@ -166,14 +165,12 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
     if (parser.eatField("pokemons")) |_| {
         const poke_index = try parser.eatIndex();
-        const poke_entry = try data.pokemons.getOrPut(poke_index);
-        if (!poke_entry.found_existing) {
-            poke_entry.kv.value = Pokemon.init(allocator);
-            try data.pokemon_list.append(poke_index);
-        }
-        const pokemon = &poke_entry.kv.value;
+        const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
+        const pokemon = &poke_entry.value;
 
-        if (parser.eatField("stats")) {
+        if (parser.eatField("catch_rate")) |_| {
+            pokemon.catch_rate = try parser.eatUnsignedValue(usize, 10);
+        } else |_| if (parser.eatField("stats")) {
             if (parser.eatField("hp")) |_| {
                 pokemon.hp = try parser.eatUnsignedValue(u8, 10);
             } else |_| if (parser.eatField("attack")) |_| {
@@ -238,6 +235,8 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
     const random = &rand.DefaultPrng.init(seed).random;
     var simular = std.ArrayList(usize).init(allocator);
 
+    const species = try data.species();
+
     var zone_iter = data.zones.iterator();
     while (zone_iter.next()) |zone_kw| {
         const zone_i = zone_kw.key;
@@ -254,12 +253,11 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                 const wild_pokemon = &poke_kw.value;
                 const old_species = wild_pokemon.species orelse continue;
 
-                const pick_from = data.pokemon_list.toSlice();
                 if (simular_total_stats) blk: {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
                     const poke_kv = data.pokemons.get(old_species) orelse {
-                        wild_pokemon.species = pick_from[random.range(usize, 0, pick_from.len)];
+                        wild_pokemon.species = species[random.range(usize, 0, species.len)];
                         break :blk;
                     };
                     const pokemon = poke_kv.value;
@@ -273,7 +271,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         min -= 5;
                         max += 5;
 
-                        for (pick_from) |s| {
+                        for (species) |s| {
                             const p = data.pokemons.get(s).?.value;
                             const total = @intCast(i64, sum(u8, p.toBuf(&stats)));
                             if (min <= total and total <= max)
@@ -283,7 +281,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
 
                     wild_pokemon.species = simular.toSlice()[random.range(usize, 0, simular.len)];
                 } else {
-                    wild_pokemon.species = pick_from[random.range(usize, 0, pick_from.len)];
+                    wild_pokemon.species = species[random.range(usize, 0, species.len)];
                 }
             }
         }
@@ -312,9 +310,29 @@ const WildAreas = std.StringHashMap(WildArea);
 const WildPokemons = std.AutoHashMap(usize, WildPokemon);
 
 const Data = struct {
-    pokemon_list: std.ArrayList(usize),
     pokemons: Pokemons,
     zones: Zones,
+
+    fn species(d: Data) ![]const usize {
+        var res = std.ArrayList(usize).init(d.allocator());
+        errdefer res.deinit();
+
+        var p_it = d.pokemons.iterator();
+        while (p_it.next()) |kv| {
+            // We should't pick Pokemon with 0 catch rate as they tend to be
+            // Pokémon not meant to be used in the standard game.
+            // Pokémons from the film studio in bw2 have 0 catch rate.
+            if (kv.value.catch_rate == 0)
+                continue;
+            try res.append(kv.key);
+        }
+
+        return res.toOwnedSlice();
+    }
+
+    fn allocator(d: Data) *mem.Allocator {
+        return d.pokemons.allocator;
+    }
 };
 
 const Zone = struct {
@@ -346,6 +364,7 @@ const Pokemon = struct {
     speed: ?u8,
     sp_attack: ?u8,
     sp_defense: ?u8,
+    catch_rate: usize,
     types: std.ArrayList([]const u8),
 
     fn init(allocator: *mem.Allocator) Pokemon {
@@ -356,6 +375,7 @@ const Pokemon = struct {
             .speed = null,
             .sp_attack = null,
             .sp_defense = null,
+            .catch_rate = 1,
             .types = std.ArrayList([]const u8).init(allocator),
         };
     }
@@ -400,54 +420,70 @@ test "tm35-rand-wild" {
         \\.pokemons[0].stats.speed=10
         \\.pokemons[0].stats.sp_attack=10
         \\.pokemons[0].stats.sp_defense=10
+        \\.pokemons[0].catch_rate=10
         \\.pokemons[1].stats.hp=12
         \\.pokemons[1].stats.attack=12
         \\.pokemons[1].stats.defense=12
         \\.pokemons[1].stats.speed=12
         \\.pokemons[1].stats.sp_attack=12
         \\.pokemons[1].stats.sp_defense=12
+        \\.pokemons[1].catch_rate=10
         \\.pokemons[2].stats.hp=14
         \\.pokemons[2].stats.attack=14
         \\.pokemons[2].stats.defense=14
         \\.pokemons[2].stats.speed=14
         \\.pokemons[2].stats.sp_attack=14
         \\.pokemons[2].stats.sp_defense=14
+        \\.pokemons[2].catch_rate=10
         \\.pokemons[3].stats.hp=16
         \\.pokemons[3].stats.attack=16
         \\.pokemons[3].stats.defense=16
         \\.pokemons[3].stats.speed=16
         \\.pokemons[3].stats.sp_attack=16
         \\.pokemons[3].stats.sp_defense=16
+        \\.pokemons[3].catch_rate=10
         \\.pokemons[4].stats.hp=18
         \\.pokemons[4].stats.attack=18
         \\.pokemons[4].stats.defense=18
         \\.pokemons[4].stats.speed=18
         \\.pokemons[4].stats.sp_attack=18
         \\.pokemons[4].stats.sp_defense=18
+        \\.pokemons[4].catch_rate=10
         \\.pokemons[5].stats.hp=20
         \\.pokemons[5].stats.attack=20
         \\.pokemons[5].stats.defense=20
         \\.pokemons[5].stats.speed=20
         \\.pokemons[5].stats.sp_attack=20
         \\.pokemons[5].stats.sp_defense=20
+        \\.pokemons[5].catch_rate=10
         \\.pokemons[6].stats.hp=22
         \\.pokemons[6].stats.attack=22
         \\.pokemons[6].stats.defense=22
         \\.pokemons[6].stats.speed=22
         \\.pokemons[6].stats.sp_attack=22
         \\.pokemons[6].stats.sp_defense=22
+        \\.pokemons[6].catch_rate=10
         \\.pokemons[7].stats.hp=24
         \\.pokemons[7].stats.attack=24
         \\.pokemons[7].stats.defense=24
         \\.pokemons[7].stats.speed=24
         \\.pokemons[7].stats.sp_attack=24
         \\.pokemons[7].stats.sp_defense=24
+        \\.pokemons[7].catch_rate=10
         \\.pokemons[8].stats.hp=28
         \\.pokemons[8].stats.attack=28
         \\.pokemons[8].stats.defense=28
         \\.pokemons[8].stats.speed=28
         \\.pokemons[8].stats.sp_attack=28
         \\.pokemons[8].stats.sp_defense=28
+        \\.pokemons[8].catch_rate=10
+        \\.pokemons[9].stats.hp=28
+        \\.pokemons[9].stats.attack=28
+        \\.pokemons[9].stats.defense=28
+        \\.pokemons[9].stats.speed=28
+        \\.pokemons[9].stats.sp_attack=28
+        \\.pokemons[9].stats.sp_defense=28
+        \\.pokemons[9].catch_rate=0
         \\
     ;
 
@@ -471,22 +507,22 @@ test "tm35-rand-wild" {
         \\
     ;
     testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.zones[3].wild.grass.pokemons[3].species=2
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=0
-        \\.zones[3].wild.grass.pokemons[0].species=2
-        \\.zones[1].wild.grass.pokemons[3].species=3
-        \\.zones[1].wild.grass.pokemons[1].species=7
-        \\.zones[1].wild.grass.pokemons[2].species=1
-        \\.zones[1].wild.grass.pokemons[0].species=6
-        \\.zones[2].wild.grass.pokemons[3].species=6
-        \\.zones[2].wild.grass.pokemons[1].species=6
-        \\.zones[2].wild.grass.pokemons[2].species=8
-        \\.zones[2].wild.grass.pokemons[0].species=8
-        \\.zones[0].wild.grass.pokemons[3].species=0
-        \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=4
-        \\.zones[0].wild.grass.pokemons[0].species=7
+        \\.zones[3].wild.grass.pokemons[3].species=8
+        \\.zones[3].wild.grass.pokemons[1].species=4
+        \\.zones[3].wild.grass.pokemons[2].species=4
+        \\.zones[3].wild.grass.pokemons[0].species=8
+        \\.zones[1].wild.grass.pokemons[3].species=5
+        \\.zones[1].wild.grass.pokemons[1].species=6
+        \\.zones[1].wild.grass.pokemons[2].species=7
+        \\.zones[1].wild.grass.pokemons[0].species=2
+        \\.zones[2].wild.grass.pokemons[3].species=2
+        \\.zones[2].wild.grass.pokemons[1].species=2
+        \\.zones[2].wild.grass.pokemons[2].species=0
+        \\.zones[2].wild.grass.pokemons[0].species=0
+        \\.zones[0].wild.grass.pokemons[3].species=4
+        \\.zones[0].wild.grass.pokemons[1].species=4
+        \\.zones[0].wild.grass.pokemons[2].species=3
+        \\.zones[0].wild.grass.pokemons[0].species=6
         \\
     );
     testProgram([_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
@@ -494,18 +530,18 @@ test "tm35-rand-wild" {
         \\.zones[3].wild.grass.pokemons[1].species=0
         \\.zones[3].wild.grass.pokemons[2].species=0
         \\.zones[3].wild.grass.pokemons[0].species=0
-        \\.zones[1].wild.grass.pokemons[3].species=0
-        \\.zones[1].wild.grass.pokemons[1].species=1
+        \\.zones[1].wild.grass.pokemons[3].species=1
+        \\.zones[1].wild.grass.pokemons[1].species=0
         \\.zones[1].wild.grass.pokemons[2].species=0
-        \\.zones[1].wild.grass.pokemons[0].species=0
-        \\.zones[2].wild.grass.pokemons[3].species=0
-        \\.zones[2].wild.grass.pokemons[1].species=0
-        \\.zones[2].wild.grass.pokemons[2].species=1
-        \\.zones[2].wild.grass.pokemons[0].species=1
+        \\.zones[1].wild.grass.pokemons[0].species=1
+        \\.zones[2].wild.grass.pokemons[3].species=1
+        \\.zones[2].wild.grass.pokemons[1].species=1
+        \\.zones[2].wild.grass.pokemons[2].species=0
+        \\.zones[2].wild.grass.pokemons[0].species=0
         \\.zones[0].wild.grass.pokemons[3].species=0
         \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=0
-        \\.zones[0].wild.grass.pokemons[0].species=1
+        \\.zones[0].wild.grass.pokemons[2].species=1
+        \\.zones[0].wild.grass.pokemons[0].species=0
         \\
     );
 }

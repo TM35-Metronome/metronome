@@ -710,6 +710,20 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             } else |_| {
                 return error.NoField;
             }
+        } else |_| if (parser.eatField("moves")) {
+            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[pokemon_index].asFile();
+            const bytes = level_up_moves_file.data;
+            const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
+            const level_up_moves = @bytesToSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const index = try parser.eatIndexMax(level_up_moves.len);
+            const level_up_move = &level_up_moves[index];
+            if (parser.eatField("id")) {
+                level_up_move.id = try parser.eatUnsignedValue(u9, 10);
+            } else |_| if (parser.eatField("level")) {
+                level_up_move.level = try parser.eatUnsignedValue(u7, 10);
+            } else |_| {
+                return error.NoField;
+            }
         } else |_| {
             return error.NoField;
         }
@@ -1202,6 +1216,21 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const value = try parser.eatBoolValue();
             const learnset = &pokemon.machine_learnset;
             learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len), value));
+        } else |_| if (parser.eatField("moves")) {
+            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[pokemon_index].asFile();
+            const bytes = level_up_moves_file.data;
+            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
+            const level_up_moves = @bytesToSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const index = try parser.eatIndexMax(level_up_moves.len);
+            const level_up_move = &level_up_moves[index];
+
+            if (parser.eatField("id")) {
+                level_up_move.id = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            } else |_| if (parser.eatField("level")) {
+                level_up_move.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            } else |_| {
+                return error.NoField;
+            }
         } else |_| if (parser.eatField("evos")) {
             const evos_file = try game.evolutions.nodes.toSlice()[pokemon_index].asFile();
             const bytes = evos_file.data;

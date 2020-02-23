@@ -465,16 +465,29 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             }
         }
 
-        const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
-        const bytes = evos_file.data;
-        const rem = bytes.len % @sizeOf(gen4.Evolution);
-        const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
-        for (evos) |evo, j| {
-            if (evo.method == .unused)
-                continue;
-            try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
-            try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
-            try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
+        if (i < game.evolutions.nodes.len) {
+            const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
+            const bytes = evos_file.data;
+            const rem = bytes.len % @sizeOf(gen4.Evolution);
+            const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
+            for (evos) |evo, j| {
+                if (evo.method == .unused)
+                    continue;
+                try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
+                try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
+                try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
+            }
+        }
+
+        if (i < game.level_up_moves.nodes.len) {
+            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[i].asFile();
+            const bytes = level_up_moves_file.data;
+            const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
+            const level_up_moves = @bytesToSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            for (level_up_moves) |move, j| {
+                try stream.print(".pokemons[{}].moves[{}].id={}\n", i, j, move.id);
+                try stream.print(".pokemons[{}].moves[{}].level={}\n", i, j, move.level);
+            }
         }
     }
 
@@ -663,7 +676,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         const party_data = party_file.data;
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
-            const base = trainer.partyMember(party_data, i) orelse continue;
+            const base = trainer.partyMember(party_data, j) orelse continue;
             try stream.print(".trainers[{}].party[{}].iv={}\n", i, j, base.iv);
             try stream.print(".trainers[{}].party[{}].gender={}\n", i, j, base.gender_ability.gender);
             try stream.print(".trainers[{}].party[{}].ability={}\n", i, j, base.gender_ability.ability);
@@ -731,8 +744,17 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             try stream.print(".moves[{}].stats_affected_chance[{}]={}\n", i, j, stat_affected_chance);
     }
 
+    // HACK: Pokemon bw2 have these movie pokemons that are not allowed to appear
+    //       in normal trainer battles and wild encounters. The real fix to this problem
+    //       is to expose the pokedex and have commands that pick pokemon pick from
+    //       the pokedex. This requires some effort though, so for now, we just don't
+    //       emit these Pokémons.
+    const number_of_pokemons = 649;
+
     for (game.pokemons.nodes.toSlice()) |node, i| {
         const pokemon = node.asDataFile(gen5.BasePokemon) catch continue;
+        if (number_of_pokemons <= i)
+            break;
 
         try stream.print(".pokemons[{}].stats.hp={}\n", i, pokemon.stats.hp);
         try stream.print(".pokemons[{}].stats.attack={}\n", i, pokemon.stats.attack);
@@ -789,19 +811,29 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             }
         }
 
-        if (game.evolutions.nodes.len <= i)
-            continue;
+        if (i < game.evolutions.nodes.len) {
+            const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
+            const bytes = evos_file.data;
+            const rem = bytes.len % @sizeOf(gen5.Evolution);
+            const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
+            for (evos) |evo, j| {
+                if (evo.method == .unused)
+                    continue;
+                try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
+                try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
+                try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
+            }
+        }
 
-        const evos_file = try game.evolutions.nodes.toSlice()[i].asFile();
-        const bytes = evos_file.data;
-        const rem = bytes.len % @sizeOf(gen5.Evolution);
-        const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-        for (evos) |evo, j| {
-            if (evo.method == .unused)
-                continue;
-            try stream.print(".pokemons[{}].evos[{}].method={}\n", i, j, @tagName(evo.method));
-            try stream.print(".pokemons[{}].evos[{}].param={}\n", i, j, evo.param.value());
-            try stream.print(".pokemons[{}].evos[{}].target={}\n", i, j, evo.target.value());
+        if (i < game.level_up_moves.nodes.len) {
+            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[i].asFile();
+            const bytes = level_up_moves_file.data;
+            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
+            const level_up_moves = @bytesToSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            for (level_up_moves) |move, j| {
+                try stream.print(".pokemons[{}].moves[{}].id={}\n", i, j, move.id.value());
+                try stream.print(".pokemons[{}].moves[{}].level={}\n", i, j, move.level.value());
+            }
         }
     }
 

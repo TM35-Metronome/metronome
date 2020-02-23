@@ -119,6 +119,7 @@ pub fn main2(
             error.Overflow,
             error.EndOfString,
             error.InvalidCharacter,
+            error.InvalidField,
             => true,
         };
         if (print_line)
@@ -131,7 +132,7 @@ pub fn main2(
 
     var it = data.pokeballs.iterator();
     while (it.next()) |kv| {
-        stdio.out.print(".pokeball_items[{}]={}\n", kv.key, kv.value) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print(".pokeball_items[{}].item={}\n", kv.key, kv.value) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
     }
     return 0;
 }
@@ -142,6 +143,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
     if (parser.eatField("pokeball_items")) |_| {
         const ball_index = try parser.eatIndex();
+        _ = try parser.eatField("item");
         const ball_item = try parser.eatUnsignedValue(usize, 10);
         _ = try data.pokeballs.put(ball_index, ball_item);
         return false;
@@ -210,7 +212,7 @@ test "tm35-rand-pokeball-items" {
         }
 
         fn pokeball(comptime id: []const u8, comptime it: []const u8) []const u8 {
-            return ".pokeball_items[" ++ id ++ "]=" ++ it ++ "\n";
+            return ".pokeball_items[" ++ id ++ "].item=" ++ it ++ "\n";
         }
     };
 
@@ -227,26 +229,26 @@ test "tm35-rand-pokeball-items" {
         H.pokeball("3", "3");
 
     testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.pokeball_items[3]=3
-        \\.pokeball_items[1]=3
-        \\.pokeball_items[2]=3
-        \\.pokeball_items[0]=0
+        \\.pokeball_items[3].item=3
+        \\.pokeball_items[1].item=3
+        \\.pokeball_items[2].item=3
+        \\.pokeball_items[0].item=0
         \\
     );
 
     testProgram([_][]const u8{"--seed=1"}, test_string, result_prefix ++
-        \\.pokeball_items[3]=3
-        \\.pokeball_items[1]=2
-        \\.pokeball_items[2]=3
-        \\.pokeball_items[0]=0
+        \\.pokeball_items[3].item=3
+        \\.pokeball_items[1].item=2
+        \\.pokeball_items[2].item=3
+        \\.pokeball_items[0].item=0
         \\
     );
 
     testProgram([_][]const u8{"--seed=2"}, test_string, result_prefix ++
-        \\.pokeball_items[3]=1
-        \\.pokeball_items[1]=2
-        \\.pokeball_items[2]=2
-        \\.pokeball_items[0]=0
+        \\.pokeball_items[3].item=1
+        \\.pokeball_items[1].item=2
+        \\.pokeball_items[2].item=2
+        \\.pokeball_items[0].item=0
         \\
     );
 }

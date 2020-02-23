@@ -93,6 +93,8 @@ test "load/apply" {
             ".pokemons[0].evos[0].method=",
             ".pokemons[0].tms[0]=",
             ".pokemons[0].hms[0]=",
+            ".pokemons[0].moves[0].id=",
+            ".pokemons[0].moves[0].level=",
             ".tms[0]=",
             ".hms[0]=",
             ".zones[0].wild.surf.encounter_rate=",
@@ -535,7 +537,7 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
     try createNarc(allocator, root, info.pokemons, zeroInit(gen4.BasePokemon), 10, "");
 
     comptime checklist.set("level_up_moves", true) catch unreachable;
-    try createNarc(allocator, root, info.level_up_moves, zeroInit(gen4.LevelUpMove), 10, [_]u8{0xFF} ** @sizeOf(gen4.LevelUpMove));
+    try createNarc(allocator, root, info.level_up_moves, zeroInit(gen4.LevelUpMove), 10, "");
 
     comptime checklist.set("moves", true) catch unreachable;
     try createNarc(allocator, root, info.moves, zeroInit(gen4.Move), 10, "");
@@ -635,7 +637,7 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
     try createNarc(allocator, root, info.evolutions, evo, 10, "");
 
     comptime checklist.set("level_up_moves", true) catch unreachable;
-    try createNarc(allocator, root, info.level_up_moves, zeroInit(gen5.LevelUpMove), 10, [_]u8{0xFF} ** @sizeOf(gen5.LevelUpMove));
+    try createNarc(allocator, root, info.level_up_moves, zeroInit(gen5.LevelUpMove), 10, "");
 
     comptime checklist.set("moves", true) catch unreachable;
     try createNarc(allocator, root, info.moves, zeroInit(gen5.Move), 10, "");

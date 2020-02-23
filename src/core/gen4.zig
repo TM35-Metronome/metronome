@@ -236,10 +236,9 @@ pub const Move = extern struct {
     }
 };
 
-pub const LevelUpMove = extern struct {
-    //move_id: u9,
-    //level: u7,
-    data: lu16,
+pub const LevelUpMove = packed struct {
+    id: u9,
+    level: u7,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);

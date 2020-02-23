@@ -205,7 +205,7 @@ pub const Move = extern struct {
 };
 
 pub const LevelUpMove = extern struct {
-    move_id: lu16,
+    id: lu16,
     level: lu16,
 
     comptime {

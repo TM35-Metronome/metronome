@@ -339,10 +339,8 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
             // is a meassure as to how many "legendary" criteria this
             // Pokémon fits into. This rating can be negative.
             var ratings = std.AutoHashMap(usize, isize).init(allocator);
-            var p_it = data.pokemons.iterator();
-            while (p_it.next()) |kv| {
-                const _species = kv.key;
-                const pokemon = kv.value;
+            for (species) |_species| {
+                const pokemon = data.pokemons.get(_species).?.value;
                 const rating_entry = try ratings.getOrPutValue(_species, 0);
 
                 // Legendaries are generally in the "slow" to "medium_slow"
@@ -461,8 +459,14 @@ const Data = struct {
         errdefer res.deinit();
 
         var p_it = d.pokemons.iterator();
-        while (p_it.next()) |kv|
+        while (p_it.next()) |kv| {
+            // We should't pick Pokemon with 0 catch rate as they tend to be
+            // Pokémon not meant to be used in the standard game.
+            // Pokémons from the film studio in bw2 have 0 catch rate.
+            if ((kv.value.catch_rate orelse 1) == 0)
+                continue;
             try res.append(kv.key);
+        }
 
         return res.toOwnedSlice();
     }
@@ -478,6 +482,8 @@ const Data = struct {
 
         for (_species) |s| {
             const pokemon = (d.pokemons.get(s) orelse continue).value;
+            if ((pokemon.catch_rate orelse 1) == 0)
+                continue;
 
             for (pokemon.types.toSlice()) |t| {
                 const entry = try res.getOrPutValue(t, std.ArrayList(usize).init(d.allocator()));
@@ -574,7 +580,10 @@ test "tm35-rand-static" {
         H.pokemon("20", "12", "dark", "dragon", "slow", "45", "127", "dragon", "21") ++
         H.pokemon("21", "12", "dark", "dragon", "slow", "45", "127", "dragon", null);
 
-    const result_prefix = legendaries ++ pseudo_legendaries;
+    const pokemons_to_not_pick_ever = comptime H.pokemon("22", "12", "water", "water", "slow", "0", "255", "water1", null) ++
+        H.pokemon("23", "12", "dark", "dragon", "slow", "0", "127", "dragon", null);
+
+    const result_prefix = legendaries ++ pseudo_legendaries ++ pokemons_to_not_pick_ever;
     const test_string = comptime result_prefix ++
         H.static("0", "0") ++
         H.static("1", "1") ++
