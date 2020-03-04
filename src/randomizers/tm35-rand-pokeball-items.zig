@@ -28,9 +28,11 @@ const program_version = "0.0.0";
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-h, --help        Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>  The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version     Output version information and exit.                                                      ") catch unreachable,
+        clap.parseParam("-h, --help               Display this help text and exit.                                                          ") catch unreachable,
+        clap.parseParam("-t, --include-tms-hms    Allow for tms/hms to be randomized (This might make the game impossible to complete).     ") catch unreachable,
+        clap.parseParam("-k, --include-key-items  Allow for key items to be randomized (This might make the game impossible to complete).   ") catch unreachable,
+        clap.parseParam("-s, --seed <NUM>         The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-v, --version            Output version information and exit.                                                      ") catch unreachable,
     };
 };
 
@@ -106,6 +108,9 @@ pub fn main2(
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
+    const include_tms_hms = args.flag("--include-tms-hms");
+    const include_key_items = args.flag("--include-key-items");
+
     var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
     var data = Data{
         .items = Items.init(allocator),
@@ -128,7 +133,7 @@ pub fn main2(
         line_buf.shrink(0);
     }
 
-    randomize(data, seed) catch |err| return errors.randErr(stdio.err, err);
+    randomize(data, seed, include_tms_hms, include_key_items) catch |err| return errors.randErr(stdio.err, err);
 
     var it = data.pokeballs.iterator();
     while (it.next()) |kv| {
@@ -159,18 +164,31 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     return true;
 }
 
-fn randomize(data: Data, seed: u64) !void {
+fn randomize(data: Data, seed: u64, include_tms_hms: bool, include_key_items: bool) !void {
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    const pick_from = try data.nonkey_items();
+    var pocket_blacklist_buffer: [2][]const u8 = undefined;
+    const pocket_blacklist = blk: {
+        var list = std.ArrayList([]const u8).fromOwnedSlice(std.debug.failing_allocator, &pocket_blacklist_buffer);
+        list.resize(0) catch unreachable;
+        if (!include_tms_hms)
+            list.append("tms_hms") catch unreachable;
+        if (!include_key_items)
+            list.append("key_items") catch unreachable;
+        break :blk list.toSlice();
+    };
+
+    const pick_from = try data.getItems(pocket_blacklist);
 
     var it = data.pokeballs.iterator();
-    while (it.next()) |kv| {
+    outer: while (it.next()) |kv| {
         const item = (data.items.get(kv.value) orelse continue).value;
         const pocket = item.pocket orelse continue;
-        if (mem.eql(u8, pocket, "key_items"))
-            continue; // Don't randomize items that are key items (they are probably needed for progression)
+        for (pocket_blacklist) |blacklisted_pocket| {
+            if (mem.eql(u8, pocket, blacklisted_pocket))
+                continue :outer;
+        }
 
         kv.value = pick_from[random.range(usize, 0, pick_from.len)];
     }
@@ -183,16 +201,18 @@ const Data = struct {
     pokeballs: Pokeballs,
     items: Items,
 
-    fn nonkey_items(d: Data) ![]usize {
+    fn getItems(d: Data, pocket_blacklist: []const []const u8) ![]usize {
         var res = std.ArrayList(usize).init(d.pokeballs.allocator);
         errdefer res.deinit();
 
         var it = d.items.iterator();
-        while (it.next()) |item_kv| {
+        outer: while (it.next()) |item_kv| {
             const item = item_kv.value;
             const pocket = item.pocket orelse continue;
-            if (mem.eql(u8, pocket, "key_items"))
-                continue;
+            for (pocket_blacklist) |blacklisted_pocket| {
+                if (mem.eql(u8, pocket, blacklisted_pocket))
+                    continue :outer;
+            }
 
             try res.append(item_kv.key);
         }
@@ -218,7 +238,7 @@ test "tm35-rand-pokeball-items" {
 
     const items = H.item("0", "key_items") ++
         H.item("1", "items") ++
-        H.item("2", "hmtms") ++
+        H.item("2", "tms_hms") ++
         H.item("3", "berries");
 
     const result_prefix = items;
@@ -228,27 +248,32 @@ test "tm35-rand-pokeball-items" {
         H.pokeball("2", "2") ++
         H.pokeball("3", "3");
 
-    testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.pokeball_items[3].item=3
-        \\.pokeball_items[1].item=3
-        \\.pokeball_items[2].item=3
-        \\.pokeball_items[0].item=0
-        \\
-    );
-
     testProgram([_][]const u8{"--seed=1"}, test_string, result_prefix ++
         \\.pokeball_items[3].item=3
+        \\.pokeball_items[1].item=1
+        \\.pokeball_items[2].item=2
+        \\.pokeball_items[0].item=0
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=1", "--include-key-items" }, test_string, result_prefix ++
+        \\.pokeball_items[3].item=3
+        \\.pokeball_items[1].item=0
+        \\.pokeball_items[2].item=2
+        \\.pokeball_items[0].item=3
+        \\
+    );
+    testProgram([_][]const u8{ "--seed=1", "--include-tms-hms" }, test_string, result_prefix ++
+        \\.pokeball_items[3].item=3
         \\.pokeball_items[1].item=2
         \\.pokeball_items[2].item=3
         \\.pokeball_items[0].item=0
         \\
     );
-
-    testProgram([_][]const u8{"--seed=2"}, test_string, result_prefix ++
+    testProgram([_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[3].item=1
-        \\.pokeball_items[1].item=2
-        \\.pokeball_items[2].item=2
-        \\.pokeball_items[0].item=0
+        \\.pokeball_items[1].item=0
+        \\.pokeball_items[2].item=3
+        \\.pokeball_items[0].item=1
         \\
     );
 }

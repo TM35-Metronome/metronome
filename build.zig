@@ -147,7 +147,7 @@ pub fn build(b: *Builder) void {
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
             },
-            else => {}, // TODO: More os support
+            else => unreachable, // TODO: More os support
         }
 
         exe.addIncludeDir(b.fmt("{}/nativefiledialog/src/include", lib_folder));
@@ -158,11 +158,11 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
-        //exe.install();
+        exe.install();
         exe.setTheTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        //build_gui_step.dependOn(&exe.step);
+        build_gui_step.dependOn(&exe.step);
     }
 }
 

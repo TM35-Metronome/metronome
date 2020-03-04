@@ -332,7 +332,7 @@ pub const FRLGPocket = packed enum(u8) {
     items = 0x01,
     key_items = 0x02,
     poke_balls = 0x03,
-    tm_hms = 0x04,
+    tms_hms = 0x04,
     berries = 0x05,
 };
 
@@ -340,7 +340,7 @@ pub const RSEPocket = packed enum(u8) {
     none = 0x00,
     items = 0x01,
     poke_balls = 0x02,
-    tm_hms = 0x03,
+    tms_hms = 0x03,
     berries = 0x04,
     key_items = 0x05,
 };

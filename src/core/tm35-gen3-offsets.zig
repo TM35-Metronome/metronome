@@ -1267,7 +1267,7 @@ const rs_last_items = [_]gen3.Item{
         .description = undefined,
         .importance = 1,
         .unknown = 0,
-        .pocket = gen3.Pocket{ .rse = .tm_hms },
+        .pocket = gen3.Pocket{ .rse = .tms_hms },
         .@"type" = 1,
         .field_use_func = undefined,
         .battle_usage = lu32.init(0),

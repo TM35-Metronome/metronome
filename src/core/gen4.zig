@@ -345,7 +345,7 @@ pub const Pocket = packed struct {
 
 pub const PocketKind = packed enum(u4) {
     items = 0x00,
-    tm_hms = 0x01,
+    tms_hms = 0x01,
     berries = 0x02,
     key_items = 0x03,
     unknown_0x04 = 0x04,

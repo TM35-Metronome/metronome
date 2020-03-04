@@ -963,7 +963,9 @@ const program_name = "tm35-randomizer";
 const command_file_name = "commands";
 const default_commands = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
     "tm35-rand-parties" ++ extension ++ "\n" ++
+    "tm35-rand-pokeball-items" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++
+    "tm35-rand-static" ++ extension ++ "\n" ++
     "tm35-rand-stats" ++ extension ++ "\n" ++
     "tm35-rand-wild" ++ extension ++ "\n";
 
@@ -1149,9 +1151,9 @@ fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map
     var p = try std.ChildProcess.init([_][]const u8{ exe, "--help" }, &fba.allocator);
     defer p.deinit();
 
-    p.stdin_behavior = std.ChildProcess.StdIo.Ignore;
-    p.stdout_behavior = std.ChildProcess.StdIo.Pipe;
-    p.stderr_behavior = std.ChildProcess.StdIo.Ignore;
+    p.stdin_behavior = .Ignore;
+    p.stdout_behavior = .Pipe;
+    p.stderr_behavior = .Ignore;
     p.cwd = cwd;
     p.env_map = env_map;
 
@@ -1159,6 +1161,7 @@ fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map
     errdefer _ = p.kill() catch undefined;
 
     const help = try p.stdout.?.inStream().stream.readAllAlloc(allocator, 1024 * 1024);
+    errdefer allocator.free(help);
 
     const res = try p.wait();
     switch (res) {
