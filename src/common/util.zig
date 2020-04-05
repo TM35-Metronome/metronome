@@ -8,13 +8,13 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const testing = std.testing;
 
 pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
 pub const errors = @import("errors.zig");
 pub const escape = @import("escape.zig");
 pub const format = @import("format.zig");
+pub const testing = @import("testing.zig");
 
 pub const readLine = @import("readline.zig").readLine;
 
@@ -23,6 +23,7 @@ test "" {
     _ = bit;
     _ = escape;
     _ = format;
+    _ = testing;
     _ = readLine;
 }
 
@@ -100,7 +101,7 @@ pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {
 test "indexOfPtr" {
     const arr = "abcde";
     for (arr) |*item, i| {
-        testing.expectEqual(i, indexOfPtr(u8, arr, item));
+        std.testing.expectEqual(i, indexOfPtr(u8, arr, item));
     }
 }
 
