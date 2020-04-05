@@ -34,6 +34,10 @@ const randomizer_exes = [_][]const u8{
     "tm35-rand-pokeball-items",
 };
 
+const other_exes = [_][]const u8{
+    "tm35-no-trade-evolutions",
+};
+
 const gui_exes = [_][]const u8{
     "tm35-randomizer",
 };
@@ -101,6 +105,8 @@ pub fn build(b: *Builder) void {
             testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/core/{}.zig", src_folder, name));
         for (randomizer_exes) |name|
             testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/randomizers/{}.zig", src_folder, name));
+        for (other_exes) |name|
+            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/other/{}.zig", src_folder, name));
 
         for (gui_exes) |tool, i| {
             const source = b.fmt("{}/gui/{}.zig", src_folder, tool);
@@ -121,6 +127,8 @@ pub fn build(b: *Builder) void {
         buildAndInstallCmdlineProgram(b, build_core_step, true, target, mode, name, b.fmt("{}/core/{}.zig", src_folder, name));
     for (randomizer_exes) |name, i|
         buildAndInstallCmdlineProgram(b, build_randomizers_step, true, target, mode, name, b.fmt("{}/randomizers/{}.zig", src_folder, name));
+    for (other_exes) |name, i|
+        buildAndInstallCmdlineProgram(b, build_randomizers_step, true, target, mode, name, b.fmt("{}/other/{}.zig", src_folder, name));
 
     const lib_cflags = [_][]const u8{"-D_POSIX_C_SOURCE=200809L"};
     for (gui_exes) |tool, i| {
