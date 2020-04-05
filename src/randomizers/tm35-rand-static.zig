@@ -592,7 +592,7 @@ test "tm35-rand-static" {
         H.static("4", "4") ++
         H.static("5", "21");
 
-    testProgram([_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.static_pokemons[4].species=20
         \\.static_pokemons[5].species=9
         \\.static_pokemons[3].species=18
@@ -601,7 +601,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=15
         \\
     );
-    testProgram([_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=9
         \\.static_pokemons[5].species=20
         \\.static_pokemons[3].species=1
@@ -610,7 +610,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=0
         \\
     );
-    testProgram([_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=7
         \\.static_pokemons[3].species=3
@@ -619,7 +619,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=12
         \\
     );
-    testProgram([_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=7
         \\.static_pokemons[3].species=3
@@ -628,7 +628,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=1
         \\
     );
-    testProgram([_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=15
         \\.static_pokemons[5].species=4
         \\.static_pokemons[3].species=11
@@ -637,7 +637,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=11
         \\
     );
-    testProgram([_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=20
         \\.static_pokemons[3].species=3
@@ -646,7 +646,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=0
         \\
     );
-    testProgram([_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=0
         \\.static_pokemons[5].species=18
         \\.static_pokemons[3].species=0
@@ -655,7 +655,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=5
         \\
     );
-    testProgram([_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, [_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=13
         \\.static_pokemons[3].species=1
@@ -664,46 +664,4 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=6
         \\
     );
-}
-
-fn testProgram(
-    args: []const []const u8,
-    in: []const u8,
-    out: []const u8,
-) void {
-    var alloc_buf: [1024 * 50]u8 = undefined;
-    var out_buf: [1024 * 10]u8 = undefined;
-    var err_buf: [1024]u8 = undefined;
-    var fba = heap.FixedBufferAllocator.init(&alloc_buf);
-    var stdin = io.SliceInStream.init(in);
-    var stdout = io.SliceOutStream.init(&out_buf);
-    var stderr = io.SliceOutStream.init(&err_buf);
-    var arg_iter = clap.args.SliceIterator{ .args = args };
-
-    const StdIo = util.CustomStdIoStreams(anyerror, anyerror);
-
-    const res = main2(
-        &fba.allocator,
-        anyerror,
-        anyerror,
-        StdIo{
-            .in = @ptrCast(*io.InStream(anyerror), &stdin.stream),
-            .out = @ptrCast(*io.OutStream(anyerror), &stdout.stream),
-            .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
-        },
-        clap.args.SliceIterator,
-        &arg_iter,
-    );
-    debug.warn("{}", stderr.getWritten());
-    testing.expectEqual(u8(0), res);
-    testing.expectEqualSlices(u8, "", stderr.getWritten());
-    if (!mem.eql(u8, out, stdout.getWritten())) {
-        debug.warn("\n====== expected this output: =========\n");
-        debug.warn("{}", out);
-        debug.warn("\n======== instead found this: =========\n");
-        debug.warn("{}", stdout.getWritten());
-        debug.warn("\n======================================\n");
-        testing.expect(false);
-    }
-    testing.expectEqualSlices(u8, out, stdout.getWritten());
 }
