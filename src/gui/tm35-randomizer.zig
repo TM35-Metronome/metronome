@@ -967,6 +967,7 @@ const default_commands = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++
     "tm35-rand-static" ++ extension ++ "\n" ++
     "tm35-rand-stats" ++ extension ++ "\n" ++
+    "tm35-no-trade-evolutions" ++ extension ++ "\n" ++
     "tm35-rand-wild" ++ extension ++ "\n";
 
 const Exes = struct {
