@@ -26,7 +26,7 @@ test "nds.crc_modbus" {
 
 // http://problemkaputt.de/gbatek.htm#dscartridgeheader
 pub const Header = extern struct {
-    game_title: [12]u8,
+    game_title: [11:0]u8,
     gamecode: [4]u8,
     makercode: [2]u8,
 
@@ -215,9 +215,9 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        if (!algorithm.all(u8, header.game_title, notLower))
+        if (!algorithm.all(u8, &header.game_title, notLower))
             return error.InvalidGameTitle;
-        if (!algorithm.all(u8, header.gamecode, ascii.isUpper))
+        if (!algorithm.all(u8, &header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
@@ -286,7 +286,7 @@ pub const Header = extern struct {
             //    return error.InvalidReserved8;
             //if (!algorithm.all(u8, header.reserved9, isZero))
             //    return error.InvalidReserved9;
-            if (!mem.eql(u8, header.title_id_rest, [_]u8{ 0x00, 0x03, 0x00 }))
+            if (!mem.eql(u8, &header.title_id_rest, &[_]u8{ 0x00, 0x03, 0x00 }))
                 return error.InvalidTitleIdRest;
             //if (!algorithm.all(u8, header.reserved12, isZero))
             //    return error.InvalidReserved12;

@@ -25,46 +25,49 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
-const StdIo = util.CustomStdIoStreams(anyerror, anyerror);
+const StdIo = util.CustomStdIoStreams(
+    std.io.FixedBufferStream([]u8).InStream,
+    std.io.FixedBufferStream([]u8).OutStream,
+);
 
 test "load/apply" {
-    const gen_buf = try std.heap.direct_allocator.alloc(u8, 25 * 1024 * 1024);
-    defer std.heap.direct_allocator.free(gen_buf);
+    const gen_buf = try std.heap.page_allocator.alloc(u8, 25 * 1024 * 1024);
+    defer std.heap.page_allocator.free(gen_buf);
 
-    const program_buf = try std.heap.direct_allocator.alloc(u8, 18 * 1024 * 1024);
-    defer std.heap.direct_allocator.free(program_buf);
+    const program_buf = try std.heap.page_allocator.alloc(u8, 18 * 1024 * 1024);
+    defer std.heap.page_allocator.free(program_buf);
 
-    const out_buf = try std.heap.direct_allocator.alloc(u8, 4 * 1024 * 1024);
-    defer std.heap.direct_allocator.free(out_buf);
+    const out_buf = try std.heap.page_allocator.alloc(u8, 4 * 1024 * 1024);
+    defer std.heap.page_allocator.free(out_buf);
 
     var gen_fba = heap.FixedBufferAllocator.init(gen_buf);
-    deleteFakeRoms(&gen_fba.allocator);
+    deleteFakeRoms();
     const roms = try generateFakeRoms(&gen_fba.allocator);
 
     var stderr_buf: [1024]u8 = undefined;
     for (roms) |rom_path| {
-        var stderr = io.SliceOutStream.init(&stderr_buf);
+        var stderr = io.fixedBufferStream(&stderr_buf);
         var fba = heap.FixedBufferAllocator.init(program_buf);
 
-        var load_stdout = io.SliceOutStream.init(out_buf);
+        var load_stdout = io.fixedBufferStream(out_buf);
         var load_args = clap.args.SliceIterator{ .args = &[_][]const u8{rom_path} };
         const load_res = load.main2(
             &fba.allocator,
-            anyerror,
-            anyerror,
+            StdIo.InStream,
+            StdIo.OutStream,
             StdIo{
                 .in = undefined,
-                .out = @ptrCast(*io.OutStream(anyerror), &load_stdout.stream),
-                .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+                .out = load_stdout.outStream(),
+                .err = stderr.outStream(),
             },
             clap.args.SliceIterator,
             &load_args,
         );
-        debug.warn("{}", stderr.getWritten());
-        testing.expectEqual(u8(0), load_res);
+        debug.warn("{}", .{stderr.getWritten()});
+        testing.expectEqual(@as(u8, 0), load_res);
         testing.expectEqualSlices(u8, "", stderr.getWritten());
 
-        const load_written = load_stdout.slice[0..load_stdout.pos];
+        const load_written = load_stdout.getWritten();
 
         // Validate that certain entries are outputted for
         // all generations of games
@@ -103,9 +106,9 @@ test "load/apply" {
             ".zones[0].wild.surf.pokemons[0].species=",
         }) |expected_string| {
             if (mem.indexOf(u8, load_written, expected_string) == null) {
-                debug.warn("{}\n", load_written);
-                debug.warn("{}\n", rom_path);
-                debug.warn("Could not find {}\n", expected_string);
+                debug.warn("{}\n", .{load_written});
+                debug.warn("{}\n", .{rom_path});
+                debug.warn("Could not find {}\n", .{expected_string});
                 testing.expect(false);
             }
         }
@@ -114,7 +117,7 @@ test "load/apply" {
         changeAllNumberValuesTo(load_written, 1);
 
         fba = heap.FixedBufferAllocator.init(program_buf);
-        var apply_stdin = io.SliceInStream.init(load_written);
+        var apply_stdin = io.fixedBufferStream(load_written);
         var apply_args = clap.args.SliceIterator{
             .args = &[_][]const u8{
                 rom_path,
@@ -125,59 +128,59 @@ test "load/apply" {
         };
         const apply_res = apply.main2(
             &fba.allocator,
-            anyerror,
-            anyerror,
+            StdIo.InStream,
+            StdIo.OutStream,
             StdIo{
-                .in = @ptrCast(*io.InStream(anyerror), &apply_stdin.stream),
-                .out = @ptrCast(*io.OutStream(anyerror), io.null_out_stream),
-                .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+                .in = apply_stdin.inStream(),
+                .out = undefined,
+                .err = stderr.outStream(),
             },
             clap.args.SliceIterator,
             &apply_args,
         );
-        debug.warn("{}", stderr.getWritten());
-        testing.expectEqual(u8(0), apply_res);
+        debug.warn("{}", .{stderr.getWritten()});
+        testing.expectEqual(@as(u8, 0), apply_res);
         testing.expectEqualSlices(u8, "", stderr.getWritten());
 
         fba = heap.FixedBufferAllocator.init(program_buf);
-        load_stdout = io.SliceOutStream.init(out_buf);
+        load_stdout = io.fixedBufferStream(out_buf);
         load_args = clap.args.SliceIterator{ .args = &[_][]const u8{rom_path} };
         const load_res2 = load.main2(
             &fba.allocator,
-            anyerror,
-            anyerror,
+            StdIo.InStream,
+            StdIo.OutStream,
             StdIo{
                 .in = undefined,
-                .out = @ptrCast(*io.OutStream(anyerror), &load_stdout.stream),
-                .err = @ptrCast(*io.OutStream(anyerror), &stderr.stream),
+                .out = load_stdout.outStream(),
+                .err = stderr.outStream(),
             },
             clap.args.SliceIterator,
             &load_args,
         );
-        debug.warn("{}", stderr.getWritten());
-        testing.expectEqual(u8(0), load_res2);
+        debug.warn("{}", .{stderr.getWritten()});
+        testing.expectEqual(@as(u8, 0), load_res2);
         testing.expectEqualSlices(u8, "", stderr.getWritten());
 
-        const load_written2 = load_stdout.slice[0..load_stdout.pos];
+        const load_written2 = load_stdout.getWritten();
         validateThatAllNumbersAre(load_written2, 1);
     }
 }
 
 fn validateThatAllNumbersAre(text: []const u8, num: usize) void {
-    var lines = mem.separate(text, "\n");
+    var lines = mem.split(text, "\n");
     while (lines.next()) |line| {
         const eql = mem.indexOfScalar(u8, line, '=') orelse continue;
         const value_str = line[eql + 1 ..];
         const value = fmt.parseInt(usize, value_str, 10) catch continue;
         if (num != value) {
-            debug.warn("{}\n", line);
+            debug.warn("{}\n", .{line});
             testing.expectEqual(num, value);
         }
     }
 }
 
 fn changeAllNumberValuesTo(text: []u8, num: usize) void {
-    var lines = mem.separate(text, "\n");
+    var lines = mem.split(text, "\n");
     while (lines.next()) |line| {
         const eql = mem.indexOfScalar(u8, line, '=') orelse continue;
         const value_str = line[eql + 1 ..];
@@ -185,7 +188,7 @@ fn changeAllNumberValuesTo(text: []u8, num: usize) void {
         const index_in_text = util.indexOfPtr(u8, text, &value_str[0]);
 
         var buf: [1]u8 = undefined;
-        _ = fmt.bufPrint(&buf, "{}", num) catch continue;
+        _ = fmt.bufPrint(&buf, "{}", .{num}) catch continue;
         mem.set(u8, text[index_in_text..][0..value_str.len], buf[0]);
     }
 }
@@ -205,15 +208,15 @@ pub fn generateFakeRoms(allocator: *mem.Allocator) ![][]u8 {
     var tmp_fix_buf_alloc = heap.FixedBufferAllocator.init(tmp[0..]);
     const tmp_allocator = &tmp_fix_buf_alloc.allocator;
 
-    deleteFakeRoms(tmp_allocator);
-    try fs.makeDir(tmp_folder);
-    errdefer deleteFakeRoms(tmp_allocator);
+    deleteFakeRoms();
+    try fs.cwd().makeDir(tmp_folder);
+    errdefer deleteFakeRoms();
 
     tmp_fix_buf_alloc = heap.FixedBufferAllocator.init(tmp[0..]);
 
     var rom_names = std.ArrayList([]u8).init(allocator);
     errdefer {
-        for (rom_names.toSliceConst()) |name|
+        for (rom_names.items) |name|
             allocator.free(name);
         rom_names.deinit();
     }
@@ -239,8 +242,8 @@ pub fn generateFakeRoms(allocator: *mem.Allocator) ![][]u8 {
     return rom_names.toOwnedSlice();
 }
 
-pub fn deleteFakeRoms(allocator: *mem.Allocator) void {
-    fs.deleteTree(allocator, tmp_folder) catch {};
+pub fn deleteFakeRoms() void {
+    fs.cwd().deleteTree(tmp_folder) catch {};
 }
 
 fn Checklist(comptime size: usize) type {
@@ -287,21 +290,20 @@ fn checklistFromT(comptime T: type) Checklist(@typeInfo(T).Struct.fields.len) {
 }
 
 fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
-    const BufferedOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
     const Helper = struct {
         fn genWildInfo(buf: []u8, comptime n: comptime_int, free: *u32) !gen3.Ref(gen3.WildPokemonInfo(n)) {
             const wild_offset = free.*;
             const info_offset = free.* + @sizeOf(gen3.WildPokemon) * n;
             var wild_info = zeroInit(gen3.WildPokemonInfo(n));
             wild_info.wild_pokemons = try gen3.Ref([n]gen3.WildPokemon).init(wild_offset);
-            mem.copy(u8, buf[info_offset..], mem.toBytes(wild_info));
+            mem.copy(u8, buf[info_offset..], &mem.toBytes(wild_info));
 
             free.* = info_offset + @sizeOf(gen3.WildPokemonInfo(n));
             return try gen3.Ref(gen3.WildPokemonInfo(n)).init(info_offset);
         }
 
-        fn fillSection(buf: []u8, section: var, val: @typeOf(section).T) !void {
-            mem.set(@typeOf(section).T, section.slice(buf), val);
+        fn fillSection(buf: []u8, section: var, val: @TypeOf(section).T) !void {
+            mem.set(@TypeOf(section).T, section.slice(buf), val);
         }
     };
 
@@ -312,9 +314,9 @@ fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
     var header = zeroInit(rom.gba.Header);
     header.game_title = info.game_title;
     header.gamecode = info.gamecode;
-    header.makercode = "AA";
+    header.makercode = "AA".*;
     header.fixed_value = 0x96;
-    mem.copy(u8, buf, mem.toBytes(header));
+    mem.copy(u8, buf, &mem.toBytes(header));
 
     // We use a checklist to assert at comptime that we generate info
     // for all fields in gen3.offsets.Info
@@ -359,7 +361,7 @@ fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
         var j: usize = 0;
         while (j < learned_moves) : (j += 1)
             free_space_offset += @sizeOf(gen3.LevelUpMove);
-        mem.copy(u8, buf[free_space_offset..], [_]u8{ 0xFF, 0xFF });
+        mem.copy(u8, buf[free_space_offset..], &[_]u8{ 0xFF, 0xFF });
         free_space_offset += @sizeOf(gen3.LevelUpMove);
     }
 
@@ -390,13 +392,11 @@ fn genGen3FakeRom(allocator: *mem.Allocator, info: gen3.offsets.Info) ![]u8 {
     // Assert that we have generated data for all fields
     comptime std.debug.assert(checklist.all(true));
 
-    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", tmp_folder, info.game_title, info.gamecode, @tagName(info.version));
+    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", .{ tmp_folder, info.game_title, info.gamecode, @tagName(info.version) });
     errdefer allocator.free(name);
 
-    var file = try fs.File.openWrite(name);
-    errdefer fs.deleteFile(name) catch {};
-    defer file.close();
-    try file.write(buf);
+    errdefer fs.cwd().deleteFile(name) catch {};
+    try fs.cwd().writeFile(name, buf);
 
     return name;
 }
@@ -412,11 +412,11 @@ fn getGen3FreeSpace(info: gen3.offsets.Info) u32 {
     return res;
 }
 
-fn ndsHeader(game_title: [12]u8, gamecode: [4]u8) rom.nds.Header {
+fn ndsHeader(game_title: [11:0]u8, gamecode: [4]u8) rom.nds.Header {
     var res = zeroInit(rom.nds.Header);
     res.game_title = game_title;
     res.gamecode = gamecode;
-    res.makercode = "ST";
+    res.makercode = "ST".*;
     res.arm9_rom_offset = lu32.init(0x4000);
     res.arm9_entry_address = lu32.init(0x2000000);
     res.arm9_ram_address = lu32.init(0x2000000);
@@ -462,16 +462,11 @@ fn createNarcData(alloc: *mem.Allocator, root: *rom.nds.fs.Nitro, path: []const 
     var i: usize = 0;
     while (i < count) : (i += 1) {
         var name_buf: [10]u8 = undefined;
-        const name = try fmt.bufPrint(name_buf[0..], "{}", i);
+        const name = try fmt.bufPrint(name_buf[0..], "{}", .{i});
 
         _ = try narc.createFile(name, rom.nds.fs.Narc.File{
             .allocator = alloc,
-            .data = try fmt.allocPrint(
-                alloc,
-                "{}{}",
-                data,
-                term,
-            ),
+            .data = try fmt.allocPrint(alloc, "{}{}", .{ data, term }),
         });
     }
 }
@@ -493,30 +488,30 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
             mem.copy(u8, res[res.len - machine_len ..], info.hm_tm_prefix);
             break :blk res;
         },
-        .arm7 = [_]u8{},
+        .arm7 = &[_]u8{},
         .nitro_footer = [_]lu32{comptime lu32.init(0)} ** 3,
         .arm9_overlay_table = switch (info.starters) {
-            .arm9 => [_]rom.nds.Overlay{},
+            .arm9 => &[_]rom.nds.Overlay{},
             .overlay9 => |overlay| blk: {
                 const res = try allocator.alloc(rom.nds.Overlay, overlay.file + 1);
-                mem.set(u8, @sliceToBytes(res), 0);
+                mem.set(u8, mem.sliceAsBytes(res), 0);
                 break :blk res;
             },
         },
         .arm9_overlay_files = switch (info.starters) {
-            .arm9 => [_][]u8{},
+            .arm9 => &[_][]u8{},
             .overlay9 => |overlay| blk: {
                 const res = try allocator.alloc([]u8, overlay.file + 1);
                 for (res) |*bytes|
-                    bytes.* = ([*]u8)(undefined)[0..0];
+                    bytes.* = "";
 
                 res[overlay.file] = try allocator.alloc(u8, overlay.offset + gen4.offsets.starters_len);
                 mem.set(u8, res[overlay.file], 0);
                 break :blk res;
             },
         },
-        .arm7_overlay_table = [_]rom.nds.Overlay{},
-        .arm7_overlay_files = [_][]u8{},
+        .arm7_overlay_table = &[_]rom.nds.Overlay{},
+        .arm7_overlay_files = &[_][]u8{},
         .root = try rom.nds.fs.Nitro.create(allocator),
     };
     const root = nds_rom.root;
@@ -572,11 +567,11 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
     // Assert that we have generated data for all fields
     comptime std.debug.assert(checklist.all(true));
 
-    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", tmp_folder, info.game_title, info.gamecode, @tagName(info.version));
+    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", .{ tmp_folder, mem.spanZ(&info.game_title), info.gamecode, @tagName(info.version) });
     errdefer allocator.free(name);
 
-    var file = try fs.File.openWrite(name);
-    errdefer fs.deleteFile(name) catch {};
+    var file = try fs.cwd().createFile(name, .{});
+    errdefer fs.cwd().deleteFile(name) catch {};
     defer file.close();
 
     try nds_rom.writeToFile(file);
@@ -587,7 +582,7 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
 fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
     const machine_len = gen5.offsets.tm_count + gen5.offsets.hm_count;
     const machines = [_]lu16{comptime lu16.init(0)} ** machine_len;
-    const arm9 = try fmt.allocPrint(allocator, "{}{}", gen5.offsets.hm_tm_prefix, @sliceToBytes(machines[0..]));
+    const arm9 = try fmt.allocPrint(allocator, "{}{}", .{ gen5.offsets.hm_tm_prefix, mem.sliceAsBytes(machines[0..]) });
     defer allocator.free(arm9);
 
     const nds_rom = rom.nds.Rom{
@@ -595,12 +590,12 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
         .header = ndsHeader(info.game_title, info.gamecode),
         .banner = ndsBanner,
         .arm9 = arm9,
-        .arm7 = [_]u8{},
+        .arm7 = &[_]u8{},
         .nitro_footer = [_]lu32{comptime lu32.init(0)} ** 3,
-        .arm9_overlay_table = [_]rom.nds.Overlay{},
-        .arm9_overlay_files = [_][]u8{},
-        .arm7_overlay_table = [_]rom.nds.Overlay{},
-        .arm7_overlay_files = [_][]u8{},
+        .arm9_overlay_table = &[_]rom.nds.Overlay{},
+        .arm9_overlay_files = &[_][]u8{},
+        .arm7_overlay_table = &[_]rom.nds.Overlay{},
+        .arm7_overlay_files = &[_][]u8{},
         .root = try rom.nds.fs.Nitro.create(allocator),
     };
     const root = nds_rom.root;
@@ -659,11 +654,11 @@ fn genGen5FakeRom(allocator: *mem.Allocator, info: gen5.offsets.Info) ![]u8 {
     // Assert that we have generated data for all fields
     comptime std.debug.assert(checklist.all(true));
 
-    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", tmp_folder, info.game_title, info.gamecode, @tagName(info.version));
+    const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", .{ tmp_folder, mem.spanZ(&info.game_title), info.gamecode, @tagName(info.version) });
     errdefer allocator.free(name);
 
-    var file = try fs.File.openWrite(name);
-    errdefer fs.deleteFile(name) catch {};
+    var file = try fs.cwd().createFile(name, .{});
+    errdefer fs.cwd().deleteFile(name) catch {};
     defer file.close();
 
     try nds_rom.writeToFile(file);

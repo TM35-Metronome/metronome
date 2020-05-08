@@ -24,7 +24,7 @@ const nds = rom.nds;
 
 const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -37,50 +37,51 @@ const params = [_]Param{
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-gen3-disassemble-scripts [-hv] <FILE>
+    try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Finds all scripts in a generation 3 Pokemon game, disassembles them
         \\and writes them to stdout.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
@@ -91,18 +92,18 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.write("No file provided\n") catch {};
+        stdio.err.writeAll("No file provided\n") catch {};
         usage(stdio.err) catch {};
         return 1;
     };
 
-    const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
+    const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
@@ -125,13 +126,13 @@ pub fn main2(
             return 0;
         } else |err| err;
 
-        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", file_name) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error) catch {};
-        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
+        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", .{file_name}) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error }) catch {};
+        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error }) catch {};
         return 1;
     } else |nds_error| {
-        stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error) catch {};
+        stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
         return 1;
     }
 }
@@ -151,38 +152,38 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
 
             const script_data = try s.addr.other.toSliceEnd(game.data);
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
-            try stream.print("map_header[{}].map_script[{}]:\n", map_id, script_id);
+            try stream.print("map_header[{}].map_script[{}]:\n", .{ map_id, script_id });
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*, decoder);
 
-            try stream.write("\n");
+            try stream.writeAll("\n");
         }
 
         const events = try map_header.map_events.toSingle(game.data);
         for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
             const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
-            try stream.print("map_header[{}].obj_events[{}]:\n", map_id, script_id);
+            try stream.print("map_header[{}].obj_events[{}]:\n", .{ map_id, script_id });
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*, decoder);
 
-            try stream.write("\n");
+            try stream.writeAll("\n");
         }
 
         for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
             const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
-            try stream.print("map_header[{}].coord_event[{}]:\n", map_id, script_id);
+            try stream.print("map_header[{}].coord_event[{}]:\n", .{ map_id, script_id });
             while (try decoder.next()) |command|
                 try printCommand(stream, command.*, decoder);
 
-            try stream.write("\n");
+            try stream.writeAll("\n");
         }
     }
 }
 
 fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
-    for (game.scripts.nodes.toSlice()) |node, script_i| {
+    for (game.scripts.nodes.items) |node, script_i| {
         const script_file = node.asFile() catch continue;
         const script_data = script_file.data;
 
@@ -199,9 +200,9 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
         }
 
         var offset_i: usize = 0;
-        while (offset_i < offsets.count()) : (offset_i += 1) {
-            const offset = offsets.at(offset_i);
-            try stream.print("script[{}]@0x{x}:\n", script_i, offset);
+        while (offset_i < offsets.items.len) : (offset_i += 1) {
+            const offset = offsets.items[offset_i];
+            try stream.print("script[{}]@0x{x}:\n", .{ script_i, offset });
             if (@intCast(isize, script_data.len) < offset)
                 return error.Error;
             if (offset < 0)
@@ -212,29 +213,29 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
                 .i = @intCast(usize, offset),
             };
             while (decoder.next() catch {
-                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", decoder.bytes[decoder.i], decoder.i);
+                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{ decoder.bytes[decoder.i], decoder.i });
                 continue;
             }) |command| {
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
                     .jump => {
-                        const off = command.data.jump.adr.value();
+                        const off = command.data().jump.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
                     .compare_last_result_jump => {
-                        const off = command.data.compare_last_result_jump.adr.value();
+                        const off = command.data().compare_last_result_jump.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
                     .call => {
-                        const off = command.data.call.adr.value();
+                        const off = command.data().call.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
                     .compare_last_result_call => {
-                        const off = command.data.compare_last_result_call.adr.value();
+                        const off = command.data().compare_last_result_call.adr.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
@@ -246,7 +247,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
 }
 
 fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
-    for (game.scripts.nodes.toSlice()) |node, script_i| {
+    for (game.scripts.nodes.items) |node, script_i| {
         const script_file = node.asFile() catch continue;
         const script_data = script_file.data;
 
@@ -263,9 +264,9 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
         }
 
         var offset_i: usize = 0;
-        while (offset_i < offsets.count()) : (offset_i += 1) {
-            const offset = offsets.at(offset_i);
-            try stream.print("script[{}]@0x{x}:\n", script_i, offset);
+        while (offset_i < offsets.items.len) : (offset_i += 1) {
+            const offset = offsets.items[offset_i];
+            try stream.print("script[{}]@0x{x}:\n", .{ script_i, offset });
             if (@intCast(isize, script_data.len) < offset)
                 return error.Error;
             if (offset < 0)
@@ -276,19 +277,19 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
                 .i = @intCast(usize, offset),
             };
             while (decoder.next() catch {
-                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", decoder.bytes[decoder.i], decoder.i);
+                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{ decoder.bytes[decoder.i], decoder.i });
                 continue;
             }) |command| {
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
                     .jump => {
-                        const off = command.data.jump.offset.value();
+                        const off = command.data().jump.offset.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
                     .@"if" => {
-                        const off = command.data.@"if".offset.value();
+                        const off = command.data().@"if".offset.value();
                         if (off >= 0)
                             try offsets.append(off + @intCast(isize, decoder.i));
                     },
@@ -300,22 +301,22 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
 }
 
 fn printCommand(stream: var, command: var, decoder: var) !void {
-    try stream.write("\t");
+    try stream.writeAll("\t");
     try printCommandHelper(stream, command);
-    try stream.print("\t@0x{x}\n", decoder.i - try script.packedLength(command));
+    try stream.print("\t@0x{x}\n", .{decoder.i - try script.packedLength(command)});
 }
 
 fn printCommandHelper(stream: var, value: var) !void {
-    const T = @typeOf(value);
+    const T = @TypeOf(value);
 
     // Infered error sets enforce us to have to return an error somewhere. This
     // messes up with the below comptime branch selection, where some branches
     // does not return any errors.
-    try stream.write("");
+    try stream.writeAll("");
     switch (@typeInfo(T)) {
         .Void => {},
-        .Int => |i| try stream.print("{}", value),
-        .Enum => |e| try stream.print("{}", @tagName(value)),
+        .Int => |i| try stream.print("{}", .{value}),
+        .Enum => |e| try stream.print("{}", .{@tagName(value)}),
         .Struct => |s| {
             // lu16 and lu16 are seen as structs, but really they should be treated
             // the same as int values.
@@ -339,7 +340,7 @@ fn printCommandHelper(stream: var, value: var) !void {
                             @compileError("Could not find a tag for " ++ struct_field.name);
                         const tag = @field(value, tag_field);
                         const union_value = @field(value, struct_field.name);
-                        const TagEnum = @typeOf(tag);
+                        const TagEnum = @TypeOf(tag);
 
                         var found: bool = true;
                         inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
@@ -357,7 +358,7 @@ fn printCommandHelper(stream: var, value: var) !void {
                     else => try printCommandHelper(stream, @field(value, struct_field.name)),
                 }
                 if (i + 1 != s.fields.len)
-                    try stream.write(" ");
+                    try stream.writeAll(" ");
             }
         },
         else => @compileError(@typeName(T) ++ " not supported"),

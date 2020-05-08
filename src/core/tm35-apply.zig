@@ -30,9 +30,7 @@ const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 const lu128 = rom.int.lu128;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -51,53 +49,58 @@ const params = blk: {
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-apply [-ahv] [-o <FILE>] <FILE>
+    try stream.writeAll("Usage: tm35-apply ");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Applies changes to Pokémon roms.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
+/// TODO: This function actually expects an allocator that owns all the memory allocated, such
+///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
+///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
-    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var stdin = io.bufferedInStream(stdio.in);
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
+    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -105,13 +108,13 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.write("No file provided\n") catch {};
+        stdio.err.writeAll("No file provided\n") catch {};
         usage(stdio.err) catch {};
         return 1;
     };
@@ -119,13 +122,13 @@ pub fn main2(
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
-        const res = fmt.allocPrint(allocator, "{}.modified", path.basename(file_name));
+        const res = fmt.allocPrint(allocator, "{}.modified", .{path.basename(file_name)});
         break :blk res catch |err| return errors.allocErr(stdio.err);
     };
 
     var nds_rom: nds.Rom = undefined;
     var game: Game = blk: {
-        const file = fs.File.openRead(file_name) catch |err| return errors.openErr(stdio.err, file_name, err);
+        const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
@@ -134,8 +137,8 @@ pub fn main2(
 
         file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
-            stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", file_name, gen3_error) catch {};
-            stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", file_name, nds_error) catch {};
+            stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
+            stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
             return 1;
         };
 
@@ -147,9 +150,9 @@ pub fn main2(
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
-        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", file_name) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", file_name, gen4_error) catch {};
-        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", file_name, gen5_error) catch {};
+        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", .{file_name}) catch {};
+        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error }) catch {};
+        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error }) catch {};
         return 1;
     };
     defer switch (game) {
@@ -159,7 +162,7 @@ pub fn main2(
     };
 
     var line_num: usize = 1;
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
+    var line_buf = std.ArrayList(u8).init(allocator);
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
@@ -168,21 +171,16 @@ pub fn main2(
             .gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
             .gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
         } catch |err| {
-            stdio.err.print("(stdin):{}:1: warning: {}\n", line_num, @errorName(err)) catch {};
-            stdio.err.print("{}\n", line) catch {};
+            stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
+            stdio.err.print("{}\n", .{line}) catch {};
             if (abort_on_first_warning)
                 return 1;
         };
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
-    var out_file = if (replace)
-        fs.File.openWrite(out) catch |err| return errors.openErr(stdio.err, out, err)
-    else
-        fs.File.openWriteNoClobber(out, fs.File.default_mode) catch |err| return errors.createErr(stdio.err, out, err);
-    defer out_file.close();
-
-    var out_stream = &out_file.outStream().stream;
+    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return errors.createErr(stdio.err, out, err);
+    const out_stream = out_file.outStream();
     switch (game) {
         .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return errors.writeErr(stdio.err, out, err),
         .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return errors.writeErr(stdio.err, out, err),
@@ -206,11 +204,11 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, game.header.game_title))
+        if (!mem.eql(u8, value, &game.header.game_title))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, game.header.gamecode))
+        if (!mem.eql(u8, value, &game.header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
@@ -490,11 +488,11 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.data.setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data().setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.data.setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
+            static_mon.data().setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
         } else |_| if (parser.eatField("item")) {
-            static_mon.data.setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data().setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -523,19 +521,19 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
         if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, nds_rom.header.gamecode))
+        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
         const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
         game.starters[starter_index].* = value;
     } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.toSlice();
+        const trainers = game.trainers.nodes.items;
         const trainer_index = try parser.eatIndexMax(trainers.len);
         const trainer = try trainers[trainer_index].asDataFile(gen4.Trainer);
 
@@ -551,7 +549,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         } else |_| if (parser.eatField("ai")) {
             trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
         } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.toSlice();
+            const parties = game.parties.nodes.items;
             const party_index = try parser.eatIndexMax(trainer.party_size);
             const party_file = try parties[trainer_index].asFile();
             const member = trainer.partyMember(game.version, party_file.data, party_index) orelse return error.OutOfBound;
@@ -596,7 +594,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.toSlice();
+        const moves = game.moves.nodes.items;
         const move_index = try parser.eatIndexMax(moves.len);
         const move = try moves[move_index].asDataFile(gen4.Move);
 
@@ -614,7 +612,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.toSlice();
+        const pokemons = game.pokemons.nodes.items;
         const pokemon_index = try parser.eatIndexMax(pokemons.len);
         const pokemon = try pokemons[pokemon_index].asDataFile(gen4.BasePokemon);
 
@@ -694,10 +692,10 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const learnset = &pokemon.machine_learnset;
             learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len), value));
         } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.toSlice()[pokemon_index].asFile();
+            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
             const bytes = evos_file.data;
             const rem = bytes.len % @sizeOf(gen4.Evolution);
-            const evos = @bytesToSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
+            const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
 
@@ -711,10 +709,10 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             }
         } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[pokemon_index].asFile();
+            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
             const bytes = level_up_moves_file.data;
             const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
-            const level_up_moves = @bytesToSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
             const index = try parser.eatIndexMax(level_up_moves.len);
             const level_up_move = &level_up_moves[index];
             if (parser.eatField("id")) {
@@ -734,7 +732,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
     } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.toSlice();
+        const items = game.itemdata.nodes.items;
         const item_index = try parser.eatIndexMax(items.len);
         const item = try items[item_index].asDataFile(gen4.Item);
 
@@ -818,7 +816,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.toSlice();
+        const wild_pokemons = game.wild_pokemons.nodes.items;
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
         try parser.eatField("wild");
 
@@ -984,9 +982,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.data.wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data().wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.data.wild_battle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data().wild_battle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| {
             return error.NoField;
         }
@@ -1015,12 +1013,12 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
+        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
         if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, nds_rom.header.gamecode))
+        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
@@ -1028,7 +1026,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         for (game.starters[starter_index]) |starter|
             starter.* = value;
     } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.toSlice();
+        const trainers = game.trainers.nodes.items;
         const trainer_index = try parser.eatIndexMax(trainers.len);
         const trainer = try trainers[trainer_index].asDataFile(gen5.Trainer);
 
@@ -1048,7 +1046,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         } else |_| if (parser.eatField("post_battle_item")) {
             trainer.post_battle_item = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.toSlice();
+            const parties = game.parties.nodes.items;
             const party_index = try parser.eatIndexMax(trainer.party_size);
             const party_file = try parties[trainer_index].asFile();
             const member = trainer.partyMember(party_file.data, party_index) orelse return error.OutOfBound;
@@ -1095,7 +1093,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.toSlice();
+        const moves = game.moves.nodes.items;
         const move_index = try parser.eatIndexMax(moves.len);
         const move = try moves[move_index].asDataFile(gen5.Move);
 
@@ -1152,7 +1150,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.toSlice();
+        const pokemons = game.pokemons.nodes.items;
         const pokemon_index = try parser.eatIndexMax(pokemons.len);
         const pokemon = try pokemons[pokemon_index].asDataFile(gen5.BasePokemon);
 
@@ -1217,10 +1215,10 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const learnset = &pokemon.machine_learnset;
             learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len), value));
         } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.toSlice()[pokemon_index].asFile();
+            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
             const bytes = level_up_moves_file.data;
             const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-            const level_up_moves = @bytesToSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
             const index = try parser.eatIndexMax(level_up_moves.len);
             const level_up_move = &level_up_moves[index];
 
@@ -1232,10 +1230,10 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             }
         } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.toSlice()[pokemon_index].asFile();
+            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
             const bytes = evos_file.data;
             const rem = bytes.len % @sizeOf(gen5.Evolution);
-            const evos = @bytesToSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
+            const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
 
@@ -1263,7 +1261,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
     } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.toSlice();
+        const items = game.itemdata.nodes.items;
         const item_index = try parser.eatIndexMax(items.len);
         const item = try items[item_index].asDataFile(gen5.Item);
 
@@ -1351,7 +1349,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.toSlice();
+        const wild_pokemons = game.wild_pokemons.nodes.items;
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
         const wilds = try wild_pokemons[zone_index].asDataFile(gen5.WildPokemons);
         try parser.eatField("wild");
@@ -1398,9 +1396,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         const static_mon = game.static_pokemons[static_mon_index];
 
         if (parser.eatField("species")) {
-            static_mon.data.wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
+            static_mon.data().wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("level")) {
-            static_mon.data.wild_battle.level = try parser.eatUnsignedValue(u8, 10);
+            static_mon.data().wild_battle.level = try parser.eatUnsignedValue(u8, 10);
         } else |_| {
             return error.NoField;
         }

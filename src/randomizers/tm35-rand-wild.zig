@@ -15,10 +15,7 @@ const testing = std.testing;
 const errors = util.errors;
 const format = util.format;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -35,53 +32,58 @@ const params = blk: {
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-rand-wild [-htv] [-s <NUM>]
+    try stream.writeAll("Usage: tm35-rand-wild ");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Randomizes wild Pokémon encounters.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
+/// TODO: This function actually expects an allocator that owns all the memory allocated, such
+///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
+///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
-    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var stdin = io.bufferedInStream(stdio.in);
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
+    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -89,25 +91,25 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
             usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
         var buf: [8]u8 = undefined;
-        os.getrandom(buf[0..]) catch break :blk u64(0);
+        os.getrandom(buf[0..]) catch break :blk @as(u64, 0);
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
     const simular_total_stats = args.flag("--simular-total-stats");
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
+    var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
         .pokemons = Pokemons.init(allocator),
         .zones = Zones.init(allocator),
@@ -124,9 +126,9 @@ pub fn main2(
             => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
     randomize(data, seed, simular_total_stats) catch |err| return errors.randErr(stdio.err, err);
@@ -147,11 +149,11 @@ pub fn main2(
                 const pokemon = poke_kw.value;
 
                 if (pokemon.min_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", zone_i, area_name, poke_i, l) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
                 if (pokemon.max_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", zone_i, area_name, poke_i, l) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
                 if (pokemon.species) |s|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", zone_i, area_name, poke_i, s) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             }
         }
     }
@@ -257,7 +259,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
                     const poke_kv = data.pokemons.get(old_species) orelse {
-                        wild_pokemon.species = species[random.range(usize, 0, species.len)];
+                        wild_pokemon.species = species[random.intRangeLessThan(usize, 0, species.len)];
                         break :blk;
                     };
                     const pokemon = poke_kv.value;
@@ -267,7 +269,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                     var max = min;
 
                     simular.resize(0) catch unreachable;
-                    while (simular.len < 5) {
+                    while (simular.items.len < 5) {
                         min -= 5;
                         max += 5;
 
@@ -279,9 +281,9 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         }
                     }
 
-                    wild_pokemon.species = simular.toSlice()[random.range(usize, 0, simular.len)];
+                    wild_pokemon.species = simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
                 } else {
-                    wild_pokemon.species = species[random.range(usize, 0, species.len)];
+                    wild_pokemon.species = species[random.intRangeLessThan(usize, 0, species.len)];
                 }
             }
         }
@@ -289,7 +291,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
 }
 
 fn SumReturn(comptime T: type) type {
-    return switch (@typeId(T)) {
+    return switch (@typeInfo(T)) {
         .Int => u64,
         .Float => f64,
         else => unreachable,
@@ -506,7 +508,7 @@ test "tm35-rand-wild" {
         \\.zones[3].wild.grass.pokemons[3].species=0
         \\
     ;
-    util.testing.testProgram(main2, [_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.zones[3].wild.grass.pokemons[3].species=8
         \\.zones[3].wild.grass.pokemons[1].species=4
         \\.zones[3].wild.grass.pokemons[2].species=4
@@ -525,7 +527,7 @@ test "tm35-rand-wild" {
         \\.zones[0].wild.grass.pokemons[0].species=6
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
         \\.zones[3].wild.grass.pokemons[3].species=0
         \\.zones[3].wild.grass.pokemons[1].species=0
         \\.zones[3].wild.grass.pokemons[2].species=0

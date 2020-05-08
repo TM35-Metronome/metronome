@@ -188,14 +188,14 @@ pub const Parser = struct {
 
 test "peek/eat" {
     var parser = Parser{ .str = "abcd" };
-    testing.expectEqual(u8('a'), try parser.peek());
-    testing.expectEqual(u8('a'), try parser.eat());
-    testing.expectEqual(u8('b'), try parser.peek());
-    testing.expectEqual(u8('b'), try parser.eat());
-    testing.expectEqual(u8('c'), try parser.peek());
-    testing.expectEqual(u8('c'), try parser.eat());
-    testing.expectEqual(u8('d'), try parser.peek());
-    testing.expectEqual(u8('d'), try parser.eat());
+    testing.expectEqual(@as(u8, 'a'), try parser.peek());
+    testing.expectEqual(@as(u8, 'a'), try parser.eat());
+    testing.expectEqual(@as(u8, 'b'), try parser.peek());
+    testing.expectEqual(@as(u8, 'b'), try parser.eat());
+    testing.expectEqual(@as(u8, 'c'), try parser.peek());
+    testing.expectEqual(@as(u8, 'c'), try parser.eat());
+    testing.expectEqual(@as(u8, 'd'), try parser.peek());
+    testing.expectEqual(@as(u8, 'd'), try parser.eat());
     testing.expectError(error.EndOfString, parser.peek());
     testing.expectError(error.EndOfString, parser.eat());
 }
@@ -222,13 +222,13 @@ test "eatStr" {
 
 test "eatUnsigned" {
     var parser = Parser{ .str = "1234a" };
-    testing.expectEqual(usize(1234), try parser.eatUnsigned(usize, 10));
+    testing.expectEqual(@as(usize, 1234), try parser.eatUnsigned(usize, 10));
     testing.expectError(error.InvalidCharacter, parser.eatUnsigned(usize, 10));
 }
 
 test "eatUnsigned" {
     var parser = Parser{ .str = "1234a1234" };
-    testing.expectEqual(usize(1234), try parser.eatUnsignedMax(usize, 10, 10000));
+    testing.expectEqual(@as(usize, 1234), try parser.eatUnsignedMax(usize, 10, 10000));
     try parser.eatChar('a');
     testing.expectError(error.Overflow, parser.eatUnsignedMax(usize, 10, 1000));
 }
@@ -255,16 +255,16 @@ test "eatField" {
 
 test "eatIndex" {
     var parser = Parser{ .str = "[1][2]*" };
-    testing.expectEqual(usize(1), try parser.eatIndex());
-    testing.expectEqual(usize(2), try parser.eatIndex());
+    testing.expectEqual(@as(usize, 1), try parser.eatIndex());
+    testing.expectEqual(@as(usize, 2), try parser.eatIndex());
     testing.expectError(error.InvalidCharacter, parser.eatIndex());
 }
 
 test "eatIndexMax" {
     var parser = Parser{ .str = "[1][2]*" };
     testing.expectError(error.Overflow, parser.eatIndexMax(0));
-    testing.expectEqual(usize(1), try parser.eatIndexMax(2));
-    testing.expectEqual(usize(2), try parser.eatIndexMax(3));
+    testing.expectEqual(@as(usize, 1), try parser.eatIndexMax(2));
+    testing.expectEqual(@as(usize, 2), try parser.eatIndexMax(3));
     testing.expectError(error.InvalidCharacter, parser.eatIndexMax(2));
 }
 
@@ -277,14 +277,14 @@ test "eatValue" {
 
 test "eatUnsignedValue" {
     var parser = Parser{ .str = "=123" };
-    testing.expectEqual(usize(123), try parser.eatUnsignedValue(usize, 10));
+    testing.expectEqual(@as(usize, 123), try parser.eatUnsignedValue(usize, 10));
     parser = Parser{ .str = "=abc" };
     testing.expectError(error.InvalidCharacter, parser.eatUnsignedValue(usize, 10));
 }
 
 test "eatUnsignedValueMax" {
     var parser = Parser{ .str = "=123" };
-    testing.expectEqual(usize(123), try parser.eatUnsignedValueMax(usize, 10, 124));
+    testing.expectEqual(@as(usize, 123), try parser.eatUnsignedValueMax(usize, 10, 124));
     parser = Parser{ .str = "=124" };
     testing.expectError(error.Overflow, parser.eatUnsignedValueMax(usize, 10, 124));
 }

@@ -1,5 +1,8 @@
+const std = @import("std");
 const rom = @import("../rom.zig");
 const script = @import("../script.zig");
+
+const mem = std.mem;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -22,7 +25,18 @@ pub const STD_REGISTER_MATCH_CALL = 8;
 
 pub const Command = packed struct {
     tag: Kind,
-    data: extern union {
+    _data: Data,
+
+    /// HACK: Zig crashes when trying to access `_data` during code generation. This
+    ///       seem to happen because &cmd.data gives a bit aligned pointer, which then
+    ///       does not get properly handled in codegen. This function works around this
+    ///       by manually skipping the tag field to get the data field.
+    pub fn data(cmd: *Command) *Data {
+        const bytes = mem.asBytes(cmd);
+        return mem.bytesAsValue(Data, bytes[@sizeOf(Kind)..][0..@sizeOf(Data)]);
+    }
+
+    const Data = packed union {
         // Does nothing.
         nop: nop,
 
@@ -619,7 +633,7 @@ pub const Command = packed struct {
 
         // Writes the name of the specified (item) item to the specified buffer. If the specified item is a Berry (0x85 - 0xAE) or Poke Ball (0x4) and if the quantity is 2 or more, the buffered string will be pluralized ("IES" or "S" appended). If the specified item is the Enigma Berry, I have no idea what this command does (but testing showed no pluralization). If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
         bufferitemnameplural: bufferitemnameplural,
-    },
+    };
 
     pub const Kind = packed enum(u8) {
         nop = 0x00,

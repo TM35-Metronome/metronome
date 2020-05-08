@@ -186,7 +186,7 @@ pub const Trainer = extern struct {
         if (party.len < end)
             return null;
 
-        return &@bytesToSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
+        return &mem.bytesAsSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
     }
 };
 
@@ -425,11 +425,11 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
-        const info = try getInfo(nds_rom.header.game_title, nds_rom.header.gamecode);
+        const info = try getOffsets(&nds_rom.header.game_title, &nds_rom.header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
+        const hm_tms = mem.bytesAsSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
 
         const scripts = try getNarc(nds_rom.root, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
@@ -446,7 +446,7 @@ pub const Game = struct {
                 .arm9 => |offset| blk: {
                     if (nds_rom.arm9.len < offset + offsets.starters_len)
                         return error.CouldNotFindStarters;
-                    const starters_section = @bytesToSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
+                    const starters_section = mem.bytesAsSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -461,7 +461,7 @@ pub const Game = struct {
                     if (file.len < overlay.offset + offsets.starters_len)
                         return error.CouldNotFindStarters;
 
-                    const starters_section = @bytesToSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
+                    const starters_section = mem.bytesAsSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -499,8 +499,8 @@ pub const Game = struct {
         if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
-                .static_pokemons = ([*]*script.Command)(undefined)[0..0],
-                .pokeball_items = ([*]PokeballItem)(undefined)[0..0],
+                .static_pokemons = &[_]*script.Command{},
+                .pokeball_items = &[_]PokeballItem{},
             };
         }
 
@@ -512,7 +512,7 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.nodes.toSlice()) |node, script_i| {
+        for (scripts.nodes.items) |node, script_i| {
             const script_file = node.asFile() catch continue;
             const script_data = script_file.data;
             defer script_offsets.resize(0) catch unreachable;
@@ -531,8 +531,8 @@ pub const Game = struct {
             var var_8008: ?*lu16 = null;
 
             var offset_i: usize = 0;
-            while (offset_i < script_offsets.count()) : (offset_i += 1) {
-                const offset = script_offsets.at(offset_i);
+            while (offset_i < script_offsets.items.len) : (offset_i += 1) {
+                const offset = script_offsets.items[offset_i];
                 if (@intCast(isize, script_data.len) < offset)
                     return error.Error;
                 if (offset < 0)
@@ -561,10 +561,10 @@ pub const Game = struct {
                         //   SetVar 0x8008 // Item given
                         //   SetVar 0x8009 // Amount of items
                         //   Jump ???
-                        .set_var => switch (command.data.set_var.destination.value()) {
-                            0x8008 => var_8008_tmp = &command.data.set_var.value,
+                        .set_var => switch (command.data().set_var.destination.value()) {
+                            0x8008 => var_8008_tmp = &command.data().set_var.value,
                             0x8009 => if (var_8008) |item| {
-                                const amount = &command.data.set_var.value;
+                                const amount = &command.data().set_var.value;
                                 try pokeball_items.append(PokeballItem{
                                     .item = item,
                                     .amount = amount,
@@ -573,22 +573,22 @@ pub const Game = struct {
                             else => {},
                         },
                         .jump => {
-                            const off = command.data.jump.adr.value();
+                            const off = command.data().jump.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
                         .compare_last_result_jump => {
-                            const off = command.data.compare_last_result_jump.adr.value();
+                            const off = command.data().compare_last_result_jump.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
                         .call => {
-                            const off = command.data.call.adr.value();
+                            const off = command.data().call.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
                         .compare_last_result_call => {
-                            const off = command.data.compare_last_result_call.adr.value();
+                            const off = command.data().compare_last_result_call.adr.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
@@ -604,11 +604,11 @@ pub const Game = struct {
         };
     }
 
-    fn getInfo(game_title: []const u8, gamecode: []const u8) !offsets.Info {
+    fn getOffsets(game_title: []const u8, gamecode: []const u8) !offsets.Info {
         for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))
             //    continue;
-            if (!mem.eql(u8, info.gamecode, gamecode))
+            if (!mem.eql(u8, &info.gamecode, gamecode))
                 continue;
 
             return info;

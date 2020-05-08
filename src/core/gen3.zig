@@ -45,7 +45,7 @@ pub fn Ptr(comptime T: type) type {
         pub fn toSlice(ptr: Self, data: []u8, len: u32) ![]T {
             if (ptr.isNull()) {
                 if (len == 0)
-                    return @bytesToSlice(T, data[0..0]);
+                    return &[_]T{};
 
                 return error.InvalidPointer;
             }
@@ -66,7 +66,7 @@ pub fn Ptr(comptime T: type) type {
             const start = try ptr.toInt();
             const byte_len = data.len - start;
             const len = byte_len - (byte_len % @sizeOf(T));
-            return @bytesToSlice(T, data[start..][0..len]);
+            return mem.bytesAsSlice(T, data[start..][0..len]);
         }
 
         /// Slice 'data' from 'ptr' to the first item where 'isTerm'
@@ -606,14 +606,13 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
-        var file_in_stream = file.inStream();
-        var in_stream = &file_in_stream.stream;
+        const in_stream = file.inStream();
 
         const header = try in_stream.readStruct(gba.Header);
         try header.validate();
         try file.seekTo(0);
 
-        const info = try getInfo(header.game_title, header.gamecode);
+        const info = try getOffsets(&header.game_title, &header.gamecode);
         const size = try file.getEndPos();
 
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
@@ -635,22 +634,24 @@ pub const Game = struct {
             static_pokemons: std.ArrayList(*script.Command),
             pokeball_items: std.ArrayList(PokeballItem),
 
-            fn processCommand(data: *@This(), command: *script.Command) !void {
-                if (command.tag == .setwildbattle)
-                    try data.static_pokemons.append(command);
-                if (command.tag == .setorcopyvar) {
-                    if (command.data.setorcopyvar.destination.value() == 0x8000)
-                        data.VAR_0x8000 = &command.data.setorcopyvar.source;
-                    if (command.data.setorcopyvar.destination.value() == 0x8001)
-                        data.VAR_0x8001 = &command.data.setorcopyvar.source;
+            fn processCommand(script_data: *@This(), command: *script.Command) !void {
+                const tag = command.tag;
+                const data = command.data();
+                if (tag == .setwildbattle)
+                    try script_data.static_pokemons.append(command);
+                if (tag == .setorcopyvar) {
+                    if (data.setorcopyvar.destination.value() == 0x8000)
+                        script_data.VAR_0x8000 = &data.setorcopyvar.source;
+                    if (data.setorcopyvar.destination.value() == 0x8001)
+                        script_data.VAR_0x8001 = &data.setorcopyvar.source;
                 }
-                if (command.tag == .callstd and
-                    (command.data.callstd.function == script.STD_OBTAIN_ITEM or
-                    command.data.callstd.function == script.STD_FIND_ITEM))
-                blk: {
-                    try data.pokeball_items.append(PokeballItem{
-                        .item = data.VAR_0x8000 orelse break :blk,
-                        .amount = data.VAR_0x8001 orelse break :blk,
+                if (tag == .callstd and
+                    (data.callstd.function == script.STD_OBTAIN_ITEM or
+                    data.callstd.function == script.STD_FIND_ITEM))
+                {
+                    try script_data.pokeball_items.append(PokeballItem{
+                        .item = script_data.VAR_0x8000 orelse return,
+                        .amount = script_data.VAR_0x8001 orelse return,
                     });
                 }
             }
@@ -734,7 +735,7 @@ pub const Game = struct {
 
     pub fn writeToStream(game: Game, out_stream: var) !void {
         try game.header.validate();
-        try out_stream.write(game.data);
+        try out_stream.writeAll(game.data);
     }
 
     pub fn deinit(game: *Game) void {
@@ -744,11 +745,11 @@ pub const Game = struct {
         game.* = undefined;
     }
 
-    fn getInfo(game_title: []const u8, gamecode: []const u8) !offsets.Info {
+    fn getOffsets(game_title: []const u8, gamecode: []const u8) !offsets.Info {
         for (offsets.infos) |info| {
-            if (!mem.eql(u8, info.game_title, game_title))
+            if (!mem.eql(u8, &info.game_title, game_title))
                 continue;
-            if (!mem.eql(u8, info.gamecode, gamecode))
+            if (!mem.eql(u8, &info.gamecode, gamecode))
                 continue;
 
             return info;

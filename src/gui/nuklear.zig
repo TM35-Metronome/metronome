@@ -116,7 +116,7 @@ pub fn buttons(ctx: *Context, alignment: Align, width: f32, height: f32, buttons
     c.nk_layout_row_template_end(ctx);
 
     if (alignment == .right)
-        c.nk_label(ctx, c"", TEXT_LEFT);
+        c.nk_label(ctx, "", c.NK_TEXT_LEFT);
 
     var res: usize = no_button_clicked;
     for (buttons_) |but, i| {
@@ -125,88 +125,10 @@ pub fn buttons(ctx: *Context, alignment: Align, width: f32, height: f32, buttons
     }
 
     if (alignment == .left)
-        c.nk_label(ctx, c"", TEXT_LEFT);
+        c.nk_label(ctx, "", c.NK_TEXT_LEFT);
 
     return res;
 }
-
-// Nuklear functions
-pub const TEXT_ALIGN_LEFT = @enumToInt(c.NK_TEXT_ALIGN_LEFT);
-pub const TEXT_ALIGN_CENTERED = @enumToInt(c.NK_TEXT_ALIGN_CENTERED);
-pub const TEXT_ALIGN_RIGHT = @enumToInt(c.NK_TEXT_ALIGN_RIGHT);
-pub const TEXT_ALIGN_TOP = @enumToInt(c.NK_TEXT_ALIGN_TOP);
-pub const TEXT_ALIGN_MIDDLE = @enumToInt(c.NK_TEXT_ALIGN_MIDDLE);
-pub const TEXT_ALIGN_BOTTOM = @enumToInt(c.NK_TEXT_ALIGN_BOTTOM);
-pub const TEXT_LEFT = @enumToInt(c.NK_TEXT_LEFT);
-pub const TEXT_CENTERED = @enumToInt(c.NK_TEXT_CENTERED);
-pub const TEXT_RIGHT = @enumToInt(c.NK_TEXT_RIGHT);
-
-pub const WINDOW_BORDER = @enumToInt(c.NK_WINDOW_BORDER);
-pub const WINDOW_MOVABLE = @enumToInt(c.NK_WINDOW_MOVABLE);
-pub const WINDOW_SCALABLE = @enumToInt(c.NK_WINDOW_SCALABLE);
-pub const WINDOW_CLOSABLE = @enumToInt(c.NK_WINDOW_CLOSABLE);
-pub const WINDOW_MINIMIZABLE = @enumToInt(c.NK_WINDOW_MINIMIZABLE);
-pub const WINDOW_NO_SCROLLBAR = @enumToInt(c.NK_WINDOW_NO_SCROLLBAR);
-pub const WINDOW_TITLE = @enumToInt(c.NK_WINDOW_TITLE);
-pub const WINDOW_SCROLL_AUTO_HIDE = @enumToInt(c.NK_WINDOW_SCROLL_AUTO_HIDE);
-pub const WINDOW_BACKGROUND = @enumToInt(c.NK_WINDOW_BACKGROUND);
-pub const WINDOW_SCALE_LEFT = @enumToInt(c.NK_WINDOW_SCALE_LEFT);
-pub const WINDOW_NO_INPUT = @enumToInt(c.NK_WINDOW_NO_INPUT);
-
-pub const EDIT_DEFAULT = @enumToInt(c.NK_EDIT_DEFAULT);
-pub const EDIT_READ_ONLY = @enumToInt(c.NK_EDIT_READ_ONLY);
-pub const EDIT_AUTO_SELECT = @enumToInt(c.NK_EDIT_AUTO_SELECT);
-pub const EDIT_SIG_ENTER = @enumToInt(c.NK_EDIT_SIG_ENTER);
-pub const EDIT_ALLOW_TAB = @enumToInt(c.NK_EDIT_ALLOW_TAB);
-pub const EDIT_NO_CURSOR = @enumToInt(c.NK_EDIT_NO_CURSOR);
-pub const EDIT_SELECTABLE = @enumToInt(c.NK_EDIT_SELECTABLE);
-pub const EDIT_CLIPBOARD = @enumToInt(c.NK_EDIT_CLIPBOARD);
-pub const EDIT_CTRL_ENTER_NEWLINE = @enumToInt(c.NK_EDIT_CTRL_ENTER_NEWLINE);
-pub const EDIT_NO_HORIZONTAL_SCROLL = @enumToInt(c.NK_EDIT_NO_HORIZONTAL_SCROLL);
-pub const EDIT_ALWAYS_INSERT_MODE = @enumToInt(c.NK_EDIT_ALWAYS_INSERT_MODE);
-pub const EDIT_MULTILINE = @enumToInt(c.NK_EDIT_MULTILINE);
-pub const EDIT_GOTO_END_ON_ACTIVATE = @enumToInt(c.NK_EDIT_GOTO_END_ON_ACTIVATE);
-
-pub const EDIT_SIMPLE = @enumToInt(c.NK_EDIT_SIMPLE);
-pub const EDIT_FIELD = @enumToInt(c.NK_EDIT_FIELD);
-pub const EDIT_BOX = @enumToInt(c.NK_EDIT_BOX);
-pub const EDIT_EDITOR = @enumToInt(c.NK_EDIT_EDITOR);
-
-pub const EDIT_ACTIVE = @enumToInt(c.NK_EDIT_ACTIVE);
-pub const EDIT_INACTIVE = @enumToInt(c.NK_EDIT_INACTIVE);
-pub const EDIT_ACTIVATED = @enumToInt(c.NK_EDIT_ACTIVATED);
-pub const EDIT_DEACTIVATED = @enumToInt(c.NK_EDIT_DEACTIVATED);
-pub const EDIT_COMMITED = @enumToInt(c.NK_EDIT_COMMITED);
-
-pub const COLOR_TEXT = @enumToInt(c.NK_COLOR_TEXT);
-pub const COLOR_WINDOW = @enumToInt(c.NK_COLOR_WINDOW);
-pub const COLOR_HEADER = @enumToInt(c.NK_COLOR_HEADER);
-pub const COLOR_BORDER = @enumToInt(c.NK_COLOR_BORDER);
-pub const COLOR_BUTTON = @enumToInt(c.NK_COLOR_BUTTON);
-pub const COLOR_BUTTON_HOVER = @enumToInt(c.NK_COLOR_BUTTON_HOVER);
-pub const COLOR_BUTTON_ACTIVE = @enumToInt(c.NK_COLOR_BUTTON_ACTIVE);
-pub const COLOR_TOGGLE = @enumToInt(c.NK_COLOR_TOGGLE);
-pub const COLOR_TOGGLE_HOVER = @enumToInt(c.NK_COLOR_TOGGLE_HOVER);
-pub const COLOR_TOGGLE_CURSOR = @enumToInt(c.NK_COLOR_TOGGLE_CURSOR);
-pub const COLOR_SELECT = @enumToInt(c.NK_COLOR_SELECT);
-pub const COLOR_SELECT_ACTIVE = @enumToInt(c.NK_COLOR_SELECT_ACTIVE);
-pub const COLOR_SLIDER = @enumToInt(c.NK_COLOR_SLIDER);
-pub const COLOR_SLIDER_CURSOR = @enumToInt(c.NK_COLOR_SLIDER_CURSOR);
-pub const COLOR_SLIDER_CURSOR_HOVER = @enumToInt(c.NK_COLOR_SLIDER_CURSOR_HOVER);
-pub const COLOR_SLIDER_CURSOR_ACTIVE = @enumToInt(c.NK_COLOR_SLIDER_CURSOR_ACTIVE);
-pub const COLOR_PROPERTY = @enumToInt(c.NK_COLOR_PROPERTY);
-pub const COLOR_EDIT = @enumToInt(c.NK_COLOR_EDIT);
-pub const COLOR_EDIT_CURSOR = @enumToInt(c.NK_COLOR_EDIT_CURSOR);
-pub const COLOR_COMBO = @enumToInt(c.NK_COLOR_COMBO);
-pub const COLOR_CHART = @enumToInt(c.NK_COLOR_CHART);
-pub const COLOR_CHART_COLOR = @enumToInt(c.NK_COLOR_CHART_COLOR);
-pub const COLOR_CHART_COLOR_HIGHLIGHT = @enumToInt(c.NK_COLOR_CHART_COLOR_HIGHLIGHT);
-pub const COLOR_SCROLLBAR = @enumToInt(c.NK_COLOR_SCROLLBAR);
-pub const COLOR_SCROLLBAR_CURSOR = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR);
-pub const COLOR_SCROLLBAR_CURSOR_HOVER = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR_HOVER);
-pub const COLOR_SCROLLBAR_CURSOR_ACTIVE = @enumToInt(c.NK_COLOR_SCROLLBAR_CURSOR_ACTIVE);
-pub const COLOR_TAB_HEADER = @enumToInt(c.NK_COLOR_TAB_HEADER);
-pub const COLOR_COUNT = @enumToInt(c.NK_COLOR_COUNT);
 
 pub const Context = c.nk_context;
 pub const Rect = c.struct_nk_rect;

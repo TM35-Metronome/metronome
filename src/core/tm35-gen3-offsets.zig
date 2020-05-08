@@ -27,9 +27,7 @@ const lu64 = rom.int.lu64;
 const TypeId = builtin.TypeId;
 const TypeInfo = builtin.TypeInfo;
 
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -42,53 +40,54 @@ const params = [_]Param{
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-gen3-offsets [-hv] <FILE>...
-        \\Finds the offsets to data in generation 3 Pokemon roms.
+    try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
+        \\Finds all scripts in a generation 3 Pokemon game, disassembles them
+        \\and writes them to stdout.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
-    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -96,23 +95,20 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     for (args.positionals()) |file_name, i| {
-        var arena = heap.ArenaAllocator.init(heap.direct_allocator);
-        defer arena.deinit();
-
-        const arena_allocator = &arena.allocator;
-        const data = io.readFileAlloc(arena_allocator, file_name) catch |err| return errors.readErr(stdio.err, file_name, err);
+        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return errors.readErr(stdio.err, file_name, err);
+        defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
-            return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", file_name, error.FileToSmall);
+            return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, error.FileToSmall });
 
-        const header = @bytesToSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = getVersion(header.gamecode) catch |err| return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", file_name, err);
-        const info_err = getInfo(data, version, header.gamecode, header.game_title, header.software_version);
-        const info = info_err catch |err| return errors.err(stdio.err, "Failed to get offsets from '{}': {}\n", file_name, err);
+        const header = mem.bytesAsSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
+        const version = getVersion(&header.gamecode) catch |err| return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, err });
+        const info_err = getOffsets(data, version, header.gamecode, header.game_title, header.software_version);
+        const info = info_err catch |err| return errors.err(stdio.err, "Failed to get offsets from '{}': {}\n", .{ file_name, err });
         outputInfo(stdio.out, i, info) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
     }
 
@@ -120,32 +116,32 @@ pub fn main2(
 }
 
 fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
-    try stream.print(".game[{}].game_title={}\n", i, info.game_title);
-    try stream.print(".game[{}].gamecode={}\n", i, info.gamecode);
-    try stream.print(".game[{}].version={}\n", i, @tagName(info.version));
-    try stream.print(".game[{}].software_version={}\n", i, info.software_version);
-    try stream.print(".game[{}].trainers.start={}\n", i, info.trainers.start);
-    try stream.print(".game[{}].trainers.len={}\n", i, info.trainers.len);
-    try stream.print(".game[{}].moves.start={}\n", i, info.moves.start);
-    try stream.print(".game[{}].moves.len={}\n", i, info.moves.len);
-    try stream.print(".game[{}].machine_learnsets.start={}\n", i, info.machine_learnsets.start);
-    try stream.print(".game[{}].machine_learnsets.len={}\n", i, info.machine_learnsets.len);
-    try stream.print(".game[{}].pokemons.start={}\n", i, info.pokemons.start);
-    try stream.print(".game[{}].pokemons.len={}\n", i, info.pokemons.len);
-    try stream.print(".game[{}].evolutions.start={}\n", i, info.evolutions.start);
-    try stream.print(".game[{}].evolutions.len={}\n", i, info.evolutions.len);
-    try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", i, info.level_up_learnset_pointers.start);
-    try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", i, info.level_up_learnset_pointers.len);
-    try stream.print(".game[{}].hms.start={}\n", i, info.hms.start);
-    try stream.print(".game[{}].hms.len={}\n", i, info.hms.len);
-    try stream.print(".game[{}].tms.start={}\n", i, info.tms.start);
-    try stream.print(".game[{}].tms.len={}\n", i, info.tms.len);
-    try stream.print(".game[{}].items.start={}\n", i, info.items.start);
-    try stream.print(".game[{}].items.len={}\n", i, info.items.len);
-    try stream.print(".game[{}].wild_pokemon_headers.start={}\n", i, info.wild_pokemon_headers.start);
-    try stream.print(".game[{}].wild_pokemon_headers.len={}\n", i, info.wild_pokemon_headers.len);
-    try stream.print(".game[{}].map_headers.start={}\n", i, info.map_headers.start);
-    try stream.print(".game[{}].map_headers.len={}\n", i, info.map_headers.len);
+    try stream.print(".game[{}].game_title={}\n", .{ i, info.game_title });
+    try stream.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
+    try stream.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
+    try stream.print(".game[{}].software_version={}\n", .{ i, info.software_version });
+    try stream.print(".game[{}].trainers.start={}\n", .{ i, info.trainers.start });
+    try stream.print(".game[{}].trainers.len={}\n", .{ i, info.trainers.len });
+    try stream.print(".game[{}].moves.start={}\n", .{ i, info.moves.start });
+    try stream.print(".game[{}].moves.len={}\n", .{ i, info.moves.len });
+    try stream.print(".game[{}].machine_learnsets.start={}\n", .{ i, info.machine_learnsets.start });
+    try stream.print(".game[{}].machine_learnsets.len={}\n", .{ i, info.machine_learnsets.len });
+    try stream.print(".game[{}].pokemons.start={}\n", .{ i, info.pokemons.start });
+    try stream.print(".game[{}].pokemons.len={}\n", .{ i, info.pokemons.len });
+    try stream.print(".game[{}].evolutions.start={}\n", .{ i, info.evolutions.start });
+    try stream.print(".game[{}].evolutions.len={}\n", .{ i, info.evolutions.len });
+    try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", .{ i, info.level_up_learnset_pointers.start });
+    try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", .{ i, info.level_up_learnset_pointers.len });
+    try stream.print(".game[{}].hms.start={}\n", .{ i, info.hms.start });
+    try stream.print(".game[{}].hms.len={}\n", .{ i, info.hms.len });
+    try stream.print(".game[{}].tms.start={}\n", .{ i, info.tms.start });
+    try stream.print(".game[{}].tms.len={}\n", .{ i, info.tms.len });
+    try stream.print(".game[{}].items.start={}\n", .{ i, info.items.start });
+    try stream.print(".game[{}].items.len={}\n", .{ i, info.items.len });
+    try stream.print(".game[{}].wild_pokemon_headers.start={}\n", .{ i, info.wild_pokemon_headers.start });
+    try stream.print(".game[{}].wild_pokemon_headers.len={}\n", .{ i, info.wild_pokemon_headers.len });
+    try stream.print(".game[{}].map_headers.start={}\n", .{ i, info.map_headers.start });
+    try stream.print(".game[{}].map_headers.len={}\n", .{ i, info.map_headers.len });
 }
 
 fn getVersion(gamecode: []const u8) !common.Version {
@@ -163,7 +159,7 @@ fn getVersion(gamecode: []const u8) !common.Version {
     return error.UnknownPokemonVersion;
 }
 
-fn getInfo(
+fn getOffsets(
     data: []const u8,
     version: common.Version,
     gamecode: [4]u8,
@@ -171,57 +167,57 @@ fn getInfo(
     software_version: u8,
 ) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons
-    const trainer_searcher = Searcher(gen3.Trainer, [_][]const []const u8{
-        [_][]const u8{"party"},
-        [_][]const u8{"name"},
+    const trainer_searcher = Searcher(gen3.Trainer, &[_][]const []const u8{
+        &[_][]const u8{"party"},
+        &[_][]const u8{"name"},
     }){ .data = data };
     const trainers = switch (version) {
         .emerald => trainer_searcher.findSlice3(
-            em_first_trainers,
-            em_last_trainers,
+            &em_first_trainers,
+            &em_last_trainers,
         ),
         .ruby, .sapphire => trainer_searcher.findSlice3(
-            rs_first_trainers,
-            rs_last_trainers,
+            &rs_first_trainers,
+            &rs_last_trainers,
         ),
         .fire_red, .leaf_green => trainer_searcher.findSlice3(
-            frls_first_trainers,
-            frls_last_trainers,
+            &frls_first_trainers,
+            &frls_last_trainers,
         ),
         else => null,
     } orelse return error.UnableToFindTrainerOffset;
 
-    const move_searcher = Searcher(gen3.Move, [_][]const []const u8{}){ .data = data };
+    const move_searcher = Searcher(gen3.Move, &[_][]const []const u8{}){ .data = data };
     const moves = move_searcher.findSlice3(
-        first_moves,
-        last_moves,
+        &first_moves,
+        &last_moves,
     ) orelse return error.UnableToFindMoveOffset;
 
-    const machine_searcher = Searcher(lu64, [_][]const []const u8{}){ .data = data };
+    const machine_searcher = Searcher(lu64, &[_][]const []const u8{}){ .data = data };
     const machine_learnset = machine_searcher.findSlice3(
-        first_machine_learnsets,
-        last_machine_learnsets,
+        &first_machine_learnsets,
+        &last_machine_learnsets,
     ) orelse return error.UnableToFindTmHmLearnsetOffset;
 
-    const pokemons_searcher = Searcher(gen3.BasePokemon, [_][]const []const u8{
-        [_][]const u8{"padding"},
-        [_][]const u8{"egg_group1_pad"},
-        [_][]const u8{"egg_group2_pad"},
+    const pokemons_searcher = Searcher(gen3.BasePokemon, &[_][]const []const u8{
+        &[_][]const u8{"padding"},
+        &[_][]const u8{"egg_group1_pad"},
+        &[_][]const u8{"egg_group2_pad"},
     }){ .data = data };
     const pokemons = pokemons_searcher.findSlice3(
-        first_pokemons,
-        last_pokemons,
+        &first_pokemons,
+        &last_pokemons,
     ) orelse return error.UnableToFindBaseStatsOffset;
 
-    const evolution_searcher = Searcher([5]gen3.Evolution, [_][]const []const u8{[_][]const u8{"padding"}}){ .data = data };
+    const evolution_searcher = Searcher([5]gen3.Evolution, &[_][]const []const u8{&[_][]const u8{"padding"}}){ .data = data };
     const evolution_table = evolution_searcher.findSlice3(
-        first_evolutions,
-        last_evolutions,
+        &first_evolutions,
+        &last_evolutions,
     ) orelse return error.UnableToFindEvolutionTableOffset;
 
     const level_up_learnset_pointers = blk: {
         const level_upRef = gen3.Ptr(gen3.LevelUpMove);
-        const level_up_searcher = Searcher(u8, [_][]const []const u8{}){ .data = data };
+        const level_up_searcher = Searcher(u8, &[_][]const []const u8{}){ .data = data };
 
         var first_pointers: [first_levelup_learnsets.len]level_upRef = undefined;
         for (first_levelup_learnsets) |learnset, i| {
@@ -237,87 +233,87 @@ fn getInfo(
             last_pointers[i] = try level_upRef.init(@intCast(u32, offset));
         }
 
-        const pointer_searcher = Searcher(level_upRef, [_][]const []const u8{}){ .data = data };
-        break :blk pointer_searcher.findSlice3(first_pointers, last_pointers) orelse return error.UnableToFindlevel_upLearnsetOffset;
+        const pointer_searcher = Searcher(level_upRef, &[_][]const []const u8{}){ .data = data };
+        break :blk pointer_searcher.findSlice3(&first_pointers, &last_pointers) orelse return error.UnableToFindlevel_upLearnsetOffset;
     };
 
-    const hm_tm_searcher = Searcher(lu16, [_][]const []const u8{}){ .data = data };
-    const hms_slice = hm_tm_searcher.findSlice(hms) orelse return error.UnableToFindHmOffset;
+    const hm_tm_searcher = Searcher(lu16, &[_][]const []const u8{}){ .data = data };
+    const hms_slice = hm_tm_searcher.findSlice(&hms) orelse return error.UnableToFindHmOffset;
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
     //       if it turns out that both tables are actually used. For now, I'll
     //       assume that the first table is the only one used.
-    const tms_slice = hm_tm_searcher.findSlice(tms) orelse return error.UnableToFindTmOffset;
+    const tms_slice = hm_tm_searcher.findSlice(&tms) orelse return error.UnableToFindTmOffset;
 
-    const items_searcher = Searcher(gen3.Item, [_][]const []const u8{
-        [_][]const u8{"name"},
-        [_][]const u8{"description"},
-        [_][]const u8{"field_use_func"},
-        [_][]const u8{"battle_use_func"},
+    const items_searcher = Searcher(gen3.Item, &[_][]const []const u8{
+        &[_][]const u8{"name"},
+        &[_][]const u8{"description"},
+        &[_][]const u8{"field_use_func"},
+        &[_][]const u8{"battle_use_func"},
     }){ .data = data };
     const items = switch (version) {
         .emerald => items_searcher.findSlice3(
-            em_first_items,
-            em_last_items,
+            &em_first_items,
+            &em_last_items,
         ),
         .ruby, .sapphire => items_searcher.findSlice3(
-            rs_first_items,
-            rs_last_items,
+            &rs_first_items,
+            &rs_last_items,
         ),
         .fire_red, .leaf_green => items_searcher.findSlice3(
-            frlg_first_items,
-            frlg_last_items,
+            &frlg_first_items,
+            &frlg_last_items,
         ),
         else => null,
     } orelse return error.UnableToFindItemsOffset;
 
-    const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, [_][]const []const u8{
-        [_][]const u8{"pad"},
-        [_][]const u8{"land"},
-        [_][]const u8{"surf"},
-        [_][]const u8{"rock_smash"},
-        [_][]const u8{"fishing"},
+    const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, &[_][]const []const u8{
+        &[_][]const u8{"pad"},
+        &[_][]const u8{"land"},
+        &[_][]const u8{"surf"},
+        &[_][]const u8{"rock_smash"},
+        &[_][]const u8{"fishing"},
     }){ .data = data };
     const maybe_wild_pokemon_headers = switch (version) {
         .emerald => wild_pokemon_headers_searcher.findSlice3(
-            em_first_wild_mon_headers,
-            em_last_wild_mon_headers,
+            &em_first_wild_mon_headers,
+            &em_last_wild_mon_headers,
         ),
         .ruby, .sapphire => wild_pokemon_headers_searcher.findSlice3(
-            rs_first_wild_mon_headers,
-            rs_last_wild_mon_headers,
+            &rs_first_wild_mon_headers,
+            &rs_last_wild_mon_headers,
         ),
         .fire_red, .leaf_green => wild_pokemon_headers_searcher.findSlice3(
-            frlg_first_wild_mon_headers,
-            frlg_last_wild_mon_headers,
+            &frlg_first_wild_mon_headers,
+            &frlg_last_wild_mon_headers,
         ),
         else => null,
     };
     const wild_pokemon_headers = maybe_wild_pokemon_headers orelse return error.UnableToFindWildPokemonHeaders;
 
-    const map_header_searcher = Searcher(gen3.MapHeader, [_][]const []const u8{
-        [_][]const u8{"map_data"},
-        [_][]const u8{"map_events"},
-        [_][]const u8{"map_scripts"},
-        [_][]const u8{"map_connections"},
-        [_][]const u8{"pad"},
+    const map_header_searcher = Searcher(gen3.MapHeader, &[_][]const []const u8{
+        &[_][]const u8{"map_data"},
+        &[_][]const u8{"map_events"},
+        &[_][]const u8{"map_scripts"},
+        &[_][]const u8{"map_connections"},
+        &[_][]const u8{"pad"},
     }){ .data = data };
     const maybe_map_headers = switch (version) {
         .ruby,
         .sapphire,
         => map_header_searcher.findSlice3(
-            rs_first_map_headers,
-            rs_last_map_headers,
+            &rs_first_map_headers,
+            &rs_last_map_headers,
         ),
         .emerald => map_header_searcher.findSlice3(
-            em_first_map_headers,
-            em_last_map_headers,
+            &em_first_map_headers,
+            &em_last_map_headers,
         ),
         .fire_red,
         .leaf_green,
         => map_header_searcher.findSlice3(
-            frlg_first_map_headers,
-            frlg_last_map_headers,
+            &frlg_first_map_headers,
+            &frlg_last_map_headers,
         ),
         else => null,
     };
@@ -352,16 +348,16 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
         data: []const u8,
 
         pub fn find(searcher: @This(), item: T) ?*const T {
-            const slice = searcher.findSlice([_]T{item}) orelse return null;
+            const slice = searcher.findSlice(&[_]T{item}) orelse return null;
             return &slice[0];
         }
 
         pub fn findSlice(searcher: @This(), items: []const T) ?[]const T {
-            return searcher.findSlice3(items, [_]T{});
+            return searcher.findSlice3(items, &[_]T{});
         }
 
         pub fn findSlice2(searcher: @This(), start: T, end: T) ?[]const T {
-            return searcher.findSlice3([_]T{start}, [_]T{end}) orelse return null;
+            return searcher.findSlice3(&[_]T{start}, &[_]T{end}) orelse return null;
         }
 
         pub fn findSlice3(searcher: @This(), start: []const T, end: []const T) ?[]const T {
@@ -385,14 +381,18 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
             const end = searcher.data.len - bytes;
             next: while (i <= end) : (i += skip) {
                 const data_slice = searcher.data[i .. i + bytes];
-                const data_items = @bytesToSlice(T, data_slice);
+                const data_items = mem.bytesAsSlice(T, data_slice);
                 for (items) |item_a, j| {
                     const item_b = data_items[j];
                     if (!matches(T, ignored_fields, item_a, item_b))
                         continue :next;
                 }
 
-                return data_items;
+                // HACK: mem.bytesAsSlice does not return a pointer to the original data, if
+                //       the length of the data passed in is 0. I need the pointer to point into
+                //       `data_slice` so I bypass `data_items` here. I feel like this is a design
+                //       mistake by the Zig `std`.
+                return @ptrCast([*]const T, data_slice.ptr)[0..data_items.len];
             }
 
             return null;
@@ -442,7 +442,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
         },
         .Struct => |struct_info| {
             const next_ignored = comptime blk: {
-                var res: []const []const []const u8 = [_][]const []const u8{};
+                var res: []const []const []const u8 = &[_][]const []const u8{};
                 for (ignored_fields) |fields| {
                     if (fields.len > 1)
                         res = res ++ fields[1..];
@@ -483,16 +483,16 @@ test "searcher.Searcher.find" {
         a: u16,
         b: u32,
     };
-    const s_array = [_]S{
+    const s_array = &[_]S{
         S{ .a = 0, .b = 1 },
         S{ .a = 2, .b = 3 },
     };
-    const s_byte_array = @sliceToBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"a"},
+    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"a"},
     }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"b"},
+    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"b"},
     }){ .data = s_byte_array };
 
     const search_for = S{ .a = 0, .b = 3 };
@@ -505,32 +505,32 @@ test "searcher.Searcher.findSlice" {
         a: u16,
         b: u32,
     };
-    const s_array = [_]S{
+    const s_array = &[_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
     };
-    const s_byte_array = @sliceToBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"a"},
+    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"a"},
     }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"b"},
+    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"b"},
     }){ .data = s_byte_array };
 
-    const search_for = [_]S{
+    const search_for = &[_]S{
         S{ .a = 4, .b = 3 },
         S{ .a = 0, .b = 1 },
     };
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[1..3]),
-        @sliceToBytes(s_searcher1.findSlice(search_for).?),
+        mem.sliceAsBytes(s_array[1..3]),
+        mem.sliceAsBytes(s_searcher1.findSlice(search_for).?),
     );
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[0..2]),
-        @sliceToBytes(s_searcher2.findSlice(search_for).?),
+        mem.sliceAsBytes(s_array[0..2]),
+        mem.sliceAsBytes(s_searcher2.findSlice(search_for).?),
     );
 }
 
@@ -539,31 +539,31 @@ test "searcher.Searcher.findSlice2" {
         a: u16,
         b: u32,
     };
-    const s_array = [_]S{
+    const s_array = &[_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
     };
-    const s_byte_array = @sliceToBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"a"},
+    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"a"},
     }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"b"},
+    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"b"},
     }){ .data = s_byte_array };
 
     const a = S{ .a = 4, .b = 3 };
     const b = S{ .a = 4, .b = 3 };
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[1..4]),
-        @sliceToBytes(s_searcher1.findSlice2(a, b).?),
+        mem.sliceAsBytes(s_array[1..4]),
+        mem.sliceAsBytes(s_searcher1.findSlice2(a, b).?),
     );
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[0..3]),
-        @sliceToBytes(s_searcher2.findSlice2(a, b).?),
+        mem.sliceAsBytes(s_array[0..3]),
+        mem.sliceAsBytes(s_searcher2.findSlice2(a, b).?),
     );
 }
 
@@ -572,7 +572,7 @@ test "searcher.Searcher.findSlice3" {
         a: u16,
         b: u32,
     };
-    const s_array = [_]S{
+    const s_array = &[_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
@@ -580,31 +580,31 @@ test "searcher.Searcher.findSlice3" {
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
     };
-    const s_byte_array = @sliceToBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"a"},
+    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
+    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"a"},
     }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, [_][]const []const u8{
-        [_][]const u8{"b"},
+    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+        &[_][]const u8{"b"},
     }){ .data = s_byte_array };
 
-    const a = [_]S{
+    const a = &[_]S{
         S{ .a = 4, .b = 3 },
         S{ .a = 0, .b = 1 },
     };
-    const b = [_]S{
+    const b = &[_]S{
         S{ .a = 0, .b = 1 },
         S{ .a = 4, .b = 3 },
     };
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[1..6]),
-        @sliceToBytes(s_searcher1.findSlice3(a, b).?),
+        mem.sliceAsBytes(s_array[1..6]),
+        mem.sliceAsBytes(s_searcher1.findSlice3(a, b).?),
     );
     testing.expectEqualSlices(
         u8,
-        @sliceToBytes(s_array[0..5]),
-        @sliceToBytes(s_searcher2.findSlice3(a, b).?),
+        mem.sliceAsBytes(s_array[0..5]),
+        mem.sliceAsBytes(s_searcher2.findSlice3(a, b).?),
     );
 }
 
@@ -954,7 +954,7 @@ gen3.BasePokemon{
 }};
 
 fn percentFemale(percent: f64) u8 {
-    return @floatToInt(u8, math.min(f64(254), (percent * 255) / 100));
+    return @floatToInt(u8, math.min(@as(f64, 254), (percent * 255) / 100));
 }
 
 const unused_evo = gen3.Evolution{
@@ -1050,23 +1050,23 @@ const last_evolutions = [_][5]gen3.Evolution{
 
 const first_levelup_learnsets = [_][]const u8{
     // Dummy mon have same moves as Bulbasaur
-    [_]u8{
+    &[_]u8{
         0x21, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E,
         0x4B, 0x28, 0xE6, 0x32, 0x4A, 0x40, 0xEB, 0x4E, 0x4C, 0x5C, 0xFF, 0xFF,
     },
     // Bulbasaur
-    [_]u8{
+    &[_]u8{
         0x21, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E,
         0x4B, 0x28, 0xE6, 0x32, 0x4A, 0x40, 0xEB, 0x4E, 0x4C, 0x5C, 0xFF, 0xFF,
     },
     // Ivysaur
-    [_]u8{
+    &[_]u8{
         0x21, 0x02, 0x2D, 0x02, 0x49, 0x02, 0x2D, 0x08, 0x49, 0x0E, 0x16, 0x14,
         0x4D, 0x1E, 0x4F, 0x1E, 0x4B, 0x2C, 0xE6, 0x3A, 0x4A, 0x4C, 0xEB, 0x5E,
         0x4C, 0x70, 0xFF, 0xFF,
     },
     // Venusaur
-    [_]u8{
+    &[_]u8{
         0x21, 0x02, 0x2D, 0x02, 0x49, 0x02, 0x16, 0x02, 0x2D, 0x08, 0x49, 0x0E,
         0x16, 0x14, 0x4D, 0x1E, 0x4F, 0x1E, 0x4B, 0x2C, 0xE6, 0x3A, 0x4A, 0x52,
         0xEB, 0x6A, 0x4C, 0x82, 0xFF, 0xFF,
@@ -1076,7 +1076,7 @@ const first_levelup_learnsets = [_][]const u8{
 const last_levelup_learnsets = [_][]const u8{
 // TODO: Figure out if only having Chimechos level up learnset is enough.
 // Chimecho
-[_]u8{
+&[_]u8{
     0x23, 0x02, 0x2D, 0x0C, 0x36, 0x13, 0x5D, 0x1C, 0x24, 0x22, 0xFD, 0x2C, 0x19,
     0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
 }};

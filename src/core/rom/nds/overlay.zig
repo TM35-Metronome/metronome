@@ -24,13 +24,11 @@ pub fn readFiles(file: std.fs.File, allocator: *mem.Allocator, overlay_table: []
     var results = std.ArrayList([]u8).init(allocator);
     try results.ensureCapacity(overlay_table.len);
     errdefer {
-        freeFiles(results.toSlice(), allocator);
+        freeFiles(results.items, allocator);
         results.deinit();
     }
 
-    var file_stream = file.inStream();
-    var stream = &file_stream.stream;
-
+    const stream = file.inStream();
     for (overlay_table) |overlay, i| {
         const id = overlay.file_id.value() & 0x0FFF;
 

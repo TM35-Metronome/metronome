@@ -36,12 +36,12 @@ const heap = std.heap;
 const mem = std.mem;
 
 pub fn main() !void {
-    var stdio_unbuf = try util.getStdIo();
-    var stdio = stdio_unbuf.getBuffered();
-    defer stdio.err.flush() catch {};
-    defer stdio.out.flush() catch {};
+    var stdio_buf = util.getStdIo();
+    const stdio = stdio_buf.streams();
+    defer stdio_buf.err.flush() catch {};
+    defer stdio_buf.out.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     const a = &arena.allocator;
@@ -67,10 +67,10 @@ pub fn main() !void {
     var commands = std.ArrayList(Command).init(a);
     var state: State = .Start;
 
-    var line_buf = try std.Buffer.initSize(a, 0);
-    next_line: while (try util.readLine(&stdio.in, &line_buf)) |line| {
+    var line_buf = std.ArrayList(u8).init(a);
+    next_line: while (try util.readLine(&stdio_buf.in, &line_buf)) |line| {
         const trimmed = mem.trim(u8, line, " \r\n");
-        errdefer debug.warn("{}\n", trimmed);
+        errdefer debug.warn("{}\n", .{trimmed});
         if (trimmed.len == 0)
             continue;
 
@@ -135,44 +135,44 @@ pub fn main() !void {
             },
         };
 
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
-    try stdio.out.stream.write(
+    try stdio.out.writeAll(
         \\pub const Command = packed struct {
         \\tag: Kind,
         \\data: extern union {
         \\
     );
-    for (commands.toSlice()) |command|
-        try stdio.out.stream.print("{}: {},\n", command.name, command.name);
+    for (commands.items) |command|
+        try stdio.out.print("{}: {},\n", .{ command.name, command.name });
 
-    try stdio.out.stream.write(
+    try stdio.out.writeAll(
         \\},
         \\pub const Kind = packed enum(u16) {
         \\
     );
-    for (commands.toSlice()) |command|
-        try stdio.out.stream.print("{} = lu16.init({}).value(),\n", command.name, command.optcode);
+    for (commands.items) |command|
+        try stdio.out.print("{} = lu16.init({}).value(),\n", .{ command.name, command.optcode });
 
-    try stdio.out.stream.write(
+    try stdio.out.writeAll(
         \\};
         \\
     );
-    for (commands.toSlice()) |command| {
-        try stdio.out.stream.print("pub const {} = packed struct {{\n", command.name);
-        for (command.fields.toSlice()) |field| {
+    for (commands.items) |command| {
+        try stdio.out.print("pub const {} = packed struct {{\n", .{command.name});
+        for (command.fields.items) |field| {
             var tokenizer = std.zig.Tokenizer.init(field.name);
             const token = tokenizer.next();
             switch (token.id) {
-                .Identifier => try stdio.out.stream.print("{}: {},\n", field.name, field.type),
-                else => try stdio.out.stream.print("@\"{}\": {},\n", field.name, field.type),
+                .Identifier => try stdio.out.print("{}: {},\n", .{ field.name, field.type }),
+                else => try stdio.out.print("@\"{}\": {},\n", .{ field.name, field.type }),
             }
         }
-        try stdio.out.stream.write("};\n");
+        try stdio.out.writeAll("};\n");
     }
 
-    try stdio.out.stream.write(
+    try stdio.out.writeAll(
         \\};
         \\
     );

@@ -31,7 +31,7 @@ pub fn Offset(comptime _T: type) type {
         }
 
         pub fn ptr(offset: @This(), data: []u8) *T {
-            return &@bytesToSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
+            return &mem.bytesAsSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
         }
     };
 }
@@ -60,7 +60,7 @@ pub fn Section(comptime _Item: type) type {
         }
 
         pub fn slice(sec: @This(), data: []u8) []Item {
-            return @bytesToSlice(Item, data[sec.start..sec.end()]);
+            return mem.bytesAsSlice(Item, data[sec.start..sec.end()]);
         }
     };
 }
@@ -112,8 +112,8 @@ pub const infos = [_]Info{
 };
 
 const emerald_us_info = Info{
-    .game_title = "POKEMON EMER",
-    .gamecode = "BPEE",
+    .game_title = "POKEMON EMER".*,
+    .gamecode = "BPEE".*,
     .version = .emerald,
     .software_version = 0,
     .trainers = TrainerSection{
@@ -174,8 +174,8 @@ const emerald_us_info = Info{
 };
 
 pub const ruby_us_info = Info{
-    .game_title = "POKEMON RUBY",
-    .gamecode = "AXVE",
+    .game_title = "POKEMON RUBY".*,
+    .gamecode = "AXVE".*,
     .version = .ruby,
     .software_version = 1,
     .trainers = TrainerSection{
@@ -236,8 +236,8 @@ pub const ruby_us_info = Info{
 };
 
 pub const sapphire_us_info = Info{
-    .game_title = "POKEMON SAPP",
-    .gamecode = "AXPE",
+    .game_title = "POKEMON SAPP".*,
+    .gamecode = "AXPE".*,
     .version = .sapphire,
     .software_version = 1,
     .trainers = TrainerSection{
@@ -298,8 +298,8 @@ pub const sapphire_us_info = Info{
 };
 
 pub const fire_us_info = Info{
-    .game_title = "POKEMON FIRE",
-    .gamecode = "BPRE",
+    .game_title = "POKEMON FIRE".*,
+    .gamecode = "BPRE".*,
     .version = .fire_red,
     .software_version = 1,
     .trainers = TrainerSection{
@@ -360,8 +360,8 @@ pub const fire_us_info = Info{
 };
 
 pub const leaf_us_info = Info{
-    .game_title = "POKEMON LEAF",
-    .gamecode = "BPGE",
+    .game_title = "POKEMON LEAF".*,
+    .gamecode = "BPGE".*,
     .version = .leaf_green,
     .software_version = 1,
     .trainers = TrainerSection{

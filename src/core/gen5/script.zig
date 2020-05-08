@@ -1,5 +1,8 @@
+const std = @import("std");
 const rom = @import("../rom.zig");
 const script = @import("../script.zig");
+
+const mem = std.mem;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -12,7 +15,7 @@ pub fn getScriptOffsets(data: []const u8) []const li32 {
         if (rest.len < 4 or (rest[0] == 0x13 and rest[1] == 0xfd))
             break;
     }
-    return @bytesToSlice(li32, data[0 .. len * 4]);
+    return mem.bytesAsSlice(li32, data[0 .. len * 4]);
 }
 
 pub const CommandDecoder = script.CommandDecoder(Command, struct {
@@ -29,7 +32,18 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
 // These commands are only valid in black2/white2
 pub const Command = packed struct {
     tag: Kind,
-    data: extern union {
+    _data: Data,
+
+    /// HACK: Zig crashes when trying to access `_data` during code generation. This
+    ///       seem to happen because &cmd.data gives a bit aligned pointer, which then
+    ///       does not get properly handled in codegen. This function works around this
+    ///       by manually skipping the tag field to get the data field.
+    pub fn data(cmd: *Command) *Data {
+        const bytes = mem.asBytes(cmd);
+        return mem.bytesAsValue(Data, bytes[@sizeOf(Kind)..][0..@sizeOf(Data)]);
+    }
+
+    const Data = packed union {
         end: End,
         return_after_delay: ReturnAfterDelay,
         call_routine: CallRoutine,
@@ -224,7 +238,7 @@ pub const Command = packed struct {
         boot_p_c_sound: BootPCSound,
         wild_battle: WildBattle,
         fade_into_black: FadeIntoBlack,
-    },
+    };
     pub const Kind = packed enum(u16) {
         end = lu16.init(0x02).value(),
         return_after_delay = lu16.init(0x03).value(),

@@ -16,10 +16,7 @@ const testing = std.testing;
 const errors = util.errors;
 const format = util.format;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -35,8 +32,10 @@ const params = blk: {
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-no-trade-evolutions [-hv]
+    try stream.writeAll("Usage: tm35-no-trade-evolutions ");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Replace trade evolutions with non trade versions.
         \\
         \\Here is how each trade evolution is replaced:
@@ -51,46 +50,49 @@ fn usage(stream: var) !void {
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
+/// TODO: This function actually expects an allocator that owns all the memory allocated, such
+///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
+///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
-    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var stdin = io.bufferedInStream(stdio.in);
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
+    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -98,11 +100,11 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
+    var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
         .pokemons = Pokemons.init(allocator),
     };
@@ -117,9 +119,9 @@ pub fn main2(
             => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
     removeTradeEvolutions(data);
@@ -129,9 +131,9 @@ pub fn main2(
         var e_it = p_kv.value.evos.iterator();
         while (e_it.next()) |e_kv| {
             if (e_kv.value.param) |param|
-                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", p_kv.key, e_kv.key, param) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ p_kv.key, e_kv.key, param }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             if (e_kv.value.method) |method|
-                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", p_kv.key, e_kv.key, method) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ p_kv.key, e_kv.key, method }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         }
     }
     return 0;
@@ -182,11 +184,11 @@ fn removeTradeEvolutions(data: Data) void {
         }
     }
 
-    const trade_method_replace = if (has_level_up) "level_up"[0..] else null;
-    const trade_method_holding_replace = if (has_level_up_holding) "level_up_holding_item_during_daytime"[0..] else trade_method_replace;
-    const trade_method_pokemon_replace = if (has_level_up_party) "level_up_with_other_pokemon_in_party"[0..] else trade_method_replace;
+    const trade_method_replace: ?[]const u8 = if (has_level_up) "level_up" else null;
+    const trade_method_holding_replace = if (has_level_up_holding) "level_up_holding_item_during_daytime" else trade_method_replace;
+    const trade_method_pokemon_replace = if (has_level_up_party) "level_up_with_other_pokemon_in_party" else trade_method_replace;
 
-    const trade_param_replace: ?usize = if (has_level_up) usize(36) else null;
+    const trade_param_replace: ?usize = if (has_level_up) @as(usize, 36) else null;
     const trade_param_holding_replace: ?usize = if (has_level_up_holding) null else trade_param_replace;
     const trade_param_pokemon_replace: ?usize = if (has_level_up_party) null else trade_param_replace;
 
@@ -251,7 +253,7 @@ test "tm35-rand-static" {
 
     util.testing.testProgram(
         main2,
-        [_][]const u8{},
+        &[_][]const u8{},
         test_string,
         H.evo("3", "level_up", "36") ++
             H.evo("1", "level_up", "36") ++
@@ -260,7 +262,7 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(
         main2,
-        [_][]const u8{},
+        &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
         H.evo("4", "level_up_holding_item_during_daytime", "1") ++
@@ -271,7 +273,7 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(
         main2,
-        [_][]const u8{},
+        &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),
         H.evo("4", "level_up_with_other_pokemon_in_party", "1") ++

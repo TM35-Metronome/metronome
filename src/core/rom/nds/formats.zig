@@ -13,7 +13,7 @@ pub const Header = extern struct {
 
     pub fn narc(file_size: u32) Header {
         return Header{
-            .chunk_name = Chunk.names.narc,
+            .chunk_name = Chunk.names.narc.*,
             .byte_order = lu16.init(0xFFFE),
             .version = lu16.init(0x0100),
             .file_size = lu32.init(file_size),

@@ -12,10 +12,11 @@ const testing = std.testing;
 /// of these field is an enum which has the same fields as the 'union_field's
 /// type, then that is assume to be the tag of 'union_field'.
 pub fn findTagFieldName(comptime Container: type, comptime union_field: []const u8) ?[]const u8 {
-    if (!trait.is(builtin.TypeId.Struct)(Container))
+    const info = @typeInfo(Container);
+    if (info != .Struct)
         @compileError(@typeName(Container) ++ " is not a struct.");
 
-    const container_fields = meta.fields(Container);
+    const container_fields = info.Struct.fields;
     const u_index = for (container_fields) |f, i| {
         if (mem.eql(u8, f.name, union_field))
             break i;
@@ -23,29 +24,29 @@ pub fn findTagFieldName(comptime Container: type, comptime union_field: []const 
         @compileError("No field called " ++ union_field ++ " in " ++ @typeName(Container));
     };
 
-    const Union = container_fields[u_index].field_type;
-    if (!trait.is(builtin.TypeId.Union)(Union))
+    const union_info = @typeInfo(container_fields[u_index].field_type);
+    if (union_info != .Union)
         @compileError(union_field ++ " is not a union.");
 
     // Check all fields before 'union_field'.
-    outer: for (container_fields[0..u_index]) |field| {
+    outer: for (container_fields) |field, i| {
+        if (u_index <= i)
+            break;
         const Enum = field.field_type;
-        if (!trait.is(builtin.TypeId.Enum)(Enum))
+        const enum_info = @typeInfo(Enum);
+        if (enum_info != .Enum)
             continue;
 
         // Check if 'Enum' and 'Union' have the same names
         // of their fields.
-        const u_fields = meta.fields(Union);
-        const e_fields = meta.fields(Enum);
+        const u_fields = union_info.Union.fields;
+        const e_fields = enum_info.Enum.fields;
         if (u_fields.len != e_fields.len)
             continue;
 
         // The 'Enum' and 'Union' have to have the same fields
-        // in the same order. It's too slow otherwise (an it keeps
-        // this impl simple)
-        for (u_fields) |u_field, i| {
-            const e_field = e_fields[i];
-            if (!mem.eql(u8, u_field.name, e_field.name))
+        for (u_fields) |u_field| {
+            if (!@hasField(Enum, u_field.name))
                 continue :outer;
         }
 
@@ -106,35 +107,35 @@ test "findTagFieldName" {
 /// would have if unions did not have to have the size of their biggest field.
 pub fn packedLength(value: var) error{InvalidTag}!usize {
     @setEvalBranchQuota(10000000);
-    const T = @typeOf(value);
+    const T = @TypeOf(value);
     switch (@typeInfo(T)) {
-        builtin.TypeId.Void => return 0,
-        builtin.TypeId.Int => |i| {
+        .Void => return 0,
+        .Int => |i| {
             if (i.bits % 8 != 0)
                 @compileError("Does not support none power of two intergers");
-            return usize(i.bits / 8);
+            return @as(usize, i.bits / 8);
         },
-        builtin.TypeId.Enum => |e| {
-            if (e.layout != builtin.TypeInfo.ContainerLayout.Packed)
+        .Enum => |e| {
+            if (e.layout != .Packed)
                 @compileError(@typeName(T) ++ " is not packed");
 
             return packedLength(@enumToInt(value)) catch unreachable;
         },
-        builtin.TypeId.Array => |a| {
+        .Array => |a| {
             var res: usize = 0;
             for (value) |item|
                 res += try packedLength(item);
 
             return res;
         },
-        builtin.TypeId.Struct => |s| {
-            if (s.layout != builtin.TypeInfo.ContainerLayout.Packed)
+        .Struct => |s| {
+            if (s.layout != .Packed)
                 @compileError(@typeName(T) ++ " is not packed");
 
             var res: usize = 0;
-            inline for (s.fields) |struct_field|
+            inline for (s.fields) |struct_field| {
                 switch (@typeInfo(struct_field.field_type)) {
-                    builtin.TypeId.Union => |u| {
+                    .Union => |u| {
                         if (u.layout != .Packed and u.layout != .Extern)
                             @compileError(@typeName(struct_field.field_type) ++ " is not packed or extern");
                         if (u.tag_type != null)
@@ -145,7 +146,7 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
                             @compileError("Could not find a tag for " ++ struct_field.name);
                         const tag = @field(value, tag_field);
                         const union_value = @field(value, struct_field.name);
-                        const TagEnum = @typeOf(tag);
+                        const TagEnum = @TypeOf(tag);
 
                         // Switch over all tags. 'TagEnum' have the same field names as
                         // 'union' so if one member of 'TagEnum' matches 'tag', then
@@ -166,7 +167,8 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
                             return error.InvalidTag;
                     },
                     else => res += try packedLength(@field(value, struct_field.name)),
-                };
+                }
+            }
             return res;
         },
         else => @compileError(@typeName(T) ++ " not supported"),
@@ -228,7 +230,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             // will be caught by the calculation of the commands length.
             mem.copy(u8, &buf, bytes[0..len]);
 
-            const command = @bytesToSlice(Command, buf[0..])[0];
+            const command = mem.bytesAsSlice(Command, buf[0..])[0];
             const command_len = try packedLength(command);
             if (decoder.bytes.len < command_len)
                 return error.InvalidCommand;

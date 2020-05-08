@@ -41,7 +41,7 @@ pub const Banner = extern struct {
         if (banner.version == 0)
             return error.InvalidVersion;
 
-        if (!algorithm.all(u8, banner.reserved1, isZero))
+        if (!algorithm.all(u8, &banner.reserved1, isZero))
             return error.InvalidReserved1;
 
         //if (!utils.algorithm.all(u8, banner.reserved2, ascii.isZero))

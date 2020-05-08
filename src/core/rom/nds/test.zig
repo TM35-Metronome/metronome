@@ -34,28 +34,28 @@ fn randomFs(allocator: *mem.Allocator, random: *rand.Random, comptime Folder: ty
     var curr: ?*Folder = root;
     while (curr) |folder| {
         const parents = countParents(Folder, folder);
-        const choice = random.range(usize, 0, 255);
-        if (choice < parents + folder.nodes.len) {
+        const choice = random.intRangeLessThan(usize, 0, 255);
+        if (choice < parents + folder.nodes.items.len) {
             curr = folder.parent;
             break;
         }
 
-        const is_file = random.scalar(bool);
+        const is_file = random.boolean();
         var name_buf: [50]u8 = undefined;
-        const name = try fmt.bufPrint(name_buf[0..], "{}", unique);
+        const name = try fmt.bufPrint(name_buf[0..], "{}", .{unique});
         unique += 1;
 
         if (is_file) {
             switch (Folder) {
                 fs.Nitro => {
                     _ = try folder.createFile(name, blk: {
-                        const is_narc = random.scalar(bool);
+                        const is_narc = random.boolean();
 
                         if (is_narc) {
                             break :blk fs.Nitro.File{ .narc = try randomFs(allocator, random, fs.Narc) };
                         }
 
-                        const data = try allocator.alloc(u8, random.range(usize, 10, 100));
+                        const data = try allocator.alloc(u8, random.intRangeLessThan(usize, 10, 100));
                         random.bytes(data);
                         break :blk fs.Nitro.File{
                             .binary = fs.Nitro.File.Binary{
@@ -66,7 +66,7 @@ fn randomFs(allocator: *mem.Allocator, random: *rand.Random, comptime Folder: ty
                     });
                 },
                 fs.Narc => {
-                    const data = try allocator.alloc(u8, random.range(usize, 10, 100));
+                    const data = try allocator.alloc(u8, random.intRangeLessThan(usize, 10, 100));
                     random.bytes(data);
                     _ = try folder.createFile(name, fs.Narc.File{
                         .allocator = allocator,
@@ -99,7 +99,7 @@ fn fsEqual(allocator: *mem.Allocator, comptime Folder: type, fs1: *Folder, fs2: 
     });
 
     while (folders_to_compare.popOrNull()) |pair| {
-        for (pair.f1.nodes.toSliceConst()) |n1| {
+        for (pair.f1.nodes.items) |n1| {
             switch (n1.kind) {
                 .file => |f1| {
                     const f2 = pair.f2.getFile(n1.name) orelse return false;
@@ -296,17 +296,17 @@ test "nds.fs.read/writeNitro" {
     const main_fnt = fntAndFiles.main_fnt;
     const sub_fnt = fntAndFiles.sub_fnt;
 
-    const fnt_buff_size = @sliceToBytes(main_fnt).len + sub_fnt.len;
+    const fnt_buff_size = mem.sliceAsBytes(main_fnt).len + sub_fnt.len;
     const fnt_buff = try allocator.alloc(u8, fnt_buff_size);
-    const fnt = try fmt.bufPrint(fnt_buff, "{}{}", @sliceToBytes(main_fnt), sub_fnt);
+    const fnt = try fmt.bufPrint(fnt_buff, "{}{}", .{ mem.sliceAsBytes(main_fnt), sub_fnt });
     var fat = std.ArrayList(fs.FatEntry).init(allocator);
 
     const test_file = "__nds.fs.test.read.write__";
-    defer std.fs.deleteFile(test_file) catch unreachable;
 
     {
-        var file = try std.fs.File.openWrite(test_file);
+        var file = try std.fs.cwd().createFile(test_file, .{});
         defer file.close();
+        errdefer std.fs.cwd().deleteFile(test_file) catch unreachable;
 
         for (files) |f| {
             const pos = @intCast(u32, try file.getPos());
@@ -314,11 +314,12 @@ test "nds.fs.read/writeNitro" {
             fat.append(fs.FatEntry.init(pos, @intCast(u32, try file.getPos()) - pos)) catch unreachable;
         }
     }
+    defer std.fs.cwd().deleteFile(test_file) catch unreachable;
 
     const fs2 = blk: {
-        var file = try std.fs.File.openRead(test_file);
+        var file = try std.fs.cwd().openFile(test_file, .{});
         defer file.close();
-        break :blk try fs.readNitro(file, allocator, fnt, fat.toSlice());
+        break :blk try fs.readNitro(file, allocator, fnt, fat.items);
     };
 
     debug.assert(try fsEqual(allocator, fs.Nitro, root, fs2));
@@ -334,9 +335,9 @@ test "nds.Rom" {
     var rom1 = nds.Rom{
         .allocator = allocator,
         .header = nds.Header{
-            .game_title = "A" ** 12,
-            .gamecode = "A" ** 4,
-            .makercode = "ST",
+            .game_title = ("A" ** 11).*,
+            .gamecode = ("A" ** 4).*,
+            .makercode = "ST".*,
             .unitcode = 0x00,
             .encryption_seed_select = 0x00,
             .device_capacity = 0x00,
@@ -464,34 +465,34 @@ test "nds.Rom" {
             .title_italian = [_]u8{0x00} ** 0x100,
             .title_spanish = [_]u8{0x00} ** 0x100,
         },
-        .arm9 = [_]u8{},
-        .arm7 = [_]u8{},
+        .arm9 = &[_]u8{},
+        .arm7 = &[_]u8{},
         .nitro_footer = [_]lu32{
             lu32.init(0),
             lu32.init(0),
             lu32.init(0),
         },
-        .arm9_overlay_table = [_]nds.Overlay{},
-        .arm9_overlay_files = [_][]u8{},
-        .arm7_overlay_table = [_]nds.Overlay{},
-        .arm7_overlay_files = [_][]u8{},
+        .arm9_overlay_table = &[_]nds.Overlay{},
+        .arm9_overlay_files = &[_][]u8{},
+        .arm7_overlay_table = &[_]nds.Overlay{},
+        .arm7_overlay_files = &[_][]u8{},
         .root = try randomFs(allocator, &random.random, fs.Nitro),
     };
 
-    const name = try fmt.allocPrint(allocator, "__{}_{}__", rom1.header.game_title, rom1.header.gamecode);
+    const name = try fmt.allocPrint(allocator, "__{}_{}__", .{ rom1.header.game_title, rom1.header.gamecode });
     errdefer allocator.free(name);
 
     {
-        const file = try std.fs.File.openWrite(name);
-        errdefer std.fs.deleteFile(name) catch {};
+        const file = try std.fs.cwd().createFile(name, .{});
+        errdefer std.fs.cwd().deleteFile(name) catch {};
         defer file.close();
 
         try rom1.writeToFile(file);
     }
-    defer std.fs.deleteFile(name) catch {};
+    defer std.fs.cwd().deleteFile(name) catch {};
 
     var rom2 = blk: {
-        const file = try std.fs.File.openRead(name);
+        const file = try std.fs.cwd().openFile(name, .{});
         defer file.close();
         break :blk try nds.Rom.fromFile(file, allocator);
     };

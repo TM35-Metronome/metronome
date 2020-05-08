@@ -16,10 +16,7 @@ const testing = std.testing;
 const errors = util.errors;
 const format = util.format;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
@@ -36,16 +33,17 @@ const params = blk: {
         clap.parseParam("-v, --version                     Output version information and exit.                                                           ") catch unreachable,
     };
 };
-
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-rand-parties [-hfiv] [-s <NUM>] [-t <random|same|themed>]
+    try stream.writeAll("Usage: tm35-rand-parties ");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Randomizes trainer parties.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 const TypesOption = enum {
@@ -55,42 +53,45 @@ const TypesOption = enum {
 };
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
+/// TODO: This function actually expects an allocator that owns all the memory allocated, such
+///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
+///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
-    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var stdin = io.bufferedInStream(stdio.in);
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
+    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -98,25 +99,25 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
             usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
         var buf: [8]u8 = undefined;
-        os.getrandom(buf[0..]) catch break :blk u64(0);
+        os.getrandom(buf[0..]) catch break :blk @as(u64, 0);
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
     const types_arg = args.option("--types") orelse "random";
     const types = std.meta.stringToEnum(TypesOption, types_arg) orelse {
-        stdio.err.print("--types does not support '{}'\n", types_arg) catch {};
+        stdio.err.print("--types does not support '{}'\n", .{types_arg}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
@@ -124,7 +125,7 @@ pub fn main2(
     const fix_moves = args.flag("--fix-moves");
     const simular_total_stats = args.flag("--simular-total-stats");
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
+    var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
         .type_set = std.BufSet.init(allocator),
         .pokemons = Pokemons.init(allocator),
@@ -143,9 +144,9 @@ pub fn main2(
             => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
     randomize(data, seed, fix_moves, simular_total_stats, types) catch |err| return errors.randErr(stdio.err, err);
@@ -161,13 +162,13 @@ pub fn main2(
             const member = party_kv.value;
 
             if (member.species) |s|
-                stdio.out.print(".trainers[{}].party[{}].species={}\n", trainer_i, member_i, s) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, member_i, s }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             if (member.level) |l|
-                stdio.out.print(".trainers[{}].party[{}].level={}\n", trainer_i, member_i, l) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, member_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
             var move_iter = member.moves.iterator();
             while (move_iter.next()) |move_kv| {
-                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", trainer_i, member_i, move_kv.key, move_kv.value) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, member_i, move_kv.key, move_kv.value }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             }
         }
     }
@@ -303,7 +304,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
         const trainer = trainer_kv.value;
 
         const theme = switch (types_op) {
-            TypesOption.themed => all_types[random.range(usize, 0, all_types.len)],
+            TypesOption.themed => all_types[random.intRangeLessThan(usize, 0, all_types.len)],
             else => undefined,
         };
 
@@ -317,47 +318,47 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                     const pokemon = data.pokemons.get(old_species) orelse {
                         // If we can't find the prev Pokemons type, then the only thing we can
                         // do is chose a random one.
-                        break :blk all_types[random.range(usize, 0, all_types.len)];
+                        break :blk all_types[random.intRangeLessThan(usize, 0, all_types.len)];
                     };
                     const types = pokemon.value.types;
-                    if (types.len == 0)
+                    if (types.items.len == 0)
                         continue;
 
-                    break :blk types.toSlice()[random.range(usize, 0, types.len)];
+                    break :blk types.items[random.intRangeLessThan(usize, 0, types.items.len)];
                 },
-                .random => all_types[random.range(usize, 0, all_types.len)],
+                .random => all_types[random.intRangeLessThan(usize, 0, all_types.len)],
                 .themed => theme,
             };
 
-            const pick_from = species_by_type.get(new_type).?.value.toSliceConst();
+            const pick_from = species_by_type.get(new_type).?.value.items;
             if (simular_total_stats) blk: {
                 // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                 // We therefor just pick a random pokemon and continue.
                 const poke_kv = data.pokemons.get(old_species) orelse {
-                    member.species = pick_from[random.range(usize, 0, pick_from.len)];
+                    member.species = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
                     break :blk;
                 };
                 const pokemon = poke_kv.value;
 
-                var min = @intCast(i64, sum(u8, pokemon.stats));
+                var min = @intCast(i64, sum(u8, &pokemon.stats));
                 var max = min;
 
                 simular.resize(0) catch unreachable;
-                while (simular.len < 25) : ({
+                while (simular.items.len < 25) : ({
                     min -= 5;
                     max += 5;
                 }) {
                     for (pick_from) |s| {
                         const p = data.pokemons.get(s).?.value;
-                        const total = @intCast(i64, sum(u8, p.stats));
+                        const total = @intCast(i64, sum(u8, &p.stats));
                         if (min <= total and total <= max)
                             try simular.append(s);
                     }
                 }
 
-                member.species = simular.toSlice()[random.range(usize, 0, simular.len)];
+                member.species = simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
             } else {
-                member.species = pick_from[random.range(usize, 0, pick_from.len)];
+                member.species = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
             }
 
             if (fix_moves and member.moves.count() != 0) blk: {
@@ -406,7 +407,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
 }
 
 fn SumReturn(comptime T: type) type {
-    return switch (@typeId(T)) {
+    return switch (@typeInfo(T)) {
         .Int => u64,
         .Float => f64,
         else => unreachable,
@@ -465,7 +466,7 @@ const Data = struct {
             if (pokemon.catch_rate == 0)
                 continue;
 
-            for (pokemon.types.toSlice()) |t| {
+            for (pokemon.types.items) |t| {
                 const entry = try res.getOrPutValue(t, std.ArrayList(usize).init(d.allocator()));
                 try entry.value.append(s);
             }
@@ -523,11 +524,11 @@ const RelativeMove = struct {
         return RelativeMove{
             .power = blk: {
                 const power = @intToFloat(f32, m.power orelse 0);
-                const stab = for (p.types.toSlice()) |t1| {
+                const stab = for (p.types.items) |t1| {
                     const t2 = m.type orelse continue;
                     if (mem.eql(u8, t1, t2))
-                        break f32(1.5);
-                } else f32(1.0);
+                        break @as(f32, 1.5);
+                } else @as(f32, 1.0);
 
                 break :blk math.cast(u8, @floatToInt(u64, power * stab)) catch math.maxInt(u8);
             },
@@ -633,7 +634,7 @@ test "tm35-rand-parties" {
         H.trainer("2", "2", "3") ++
         H.trainer("3", "3", "4");
 
-    util.testing.testProgram(main2, [_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.trainers[3].party[1].species=0
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=4
@@ -660,7 +661,7 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].moves[0]=1
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
         \\.trainers[3].party[1].species=0
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=1
@@ -715,9 +716,9 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].moves[0]=1
         \\
     ;
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
         \\.trainers[3].party[1].species=0
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=4
@@ -744,7 +745,7 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].moves[0]=1
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
         \\.trainers[3].party[1].species=0
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=1

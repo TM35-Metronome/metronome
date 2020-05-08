@@ -6,7 +6,7 @@ pub const NarcOffset = struct {
 };
 
 pub const Info = struct {
-    game_title: [12]u8,
+    game_title: [11:0]u8,
     gamecode: [4]u8,
     version: common.Version,
 
@@ -30,22 +30,22 @@ pub const infos = [_]Info{
 };
 
 const black2_info = Info{
-    .game_title = "POKEMON B2\x00\x00",
-    .gamecode = "IREO",
+    .game_title = "POKEMON B2\x00".*,
+    .gamecode = "IREO".*,
     .version = .black2,
 
     .starters = [_][]const NarcOffset{
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x58B },
             NarcOffset{ .file = 854, .offset = 0x590 },
             NarcOffset{ .file = 854, .offset = 0x595 },
         },
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x5C0 },
             NarcOffset{ .file = 854, .offset = 0x5C5 },
             NarcOffset{ .file = 854, .offset = 0x5CA },
         },
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 854, .offset = 0x5E2 },
             NarcOffset{ .file = 854, .offset = 0x5E7 },
             NarcOffset{ .file = 854, .offset = 0x5EC },
@@ -63,8 +63,8 @@ const black2_info = Info{
 };
 
 const white2_info = Info{
-    .game_title = "POKEMON W2\x00\x00",
-    .gamecode = "IRDO",
+    .game_title = "POKEMON W2\x00".*,
+    .gamecode = "IRDO".*,
     .version = .white2,
 
     .starters = black2_info.starters,
@@ -80,12 +80,12 @@ const white2_info = Info{
 };
 
 const black_info = Info{
-    .game_title = "POKEMON B\x00\x00\x00",
-    .gamecode = "IRBO",
+    .game_title = "POKEMON B\x00\x00".*,
+    .gamecode = "IRBO".*,
     .version = .black,
 
     .starters = [_][]const NarcOffset{
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x27f },
             NarcOffset{ .file = 782, .offset = 0x284 },
             NarcOffset{ .file = 782, .offset = 0x361 },
@@ -93,7 +93,7 @@ const black_info = Info{
             NarcOffset{ .file = 304, .offset = 0x0F9 },
             NarcOffset{ .file = 304, .offset = 0x19C },
         },
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x2af },
             NarcOffset{ .file = 782, .offset = 0x2b4 },
             NarcOffset{ .file = 782, .offset = 0x356 },
@@ -101,7 +101,7 @@ const black_info = Info{
             NarcOffset{ .file = 304, .offset = 0x11C },
             NarcOffset{ .file = 304, .offset = 0x1C4 },
         },
-        [_]NarcOffset{
+        &[_]NarcOffset{
             NarcOffset{ .file = 782, .offset = 0x2cc },
             NarcOffset{ .file = 782, .offset = 0x2d1 },
             NarcOffset{ .file = 782, .offset = 0x338 },
@@ -122,8 +122,8 @@ const black_info = Info{
 };
 
 const white_info = Info{
-    .game_title = "POKEMON W\x00\x00\x00",
-    .gamecode = "IRAO",
+    .game_title = "POKEMON W\x00\x00".*,
+    .gamecode = "IRAO".*,
     .version = .white,
 
     .starters = black_info.starters,

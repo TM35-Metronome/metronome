@@ -16,16 +16,12 @@ const testing = std.testing;
 const errors = util.errors;
 const format = util.format;
 
-const BufInStream = io.BufferedInStream(fs.File.InStream.Error);
-const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
-
-const Clap = clap.ComptimeClap(clap.Help, params);
+const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 // TODO: proper versioning
 const program_version = "0.0.0";
 
-// TODO: Have the tm35-randomizer recognize options with it's help message split onto a new line
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
@@ -38,15 +34,17 @@ const params = blk: {
 };
 
 fn usage(stream: var) !void {
-    try stream.write(
-        \\Usage: tm35-rand-parties [-hv] [-s <NUM>] [-m <METHOD>] [-t <random|same>]
+    try stream.writeAll("Usage: tm35-rand-starters ");
+    try clap.usage(stream, &params);
+    try stream.writeAll(
+        \\
         \\Randomizes static Pokémons.
         \\Only works properly for dppt and b2w2.
         \\
         \\Options:
         \\
     );
-    try clap.help(stream, params);
+    try clap.help(stream, &params);
 }
 
 const Method = enum {
@@ -62,42 +60,45 @@ const Type = enum {
 };
 
 pub fn main() u8 {
-    var stdio_unbuf = util.getStdIo() catch |err| return 1;
-    var stdio = stdio_unbuf.getBuffered();
+    var stdio = util.getStdIo();
     defer stdio.err.flush() catch {};
 
-    var arena = heap.ArenaAllocator.init(heap.direct_allocator);
+    var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(&stdio.err.stream);
+        return errors.allocErr(stdio.err.outStream());
     const res = main2(
         &arena.allocator,
-        fs.File.ReadError,
-        fs.File.WriteError,
-        stdio.getStreams(),
+        util.StdIo.In.InStream,
+        util.StdIo.Out.OutStream,
+        stdio.streams(),
         clap.args.OsIterator,
         &arg_iter,
     );
 
-    stdio.out.flush() catch |err| return errors.writeErr(&stdio.err.stream, "<stdout>", err);
+    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
     return res;
 }
 
+/// TODO: This function actually expects an allocator that owns all the memory allocated, such
+///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
+///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime ReadError: type,
-    comptime WriteError: type,
-    stdio: util.CustomStdIoStreams(ReadError, WriteError),
+    comptime InStream: type,
+    comptime OutStream: type,
+    stdio: util.CustomStdIoStreams(InStream, OutStream),
     comptime ArgIterator: type,
     arg_iter: *ArgIterator,
 ) u8 {
-    var stdin = io.BufferedInStream(ReadError).init(stdio.in);
+    var stdin = io.bufferedInStream(stdio.in);
     var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", err) catch {};
+        stdio.err.print("{}\n", .{err}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
+    defer args.deinit();
 
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -105,37 +106,37 @@ pub fn main2(
     }
 
     if (args.flag("--version")) {
-        stdio.out.print("{}\n", program_version) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
 
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", seed, err) catch {};
+            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
             usage(stdio.err) catch {};
             return 1;
         }
     else blk: {
         var buf: [8]u8 = undefined;
-        os.getrandom(buf[0..]) catch break :blk u64(0);
+        os.getrandom(buf[0..]) catch break :blk @as(u64, 0);
         break :blk mem.readInt(u64, &buf, .Little);
     };
 
     const type_arg = args.option("--types") orelse "random";
     const types = std.meta.stringToEnum(Type, type_arg) orelse {
-        stdio.err.print("--types does not support '{}'\n", type_arg) catch {};
+        stdio.err.print("--types does not support '{}'\n", .{type_arg}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
 
     const method_arg = args.option("--method") orelse "random";
     const method = std.meta.stringToEnum(Method, method_arg) orelse {
-        stdio.err.print("--method does not support '{}'\n", method_arg) catch {};
+        stdio.err.print("--method does not support '{}'\n", .{method_arg}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
 
-    var line_buf = std.Buffer.initSize(allocator, 0) catch |err| return errors.allocErr(stdio.err);
+    var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
         .pokemons = Pokemons.init(allocator),
         .static_mons = StaticMons.init(allocator),
@@ -152,9 +153,9 @@ pub fn main2(
             => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", str) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
 
-        line_buf.shrink(0);
+        line_buf.resize(0) catch unreachable;
     }
 
     randomize(data, seed, method, types) catch |err| return errors.randErr(stdio.err, err);
@@ -163,7 +164,7 @@ pub fn main2(
     while (static_it.next()) |static_kv| {
         const static_i = static_kv.key;
         const static = static_kv.value;
-        stdio.out.print(".static_pokemons[{}].species={}\n", static_i, static) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print(".static_pokemons[{}].species={}\n", .{ static_i, static }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
     }
     return 0;
 }
@@ -240,19 +241,19 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
 
                 var it = data.static_mons.iterator();
                 while (it.next()) |kv|
-                    kv.value = species[random.range(usize, 0, species.len)];
+                    kv.value = species[random.intRangeLessThan(usize, 0, species.len)];
             },
             .same => {
                 const by_type = try data.speciesByType(species);
                 var it = data.static_mons.iterator();
                 while (it.next()) |kv| {
                     const pokemon = data.pokemons.get(kv.value).?.value;
-                    if (pokemon.types.len == 0)
+                    if (pokemon.types.items.len == 0)
                         continue;
 
-                    const t = pokemon.types.toSlice()[random.range(usize, 0, pokemon.types.len)];
-                    const pokemons = by_type.get(t).?.value.toSlice();
-                    kv.value = pokemons[random.range(usize, 0, pokemons.len)];
+                    const t = pokemon.types.items[random.intRangeLessThan(usize, 0, pokemon.types.items.len)];
+                    const pokemons = by_type.get(t).?.value.items;
+                    kv.value = pokemons[random.intRangeLessThan(usize, 0, pokemons.len)];
                 }
             },
         },
@@ -276,13 +277,13 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 // simular/same as itself.
                 const prev_pokemon = (data.pokemons.get(kv.value) orelse continue).value;
 
-                var min = @intCast(i64, sum(u8, prev_pokemon.stats));
+                var min = @intCast(i64, sum(u8, &prev_pokemon.stats));
                 var max = min;
 
                 // For same-stats, we can just make this loop run once, which will
                 // make the simular list only contain pokemons with the same stats.
-                const condition = if (method == .@"simular-stats") usize(25) else usize(1);
-                while (simular.len < condition) : ({
+                const condition = if (method == .@"simular-stats") @as(usize, 25) else @as(usize, 1);
+                while (simular.items.len < condition) : ({
                     min -= 5;
                     max += 5;
                 }) {
@@ -290,7 +291,7 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                         .random => for (species) |s| {
                             const pokemon = data.pokemons.get(s).?.value;
 
-                            const total = @intCast(i64, sum(u8, pokemon.stats));
+                            const total = @intCast(i64, sum(u8, &pokemon.stats));
                             if (min <= total and total <= max)
                                 try simular.append(s);
                         },
@@ -300,17 +301,17 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                             // we can assume is that the Pokémon is the same type
                             // as it self, and therefor just use that as the simular
                             // Pokémon.
-                            if (prev_pokemon.types.len == 0) {
+                            if (prev_pokemon.types.items.len == 0) {
                                 try simular.append(kv.value);
                                 break;
                             }
-                            for (prev_pokemon.types.toSlice()) |t| {
+                            for (prev_pokemon.types.items) |t| {
                                 const pokemons_of_type = by_type.get(t).?.value;
 
-                                for (pokemons_of_type.toSlice()) |s| {
+                                for (pokemons_of_type.items) |s| {
                                     const pokemon = data.pokemons.get(s).?.value;
 
-                                    const total = @intCast(i64, sum(u8, pokemon.stats));
+                                    const total = @intCast(i64, sum(u8, &pokemon.stats));
                                     if (min <= total and total <= max)
                                         try simular.append(s);
                                 }
@@ -319,8 +320,8 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                     }
                 }
 
-                const pick_from = simular.toSlice();
-                kv.value = pick_from[random.range(usize, 0, pick_from.len)];
+                const pick_from = simular.items;
+                kv.value = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
             }
         },
         .@"legendary-with-legendary" => {
@@ -346,29 +347,29 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 // Legendaries are generally in the "slow" to "medium_slow"
                 // growth rating
                 if (pokemon.growth_rate) |growth_rate|
-                    rating_entry.value += isize(@boolToInt(mem.eql(u8, growth_rate, "slow") or
+                    rating_entry.value += @as(isize, @boolToInt(mem.eql(u8, growth_rate, "slow") or
                         mem.eql(u8, growth_rate, "medium_slow")));
 
                 // They generally have a catch rate of 45 or less
                 if (pokemon.catch_rate) |catch_rate|
-                    rating_entry.value += isize(@boolToInt(catch_rate <= 45));
+                    rating_entry.value += @as(isize, @boolToInt(catch_rate <= 45));
 
                 // They tend to not have a gender (255 in gender_ratio means
                 // genderless).
                 if (pokemon.gender_ratio) |gender_ratio|
-                    rating_entry.value += isize(@boolToInt(gender_ratio == 255));
+                    rating_entry.value += @as(isize, @boolToInt(gender_ratio == 255));
 
                 // Most are part of the "undiscovered" egg group
                 if (pokemon.egg_group) |egg_group|
-                    rating_entry.value += isize(@boolToInt(mem.eql(u8, egg_group, "undiscovered")));
+                    rating_entry.value += @as(isize, @boolToInt(mem.eql(u8, egg_group, "undiscovered")));
 
                 // They don't have evolutions.
-                if (pokemon.evos.len != 0)
+                if (pokemon.evos.items.len != 0)
                     rating_entry.value -= 10;
 
                 // And they don't evolve from anything. Suptract
                 // score from this Pokémons evolutions.
-                for (pokemon.evos.toSlice()) |evo| {
+                for (pokemon.evos.items) |evo| {
                     const evo_rating = try ratings.getOrPutValue(evo, 0);
                     evo_rating.value -= 10;
                 }
@@ -398,11 +399,11 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
 
             const legendaries_by_type = switch (_type) {
                 .random => undefined,
-                .same => try data.speciesByType(legendaries.toSlice()),
+                .same => try data.speciesByType(legendaries.items),
             };
             const rest_by_type = switch (_type) {
                 .random => undefined,
-                .same => try data.speciesByType(rest.toSlice()),
+                .same => try data.speciesByType(rest.items),
             };
 
             var s_it = data.static_mons.iterator();
@@ -412,26 +413,26 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
                 const pick_from = switch (_type) {
                     .random => if (rating >= rating_to_be_legendary) legendaries else rest,
                     .same => blk: {
-                        if (pokemon.types.len == 0)
+                        if (pokemon.types.items.len == 0)
                             continue;
 
-                        const types = pokemon.types.toSlice();
-                        const picked_type = types[random.range(usize, 0, types.len)];
+                        const types = pokemon.types.items;
+                        const picked_type = types[random.intRangeLessThan(usize, 0, types.len)];
                         const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
                         break :blk (pick_from_by_type.get(picked_type) orelse continue).value;
                     },
                 };
 
-                if (pick_from.len == 0)
+                if (pick_from.items.len == 0)
                     continue;
-                kv.value = pick_from.toSlice()[random.range(usize, 0, pick_from.len)];
+                kv.value = pick_from.items[random.intRangeLessThan(usize, 0, pick_from.items.len)];
             }
         },
     }
 }
 
 fn SumReturn(comptime T: type) type {
-    return switch (@typeId(T)) {
+    return switch (@typeInfo(T)) {
         .Int => u64,
         .Float => f64,
         else => unreachable,
@@ -485,7 +486,7 @@ const Data = struct {
             if ((pokemon.catch_rate orelse 1) == 0)
                 continue;
 
-            for (pokemon.types.toSlice()) |t| {
+            for (pokemon.types.items) |t| {
                 const entry = try res.getOrPutValue(t, std.ArrayList(usize).init(d.allocator()));
                 try entry.value.append(s);
             }
@@ -592,7 +593,7 @@ test "tm35-rand-static" {
         H.static("4", "4") ++
         H.static("5", "21");
 
-    util.testing.testProgram(main2, [_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.static_pokemons[4].species=20
         \\.static_pokemons[5].species=9
         \\.static_pokemons[3].species=18
@@ -601,7 +602,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=15
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=9
         \\.static_pokemons[5].species=20
         \\.static_pokemons[3].species=1
@@ -610,7 +611,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=0
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=7
         \\.static_pokemons[3].species=3
@@ -619,7 +620,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=12
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=7
         \\.static_pokemons[3].species=3
@@ -628,7 +629,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=1
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=15
         \\.static_pokemons[5].species=4
         \\.static_pokemons[3].species=11
@@ -637,7 +638,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=11
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=20
         \\.static_pokemons[3].species=3
@@ -646,7 +647,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=0
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=0
         \\.static_pokemons[5].species=18
         \\.static_pokemons[3].species=0
@@ -655,7 +656,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[0].species=5
         \\
     );
-    util.testing.testProgram(main2, [_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[4].species=4
         \\.static_pokemons[5].species=13
         \\.static_pokemons[3].species=1

@@ -11,7 +11,7 @@ pub const StarterLocation = union(enum) {
 };
 
 pub const Info = struct {
-    game_title: [12]u8,
+    game_title: [11:0]u8,
     gamecode: [4]u8,
     version: common.Version,
 
@@ -37,8 +37,8 @@ pub const infos = [_]Info{
 };
 
 const hg_info = Info{
-    .game_title = "POKEMON HG\x00\x00",
-    .gamecode = "IPKE",
+    .game_title = "POKEMON HG\x00".*,
+    .gamecode = "IPKE".*,
     .version = .heart_gold,
 
     .starters = StarterLocation{ .arm9 = 0x00108514 },
@@ -55,8 +55,8 @@ const hg_info = Info{
 };
 
 const ss_info = Info{
-    .game_title = "POKEMON SS\x00\x00",
-    .gamecode = "IPGE",
+    .game_title = "POKEMON SS\x00".*,
+    .gamecode = "IPGE".*,
     .version = .soul_silver,
 
     .starters = hg_info.starters,
@@ -73,8 +73,8 @@ const ss_info = Info{
 };
 
 const diamond_info = Info{
-    .game_title = "POKEMON D\x00\x00\x00",
-    .gamecode = "ADAE",
+    .game_title = "POKEMON D\x00\x00".*,
+    .gamecode = "ADAE".*,
     .version = .diamond,
 
     .starters = StarterLocation{
@@ -96,8 +96,8 @@ const diamond_info = Info{
 };
 
 const pearl_info = Info{
-    .game_title = "POKEMON P\x00\x00\x00",
-    .gamecode = "APAE",
+    .game_title = "POKEMON P\x00\x00".*,
+    .gamecode = "APAE".*,
     .version = .pearl,
 
     .starters = diamond_info.starters,
@@ -114,8 +114,8 @@ const pearl_info = Info{
 };
 
 const platinum_info = Info{
-    .game_title = "POKEMON PL\x00\x00",
-    .gamecode = "CPUE",
+    .game_title = "POKEMON PL\x00".*,
+    .gamecode = "CPUE".*,
     .version = .platinum,
 
     .starters = StarterLocation{

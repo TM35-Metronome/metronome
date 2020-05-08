@@ -11,29 +11,29 @@ pub fn setTo(comptime Int: type, num: Int, bit: math.Log2Int(Int), value: bool) 
 }
 
 test "setTo" {
-    const v = u8(0b10);
-    testing.expectEqual(u8(0b11), setTo(u8, v, 0, true));
-    testing.expectEqual(u8(0b00), setTo(u8, v, 1, false));
+    const v = @as(u8, 0b10);
+    testing.expectEqual(@as(u8, 0b11), setTo(u8, v, 0, true));
+    testing.expectEqual(@as(u8, 0b00), setTo(u8, v, 1, false));
 }
 
 pub fn set(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
-    return num | (Int(1) << bit);
+    return num | (@as(Int, 1) << bit);
 }
 
 test "set" {
-    const v = u8(0b10);
-    testing.expectEqual(u8(0b11), set(u8, v, 0));
-    testing.expectEqual(u8(0b10), set(u8, v, 1));
+    const v = @as(u8, 0b10);
+    testing.expectEqual(@as(u8, 0b11), set(u8, v, 0));
+    testing.expectEqual(@as(u8, 0b10), set(u8, v, 1));
 }
 
 pub fn clear(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
-    return num & ~(Int(1) << bit);
+    return num & ~(@as(Int, 1) << bit);
 }
 
 test "clear" {
-    const v = u8(0b10);
-    testing.expectEqual(u8(0b10), clear(u8, v, 0));
-    testing.expectEqual(u8(0b00), clear(u8, v, 1));
+    const v = @as(u8, 0b10);
+    testing.expectEqual(@as(u8, 0b10), clear(u8, v, 0));
+    testing.expectEqual(@as(u8, 0b00), clear(u8, v, 1));
 }
 
 pub fn isSet(comptime Int: type, num: Int, bit: math.Log2Int(Int)) bool {
@@ -41,19 +41,19 @@ pub fn isSet(comptime Int: type, num: Int, bit: math.Log2Int(Int)) bool {
 }
 
 test "isSet" {
-    const v = u8(0b10);
+    const v = @as(u8, 0b10);
     testing.expect(!isSet(u8, v, 0));
     testing.expect(isSet(u8, v, 1));
 }
 
 pub fn toggle(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
-    return num ^ (Int(1) << bit);
+    return num ^ (@as(Int, 1) << bit);
 }
 
 test "toggle" {
-    const v = u8(0b10);
-    testing.expectEqual(u8(0b11), toggle(u8, v, 0));
-    testing.expectEqual(u8(0b00), toggle(u8, v, 1));
+    const v = @as(u8, 0b10);
+    testing.expectEqual(@as(u8, 0b11), toggle(u8, v, 0));
+    testing.expectEqual(@as(u8, 0b00), toggle(u8, v, 1));
 }
 
 pub fn count(comptime Int: type, num: Int) usize {
@@ -66,8 +66,8 @@ pub fn count(comptime Int: type, num: Int) usize {
 }
 
 test "count" {
-    testing.expectEqual(usize(0), count(u8, 0b0));
-    testing.expectEqual(usize(1), count(u8, 0b1));
-    testing.expectEqual(usize(2), count(u8, 0b101));
-    testing.expectEqual(usize(4), count(u8, 0b11011));
+    testing.expectEqual(@as(usize, 0), count(u8, 0b0));
+    testing.expectEqual(@as(usize, 1), count(u8, 0b1));
+    testing.expectEqual(@as(usize, 2), count(u8, 0b101));
+    testing.expectEqual(@as(usize, 4), count(u8, 0b11011));
 }

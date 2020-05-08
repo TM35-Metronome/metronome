@@ -27,7 +27,7 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
     if (data.len < 8)
         return error.BadHeader;
 
-    const inc_len = mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 4 ..][0..4].ptr));
+    const inc_len = mem.readIntLittle(u32, data[data.len - 4 ..][0..4]);
     const lengths = blk: {
         if (inc_len == 0) {
             return error.BadHeaderLength;
@@ -36,7 +36,7 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
             if (hdr_len < 8 or hdr_len > 0xB) return error.BadHeaderLength;
             if (data.len <= hdr_len) return error.BadLength;
 
-            const enc_len = mem.readIntLittle(u32, @ptrCast(*const [4]u8, data[data.len - 8 ..][0..4].ptr)) & 0x00FFFFFF;
+            const enc_len = mem.readIntLittle(u32, data[data.len - 8 ..][0..4]) & 0x00FFFFFF;
             const dec_len = try math.sub(u32, try math.cast(u32, data.len), enc_len);
             const pak_len = try math.sub(u32, enc_len, hdr_len);
             const raw_len = dec_len + enc_len + inc_len;
@@ -65,8 +65,8 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
     const pak_end = lengths.dec + lengths.pak;
     var pak = lengths.dec;
     var raw = lengths.dec;
-    var mask = usize(0);
-    var flags = usize(0);
+    var mask = @as(usize, 0);
+    var flags = @as(usize, 0);
 
     while (raw < lengths.raw) {
         mask = mask >> 1;
@@ -87,14 +87,14 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
         } else {
             if (pak + 1 >= pak_end) break;
 
-            const pos = (usize(pak_buffer[pak]) << 8) | pak_buffer[pak + 1];
+            const pos = (@as(usize, pak_buffer[pak]) << 8) | pak_buffer[pak + 1];
             pak += 2;
 
             const len = (pos >> 12) + threshold + 1;
             if (raw + len > lengths.raw) return error.WrongDecodedLength;
 
             const new_pos = (pos & 0xFFF) + 3;
-            var i = usize(0);
+            var i = @as(usize, 0);
             while (i < len) : (i += 1) {
                 result[raw] = result[raw - new_pos];
                 raw += 1;
@@ -114,13 +114,13 @@ pub const Mode = enum {
 };
 
 pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocator) ![]u8 {
-    var pak_tmp = usize(0);
+    var pak_tmp = @as(usize, 0);
     var raw_tmp = data.len;
     var pak_len = data.len + ((data.len + 7) / 8) + 11;
-    var pak = usize(0);
-    var raw = usize(0);
-    var mask = usize(0);
-    var flag = usize(0);
+    var pak = @as(usize, 0);
+    var raw = @as(usize, 0);
+    var mask = @as(usize, 0);
+    var flag = @as(usize, 0);
     var raw_end = blk: {
         var res = data.len;
         if (arm9) {
@@ -226,7 +226,7 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
 
         const enc_len = pak_tmp;
         const inc_len = data.len - pak_tmp - raw_tmp;
-        var hdr_len = usize(8);
+        var hdr_len = @as(usize, 8);
 
         while ((pak & 3) != 0) : ({
             pak += 1;
@@ -254,11 +254,11 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
 fn searchMatch(data: []const u8, match: []const u8) []const u8 {
     var best = data[0..0];
 
-    var pos = usize(0);
+    var pos = @as(usize, 0);
     while (pos < data.len) : (pos += 1) {
         const max = math.min(match.len, data.len - pos);
 
-        var len = usize(0);
+        var len = @as(usize, 0);
         while (len < max) : (len += 1) {
             if (data[pos + len] != match[len]) break;
         }
@@ -274,8 +274,8 @@ fn searchMatch(data: []const u8, match: []const u8) []const u8 {
 /// Finding best match of data[raw..raw+0x12] in data[max(0, raw - 0x1002)..raw]
 /// and return the pos and lenght to that match
 fn search(data: []const u8, raw: usize) []const u8 {
-    const max = math.min(raw, usize(0x1002));
-    const pattern = data[raw..math.min(usize(0x12) + raw, data.len)];
+    const max = math.min(raw, @as(usize, 0x1002));
+    const pattern = data[raw..math.min(@as(usize, 0x12) + raw, data.len)];
     const d = data[raw - max .. raw];
 
     return searchMatch(d, pattern);
@@ -283,7 +283,7 @@ fn search(data: []const u8, raw: usize) []const u8 {
 
 fn invert(data: []u8) void {
     var bottom = data.len - 1;
-    var i = usize(0);
+    var i = @as(usize, 0);
     while (i < bottom) : ({
         i += 1;
         bottom -= 1;

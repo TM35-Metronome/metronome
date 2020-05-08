@@ -162,7 +162,7 @@ pub const Trainer = extern struct {
         if (party.len < end)
             return null;
 
-        return &@bytesToSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
+        return &mem.bytesAsSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
     }
 };
 
@@ -757,7 +757,7 @@ pub const Species = extern struct {
     }
 
     pub fn setSpecies(s: *Species, spe: u10) void {
-        s.value = lu16.init((u16(s.form()) << u4(10)) | spe);
+        s.value = lu16.init((@as(u16, s.form()) << @as(u4, 10)) | spe);
     }
 
     pub fn form(s: Species) u6 {
@@ -765,7 +765,7 @@ pub const Species = extern struct {
     }
 
     pub fn setForm(s: *Species, f: u10) void {
-        s.value = lu16.init((u16(f) << u4(10)) | s.species());
+        s.value = lu16.init((@as(u16, f) << @as(u4, 10)) | s.species());
     }
 };
 
@@ -885,13 +885,13 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
-        const info = try getInfo(nds_rom.header.gamecode);
+        const info = try getOffsets(&nds_rom.header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = @bytesToSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
+        const hm_tms = mem.bytesAsSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
         const scripts = try getNarc(nds_rom.root, info.scripts);
-        const script_files = scripts.nodes.toSlice();
+        const script_files = scripts.nodes.items;
 
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
@@ -921,7 +921,7 @@ pub const Game = struct {
                         if (file.data.len < offset.offset + 2)
                             return error.CouldNotFindStarter;
 
-                        res[i][j] = &@bytesToSlice(lu16, file.data[offset.offset..][0..2])[0];
+                        res[i][j] = &mem.bytesAsSlice(lu16, file.data[offset.offset..][0..2])[0];
                     }
                 }
 
@@ -960,8 +960,8 @@ pub const Game = struct {
         if (version == .black or version == .white) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
-                .static_pokemons = ([*]*script.Command)(undefined)[0..0],
-                .pokeball_items = ([*]PokeballItem)(undefined)[0..0],
+                .static_pokemons = &[_]*script.Command{},
+                .pokeball_items = &[_]PokeballItem{},
             };
         }
 
@@ -973,7 +973,7 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.nodes.toSlice()) |node, script_i| {
+        for (scripts.nodes.items) |node, script_i| {
             const script_file = node.asFile() catch continue;
             const script_data = script_file.data;
             defer script_offsets.resize(0) catch unreachable;
@@ -992,8 +992,8 @@ pub const Game = struct {
             var var_800C: ?*lu16 = null;
 
             var offset_i: usize = 0;
-            while (offset_i < script_offsets.count()) : (offset_i += 1) {
-                const offset = script_offsets.at(offset_i);
+            while (offset_i < script_offsets.items.len) : (offset_i += 1) {
+                const offset = script_offsets.items[offset_i];
                 if (@intCast(isize, script_data.len) < offset)
                     return error.Error;
                 if (offset < 0)
@@ -1020,10 +1020,10 @@ pub const Game = struct {
                         //   set_var_eq_val 0x800C // Item given
                         //   set_var_eq_val 0x800D // Amount of items
                         //   jump ???
-                        .set_var_eq_val => switch (command.data.set_var_eq_val.container.value()) {
-                            0x800C => var_800C_tmp = &command.data.set_var_eq_val.value,
+                        .set_var_eq_val => switch (command.data().set_var_eq_val.container.value()) {
+                            0x800C => var_800C_tmp = &command.data().set_var_eq_val.value,
                             0x800D => if (var_800C) |item| {
-                                const amount = &command.data.set_var_eq_val.value;
+                                const amount = &command.data().set_var_eq_val.value;
                                 try pokeball_items.append(PokeballItem{
                                     .item = item,
                                     .amount = amount,
@@ -1032,12 +1032,12 @@ pub const Game = struct {
                             else => {},
                         },
                         .jump => {
-                            const off = command.data.jump.offset.value();
+                            const off = command.data().jump.offset.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
                         .@"if" => {
-                            const off = command.data.@"if".offset.value();
+                            const off = command.data().@"if".offset.value();
                             if (off >= 0)
                                 try script_offsets.append(off + @intCast(isize, decoder.i));
                         },
@@ -1060,11 +1060,11 @@ pub const Game = struct {
         }
     }
 
-    fn getInfo(gamecode: []const u8) !offsets.Info {
+    fn getOffsets(gamecode: []const u8) !offsets.Info {
         for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))
             //    continue;
-            if (!mem.eql(u8, info.gamecode, gamecode))
+            if (!mem.eql(u8, &info.gamecode, gamecode))
                 continue;
 
             return info;

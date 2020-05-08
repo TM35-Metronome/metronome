@@ -61,8 +61,7 @@ pub const Rom = struct {
     root: *fs.Nitro,
 
     pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {
-        var file_stream = file.inStream();
-        var stream = &file_stream.stream;
+        const stream = file.inStream();
 
         const header = try stream.readStruct(Header);
         try header.validate();
@@ -84,7 +83,7 @@ pub const Rom = struct {
         errdefer allocator.free(arm9);
         const nitro_footer = blk: {
             var res: [3]lu32 = undefined;
-            try stream.readNoEof(@sliceToBytes(res[0..]));
+            try stream.readNoEof(mem.sliceAsBytes(res[0..]));
             break :blk res;
         };
 
@@ -108,7 +107,7 @@ pub const Rom = struct {
         try file.seekTo(header.fat_offset.value());
         const fat = try allocator.alloc(fs.FatEntry, header.fat_size.value() / @sizeOf(fs.FatEntry));
         errdefer allocator.free(fat);
-        try stream.readNoEof(@sliceToBytes(fat));
+        try stream.readNoEof(mem.sliceAsBytes(fat));
 
         const root = try fs.readNitro(file, allocator, fnt, fat);
         errdefer root.destroy();
@@ -116,7 +115,7 @@ pub const Rom = struct {
         try file.seekTo(header.arm9_overlay_offset.value());
         const arm9_overlay_table = try allocator.alloc(Overlay, header.arm9_overlay_size.value() / @sizeOf(Overlay));
         errdefer allocator.free(arm9_overlay_table);
-        try stream.readNoEof(@sliceToBytes(arm9_overlay_table));
+        try stream.readNoEof(mem.sliceAsBytes(arm9_overlay_table));
 
         const arm9_overlay_files = try overlay.readFiles(file, allocator, arm9_overlay_table, fat);
         errdefer overlay.freeFiles(arm9_overlay_files, allocator);
@@ -124,7 +123,7 @@ pub const Rom = struct {
         try file.seekTo(header.arm7_overlay_offset.value());
         const arm7_overlay_table = try allocator.alloc(Overlay, header.arm7_overlay_size.value() / @sizeOf(Overlay));
         errdefer allocator.free(arm7_overlay_table);
-        try stream.readNoEof(@sliceToBytes(arm7_overlay_table));
+        try stream.readNoEof(mem.sliceAsBytes(arm7_overlay_table));
 
         const arm7_overlay_files = try overlay.readFiles(file, allocator, arm7_overlay_table, fat);
         errdefer overlay.freeFiles(arm7_overlay_files, allocator);
@@ -158,9 +157,9 @@ pub const Rom = struct {
         //       so we should probably give them the option to do so.
         //       Maybe encoding and decoding, is something that should be done outside the loading/saving
         //       of roms. Hmmm :thinking:
-        try file.write(rom.arm9);
+        try file.writeAll(rom.arm9);
         if (rom.hasNitroFooter()) {
-            try file.write(@sliceToBytes(rom.nitro_footer[0..]));
+            try file.writeAll(mem.sliceAsBytes(rom.nitro_footer[0..]));
         }
 
         header.arm9_rom_offset = lu32.init(@intCast(u32, arm9_pos));
@@ -175,13 +174,13 @@ pub const Rom = struct {
 
             break :blk res;
         };
-        try file.write(rom.arm7);
+        try file.writeAll(rom.arm7);
 
         header.arm7_rom_offset = lu32.init(@intCast(u32, arm7_pos));
         header.arm7_size = lu32.init(@intCast(u32, rom.arm7.len));
 
         const banner_pos = try file.getPos();
-        try file.write(mem.toBytes(rom.banner));
+        try file.writeAll(&mem.toBytes(rom.banner));
 
         header.banner_offset = lu32.init(@intCast(u32, banner_pos));
         header.banner_size = lu32.init(@sizeOf(Banner));
@@ -192,8 +191,8 @@ pub const Rom = struct {
         const sub_fnt = fntAndFiles.sub_fnt;
 
         const fnt_pos = try file.getPos();
-        try file.write(@sliceToBytes(main_fnt));
-        try file.write(sub_fnt);
+        try file.writeAll(mem.sliceAsBytes(main_fnt));
+        try file.writeAll(sub_fnt);
 
         header.fnt_offset = lu32.init(@intCast(u32, fnt_pos));
         header.fnt_size = lu32.init(@intCast(u32, main_fnt.len * @sizeOf(fs.FntMainEntry) + sub_fnt.len));
@@ -209,7 +208,7 @@ pub const Rom = struct {
 
         for (rom.arm9_overlay_files) |f, i| {
             const pos = @intCast(u32, try file.getPos());
-            try file.write(f);
+            try file.writeAll(f);
             fat.append(fs.FatEntry.init(pos, @intCast(u32, try file.getPos()) - pos)) catch unreachable;
 
             const table_entry = &rom.arm9_overlay_table[i];
@@ -219,7 +218,7 @@ pub const Rom = struct {
 
         for (rom.arm7_overlay_files) |f, i| {
             const pos = @intCast(u32, try file.getPos());
-            try file.write(f);
+            try file.writeAll(f);
             fat.append(fs.FatEntry.init(pos, @intCast(u32, try file.getPos()) - pos)) catch unreachable;
 
             const table_entry = &rom.arm7_overlay_table[i];
@@ -228,19 +227,19 @@ pub const Rom = struct {
         }
 
         const fat_pos = try file.getPos();
-        try file.write(@sliceToBytes(fat.toSliceConst()));
+        try file.writeAll(mem.sliceAsBytes(fat.items));
 
         header.fat_offset = lu32.init(@intCast(u32, fat_pos));
         header.fat_size = lu32.init(@intCast(u32, (files.len + rom.arm9_overlay_table.len + rom.arm7_overlay_table.len) * @sizeOf(fs.FatEntry)));
 
         const arm9_overlay_pos = try file.getPos();
-        try file.write(@sliceToBytes(rom.arm9_overlay_table));
+        try file.writeAll(mem.sliceAsBytes(rom.arm9_overlay_table));
 
         header.arm9_overlay_offset = lu32.init(@intCast(u32, arm9_overlay_pos));
         header.arm9_overlay_size = lu32.init(@intCast(u32, rom.arm9_overlay_table.len * @sizeOf(Overlay)));
 
         const arm7_overlay_pos = try file.getPos();
-        try file.write(@sliceToBytes(rom.arm7_overlay_table));
+        try file.writeAll(mem.sliceAsBytes(rom.arm7_overlay_table));
 
         header.arm7_overlay_offset = lu32.init(@intCast(u32, arm7_overlay_pos));
         header.arm7_overlay_size = lu32.init(@intCast(u32, rom.arm7_overlay_table.len * @sizeOf(Overlay)));
@@ -250,7 +249,7 @@ pub const Rom = struct {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = header.total_used_rom_size.value();
             var device_cap: u6 = 0;
-            while (@shlExact(u64(128000), device_cap) < size) : (device_cap += 1) {}
+            while (@shlExact(@as(u64, 128000), device_cap) < size) : (device_cap += 1) {}
 
             break :blk device_cap;
         };
@@ -258,7 +257,7 @@ pub const Rom = struct {
 
         try header.validate();
         try file.seekTo(0x00);
-        try file.write(mem.toBytes(header));
+        try file.writeAll(&mem.toBytes(header));
     }
 
     pub fn hasNitroFooter(rom: Rom) bool {

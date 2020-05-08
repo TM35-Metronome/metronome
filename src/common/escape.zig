@@ -17,14 +17,14 @@ const chars = blk: {
 pub const default_escapes = blk: {
     var res: [255][]const u8 = undefined;
     for (res) |*slice, i|
-        slice.* = (*const [1]u8)(&chars[i]);
+        slice.* = @as(*const [1]u8, &chars[i])[0..];
 
     break :blk res;
 };
 
 pub fn writeEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
     for (buf) |char| {
-        try out_stream.write(escapes[char]);
+        try out_stream.writeAll(escapes[char]);
     }
 }
 
@@ -41,9 +41,9 @@ test "writeEscaped" {
 
 fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
     var buf: [1024]u8 = undefined;
-    var sos = io.SliceOutStream.init(&buf);
-    writeEscaped(&sos.stream, str, escapes) catch unreachable;
-    testing.expectEqualSlices(u8, expect, sos.getWritten());
+    var fbs = io.fixedBufferStream(&buf);
+    writeEscaped(fbs.outStream(), str, escapes) catch unreachable;
+    testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 
 pub fn writeUnEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
@@ -52,12 +52,12 @@ pub fn writeUnEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8
         for (escapes) |escape, c| {
             if (mem.startsWith(u8, buf[index..], escape)) {
                 index += escape.len;
-                try out_stream.write((*const [1]u8)(&@intCast(u8, c)));
+                try out_stream.writeAll(@as(*const [1]u8, &@intCast(u8, c)));
                 continue :outer;
             }
         }
 
-        try out_stream.write(buf[index .. index + 1]);
+        try out_stream.writeAll(buf[index .. index + 1]);
         index += 1;
     }
 }
@@ -74,14 +74,14 @@ test "writeUnEscaped" {
 
 fn testWriteUnEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
     var buf: [1024]u8 = undefined;
-    var sos = io.SliceOutStream.init(&buf);
-    writeUnEscaped(&sos.stream, str, escapes) catch unreachable;
-    testing.expectEqualSlices(u8, expect, sos.getWritten());
+    var fbs = io.fixedBufferStream(&buf);
+    writeUnEscaped(fbs.outStream(), str, escapes) catch unreachable;
+    testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 
-pub fn separateEscaped(buffer: []const u8, escape: []const u8, delimiter: []const u8) EscapedSeparator {
+pub fn splitEscaped(buffer: []const u8, escape: []const u8, delimiter: []const u8) EscapedSplitter {
     std.debug.assert(delimiter.len != 0);
-    return EscapedSeparator{
+    return EscapedSplitter{
         .index = 0,
         .buffer = buffer,
         .escape = escape,
@@ -89,14 +89,14 @@ pub fn separateEscaped(buffer: []const u8, escape: []const u8, delimiter: []cons
     };
 }
 
-pub const EscapedSeparator = struct {
+pub const EscapedSplitter = struct {
     buffer: []const u8,
     index: ?usize,
     escape: []const u8,
     delimiter: []const u8,
 
     /// Returns a slice of the next field, or null if splitting is complete.
-    pub fn next(self: *EscapedSeparator) ?[]const u8 {
+    pub fn next(self: *EscapedSplitter) ?[]const u8 {
         const start = self.index orelse return null;
         var start2 = start;
 
@@ -124,42 +124,42 @@ pub const EscapedSeparator = struct {
     }
 
     /// Returns a slice of the remaining bytes. Does not affect iterator state.
-    pub fn rest(self: EscapedSeparator) []const u8 {
+    pub fn rest(self: EscapedSplitter) []const u8 {
         const end = self.buffer.len;
         const start = self.index orelse end;
         return self.buffer[start..end];
     }
 };
 
-test "separateEscaped" {
-    var it = separateEscaped("abc|def||ghi\\|jkl", "\\", "|");
+test "splitEscaped" {
+    var it = splitEscaped("abc|def||ghi\\|jkl", "\\", "|");
     testing.expectEqualSlices(u8, "abc", it.next().?);
     testing.expectEqualSlices(u8, "def", it.next().?);
     testing.expectEqualSlices(u8, "", it.next().?);
     testing.expectEqualSlices(u8, "ghi\\|jkl", it.next().?);
     testing.expect(it.next() == null);
 
-    it = separateEscaped("", "\\", "|");
+    it = splitEscaped("", "\\", "|");
     testing.expectEqualSlices(u8, "", it.next().?);
     testing.expect(it.next() == null);
 
-    it = separateEscaped("|", "\\", "|");
+    it = splitEscaped("|", "\\", "|");
     testing.expectEqualSlices(u8, "", it.next().?);
     testing.expectEqualSlices(u8, "", it.next().?);
     testing.expect(it.next() == null);
 
-    it = separateEscaped("hello", "\\", " ");
+    it = splitEscaped("hello", "\\", " ");
     testing.expectEqualSlices(u8, it.next().?, "hello");
     testing.expect(it.next() == null);
 
-    it = separateEscaped("\\,\\,,", "\\", ",");
+    it = splitEscaped("\\,\\,,", "\\", ",");
     testing.expectEqualSlices(u8, it.next().?, "\\,\\,");
     testing.expectEqualSlices(u8, it.next().?, "");
     testing.expect(it.next() == null);
 }
 
-test "separateEscaped (multibyte)" {
-    var it = separateEscaped("a, b ,, c, d, e\\\\, f", "\\\\", ", ");
+test "splitEscaped (multibyte)" {
+    var it = splitEscaped("a, b ,, c, d, e\\\\, f", "\\\\", ", ");
     testing.expectEqualSlices(u8, it.next().?, "a");
     testing.expectEqualSlices(u8, it.next().?, "b ,");
     testing.expectEqualSlices(u8, it.next().?, "c");
