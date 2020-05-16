@@ -410,28 +410,33 @@ pub const Game = struct {
     allocator: *mem.Allocator,
 
     starters: [3]*lu16,
-    pokemons: *const nds.fs.Narc,
-    evolutions: *const nds.fs.Narc,
-    moves: *const nds.fs.Narc,
-    level_up_moves: *const nds.fs.Narc,
-    trainers: *const nds.fs.Narc,
-    parties: *const nds.fs.Narc,
-    wild_pokemons: *const nds.fs.Narc,
-    itemdata: *const nds.fs.Narc,
-    scripts: *const nds.fs.Narc,
+    pokemons: nds.fs.Fs,
+    evolutions: nds.fs.Fs,
+    moves: nds.fs.Fs,
+    level_up_moves: nds.fs.Fs,
+    trainers: nds.fs.Fs,
+    parties: nds.fs.Fs,
+    wild_pokemons: nds.fs.Fs,
+    itemdata: nds.fs.Fs,
+    scripts: nds.fs.Fs,
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
-        const info = try getOffsets(&nds_rom.header.game_title, &nds_rom.header.gamecode);
-        const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+        try nds_rom.decodeArm9();
+        const header = nds_rom.header();
+        const arm9 = nds_rom.arm9();
+        const file_system = nds_rom.fileSystem();
+
+        const info = try getOffsets(&header.game_title, &header.gamecode);
+        const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = mem.bytesAsSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
+        const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
 
-        const scripts = try getNarc(nds_rom.root, info.scripts);
+        const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -617,11 +622,8 @@ pub const Game = struct {
         return error.NotGen4Game;
     }
 
-    pub fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
-        const file = file_system.getFile(path) orelse return error.FileNotFound;
-        switch (file.*) {
-            .binary => return error.FileNotNarc,
-            .narc => |res| return res,
-        }
+    pub fn getNarc(file_system: nds.fs.Fs, path: []const []const u8) !nds.fs.Fs {
+        const file = file_system.lookup(path) orelse return error.FileNotFound;
+        return try nds.fs.Fs.fromNarc(file);
     }
 };
