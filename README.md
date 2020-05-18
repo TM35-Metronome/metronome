@@ -8,7 +8,7 @@ A set of tools for randomizing and modifying Pokémon games.
 ## Build
 
 External dependencies:
-* [Zig `0.5.0`](https://ziglang.org/download/)
+* [Zig `0.6.0`](https://ziglang.org/download/)
 * Linux only:
   * [zenity](https://github.com/GNOME/zenity) (optional file dialog)
 
