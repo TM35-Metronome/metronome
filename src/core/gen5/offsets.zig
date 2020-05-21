@@ -1,4 +1,4 @@
-const common = @import("..", "common.zig");
+const common = @import("../common.zig");
 
 pub const NarcOffset = struct {
     file: usize,
@@ -51,15 +51,15 @@ const black2_info = Info{
             NarcOffset{ .file = 854, .offset = 0x5EC },
         },
     },
-    .scripts = [_][]const u8{ "a", "0", "5", "6" },
-    .pokemons = [_][]const u8{ "a", "0", "1", "6" },
-    .evolutions = [_][]const u8{ "a", "0", "1", "9" },
-    .level_up_moves = [_][]const u8{ "a", "0", "1", "8" },
-    .moves = [_][]const u8{ "a", "0", "2", "1" },
-    .trainers = [_][]const u8{ "a", "0", "9", "1" },
-    .parties = [_][]const u8{ "a", "0", "9", "2" },
-    .wild_pokemons = [_][]const u8{ "a", "1", "2", "7" },
-    .itemdata = [_][]const u8{ "a", "0", "2", "4" },
+    .scripts = &[_][]const u8{ "a", "0", "5", "6" },
+    .pokemons = &[_][]const u8{ "a", "0", "1", "6" },
+    .evolutions = &[_][]const u8{ "a", "0", "1", "9" },
+    .level_up_moves = &[_][]const u8{ "a", "0", "1", "8" },
+    .moves = &[_][]const u8{ "a", "0", "2", "1" },
+    .trainers = &[_][]const u8{ "a", "0", "9", "1" },
+    .parties = &[_][]const u8{ "a", "0", "9", "2" },
+    .wild_pokemons = &[_][]const u8{ "a", "1", "2", "7" },
+    .itemdata = &[_][]const u8{ "a", "0", "2", "4" },
 };
 
 const white2_info = Info{
@@ -110,14 +110,14 @@ const black_info = Info{
             NarcOffset{ .file = 304, .offset = 0x1D9 },
         },
     },
-    .scripts = [_][]const u8{ "a", "0", "5", "7" },
+    .scripts = &[_][]const u8{ "a", "0", "5", "7" },
     .pokemons = black2_info.pokemons,
     .evolutions = black2_info.evolutions,
     .level_up_moves = black2_info.level_up_moves,
     .moves = black2_info.moves,
-    .trainers = [_][]const u8{ "a", "0", "9", "2" },
-    .parties = [_][]const u8{ "a", "0", "9", "3" },
-    .wild_pokemons = [_][]const u8{ "a", "1", "2", "6" },
+    .trainers = &[_][]const u8{ "a", "0", "9", "2" },
+    .parties = &[_][]const u8{ "a", "0", "9", "3" },
+    .wild_pokemons = &[_][]const u8{ "a", "1", "2", "6" },
     .itemdata = black2_info.itemdata,
 };
 

@@ -885,13 +885,17 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
-        const info = try getOffsets(&nds_rom.header.gamecode);
-        const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+        try nds_rom.decodeArm9();
+        const header = nds_rom.header();
+        const arm9 = nds_rom.arm9();
+        const file_system = nds_rom.fileSystem();
+
+        const info = try getOffsets(&header.gamecode);
+        const hm_tm_prefix_index = mem.indexOf(u8, arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = mem.bytesAsSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tm_len]);
-        const scripts = try getNarc(nds_rom.root, info.scripts);
-        const script_files = scripts.nodes.items;
+        const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tm_len]);
+        const scripts = try getNarc(file_system, info.scripts);
 
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
@@ -913,29 +917,23 @@ pub const Game = struct {
                     filled += 1;
 
                     for (offs) |offset, j| {
-                        if (script_files.len <= offset.file)
-                            return error.CouldNotFindStarter;
-
-                        const node = script_files[offset.file];
-                        const file = try nodeAsFile(node);
-                        if (file.data.len < offset.offset + 2)
-                            return error.CouldNotFindStarter;
-
-                        res[i][j] = &mem.bytesAsSlice(lu16, file.data[offset.offset..][0..2])[0];
+                        const fat = scripts.fat[offset.file];
+                        const file_data = scripts.data[fat.start.value()..fat.end.value()];
+                        res[i][j] = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
                     }
                 }
 
                 break :blk res;
             },
             .scripts = scripts,
-            .pokemons = try getNarc(nds_rom.root, info.pokemons),
-            .evolutions = try getNarc(nds_rom.root, info.evolutions),
-            .level_up_moves = try getNarc(nds_rom.root, info.level_up_moves),
-            .moves = try getNarc(nds_rom.root, info.moves),
-            .trainers = try getNarc(nds_rom.root, info.trainers),
-            .parties = try getNarc(nds_rom.root, info.parties),
-            .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
-            .itemdata = try getNarc(nds_rom.root, info.itemdata),
+            .pokemons = try getNarc(file_system, info.pokemons),
+            .evolutions = try getNarc(file_system, info.evolutions),
+            .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .moves = try getNarc(file_system, info.moves),
+            .trainers = try getNarc(file_system, info.trainers),
+            .parties = try getNarc(file_system, info.parties),
+            .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
+            .itemdata = try getNarc(file_system, info.itemdata),
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
@@ -956,7 +954,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
         if (version == .black or version == .white) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
@@ -973,9 +971,8 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.nodes.items) |node, script_i| {
-            const script_file = node.asFile() catch continue;
-            const script_data = script_file.data;
+        for (scripts.fat) |fat, script_i| {
+            const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.resize(0) catch unreachable;
 
             for (script.getScriptOffsets(script_data)) |relative_offset, i| {
@@ -1073,13 +1070,8 @@ pub const Game = struct {
         return error.NotGen5Game;
     }
 
-    fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
-        const file = file_system.getFile(path) orelse return error.FileNotFound;
-
-        const Tag = @TagType(nds.fs.Nitro.File);
-        switch (file.*) {
-            .binary => return error.FileNotNarc,
-            .narc => |res| return res,
-        }
+    pub fn getNarc(file_system: nds.fs.Fs, path: []const []const u8) !nds.fs.Fs {
+        const file = file_system.lookup(path) orelse return error.FileNotFound;
+        return try nds.fs.Fs.fromNarc(file);
     }
 };

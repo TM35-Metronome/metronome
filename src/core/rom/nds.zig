@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const blz = @import("nds/blz.zig");
-const overlay = @import("nds/overlay.zig");
 const int = @import("int.zig");
 
 const debug = std.debug;
@@ -18,7 +17,6 @@ pub const fs = @import("nds/fs.zig");
 
 pub const Banner = @import("nds/banner.zig").Banner;
 pub const Header = @import("nds/header.zig").Header;
-pub const Overlay = overlay.Overlay;
 
 test "nds" {
     _ = @import("nds/banner.zig");
@@ -26,9 +24,19 @@ test "nds" {
     _ = @import("nds/formats.zig");
     _ = @import("nds/fs.zig");
     _ = @import("nds/header.zig");
-    _ = @import("nds/overlay.zig");
     _ = @import("nds/test.zig");
 }
+
+pub const Overlay = extern struct {
+    overlay_id: lu32,
+    ram_address: lu32,
+    ram_size: lu32,
+    bss_size: lu32,
+    static_initialiser_start_address: lu32,
+    static_initialiser_end_address: lu32,
+    file_id: lu32,
+    reserved: [4]u8,
+};
 
 pub const Rom = struct {
     allocator: *mem.Allocator,
@@ -52,6 +60,15 @@ pub const Rom = struct {
         const h = rom.header();
         const offset = h.arm9_rom_offset.value();
         return rom.data[offset..][0..h.arm9_size.value()];
+    }
+
+    pub fn nitroFooter(rom: Rom) []u8 {
+        const h = rom.header();
+        const offset = h.arm9_rom_offset.value() + h.arm9_size.value();
+        const footer = rom.data[offset..][0..12];
+        if (!mem.startsWith(u8, footer, &lu32.init(0xDEC00621).bytes))
+            return footer[0..0];
+        return footer;
     }
 
     /// Decodes the arm9 section of the rom inplace. This function might not do anything
@@ -89,11 +106,11 @@ pub const Rom = struct {
         const h = rom.header();
         const fnt_offset = h.fnt_offset.value();
         const fat_offset = h.fat_offset.value();
-        const fnt_bytes = rom.data[offset..][0..h.fnt_size.value()];
-        const fat_bytes = rom.data[offset..][0..h.fat_size.value()];
+        const fnt_bytes = rom.data[fnt_offset..][0..h.fnt_size.value()];
+        const fat_bytes = rom.data[fat_offset..][0..h.fat_size.value()];
         return fs.Fs{
             .fnt = fnt_bytes,
-            .fat = mem.bytesAsSlice(fs.FatEntry, bytes),
+            .fat = mem.bytesAsSlice(fs.FatEntry, fat_bytes),
             .data = rom.data,
         };
     }
@@ -122,7 +139,7 @@ pub const Rom = struct {
         // The contract here is that once you have an `nds.Rom`, it should
         // always be a valid rom, so we just assert that this is true here
         // for sanity.
-        res.header().validate() catch unreachable;
+        rom.header().validate() catch unreachable;
         try file.writeAll(rom.data);
 
         // TODO: Left over form old code. I need to make sure these fields are updated

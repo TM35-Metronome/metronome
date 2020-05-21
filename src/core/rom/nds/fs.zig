@@ -20,74 +20,89 @@ pub const Fs = struct {
     data: []u8,
 
     pub fn lookup(fs: Fs, path: []const []const u8) ?[]u8 {
-        const fat = fs.loopupFat(path) orelse return null;
+        const fat = fs.lookupFat(path) orelse return null;
         return fs.data[fat.start.value()..fat.end.value()];
     }
 
     pub fn lookupFat(fs: Fs, path: []const []const u8) ?FatEntry {
-        const Kind = enum(u8) {
-            file = 0x00,
-            folder = 0x80,
-        };
-
-        const fnt_main_table = blk: {
-            const rem = fnt.len % @sizeOf(FntMainEntry);
-            const fnt_mains = mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
-            const len = fnt_mains[0].parent_id.value();
-
-            assert(fnt_mains.len >= len and len <= 4096 and len != 0);
-            break :blk fnt_mains[0..len];
-        };
-
-        const fnt_first = fnt_main_table[0];
-        const first_offset = fnt_first.offset_to_subtable.value();
-        assert(fnt.len >= first_offset);
-
-        var fnt_entry = fnt_first;
-        var offset = first_offset;
-        var file_id = fnt_first.first_file_id_in_subtable.value();
-        for (path) |folder, i| {
+        var it = fs.iterate(0);
+        outer: for (path) |folder, i| {
             const is_last = i == path.len - 1;
 
-            var fbs = io.fixedBufferStream(fnt[offset..]);
-            const stream = fbs.inStream();
-            while (true) {
-                const type_length = try stream.readByte();
-                if (type_length == 0)
-                    return null;
-
-                const length = type_length & 0x7F;
-                const kind = @intToEnum(Kind, type_length & 0x80);
-                const name = fnt_sub_table[fbs.pos..][0..length];
-                fbs.pos += length;
-
-                switch (kind) {
+            while (it.next()) |entry| {
+                switch (entry.kind) {
                     .file => {
-                        const fat_entry = fat[file_id];
-                        if (is_last and mem.eql(u8, name, folder))
-                            return fat_entry;
-
-                        file_id += 1;
+                        if (is_last and mem.eql(u8, entry.name, folder))
+                            return fs.fat[entry.id];
                     },
                     .folder => {
-                        const read_id = try stream.readIntLittle(u16);
-                        assert(read_id >= 0xF001 and read_id <= 0xFFFF);
-
-                        const id = read_id & 0x0FFF;
-                        assert(fnt_main_table.len > id);
-                        if (is_last or !mem.eql(u8, name, folder))
+                        if (is_last or !mem.eql(u8, entry.name, folder))
                             continue;
 
-                        fnt_entry = fnt_main_table[id];
-                        file_id = fnt_entry.first_file_id_in_subtable.value();
-                        offset = fnt_entry.offset_to_subtable.value();
+                        it = fs.iterate(entry.id);
                         continue :outer; // We found the folder. Continue on to the next one
                     },
                 }
             }
+            return null;
         }
+        unreachable;
     }
 
+    pub fn iterate(fs: Fs, folder_id: u32) Iterator {
+        const fnt_main_table = blk: {
+            const rem = fs.fnt.len % @sizeOf(FntMainEntry);
+            const fnt_mains = mem.bytesAsSlice(FntMainEntry, fs.fnt[0 .. fs.fnt.len - rem]);
+            const len = fnt_mains[0].parent_id.value();
+
+            debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
+            break :blk fnt_mains[0..len];
+        };
+
+        const fnt_entry = fnt_main_table[folder_id];
+        const file_id = fnt_entry.first_file_id_in_subtable.value();
+        const offset = fnt_entry.offset_to_subtable.value();
+        debug.assert(fs.fnt.len >= offset);
+
+        return Iterator{
+            .file_id = file_id,
+            .fnt_sub_table = fs.fnt[offset..],
+        };
+    }
+
+    pub fn at(fs: Fs, i: usize) []u8 {
+        const fat = fs.fat[i];
+        return fs.data[fat.start.value()..fat.end.value()];
+    }
+
+    /// Reinterprets the file system as a slice of T. This can only be
+    /// done if the file system is arranged in a certain way:
+    /// * All files must have the same size of `@sizeOf(T)`
+    /// * All files must be arranged sequentially in memory with no padding
+    ///   and in the same order as the `fat`.
+    ///
+    /// This function is useful when working with roms that stores arrays
+    /// of structs in narc file systems.
+    pub fn toSlice(fs: Fs, comptime T: type) ![]T {
+        if (fs.fat.len == 0)
+            return &[0]T{};
+
+        const start = fs.fat[0].start.value();
+        var end = start;
+        for (fs.fat) |fat| {
+            const fat_start = fat.start.value();
+            if (fat_start != end)
+                return error.FsIsNotSequential;
+            if (fat.size() != @sizeOf(T))
+                return error.FsIsNotType;
+            end = fat.end.value();
+        }
+
+        return mem.bytesAsSlice(T, fs.data[start..end]);
+    }
+
+    /// Get a file system from a narc file. This function can faile if the
+    /// bytes are not a valid narc.
     pub fn fromNarc(data: []u8) !Fs {
         var fbs = io.fixedBufferStream(data);
         const stream = fbs.inStream();
@@ -107,7 +122,7 @@ pub const Fs = struct {
         if (!mem.eql(u8, &fat_header.header.name, names.fat))
             return error.InvalidNarcHeader;
 
-        const fat_size = fat_header.chunk.size.value() - @sizeOf(formats.FatChunk);
+        const fat_size = fat_header.header.size.value() - @sizeOf(formats.FatChunk);
         const fat = mem.bytesAsSlice(FatEntry, data[fbs.pos..][0..fat_size]);
         fbs.pos += fat_size;
 
@@ -129,6 +144,52 @@ pub const Fs = struct {
             .data = data[fbs.pos..],
         };
     }
+};
+
+pub const Iterator = struct {
+    file_id: u32,
+    fnt_sub_table: []const u8,
+
+    pub fn next(it: *Iterator) ?Entry {
+        var fbs = io.fixedBufferStream(it.fnt_sub_table);
+
+        const stream = fbs.inStream();
+        const type_length = stream.readByte() catch return null;
+        if (type_length == 0)
+            return null;
+
+        const length = type_length & 0x7F;
+        const is_folder = (type_length & 0x80) != 0;
+        const name = fbs.buffer[fbs.pos..][0..length];
+        fbs.pos += length;
+
+        const id = if (is_folder) blk: {
+            const read_id = stream.readIntLittle(u16) catch return null;
+            debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
+            break :blk read_id & 0x0FFF;
+        } else blk: {
+            defer it.file_id += 1;
+            break :blk it.file_id;
+        };
+
+        it.fnt_sub_table = fbs.buffer[fbs.pos..];
+        return Entry{
+            .kind = if (is_folder) .folder else .file,
+            .id = id,
+            .name = name,
+        };
+    }
+};
+
+pub const Entry = struct {
+    kind: Kind,
+    id: u32,
+    name: []const u8,
+
+    pub const Kind = enum {
+        file,
+        folder,
+    };
 };
 
 pub const FntMainEntry = packed struct {

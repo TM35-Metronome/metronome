@@ -520,22 +520,24 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         if (version != game.version)
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
+        const header = nds_rom.header();
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
-        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
+        const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
+        if (!mem.eql(u8, value, header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
+        const header = nds_rom.header();
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
+        if (!mem.eql(u8, value, &header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
         const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
         game.starters[starter_index].* = value;
     } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.items;
+        const trainers = try game.trainers.toSlice(gen4.Trainer);
         const trainer_index = try parser.eatIndexMax(trainers.len);
-        const trainer = try trainers[trainer_index].asDataFile(gen4.Trainer);
+        const trainer = &trainers[trainer_index];
 
         if (parser.eatField("class")) {
             trainer.class = try parser.eatUnsignedValue(u8, 10);
@@ -549,10 +551,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         } else |_| if (parser.eatField("ai")) {
             trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
         } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.items;
             const party_index = try parser.eatIndexMax(trainer.party_size);
-            const party_file = try parties[trainer_index].asFile();
-            const member = trainer.partyMember(game.version, party_file.data, party_index) orelse return error.OutOfBound;
+            const party_file = game.parties.at(trainer_index);
+            const member = trainer.partyMember(game.version, party_file, party_index) orelse return error.OutOfBound;
 
             if (parser.eatField("iv")) {
                 member.iv = try parser.eatUnsignedValue(u8, 10);
@@ -594,9 +595,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.items;
+        const moves = try game.moves.toSlice(gen4.Move);
         const move_index = try parser.eatIndexMax(moves.len);
-        const move = try moves[move_index].asDataFile(gen4.Move);
+        const move = &moves[move_index];
 
         if (parser.eatField("category")) {
             move.category = try parser.eatEnumValue(common.MoveCategory);
@@ -612,9 +613,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.items;
+        const pokemons = try game.pokemons.toSlice(gen4.BasePokemon);
         const pokemon_index = try parser.eatIndexMax(pokemons.len);
-        const pokemon = try pokemons[pokemon_index].asDataFile(gen4.BasePokemon);
+        const pokemon = &pokemons[pokemon_index];
 
         if (parser.eatField("stats")) {
             if (parser.eatField("hp")) {
@@ -692,10 +693,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const learnset = &pokemon.machine_learnset;
             learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len), value));
         } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
-            const bytes = evos_file.data;
-            const rem = bytes.len % @sizeOf(gen4.Evolution);
-            const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
+            const evos_file = game.evolutions.at(pokemon_index);
+            const rem = evos_file.len % @sizeOf(gen4.Evolution);
+            const evos = mem.bytesAsSlice(gen4.Evolution, evos_file[0 .. evos_file.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
             const evo = &evos[evo_index];
 
@@ -709,8 +709,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             }
         } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
-            const bytes = level_up_moves_file.data;
+            const bytes = game.level_up_moves.at(pokemon_index);
             const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
             const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
             const index = try parser.eatIndexMax(level_up_moves.len);
@@ -732,9 +731,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
     } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.items;
+        const items = try game.itemdata.toSlice(gen4.Item);
         const item_index = try parser.eatIndexMax(items.len);
-        const item = try items[item_index].asDataFile(gen4.Item);
+        const item = &items[item_index];
 
         if (parser.eatField("price")) {
             item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
@@ -816,8 +815,8 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.items;
-        const zone_index = try parser.eatIndexMax(wild_pokemons.len);
+        const wild_pokemons = game.wild_pokemons;
+        const zone_index = try parser.eatIndexMax(wild_pokemons.fat.len);
         try parser.eatField("wild");
 
         switch (game.version) {
@@ -825,7 +824,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             .pearl,
             .platinum,
             => {
-                const wilds = try wild_pokemons[zone_index].asDataFile(gen4.DpptWildPokemons);
+                const wilds = &(try wild_pokemons.toSlice(gen4.DpptWildPokemons))[zone_index];
                 if (parser.eatField("grass")) {
                     if (parser.eatField("encounter_rate")) {
                         wilds.grass_rate = lu32.init(try parser.eatUnsignedValue(u32, 10));
@@ -911,7 +910,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             .heart_gold,
             .soul_silver,
             => {
-                const wilds = try wild_pokemons[zone_index].asDataFile(gen4.HgssWildPokemons);
+                const wilds = &(try wild_pokemons.toSlice(gen4.HgssWildPokemons))[zone_index];
                 inline for ([_][]const u8{
                     "grass_morning",
                     "grass_day",
@@ -1012,13 +1011,15 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         if (version != game.version)
             return error.VersionDontMatch;
     } else |_| if (parser.eatField("game_title")) {
+        const header = nds_rom.header();
         const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
-        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
+        const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
+        if (!mem.eql(u8, value, header.game_title[0..null_index]))
             return error.GameTitleDontMatch;
     } else |_| if (parser.eatField("gamecode")) {
+        const header = nds_rom.header();
         const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
+        if (!mem.eql(u8, value, &header.gamecode))
             return error.GameCodeDontMatch;
     } else |_| if (parser.eatField("starters")) {
         const starter_index = try parser.eatIndexMax(game.starters.len);
@@ -1026,9 +1027,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         for (game.starters[starter_index]) |starter|
             starter.* = value;
     } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.items;
+        const trainers = try game.trainers.toSlice(gen5.Trainer);
         const trainer_index = try parser.eatIndexMax(trainers.len);
-        const trainer = try trainers[trainer_index].asDataFile(gen5.Trainer);
+        const trainer = &trainers[trainer_index];
 
         if (parser.eatField("class")) {
             trainer.class = try parser.eatUnsignedValue(u8, 10);
@@ -1046,10 +1047,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         } else |_| if (parser.eatField("post_battle_item")) {
             trainer.post_battle_item = lu16.init(try parser.eatUnsignedValue(u16, 10));
         } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.items;
             const party_index = try parser.eatIndexMax(trainer.party_size);
-            const party_file = try parties[trainer_index].asFile();
-            const member = trainer.partyMember(party_file.data, party_index) orelse return error.OutOfBound;
+            const party_file = game.parties.at(trainer_index);
+            const member = trainer.partyMember(party_file, party_index) orelse return error.OutOfBound;
 
             if (parser.eatField("iv")) {
                 member.iv = try parser.eatUnsignedValue(u8, 10);
@@ -1093,9 +1093,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.items;
+        const moves = try game.moves.toSlice(gen5.Move);
         const move_index = try parser.eatIndexMax(moves.len);
-        const move = try moves[move_index].asDataFile(gen5.Move);
+        const move = &moves[move_index];
 
         if (parser.eatField("type")) {
             move.@"type" = try parser.eatEnumValue(gen5.Type);
@@ -1150,9 +1150,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.items;
+        const pokemons = try game.pokemons.toSlice(gen5.BasePokemon);
         const pokemon_index = try parser.eatIndexMax(pokemons.len);
-        const pokemon = try pokemons[pokemon_index].asDataFile(gen5.BasePokemon);
+        const pokemon = &pokemons[pokemon_index];
 
         if (parser.eatField("stats")) {
             if (parser.eatField("hp")) {
@@ -1215,8 +1215,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const learnset = &pokemon.machine_learnset;
             learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len), value));
         } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
-            const bytes = level_up_moves_file.data;
+            const bytes = game.level_up_moves.at(pokemon_index);
             const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
             const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
             const index = try parser.eatIndexMax(level_up_moves.len);
@@ -1230,8 +1229,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 return error.NoField;
             }
         } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
-            const bytes = evos_file.data;
+            const bytes = game.evolutions.at(pokemon_index);
             const rem = bytes.len % @sizeOf(gen5.Evolution);
             const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
             const evo_index = try parser.eatIndexMax(evos.len);
@@ -1261,9 +1259,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         const hm_index = try parser.eatIndexMax(game.hms.len);
         game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
     } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.items;
+        const items = try game.itemdata.toSlice(gen5.Item);
         const item_index = try parser.eatIndexMax(items.len);
-        const item = try items[item_index].asDataFile(gen5.Item);
+        const item = &items[item_index];
 
         if (parser.eatField("price")) {
             item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
@@ -1349,9 +1347,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             return error.NoField;
         }
     } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.items;
+        const wild_pokemons = try game.wild_pokemons.toSlice(gen5.WildPokemons);
         const zone_index = try parser.eatIndexMax(wild_pokemons.len);
-        const wilds = try wild_pokemons[zone_index].asDataFile(gen5.WildPokemons);
+        const wilds = &wild_pokemons[zone_index];
         try parser.eatField("wild");
 
         inline for ([_][]const u8{

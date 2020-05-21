@@ -429,6 +429,7 @@ pub const Game = struct {
         const header = nds_rom.header();
         const arm9 = nds_rom.arm9();
         const file_system = nds_rom.fileSystem();
+        const arm9_overlay_table = nds_rom.arm9OverlayTable();
 
         const info = try getOffsets(&header.game_title, &header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
@@ -449,9 +450,9 @@ pub const Game = struct {
 
             .starters = switch (info.starters) {
                 .arm9 => |offset| blk: {
-                    if (nds_rom.arm9.len < offset + offsets.starters_len)
+                    if (arm9.len < offset + offsets.starters_len)
                         return error.CouldNotFindStarters;
-                    const starters_section = mem.bytesAsSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
+                    const starters_section = mem.bytesAsSlice(lu16, arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -459,14 +460,10 @@ pub const Game = struct {
                     };
                 },
                 .overlay9 => |overlay| blk: {
-                    if (nds_rom.arm9_overlay_files.len <= overlay.file)
-                        return error.CouldNotFindStarters;
-
-                    const file = nds_rom.arm9_overlay_files[overlay.file];
-                    if (file.len < overlay.offset + offsets.starters_len)
-                        return error.CouldNotFindStarters;
-
-                    const starters_section = mem.bytesAsSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
+                    const overlay_entry = arm9_overlay_table[overlay.file];
+                    const fat_entry = file_system.fat[overlay_entry.file_id.value()];
+                    const file_data = nds_rom.data[fat_entry.start.value()..fat_entry.end.value()];
+                    const starters_section = mem.bytesAsSlice(lu16, file_data[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -474,14 +471,14 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try getNarc(nds_rom.root, info.pokemons),
-            .evolutions = try getNarc(nds_rom.root, info.evolutions),
-            .level_up_moves = try getNarc(nds_rom.root, info.level_up_moves),
-            .moves = try getNarc(nds_rom.root, info.moves),
-            .trainers = try getNarc(nds_rom.root, info.trainers),
-            .parties = try getNarc(nds_rom.root, info.parties),
-            .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
-            .itemdata = try getNarc(nds_rom.root, info.itemdata),
+            .pokemons = try getNarc(file_system, info.pokemons),
+            .evolutions = try getNarc(file_system, info.evolutions),
+            .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .moves = try getNarc(file_system, info.moves),
+            .trainers = try getNarc(file_system, info.trainers),
+            .parties = try getNarc(file_system, info.parties),
+            .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
+            .itemdata = try getNarc(file_system, info.itemdata),
             .scripts = scripts,
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
@@ -500,7 +497,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
         if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
@@ -517,9 +514,8 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.nodes.items) |node, script_i| {
-            const script_file = node.asFile() catch continue;
-            const script_data = script_file.data;
+        for (scripts.fat) |fat, script_i| {
+            const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.resize(0) catch unreachable;
 
             for (script.getScriptOffsets(script_data)) |relative_offset, i| {
