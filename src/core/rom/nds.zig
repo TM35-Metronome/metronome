@@ -7,6 +7,7 @@ const debug = std.debug;
 const generic = fun.generic;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
@@ -27,6 +28,40 @@ test "nds" {
     _ = @import("nds/test.zig");
 }
 
+pub const Range = extern struct {
+    start: lu32,
+    end: lu32,
+
+    pub fn init(start: u32, end: u32) Range {
+        return .{ .start = lu32.init(start), .end = lu32.init(end) };
+    }
+
+    pub fn len(r: Range) u32 {
+        return r.end.value() - r.start.value();
+    }
+
+    pub fn slice(r: Range, s: var) mem.Span(@TypeOf(s)) {
+        return s[r.start.value()..r.end.value()];
+    }
+};
+
+pub const Slice = extern struct {
+    start: lu32,
+    len: lu32,
+
+    pub fn init(start: u32, len: u32) Slice {
+        return .{ .start = lu32.init(start), .len = lu32.init(len) };
+    }
+
+    pub fn end(s: Slice) u32 {
+        return s.start.value() + s.len.value();
+    }
+
+    pub fn slice(sl: Slice, s: var) mem.Span(@TypeOf(s)) {
+        return s[sl.start.value()..sl.end()];
+    }
+};
+
 pub const Overlay = extern struct {
     overlay_id: lu32,
     ram_address: lu32,
@@ -39,80 +74,376 @@ pub const Overlay = extern struct {
 };
 
 pub const Rom = struct {
-    allocator: *mem.Allocator,
-    data: []u8,
+    data: std.ArrayList(u8),
 
     pub fn header(rom: Rom) *const Header {
-        return mem.bytesAsValue(Header, rom.data[0..@sizeOf(Header)]);
+        return mem.bytesAsValue(Header, rom.data.items[0..@sizeOf(Header)]);
     }
 
     pub fn banner(rom: Rom) *Banner {
         const h = rom.header();
         const offset = h.banner_offset.value();
-        const bytes = rom.data[offset..][0..@sizeOf(Banner)];
+        const bytes = rom.data.items[offset..][0..@sizeOf(Banner)];
         return mem.bytesAsValue(Banner, bytes);
     }
 
     /// Returns the arm9 section of the rom. Note here that this section could
-    /// be encoded and therefor not very usefull. Call decodeArm9 before this
+    /// be encoded and therefor not very useful. Call decodeArm9 before this
     /// if you need the section to be decoded.
     pub fn arm9(rom: Rom) []u8 {
         const h = rom.header();
-        const offset = h.arm9_rom_offset.value();
-        return rom.data[offset..][0..h.arm9_size.value()];
+        const offset = h.arm9.offset.value();
+        return rom.data.items[offset..][0..h.arm9.size.value()];
     }
 
     pub fn nitroFooter(rom: Rom) []u8 {
         const h = rom.header();
-        const offset = h.arm9_rom_offset.value() + h.arm9_size.value();
-        const footer = rom.data[offset..][0..12];
+        const offset = h.arm9.offset.value() + h.arm9.size.value();
+        const footer = rom.data.items[offset..][0..12];
         if (!mem.startsWith(u8, footer, &lu32.init(0xDEC00621).bytes))
             return footer[0..0];
         return footer;
     }
 
-    /// Decodes the arm9 section of the rom inplace. This function might not do anything
-    /// if the section is already decoded.
-    pub fn decodeArm9(rom: Rom) !void {
-        // After arm9, there is 12 bytes that might be a nitro footer. If the first
-        // 4 bytes are == 0xDEC00621, then it's a nitro_footer.
-        // NOTE: This information was deduced from reading the source code for
-        //       ndstool and EveryFileExplore. http://problemkaputt.de/gbatek.htm does
-        //       not seem to have this information anywhere.
-        unreachable; // TODO
-    }
-
     pub fn arm7(rom: Rom) []u8 {
         const h = rom.header();
-        const offset = h.arm7_rom_offset.value();
-        return rom.data[offset..][0..h.arm7_size.value()];
+        const offset = h.arm7.offset.value();
+        return rom.data.items[offset..][0..h.arm7.size.value()];
     }
 
     pub fn arm9OverlayTable(rom: Rom) []Overlay {
         const h = rom.header();
-        const offset = h.arm9_overlay_offset.value();
-        const bytes = rom.data[offset..][0..h.arm9_overlay_size.value()];
+        const bytes = h.arm9_overlay.slice(rom.data.items);
         return mem.bytesAsSlice(Overlay, bytes);
     }
 
     pub fn arm7OverlayTable(rom: Rom) []Overlay {
         const h = rom.header();
-        const offset = h.arm7_overlay_offset.value();
-        const bytes = rom.data[offset..][0..h.arm7_overlay_size.value()];
+        const bytes = h.arm7_overlay.slice(rom.data.items);
         return mem.bytesAsSlice(Overlay, bytes);
     }
 
     pub fn fileSystem(rom: Rom) fs.Fs {
         const h = rom.header();
-        const fnt_offset = h.fnt_offset.value();
-        const fat_offset = h.fat_offset.value();
-        const fnt_bytes = rom.data[fnt_offset..][0..h.fnt_size.value()];
-        const fat_bytes = rom.data[fat_offset..][0..h.fat_size.value()];
+        const fnt_bytes = h.fnt.slice(rom.data.items);
+        const fat_bytes = h.fat.slice(rom.data.items);
         return fs.Fs{
             .fnt = fnt_bytes,
-            .fat = mem.bytesAsSlice(fs.FatEntry, fat_bytes),
-            .data = rom.data,
+            .fat = mem.bytesAsSlice(Range, fat_bytes),
+            .data = rom.data.items,
         };
+    }
+
+    /// Decodes the arm9 section of the rom in place. This function might not do anything
+    /// if the section is already decoded.
+    pub fn decodeArm9(rom: *Rom) !void {
+        const h = rom.header();
+        const arm9_bytes = rom.arm9();
+        const footer = rom.nitroFooter();
+
+        // TODO: Would be cool if we could ask for the decoded length, and
+        //       then preallocate that section directly in the roms bytes.
+        //       We could then just pass a buffer to blz.decode, and it would
+        //       decode into that buffer. Should be possible.
+        const decoded = blz.decode(arm9_bytes, rom.data.allocator) catch |err| switch (err) {
+            error.WrongDecodedLength,
+            error.Overflow,
+            error.BadLength,
+            error.BadHeaderLength,
+            error.BadHeader,
+            => return, // Assume bad encoded format means that arm9 wasn't encoded.
+            else => |e| return e,
+        };
+        defer rom.data.allocator.free(decoded);
+
+        const arm9_slice = Slice{
+            .start = h.arm9.offset,
+            .len = h.arm9.size,
+        };
+        try rom.resizeSection(arm9_slice, @intCast(u32, decoded.len));
+        mem.copy(u8, rom.arm9(), decoded);
+        return;
+    }
+
+    /// A generic structure for pointing to memory in the nds rom. The memory
+    /// pointed to is the memory for a `start/end` or `start/len` pair. This
+    /// structure does NOT point to the memory that these `start/X` pairs
+    /// refer to, but to the pairs them self. The reason for this is
+    /// so that we can modify this `start/X` indexes as we move sections
+    /// around the rom during a resize. Section also have properties that
+    /// define restrictions on what these indexes are actually allowed to
+    /// point too.
+    const Section = struct {
+        // HACK: To get `Section.order` to work (so we can sort `Section`)
+        //       we actually have to have the pointer embedded in the struct.
+        //       This really is a waist of space and unsafe as well, as
+        //       the memory of `Section` is expected to be reallocated.
+        //       It is however, safe to use this pointer before the
+        //       reallocation occurs.
+        ptr: [*]const u8,
+        start_index: u32,
+        other_index: u32,
+        kind: Kind,
+        properties: Properties,
+
+        const Kind = enum {
+            range,
+            slice,
+        };
+
+        const Properties = struct {
+            // Is `!= 0` if this section requires section for extra data after
+            // the end. This is for thing like the `nitro_footer` after
+            // arm9.
+            trailing_data: u16 = 0,
+
+            // The range in which it is valid to place the memory for this
+            // section.
+            range: RangeProp = RangeProp{},
+
+            const RangeProp = struct {
+                start: u32 = 0x8000,
+                end: u32 = math.maxInt(u32),
+            };
+        };
+
+        fn fromRange(data: []const u8, range: *const Range, prop: Properties) Section {
+            return fromStartEnd(data, &range.start, &range.end, prop);
+        }
+
+        fn fromSlice(data: []const u8, slice: *const Slice, prop: Properties) Section {
+            return fromStartLen(data, &slice.start, &slice.len, prop);
+        }
+
+        fn fromArm(data: []const u8, arm: *const Header.Arm, prop: Properties) Section {
+            return fromStartLen(data, &arm.offset, &arm.size, prop);
+        }
+
+        fn fromStartEnd(data: []const u8, start: *const lu32, end: *const lu32, prop: Properties) Section {
+            return fromAny(data, .range, start, end, prop);
+        }
+
+        fn fromStartLen(data: []const u8, start: *const lu32, len: *const lu32, prop: Properties) Section {
+            return fromAny(data, .slice, start, len, prop);
+        }
+
+        fn fromAny(data: []const u8, kind: Kind, start: *const lu32, other: *const lu32, prop: Properties) Section {
+            const data_end = @ptrToInt(data.ptr) + data.len;
+            const start_index = @ptrToInt(start) - @ptrToInt(data.ptr);
+            const other_index = @ptrToInt(other) - @ptrToInt(data.ptr);
+            debug.assert(start_index + @sizeOf(lu32) <= data_end);
+            debug.assert(other_index + @sizeOf(lu32) <= data_end);
+            return .{
+                .ptr = data.ptr,
+                .start_index = @intCast(u32, start_index),
+                .other_index = @intCast(u32, other_index),
+                .kind = kind,
+                .properties = prop,
+            };
+        }
+
+        fn toSlice(section: Section, data: []const u8) Slice {
+            // We discard const here, so that we can call `getPtr`. This
+            // is safe, as `getPtr` only needs a mutable pointer so that
+            // it can return one. We don't modify the pointee, so there
+            // is nothing unsafe about this discard.
+            const const_discarded = @intToPtr([*]u8, @ptrToInt(data.ptr))[0..data.len];
+            const start = section.getPtr(const_discarded, .start).value();
+            const len = switch (section.kind) {
+                .range => blk: {
+                    const end = section.getPtr(const_discarded, .other).value();
+                    break :blk end - start;
+                },
+                .slice => section.getPtr(const_discarded, .other).value(),
+            };
+            return Slice.init(start, len);
+        }
+
+        fn getPtr(section: Section, data: []u8, field: enum { start, other }) *lu32 {
+            const index = switch (field) {
+                .start => section.start_index,
+                .other => section.other_index,
+            };
+            const bytes = data[index..][0..@sizeOf(lu32)];
+            return mem.bytesAsValue(lu32, bytes);
+        }
+
+        /// Checks if the slice passed in have the `properties` defined
+        /// by this section.
+        fn sliceHasProperties(section: Section, slice: Slice) bool {
+            const start = slice.start.value();
+            const fixed = section.properties.range.start == section.properties.range.end;
+            return (fixed and section.properties.range.start == start) or
+                (section.properties.range.start <= start and
+                start < section.properties.range.end);
+        }
+
+        fn set(section: Section, data: []u8, slice: Slice) void {
+            debug.assert(section.sliceHasProperties(slice));
+            section.getPtr(data, .start).* = slice.start;
+            switch (section.kind) {
+                .slice => section.getPtr(data, .other).* = slice.len,
+                .range => section.getPtr(data, .other).* = lu32.init(slice.end()),
+            }
+        }
+
+        fn order(a: Section, b: Section) math.Order {
+            // HACK: Here is where we use `ptr`. To save space, we never
+            //       store the length of the pointer. To get a slice, we
+            //       just slice from 0..max. This should be safe, as
+            //       all the `fromX` validate that the indexes are inside
+            //       the slice that `ptr` comes from.
+            const m = math.maxInt(usize);
+            const a_slice = a.toSlice(a.ptr[0..m]);
+            const b_slice = b.toSlice(b.ptr[0..m]);
+            return math.order(a_slice.start.value(), b_slice.start.value());
+        }
+
+        fn before(a: Section, b: Section) bool {
+            return order(a, b) == .lt;
+        }
+    };
+
+    fn resizeSection(rom: *Rom, section_to_resize: Slice, new_size: u32) !void {
+        const file_system = rom.fileSystem();
+        const nitro_footer = rom.nitroFooter();
+
+        // Nds internals like this functions are allowed to modify data
+        // that is returned as `const` to the user, so we discard `const`
+        // here. This is always safe.
+        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+        const fat = @intToPtr([*]Range, @ptrToInt(file_system.fat.ptr))[0..file_system.fat.len];
+
+        // To avoid allocations in this function, we use a local 1MB
+        // buffer. This is a guess for the maximum bytes we will ever
+        // realistically need to perform this resize.
+        var buf: [1 * (1024 * 1024)]u8 = undefined;
+
+        const sections = blk: {
+            const fba = &heap.FixedBufferAllocator.init(&buf).allocator;
+            var sections = std.ArrayList(Section).init(fba);
+
+            try sections.append(Section.fromStartLen(
+                rom.data.items,
+                &h.banner_offset,
+                &h.banner_size,
+                .{},
+            ));
+            try sections.append(Section.fromArm(rom.data.items, &h.arm9, .{
+                .range = .{ .start = 0x4000, .end = 0x4000 },
+                .trailing_data = @intCast(u16, nitro_footer.len),
+            }));
+            try sections.append(Section.fromArm(rom.data.items, &h.arm7, .{}));
+            try sections.append(Section.fromSlice(rom.data.items, &h.arm9_overlay, .{}));
+            try sections.append(Section.fromSlice(rom.data.items, &h.arm7_overlay, .{}));
+            try sections.append(Section.fromSlice(rom.data.items, &h.fat, .{}));
+            try sections.append(Section.fromSlice(rom.data.items, &h.fnt, .{}));
+            for (fat) |*f|
+                try sections.append(Section.fromRange(rom.data.items, f, .{}));
+
+            break :blk sections.toOwnedSlice();
+        };
+
+        std.sort.sort(Section, sections, Section.before);
+
+        // The caller should always pass in a `section` that is actually inside
+        // the `sections` array.
+        const section_index = for (sections) |section, i| {
+            const section_slice = section.toSlice(rom.data.items);
+            if (section_to_resize.start.value() == section_slice.start.value()) {
+                debug.assert(section_to_resize.len.value() == section_slice.len.value());
+                break i;
+            }
+        } else unreachable;
+
+        const curr_sec = sections[section_index];
+        const next_sec = sections[section_index + 1];
+
+        const curr_slice = curr_sec.toSlice(rom.data.items);
+        const next_slice = next_sec.toSlice(rom.data.items);
+        debug.assert(curr_slice.len.value() < new_size);
+
+        const trailing_data = curr_sec.properties.trailing_data;
+        const free_space_to_next = Range.init(
+            curr_slice.start.value(),
+            next_slice.start.value(),
+        );
+        if (new_size + trailing_data <= free_space_to_next.len()) {
+            // There is enough section between `curr` and `next`
+            // for us to do a resize in place.
+            const start = curr_slice.start.value();
+            const old_end = curr_slice.end();
+            const old_section = rom.data.items[start .. old_end + trailing_data];
+            const new_slice = Slice.init(start, new_size);
+            if (!curr_sec.sliceHasProperties(new_slice))
+                return error.InvalidResize;
+            curr_sec.set(rom.data.items, new_slice);
+
+            // Copy trailing data to the end
+            const new_end = new_slice.end();
+            const new_section = rom.data.items[start .. new_end + trailing_data];
+            mem.copy(
+                u8,
+                new_section[new_end..],
+                new_section[old_end..old_section.len],
+            );
+            return;
+        }
+
+        const space_needed = (new_size + trailing_data) - free_space_to_next.len();
+
+        // Ok, we couldn't resize the section in place, so we will have to
+        // reallocate and move things around.
+        const sections_to_move = sections[section_index + 1 ..];
+
+        // Validate that the resize doesn't break any of the properties
+        // of the sections we move.
+        for (sections_to_move) |section| {
+            const slice = section.toSlice(rom.data.items);
+            const start = slice.start.value() + space_needed;
+            const len = slice.len.value();
+            if (!section.sliceHasProperties(Slice.init(start, len)))
+                return error.InvalidResize;
+        }
+
+        // Find the last section and make the end of that section
+        // the end of the rom. There might be unused space between
+        // the last section and the end of the rom. If there is
+        // enough space, then we will avoid realloc.
+        const last_sec = sections[sections.len - 1];
+        const old_len = last_sec.toSlice(rom.data.items).end();
+        try rom.data.resize(old_len + space_needed);
+
+        // Update the sections we are moving
+        for (sections_to_move) |section| {
+            const slice = section.toSlice(rom.data.items);
+            const start = slice.start.value() + space_needed;
+            const len = slice.len.value();
+            section.set(rom.data.items, Slice.init(start, len));
+        }
+
+        curr_sec.set(rom.data.items, Slice.init(curr_slice.start.value(), new_size));
+
+        const start_of_data_to_move = curr_slice.end();
+        const old_data = rom.data.items[0..old_len];
+        const data_to_move = old_data[start_of_data_to_move..];
+        const place_to_move_data = rom.data.items[start_of_data_to_move + space_needed ..];
+
+        mem.copyBackwards(u8, place_to_move_data, data_to_move);
+
+        // Update header after resize
+        h.total_used_rom_size = lu32.init(@intCast(u32, rom.data.items.len));
+        h.device_capacity = blk: {
+            // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
+            const size = h.total_used_rom_size.value();
+            var device_cap: u6 = 0;
+            while (@shlExact(@as(u64, 128000), device_cap) < size) : (device_cap += 1) {}
+
+            break :blk device_cap;
+        };
+
+        h.header_checksum = lu16.init(h.calcChecksum());
+        return;
     }
 
     pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {
@@ -120,18 +451,18 @@ pub const Rom = struct {
         const size = try file.getEndPos();
         try file.seekTo(0);
 
-        const rom_data = try allocator.alloc(u8, size);
-        errdefer allocator.free(rom_data);
+        var rom_data = std.ArrayList(u8).init(allocator);
+        errdefer rom_data.deinit();
+        try rom_data.resize(size);
 
-        try in_stream.readNoEof(rom_data);
+        try in_stream.readNoEof(rom_data.items);
         const res = Rom{
-            .allocator = allocator,
             .data = rom_data,
         };
         try res.header().validate();
 
         // TODO: we should validate that all the offsets and sizes are not
-        //       out of bounds of the rom_data.
+        //       out of bounds of the rom.data.items.
         return res;
     }
 
@@ -140,27 +471,10 @@ pub const Rom = struct {
         // always be a valid rom, so we just assert that this is true here
         // for sanity.
         rom.header().validate() catch unreachable;
-        try file.writeAll(rom.data);
-
-        // TODO: Left over form old code. I need to make sure these fields are updated
-        //       correctly during modification of the rom.
-        // Update these fields when the rom size changes.
-        // header.total_used_rom_size = lu32.init(@intCast(u32, mem.alignForward(try file.getPos(), 4)));
-        // header.device_capacity = blk: {
-        //     // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
-        //     const size = header.total_used_rom_size.value();
-        //     var device_cap: u6 = 0;
-        //     while (@shlExact(@as(u64, 128000), device_cap) < size) : (device_cap += 1) {}
-        //
-        //     break :blk device_cap;
-        // };
-
-        // Update checksum when header changes. This is why we probably shouldn't expose the
-        // header to the user directly.
-        // header.header_checksum = lu16.init(header.calcChecksum());
+        try file.writeAll(rom.data.items);
     }
 
     pub fn deinit(rom: Rom) void {
-        rom.allocator.free(rom.data);
+        rom.data.deinit();
     }
 };

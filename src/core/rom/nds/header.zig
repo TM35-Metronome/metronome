@@ -3,6 +3,7 @@ const std = @import("std");
 const util = @import("util");
 
 const int = @import("../int.zig");
+const nds = @import("../nds.zig");
 
 const ascii = std.ascii;
 const debug = std.debug;
@@ -41,27 +42,12 @@ pub const Header = extern struct {
     rom_version: u8,
     autostart: u8,
 
-    arm9_rom_offset: lu32,
-    arm9_entry_address: lu32,
-    arm9_ram_address: lu32,
-    arm9_size: lu32,
-
-    arm7_rom_offset: lu32,
-    arm7_entry_address: lu32,
-    arm7_ram_address: lu32,
-    arm7_size: lu32,
-
-    fnt_offset: lu32,
-    fnt_size: lu32,
-
-    fat_offset: lu32,
-    fat_size: lu32,
-
-    arm9_overlay_offset: lu32,
-    arm9_overlay_size: lu32,
-
-    arm7_overlay_offset: lu32,
-    arm7_overlay_size: lu32,
+    arm9: Arm,
+    arm7: Arm,
+    fnt: nds.Slice,
+    fat: nds.Slice,
+    arm9_overlay: nds.Slice,
+    arm7_overlay: nds.Slice,
 
     // TODO: Rename when I know exactly what his means.
     port_40001a4h_setting_for_normal_commands: [4]u8,
@@ -203,6 +189,13 @@ pub const Header = extern struct {
 
     signature_across_header_entries: [0x80]u8,
 
+    pub const Arm = extern struct {
+        offset: lu32,
+        entry_address: lu32,
+        ram_address: lu32,
+        size: lu32,
+    };
+
     pub fn isDsi(header: Header) bool {
         return (header.unitcode & 0x02) != 0;
     }
@@ -236,24 +229,24 @@ pub const Header = extern struct {
 
         // It seems that arm9 (secure area) is always at 0x4000
         // http://problemkaputt.de/gbatek.htm#dscartridgesecurearea
-        if (header.arm9_rom_offset.value() != 0x4000)
+        if (header.arm9.offset.value() != 0x4000)
             return error.InvalidArm9RomOffset;
-        if (header.arm9_entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm9_entry_address.value())
+        if (header.arm9.entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm9.entry_address.value())
             return error.InvalidArm9EntryAddress;
-        if (header.arm9_ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm9_ram_address.value())
+        if (header.arm9.ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm9.ram_address.value())
             return error.InvalidArm9RamAddress;
-        if (header.arm9_size.value() > 0x3BFE00)
+        if (header.arm9.size.value() > 0x3BFE00)
             return error.InvalidArm9Size;
 
-        if (header.arm7_rom_offset.value() < 0x8000)
+        if (header.arm7.offset.value() < 0x8000)
             return error.InvalidArm7RomOffset;
-        if ((header.arm7_entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm7_entry_address.value()) and
-            (header.arm7_entry_address.value() < 0x37F8000 or 0x3807E00 < header.arm7_entry_address.value()))
+        if ((header.arm7.entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm7.entry_address.value()) and
+            (header.arm7.entry_address.value() < 0x37F8000 or 0x3807E00 < header.arm7.entry_address.value()))
             return error.InvalidArm7EntryAddress;
-        if ((header.arm7_ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm7_ram_address.value()) and
-            (header.arm7_ram_address.value() < 0x37F8000 or 0x3807E00 < header.arm7_ram_address.value()))
+        if ((header.arm7.ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm7.ram_address.value()) and
+            (header.arm7.ram_address.value() < 0x37F8000 or 0x3807E00 < header.arm7.ram_address.value()))
             return error.InvalidArm7RamAddress;
-        if (header.arm7_size.value() > 0x3BFE00)
+        if (header.arm7.size.value() > 0x3BFE00)
             return error.InvalidArm7Size;
 
         if (header.banner_offset.value() != 0 and header.banner_offset.value() < 0x8000)

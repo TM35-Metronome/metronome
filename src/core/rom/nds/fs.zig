@@ -2,6 +2,7 @@ const std = @import("std");
 
 const formats = @import("formats.zig");
 const int = @import("../int.zig");
+const nds = @import("../nds.zig");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -16,7 +17,7 @@ const lu32 = int.lu32;
 
 pub const Fs = struct {
     fnt: []const u8,
-    fat: []const FatEntry,
+    fat: []const nds.Range,
     data: []u8,
 
     pub fn lookup(fs: Fs, path: []const []const u8) ?[]u8 {
@@ -24,7 +25,7 @@ pub const Fs = struct {
         return fs.data[fat.start.value()..fat.end.value()];
     }
 
-    pub fn lookupFat(fs: Fs, path: []const []const u8) ?FatEntry {
+    pub fn lookupFat(fs: Fs, path: []const []const u8) ?nds.Range {
         var it = fs.iterate(0);
         outer: for (path) |folder, i| {
             const is_last = i == path.len - 1;
@@ -89,13 +90,11 @@ pub const Fs = struct {
 
         const start = fs.fat[0].start.value();
         var end = start;
-        for (fs.fat) |fat| {
+        for (fs.fat) |fat, i| {
             const fat_start = fat.start.value();
             if (fat_start != end)
                 return error.FsIsNotSequential;
-            if (fat.size() != @sizeOf(T))
-                return error.FsIsNotType;
-            end = fat.end.value();
+            end += @sizeOf(T);
         }
 
         return mem.bytesAsSlice(T, fs.data[start..end]);
@@ -123,7 +122,7 @@ pub const Fs = struct {
             return error.InvalidNarcHeader;
 
         const fat_size = fat_header.header.size.value() - @sizeOf(formats.FatChunk);
-        const fat = mem.bytesAsSlice(FatEntry, data[fbs.pos..][0..fat_size]);
+        const fat = mem.bytesAsSlice(nds.Range, data[fbs.pos..][0..fat_size]);
         fbs.pos += fat_size;
 
         const fnt_header = try stream.readStruct(formats.Chunk);
@@ -200,20 +199,4 @@ pub const FntMainEntry = packed struct {
     // the total number of directories (See FNT Directory Main-Table):
     // http://problemkaputt.de/gbatek.htm#dscartridgenitroromandnitroarcfilesystems
     parent_id: lu16,
-};
-
-pub const FatEntry = extern struct {
-    start: lu32,
-    end: lu32,
-
-    pub fn init(offset: u32, s: u32) FatEntry {
-        return FatEntry{
-            .start = lu32.init(offset),
-            .end = lu32.init(offset + s),
-        };
-    }
-
-    pub fn size(entry: FatEntry) usize {
-        return entry.end.value() - entry.start.value();
-    }
 };

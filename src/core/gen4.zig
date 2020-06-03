@@ -40,9 +40,10 @@ pub const BasePokemon = extern struct {
     // Memory layout
     // TMS 01-92, HMS 01-08
     machine_learnset: lu128,
+    pad: [2]u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 42);
+        std.debug.assert(@sizeOf(@This()) == 44);
     }
 };
 
@@ -150,9 +151,10 @@ pub const Trainer = extern struct {
     items: [4]lu16,
     ai: lu32,
     battle_type2: u8,
+    pad: [3]u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 17);
+        std.debug.assert(@sizeOf(@This()) == 20);
     }
 
     pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
@@ -381,7 +383,7 @@ pub const Item = extern struct {
     hp_restore: u8,
     pp_restore: u8,
     happy: [3]u8,
-    padding: [2]u8,
+    padding: [8]u8,
 
     pub const Boost = packed struct {
         hp: u2,
@@ -398,6 +400,10 @@ pub const Item = extern struct {
         target: u8,
         target2: u8,
     };
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 36);
+    }
 };
 
 const PokeballItem = struct {
@@ -424,7 +430,7 @@ pub const Game = struct {
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
 
-    pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
+    pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
         const header = nds_rom.header();
         const arm9 = nds_rom.arm9();
@@ -462,7 +468,7 @@ pub const Game = struct {
                 .overlay9 => |overlay| blk: {
                     const overlay_entry = arm9_overlay_table[overlay.file];
                     const fat_entry = file_system.fat[overlay_entry.file_id.value()];
-                    const file_data = nds_rom.data[fat_entry.start.value()..fat_entry.end.value()];
+                    const file_data = file_system.data[fat_entry.start.value()..fat_entry.end.value()];
                     const starters_section = mem.bytesAsSlice(lu16, file_data[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],

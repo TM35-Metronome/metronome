@@ -884,7 +884,7 @@ pub const Game = struct {
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
 
-    pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
+    pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
         const header = nds_rom.header();
         const arm9 = nds_rom.arm9();

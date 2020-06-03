@@ -66,7 +66,6 @@ pub fn main() u8 {
     defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.page_allocator);
-    defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
         return errors.allocErr(stdio.err.outStream());
@@ -142,11 +141,11 @@ pub fn main2(
             return 1;
         };
 
-        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |game| {
+        const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
             break :blk Game{ .gen4 = game };
         } else |err| err;
 
-        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
+        const gen5_error = if (gen5.Game.fromRom(allocator, &nds_rom)) |game| {
             break :blk Game{ .gen5 = game };
         } else |err| err;
 

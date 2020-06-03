@@ -110,16 +110,16 @@ pub fn main2(
     } else |err| err;
 
     file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
-    if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
+    if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen4Data(nds_rom, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            outputGen4Data(nds_rom.*, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
         const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen5Data(nds_rom, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            outputGen5Data(nds_rom.*, game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
             return 0;
         } else |err| err;
 
