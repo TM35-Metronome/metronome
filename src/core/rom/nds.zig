@@ -25,7 +25,6 @@ test "nds" {
     _ = @import("nds/formats.zig");
     _ = @import("nds/fs.zig");
     _ = @import("nds/header.zig");
-    _ = @import("nds/test.zig");
 }
 
 pub const Range = extern struct {
@@ -304,6 +303,10 @@ pub const Rom = struct {
         }
     };
 
+    /// The most complicated function in this file. This functions job
+    /// is to resize one section in the rom to a new, bigger, size.
+    /// It it needs to move sections, it will correct the offsets that
+    /// point to those sections as well.
     fn resizeSection(rom: *Rom, section_to_resize: Slice, new_size: u32) !void {
         const file_system = rom.fileSystem();
         const nitro_footer = rom.nitroFooter();
@@ -319,6 +322,12 @@ pub const Rom = struct {
         // realistically need to perform this resize.
         var buf: [1 * (1024 * 1024)]u8 = undefined;
 
+        // First we build a table of all sections in the rom.
+        // This table will contain indexes to the place in the
+        // rom where the offsets to the sections are stored. It
+        // will not point to the sections them self, as this
+        // function will need to both move sections around, and
+        // correct the offsets that point to the sections.
         const sections = blk: {
             const fba = &heap.FixedBufferAllocator.init(&buf).allocator;
             var sections = std.ArrayList(Section).init(fba);
@@ -344,11 +353,13 @@ pub const Rom = struct {
             break :blk sections.toOwnedSlice();
         };
 
+        // Sort sections by where they appear in the rom.
         std.sort.sort(Section, sections, Section.before);
 
-        // The caller should always pass in a `section` that is actually inside
-        // the `sections` array.
-        const section_index = for (sections) |section, i| {
+        // Find the index to the section the caller wants to resize.
+        // It is the callers job to ensure that the section they pass in
+        // actually exists.
+        const sec_index = for (sections) |section, i| {
             const section_slice = section.toSlice(rom.data.items);
             if (section_to_resize.start.value() == section_slice.start.value()) {
                 debug.assert(section_to_resize.len.value() == section_slice.len.value());
@@ -356,24 +367,33 @@ pub const Rom = struct {
             }
         } else unreachable;
 
-        const curr_sec = sections[section_index];
-        const next_sec = sections[section_index + 1];
+        // Get the current, previous and next sections. These will
+        // be used to look for opportunities to perform the inline
+        // without moving any section other than the one resized.
+        const curr_sec = sections[sec_index];
+        const prev_sec = if (sec_index == 0) curr_sec else sections[sec_index - 1];
+        const next_sec = sections[sec_index + 1];
 
+        const prev_slice = prev_sec.toSlice(rom.data.items);
         const curr_slice = curr_sec.toSlice(rom.data.items);
         const next_slice = next_sec.toSlice(rom.data.items);
         debug.assert(curr_slice.len.value() < new_size);
 
         const trailing_data = curr_sec.properties.trailing_data;
-        const free_space_to_next = Range.init(
-            curr_slice.start.value(),
+
+        // Get the space available between the previous and next
+        // section.
+        const space_available_for_inline_resize = Range.init(
+            prev_slice.start.value(),
             next_slice.start.value(),
         );
-        if (new_size + trailing_data <= free_space_to_next.len()) {
-            // There is enough section between `curr` and `next`
-            // for us to do a resize in place.
-            const start = curr_slice.start.value();
+        if (new_size + trailing_data <= space_available_for_inline_resize.len()) {
+            // If our new size fits into this space, then we can simply
+            // perform an inline resize.
+            const start = space_available_for_inline_resize.start.value();
+            const old_start = curr_slice.start.value();
             const old_end = curr_slice.end();
-            const old_section = rom.data.items[start .. old_end + trailing_data];
+            const old_section = rom.data.items[old_start .. old_end + trailing_data];
             const new_slice = Slice.init(start, new_size);
             if (!curr_sec.sliceHasProperties(new_slice))
                 return error.InvalidResize;
@@ -387,14 +407,21 @@ pub const Rom = struct {
                 new_section[new_end..],
                 new_section[old_end..old_section.len],
             );
+            // Copy rest to destination
+            mem.copy(
+                u8,
+                new_section[0..new_end],
+                new_section[old_start..old_end],
+            );
             return;
         }
 
-        const space_needed = (new_size + trailing_data) - free_space_to_next.len();
+        // Ok, we couldn't perform an inline resize, so we will have to
+        // move all sections after this one to make room.
+        const space_needed = (new_size + trailing_data) -
+            (next_slice.start.value() - curr_slice.start.value());
 
-        // Ok, we couldn't resize the section in place, so we will have to
-        // reallocate and move things around.
-        const sections_to_move = sections[section_index + 1 ..];
+        const sections_to_move = sections[sec_index + 1 ..];
 
         // Validate that the resize doesn't break any of the properties
         // of the sections we move.
@@ -407,14 +434,15 @@ pub const Rom = struct {
         }
 
         // Find the last section and make the end of that section
-        // the end of the rom. There might be unused space between
-        // the last section and the end of the rom. If there is
-        // enough space, then we will avoid realloc.
+        // the end of the rom. Then resize the rom to have enough
+        // room for our section after the resize. Because the rom
+        // is an ArrayList(u8) this might do reallocation if there
+        // is enough capacity.
         const last_sec = sections[sections.len - 1];
         const old_len = last_sec.toSlice(rom.data.items).end();
         try rom.data.resize(old_len + space_needed);
 
-        // Update the sections we are moving
+        // Update the offsets of the sections we need to move.
         for (sections_to_move) |section| {
             const slice = section.toSlice(rom.data.items);
             const start = slice.start.value() + space_needed;
@@ -422,6 +450,7 @@ pub const Rom = struct {
             section.set(rom.data.items, Slice.init(start, len));
         }
 
+        // Update the section we are resizing to have its new size.
         curr_sec.set(rom.data.items, Slice.init(curr_slice.start.value(), new_size));
 
         const start_of_data_to_move = curr_slice.end();
@@ -429,6 +458,7 @@ pub const Rom = struct {
         const data_to_move = old_data[start_of_data_to_move..];
         const place_to_move_data = rom.data.items[start_of_data_to_move + space_needed ..];
 
+        // Now we move everything to make room for the resize.
         mem.copyBackwards(u8, place_to_move_data, data_to_move);
 
         // Update header after resize
