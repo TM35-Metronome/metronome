@@ -11,9 +11,10 @@ const os = std.os;
 
 pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
+pub const container = @import("container.zig");
 pub const errors = @import("errors.zig");
 pub const escape = @import("escape.zig");
-pub const format = @import("format.zig");
+pub const parse = @import("parse.zig");
 pub const testing = @import("testing.zig");
 
 pub const readLine = @import("readline.zig").readLine;
@@ -22,9 +23,9 @@ test "" {
     _ = algorithm;
     _ = bit;
     _ = escape;
-    _ = format;
-    _ = testing;
+    _ = parse;
     _ = readLine;
+    _ = testing;
 }
 
 pub const StdIo = struct {

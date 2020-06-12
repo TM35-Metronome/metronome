@@ -250,12 +250,12 @@ pub const LevelUpMove = packed struct {
 pub const DpptWildPokemons = extern struct {
     grass_rate: lu32,
     grass: [12]Grass,
-    swarm_replacements: [2]Replacement, // Replaces grass[0, 1]
-    day_replacements: [2]Replacement, // Replaces grass[2, 3]
-    night_replacements: [2]Replacement, // Replaces grass[2, 3]
-    radar_replacements: [4]Replacement, // Replaces grass[4, 5, 10, 11]
-    unknown_replacements: [6]Replacement, // ???
-    gba_replacements: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
+    swarm_replace: [2]Replacement, // Replaces grass[0, 1]
+    day_replace: [2]Replacement, // Replaces grass[2, 3]
+    night_replace: [2]Replacement, // Replaces grass[2, 3]
+    radar_replace: [4]Replacement, // Replaces grass[4, 5, 10, 11]
+    unknown_replace: [6]Replacement, // ???
+    gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
 
     surf_rate: lu32,
     surf: [5]Sea,
@@ -624,8 +624,8 @@ pub const Game = struct {
         return error.NotGen4Game;
     }
 
-    pub fn getNarc(file_system: nds.fs.Fs, path: []const []const u8) !nds.fs.Fs {
-        const file = file_system.lookup(path) orelse return error.FileNotFound;
+    pub fn getNarc(file_system: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
+        const file = try file_system.openFileData(nds.fs.root, path);
         return try nds.fs.Fs.fromNarc(file);
     }
 };

@@ -412,27 +412,25 @@ fn getGen3FreeSpace(info: gen3.offsets.Info) u32 {
     return res;
 }
 
-fn ndsHeader(game_title: [11:0]u8, gamecode: [4]u8) rom.nds.Header {
-    var res = zeroInit(rom.nds.Header);
-    res.game_title = game_title;
-    res.gamecode = gamecode;
-    res.makercode = "ST".*;
-    res.arm9_rom_offset = lu32.init(0x4000);
-    res.arm9_entry_address = lu32.init(0x2000000);
-    res.arm9_ram_address = lu32.init(0x2000000);
-    res.arm9_size = lu32.init(0x3BFE00);
-    res.arm7_rom_offset = lu32.init(0x8000);
-    res.arm7_entry_address = lu32.init(0x2000000);
-    res.arm7_ram_address = lu32.init(0x2000000);
-    res.arm7_size = lu32.init(0x3BFE00);
-    res.secure_area_delay = lu16.init(0x051E);
-    res.rom_header_size = lu32.init(0x4000);
-    res.digest_ntr_region_offset = lu32.init(0x4000);
-    res.title_id_rest = [_]u8{ 0x00, 0x03, 0x00 };
+fn ndsHeader(game_title: [11:0]u8, gamecode: [4]u8) [0x4000]u8 {
+    var res = zeroInit([0x4000]u8);
+    const header = @ptrCast(*nds.Header, &res);
+    header.game_title = game_title;
+    header.gamecode = gamecode;
+    header.makercode = "ST".*;
+    header.arm9.entry_address = lu32.init(0x2000000);
+    header.arm9.ram_address = lu32.init(0x2000000);
+    header.arm7.entry_address = lu32.init(0x2000000);
+    header.arm7.ram_address = lu32.init(0x2000000);
+    header.secure_area_delay = lu16.init(0x051E);
+    header.rom_header_size = lu32.init(0x4000);
+    header.digest_ntr_region_offset = lu32.init(0x4000);
+    header.title_id_rest = [_]u8{ 0x00, 0x03, 0x00 };
+
     return res;
 }
 
-const ndsBanner = rom.nds.Banner{
+const nds_banner = rom.nds.Banner{
     .version = 1,
     .has_animated_dsi_icon = 0,
     .crc16_across_0020h_083fh = lu16.init(0x00),
@@ -450,46 +448,183 @@ const ndsBanner = rom.nds.Banner{
     .title_spanish = [_]u8{0x00} ** 0x100,
 };
 
-fn createNarc(alloc: *mem.Allocator, root: *rom.nds.fs.Nitro, path: []const u8, data: var, count: usize, term: []const u8) !void {
-    try createNarcData(alloc, root, path, mem.toBytes(data)[0..], count, term);
+fn createNarc(alloc: *mem.Allocator, data: var, count: u32) !void {
+    try createNarcData(alloc, mem.toBytes(data)[0..], count, term);
 }
 
-fn createNarcData(alloc: *mem.Allocator, root: *rom.nds.fs.Nitro, path: []const u8, data: []const u8, count: usize, term: []const u8) !void {
-    const narc = try rom.nds.fs.Narc.create(alloc);
-    try narc.ensureCapacity(count);
-    _ = try root.createPathAndFile(path, rom.nds.fs.Nitro.File{ .narc = narc });
+fn createNarcData(alloc: *mem.Allocator, data: []const u8, count: u32) !void {
+    var res = std.ArrayList(u8).init(alloc);
+    defer res.deinit();
 
-    var i: usize = 0;
+    const stream = res.outStream();
+    try stream.writeStructure(formats.Header{
+        .chunk_name = formats.Chunk.names.narc,
+        .byte_order = lu16.init(0xFFFE),
+        .chunk_size = lu16.init(0x0010),
+        .following_chunks = lu16.init(0x0003),
+    });
+    try stream.writeStructure(formats.FatChunk{
+        .header = .{
+            .name = formats.Chunk.names.fat,
+            .size = lu32.init(count * @sizeOf(nds.Range) + @sizeOf(format.FatChunk)),
+        },
+        .file_count = lu16.init(count),
+        .reserved = lu16.init(0),
+    });
+
+    var i: u32 = 0;
     while (i < count) : (i += 1) {
-        var name_buf: [10]u8 = undefined;
-        const name = try fmt.bufPrint(name_buf[0..], "{}", .{i});
-
-        _ = try narc.createFile(name, rom.nds.fs.Narc.File{
-            .allocator = alloc,
-            .data = try fmt.allocPrint(alloc, "{}{}", .{ data, term }),
-        });
+        try stream.writeStructure(
+            nds.Range.init(i * data.len, i * data.len + data.len),
+        );
     }
+    try stream.writeStructure(formats.Chunk{
+        .name = formats.Chunk.names.fnt,
+        .size = lu32.init(@sizeOf(format.Chunk)),
+    });
+    try stream.writeStructure(formats.Chunk{
+        .name = formats.Chunk.names.file_data,
+        .size = lu32.init(@sizeOf(format.Chunk) + data.len * count),
+    });
+    i = 0;
+    while (i < count) : (i += 1) {
+        try stream.writeAll(data);
+    }
+    return res.toOwnedSlice();
 }
 
 fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
-    const nds_rom = rom.nds.Rom{
-        .allocator = allocator,
-        .header = ndsHeader(info.game_title, info.gamecode),
-        .banner = ndsBanner,
-        .arm9 = blk: {
-            const machine_len = (gen4.offsets.tm_count + gen4.offsets.hm_count) * @sizeOf(u16) +
-                info.hm_tm_prefix.len;
-            const len = switch (info.starters) {
-                .arm9 => |offset| offset + gen4.offsets.starters_len + machine_len,
-                .overlay9 => machine_len,
-            };
-            const res = try allocator.alloc(u8, len);
-            mem.set(u8, res, 0);
-            mem.copy(u8, res[res.len - machine_len ..], info.hm_tm_prefix);
-            break :blk res;
+    // We use a checklist to assert at comptime that we generate info
+    // for all fields in gen4.offsets.Info
+    comptime var checklist = checklistFromT(gen4.offsets.Info);
+    comptime checklist.set("version", true) catch unreachable;
+
+    var header = ndsHeader();
+    var rom = nds.Rom{
+        .data = std.ArrayList(u8).init(allocator),
+    };
+    defer rom.deinit();
+
+    const stream = rom.data.outStream();
+    {
+        comptime checklist.set("game_title", true) catch unreachable;
+        comptime checklist.set("gamecode", true) catch unreachable;
+        try stream.writeAll(&ndsHeader(info.game_title, info.gamecode));
+    }
+    {
+        comptime checklist.set("hm_tm_prefix", true) catch unreachable;
+        comptime checklist.set("starters", true) catch unreachable;
+        const machine_len = (gen4.offsets.tm_count + gen4.offsets.hm_count) * @sizeOf(u16) +
+            info.hm_tm_prefix.len;
+        const arm9_size = switch (info.starters) {
+            .arm9 => |offset| offset + gen4.offsets.starters_len + machine_len,
+            .overlay9 => machine_len,
+        };
+        const header = @intToPtr(*Header, @ptrToInt(rom.header()));
+        header.arm9.offset = lu32.init(@intCast(u32, rom.data.items.len));
+        header.arm9.size = lu32.init(arm9_size);
+        try stream.writeByteNTimes(0, arm9_size);
+
+        const arm9 = rom.arm9();
+        mem.copy(u8, arm9[arm9.len - machine_len ..], info.hm_tm_prefix);
+    }
+
+    {
+        const header = @intToPtr(*Header, @ptrToInt(rom.header()));
+        const offset = @intCast(u32, rom.data.items.len);
+        header.arm7.offset = lu32.init(offset);
+        header.arm7.size = lu32.init(0);
+        header.arm7_overlay = nds.Slice.init(offset, 0);
+        header.banner_offset = lu32.init(offset);
+
+        try stream.writeAll(mem.asBytes(&nds_banner));
+    }
+
+    comptime checklist.set("scripts", true) catch unreachable;
+    comptime checklist.set("pokemons", true) catch unreachable;
+    comptime checklist.set("level_up_moves", true) catch unreachable;
+    comptime checklist.set("moves", true) catch unreachable;
+    comptime checklist.set("itemdata", true) catch unreachable;
+    comptime checklist.set("trainers", true) catch unreachable;
+    comptime checklist.set("parties", true) catch unreachable;
+    comptime checklist.set("evolutions", true) catch unreachable;
+    comptime checklist.set("wild_pokemons", true) catch unreachable;
+
+    var fat = std.ArrayList(nds.Range).init(allocator);
+    var fnt_main = std.ArrayList(fs.FntMainEntry).init(allocator);
+    var fnt_sub = std.ArrayList(u8).init(allocator);
+    var files = std.ArrayList(u8).init(allocator);
+
+    try fnt_main.append(.{
+        .offset_to_subtable = lu32.init(0),
+        .first_file_id_in_subtable = lu16.init(0),
+        .parent_id = lu16.init(0),
+    });
+
+    // TODO: Sort
+    const files = [_][]const []const u8{
+        info.scripts,
+        info.pokemons,
+        info.level_up_moves,
+        info.moves,
+        info.itemdata,
+        info.trainers,
+        info.evolutions,
+        info.parties,
+        info.wild_pokemons,
+    };
+
+    var entry: usize = 0;
+    var depth: usize = 0;
+    while (true) : (depth += 1) {
+        for (files) |file| {
+            var file_depth: usize = 0;
+
+            if (file.path.len <= depth)
+                continue;
+
+            const is_file = file.path.len - 1 == depth;
+        }
+
+        try fnt.append(0);
+    }
+
+    fnt_main.items[0].parent_id = lu16.init(@intCast(u16, fnt_main.items.len));
+
+    var trainer = zeroInit(gen4.Trainer);
+    var evo = zeroInit(gen4.Evolution);
+    trainer.party_size = 1;
+    evo.method = .level_up;
+    const files = [_][]const u8{
+        .{ .path = info.scripts, .data = try createNarcData(allocator, "", 10) },
+        .{ .path = info.pokemons, .data = try createNarc(allocator, zeroInit(gen4.BasePokemon), 10) },
+        .{ .path = info.level_up_moves, .data = try createNarc(allocator, zeroInit(gen4.LevelUpMove), 10) },
+        .{ .path = info.moves, .data = try createNarc(allocator, zeroInit(gen4.Move), 10) },
+        .{ .path = info.itemdata, .data = try createNarc(allocator, zeroInit(gen4.Item), 10) },
+        .{ .path = info.trainers, .data = try createNarc(allocator, trainer, 10) },
+        .{ .path = info.evolutions, .data = try createNarc(allocator, evo, 10) },
+        .{
+            .path = info.parties,
+            .data = switch (info.version) {
+                .diamond, .pearl => try createNarc(allocator, zeroInit(gen4.PartyMemberNone), 10),
+                .heart_gold, .soul_silver, .platinum => try createNarc(allocator, zeroInit(gen4.HgSsPlatMember(gen4.PartyMemberNone)), 10),
+                else => unreachable,
+            },
         },
-        .arm7 = &[_]u8{},
-        .nitro_footer = [_]lu32{comptime lu32.init(0)} ** 3,
+        .{
+            .path = info.wild_pokemons,
+            .data = switch (info.version) {
+                .diamond, .pearl, .platinum => try createNarc(allocator, zeroInit(gen4.DpptWildPokemons), 10),
+                .heart_gold, .soul_silver => try createNarc(allocator, zeroInit(gen4.HgssWildPokemons), 10),
+                else => unreachable,
+            },
+        },
+    };
+
+    // Assert that we have generated data for all fields
+    comptime std.debug.assert(checklist.all(true));
+
+    const nds_rom = rom.nds.Rom{
         .arm9_overlay_table = switch (info.starters) {
             .arm9 => &[_]rom.nds.Overlay{},
             .overlay9 => |overlay| blk: {
@@ -510,62 +645,9 @@ fn genGen4FakeRom(allocator: *mem.Allocator, info: gen4.offsets.Info) ![]u8 {
                 break :blk res;
             },
         },
-        .arm7_overlay_table = &[_]rom.nds.Overlay{},
-        .arm7_overlay_files = &[_][]u8{},
         .root = try rom.nds.fs.Nitro.create(allocator),
     };
     const root = nds_rom.root;
-
-    // We use a checklist to assert at comptime that we generate info
-    // for all fields in gen4.offsets.Info
-    comptime var checklist = checklistFromT(gen4.offsets.Info);
-    comptime checklist.set("game_title", true) catch unreachable;
-    comptime checklist.set("gamecode", true) catch unreachable;
-    comptime checklist.set("version", true) catch unreachable;
-    comptime checklist.set("hm_tm_prefix", true) catch unreachable;
-    comptime checklist.set("starters", true) catch unreachable;
-
-    comptime checklist.set("scripts", true) catch unreachable;
-    try createNarcData(allocator, root, info.scripts, "", 10, "");
-
-    comptime checklist.set("pokemons", true) catch unreachable;
-    try createNarc(allocator, root, info.pokemons, zeroInit(gen4.BasePokemon), 10, "");
-
-    comptime checklist.set("level_up_moves", true) catch unreachable;
-    try createNarc(allocator, root, info.level_up_moves, zeroInit(gen4.LevelUpMove), 10, "");
-
-    comptime checklist.set("moves", true) catch unreachable;
-    try createNarc(allocator, root, info.moves, zeroInit(gen4.Move), 10, "");
-
-    comptime checklist.set("itemdata", true) catch unreachable;
-    try createNarc(allocator, root, info.itemdata, zeroInit(gen4.Item), 10, "");
-
-    comptime checklist.set("trainers", true) catch unreachable;
-    var trainer = zeroInit(gen4.Trainer);
-    trainer.party_size = 1;
-    try createNarc(allocator, root, info.trainers, trainer, 10, "");
-
-    comptime checklist.set("parties", true) catch unreachable;
-    switch (info.version) {
-        .diamond, .pearl => try createNarc(allocator, root, info.parties, zeroInit(gen4.PartyMemberNone), 10, ""),
-        .heart_gold, .soul_silver, .platinum => try createNarc(allocator, root, info.parties, zeroInit(gen4.HgSsPlatMember(gen4.PartyMemberNone)), 10, ""),
-        else => unreachable,
-    }
-
-    comptime checklist.set("evolutions", true) catch unreachable;
-    var evo = zeroInit(gen4.Evolution);
-    evo.method = .level_up;
-    try createNarc(allocator, root, info.evolutions, evo, 10, "");
-
-    comptime checklist.set("wild_pokemons", true) catch unreachable;
-    switch (info.version) {
-        .diamond, .pearl, .platinum => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.DpptWildPokemons), 10, ""),
-        .heart_gold, .soul_silver => try createNarc(allocator, root, info.wild_pokemons, zeroInit(gen4.HgssWildPokemons), 10, ""),
-        else => unreachable,
-    }
-
-    // Assert that we have generated data for all fields
-    comptime std.debug.assert(checklist.all(true));
 
     const name = try fmt.allocPrint(allocator, "{}__{}_{}_{}__", .{ tmp_folder, mem.spanZ(&info.game_title), info.gamecode, @tagName(info.version) });
     errdefer allocator.free(name);

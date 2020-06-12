@@ -16,67 +16,74 @@ const testing = std.testing;
 const lu16 = int.lu16;
 const lu32 = int.lu32;
 
+pub const Dir = struct { i: u16 };
+pub const File = struct { i: u32 };
+pub const Handle = union(enum) {
+    file: File,
+    dir: Dir,
+};
+
+pub const root = Dir{ .i = 0 };
+
 pub const Fs = struct {
+    fnt_main: []FntMainEntry,
     fnt: []u8,
     fat: []nds.Range,
     data: []u8,
 
-    pub fn lookup(fs: Fs, path: []const []const u8) ?[]u8 {
-        const index = fs.lookupIndex(path) orelse return null;
-        const file = fs.fat[index];
-        return fs.data[file.start.value()..file.end.value()];
+    pub fn openFileData(fs: Fs, dir: Dir, path: []const u8) ![]u8 {
+        const file = try fs.openFile(dir, path);
+        return fs.fileData(file);
     }
 
-    pub fn lookupIndex(fs: Fs, path: []const []const u8) ?usize {
-        var it = fs.iterate(0);
-        outer: for (path) |name, i| {
-            const is_file = i == path.len - 1;
+    pub fn openFile(fs: Fs, dir: Dir, path: []const u8) !File {
+        const handle = try fs.open(dir, path);
+        if (handle == .dir)
+            return error.DoesntExist;
+        return handle.file;
+    }
 
-            while (it.next()) |entry| {
-                switch (entry.kind) {
-                    .file => {
-                        if (is_file and mem.eql(u8, entry.name, name))
-                            return entry.id;
-                    },
-                    .folder => {
-                        if (is_file or !mem.eql(u8, entry.name, name))
-                            continue;
+    pub fn openDir(fs: Fs, dir: Dir, path: []const u8) !Dir {
+        const handle = try fs.open(dir, path);
+        if (handle == .file)
+            return error.DoesntExist;
+        return handle.dir;
+    }
 
-                        it = fs.iterate(entry.id);
-                        continue :outer; // We found the folder. Continue on to the next one
-                    },
-                }
-            }
-            return null;
+    pub fn open(fs: Fs, dir: Dir, path: []const u8) !Handle {
+        var handle = Handle{ .dir = dir };
+        const relative = if (mem.startsWith(u8, path, "/")) blk: {
+            handle.dir = root; // Set handle to root
+            break :blk path[1..];
+        } else path;
+
+        var split = mem.split(relative, "/");
+        while (split.next()) |name| {
+            if (handle != .dir)
+                return error.DoesntExist;
+
+            var it = fs.iterate(handle.dir);
+            handle = it.find(name) orelse return error.DoesntExist;
         }
-        return null;
+
+        return handle;
     }
 
-    pub fn iterate(fs: Fs, folder_id: u32) Iterator {
-        const fnt_main_table = fs.fntMainTable();
-        const fnt_entry = fnt_main_table[folder_id];
-        const file_id = fnt_entry.first_file_id.value();
+    pub fn iterate(fs: Fs, dir: Dir) Iterator {
+        const fnt_entry = fs.fnt_main[dir.i];
+        const file_handle = fnt_entry.first_file_handle.value();
         const offset = fnt_entry.offset_to_subtable.value();
         debug.assert(fs.fnt.len >= offset);
 
         return Iterator{
-            .file_id = file_id,
+            .file_handle = file_handle,
             .fnt_sub_table = fs.fnt[offset..],
         };
     }
 
-    pub fn at(fs: Fs, i: usize) []u8 {
-        const fat = fs.fat[i];
-        return fs.data[fat.start.value()..fat.end.value()];
-    }
-
-    pub fn fntMainTable(fs: Fs) []FntMainEntry {
-        const rem = fs.fnt.len % @sizeOf(FntMainEntry);
-        const fnt_mains = mem.bytesAsSlice(FntMainEntry, fs.fnt[0 .. fs.fnt.len - rem]);
-        const len = fnt_mains[0].parent_id.value();
-
-        debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
-        return fnt_mains[0..len];
+    pub fn fileData(fs: Fs, file: File) []u8 {
+        const f = fs.fat[file.i];
+        return fs.data[f.start.value()..f.end.value()];
     }
 
     /// Reinterprets the file system as a slice of T. This can only be
@@ -101,6 +108,24 @@ pub const Fs = struct {
         }
 
         return mem.bytesAsSlice(T, fs.data[start..end]);
+    }
+
+    pub fn fromFnt(fnt: []u8, fat: []nds.Range, data: []u8) Fs {
+        return Fs{
+            .fnt_main = fntMainTable(fnt),
+            .fnt = fnt,
+            .fat = fat,
+            .data = data,
+        };
+    }
+
+    fn fntMainTable(fnt: []u8) []FntMainEntry {
+        const rem = fnt.len % @sizeOf(FntMainEntry);
+        const fnt_mains = mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
+        const len = fnt_mains[0].parent_id.value();
+
+        debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
+        return fnt_mains[0..len];
     }
 
     /// Get a file system from a narc file. This function can faile if the
@@ -140,19 +165,20 @@ pub const Fs = struct {
         if (!mem.eql(u8, &file_data_header.name, names.file_data))
             return error.InvalidNarcHeader;
 
-        return Fs{
-            .fat = fat,
-            .fnt = fnt,
-            .data = data[fbs.pos..],
-        };
+        return Fs.fromFnt(fnt, fat, data[fbs.pos..]);
     }
 };
 
 pub const Iterator = struct {
-    file_id: u32,
+    file_handle: u32,
     fnt_sub_table: []const u8,
 
-    pub fn next(it: *Iterator) ?Entry {
+    pub const Result = struct {
+        handle: Handle,
+        name: []const u8,
+    };
+
+    pub fn next(it: *Iterator) ?Result {
         var fbs = io.fixedBufferStream(it.fnt_sub_table);
 
         const stream = fbs.inStream();
@@ -165,38 +191,37 @@ pub const Iterator = struct {
         const name = fbs.buffer[fbs.pos..][0..length];
         fbs.pos += length;
 
-        const id = if (is_folder) blk: {
+        const handle = if (is_folder) blk: {
             const read_id = stream.readIntLittle(u16) catch return null;
             debug.assert(read_id >= 0x8001 and read_id <= 0xFFFF);
             break :blk read_id & 0x7FFF;
         } else blk: {
-            defer it.file_id += 1;
-            break :blk it.file_id;
+            defer it.file_handle += 1;
+            break :blk it.file_handle;
         };
 
         it.fnt_sub_table = fbs.buffer[fbs.pos..];
-        return Entry{
-            .kind = if (is_folder) .folder else .file,
-            .id = id,
+        return Result{
+            .handle = if (is_folder)
+                Handle{ .dir = .{ .i = @intCast(u16, handle) } }
+            else
+                Handle{ .file = .{ .i = handle } },
             .name = name,
         };
     }
-};
 
-pub const Entry = struct {
-    kind: Kind,
-    id: u32,
-    name: []const u8,
-
-    pub const Kind = enum {
-        file,
-        folder,
-    };
+    pub fn find(it: *Iterator, name: []const u8) ?Handle {
+        while (it.next()) |entry| {
+            if (mem.eql(u8, entry.name, name))
+                return entry.handle;
+        }
+        return null;
+    }
 };
 
 pub const FntMainEntry = packed struct {
     offset_to_subtable: lu32,
-    first_file_id: lu16,
+    first_file_handle: lu16,
 
     // For the first entry in main-table, the parent id is actually,
     // the total number of directories (See FNT Directory Main-Table):
@@ -217,7 +242,7 @@ pub const Builder = struct {
 
         try fnt_main.append(.{
             .offset_to_subtable = lu32.init(0),
-            .first_file_id = lu16.init(0),
+            .first_file_handle = lu16.init(0),
             .parent_id = lu16.init(1),
         });
         try fnt_sub.append(0);
@@ -226,6 +251,62 @@ pub const Builder = struct {
             .fnt_main = fnt_main,
             .fnt_sub = fnt_sub,
             .fat = std.ArrayList(nds.Range).init(allocator),
+        };
+    }
+
+    pub fn createDir(b: Builder, dir: Handle, path: []const u8) !Handle {
+        const fs = b.toFs();
+        const dir_name = path.basenamePosix();
+        const parent = if (path.dirnamePosix()) |parent_path|
+            try fs.openDir(dir, parent_path)
+        else
+            dir;
+
+        if (fs.openDir(parent, dir_name))
+            return error.DirAlreadyExist;
+
+        const parent_entry = b.fnt_main.items[parent];
+        const parent_offset = parent_entry.offset_to_subtable.value();
+        const handle = @intCast(Handle, b.fnt_main.items.len);
+        const offset = @intCast(u32, b.fnt.items.len);
+
+        var buf: [1024]u8 = undefined;
+        const fbs = io.fixedBufferStream(&buf).outStream();
+
+        const written = fbs.context.getWritten();
+        try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len + 1);
+        b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
+        b.fnt_sub.append(0) catch unreachable;
+
+        for (b.fnt_main.items) |*entry| {
+            const old_offset = entry.offset_to_subtable.value();
+            const new_offset = old_offset + written.len;
+            if (old_offset > parent_offset)
+                entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
+        }
+
+        try b.fnt_main.append(.{
+            .sub_table_offset = lu32.init(offset),
+            .first_file_handle = parent_entry.first_file_handle,
+            .parent_id = lu16.init(parent.i),
+        });
+        return handle;
+    }
+
+    pub fn createFile(b: Builder, dir: Handle, path: []const u8) !Handle {
+        const dir_name = path.basenamePosix();
+        const parent = if (path.dirnamePosix()) |parent_path|
+            try b.toFs().openDir(dir, parent_path)
+        else
+            dir;
+    }
+
+    fn toFs(b: Builder) Fs {
+        return Fs{
+            .fnt_main = b.fnt_main.toSlice(),
+            .fnt = b.fnt_sub.toSlice(),
+            .fat = b.fat.toOwnedSlice(),
+            .data = &[_]u8{},
         };
     }
 
@@ -238,7 +319,7 @@ pub const Builder = struct {
             const folder = builder.fnt_main.items[folder_entry];
             const offset = folder.offset_to_subtable.value();
             var it = Iterator{
-                .file_id = folder.first_file_id.value(),
+                .file_handle = folder.first_file_handle.value(),
                 .fnt_sub_table = builder.fnt_sub.items[offset..],
             };
             while (it.next()) |entry| {
@@ -264,22 +345,22 @@ pub const Builder = struct {
         else
             0;
         const relative_root = builder.fnt_main.items[folder_entry];
-        const file_id = relative_root.first_file_id.value();
-        try builder.fat.insert(file_id, nds.Range.init(file_start, file_start + size));
+        const file_handle = relative_root.first_file_handle.value();
+        try builder.fat.insert(file_handle, nds.Range.init(file_start, file_start + size));
 
-        // Correct fnt_main after their file_ids moved around
+        // Correct fnt_main after their file_handles moved around
         for (builder.fnt_main.items) |*entry| {
             const no_new_folders = relative_path.len == 1;
-            const old_file_id = entry.first_file_id.value();
-            const new_file_id = old_file_id + 1;
-            if (old_file_id > file_id)
-                entry.first_file_id = lu16.init(new_file_id);
+            const old_file_handle = entry.first_file_handle.value();
+            const new_file_handle = old_file_handle + 1;
+            if (old_file_handle > file_handle)
+                entry.first_file_handle = lu16.init(new_file_handle);
             // If we're creating new folders, then the current folder will
             // point to the new folder at the first entry. The first file
             // of this folder will then also have been moved and we will
             // need to correct this.
-            if (!no_new_folders and old_file_id == file_id)
-                entry.first_file_id = lu16.init(new_file_id);
+            if (!no_new_folders and old_file_handle == file_handle)
+                entry.first_file_handle = lu16.init(new_file_handle);
         }
 
         var buf: [1024]u8 = undefined;
@@ -311,7 +392,7 @@ pub const Builder = struct {
                 const fnt_len = builder.fnt_sub.items.len;
                 try builder.fnt_main.append(.{
                     .offset_to_subtable = lu32.init(@intCast(u32, fnt_len)),
-                    .first_file_id = lu16.init(@intCast(u16, file_id)),
+                    .first_file_handle = lu16.init(@intCast(u16, file_handle)),
                     .parent_id = lu16.init(@intCast(u16, folder_entry)),
                 });
 

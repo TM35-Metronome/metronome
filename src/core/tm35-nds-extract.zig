@@ -144,21 +144,21 @@ pub fn main2(
     writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return errors.writeErr(stdio.err, "arm9 overlays", err);
     writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable()) catch |err| return errors.writeErr(stdio.err, "arm7 overlays", err);
 
-    writeFs(root_dir, file_system, 0) catch |err| return errors.writeErr(stdio.err, "root file system", err);
+    writeFs(root_dir, file_system, nds.fs.root) catch |err| return errors.writeErr(stdio.err, "root file system", err);
     return 0;
 }
 
-fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: u32) anyerror!void {
+fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!void {
     var it = file_system.iterate(folder);
     while (it.next()) |entry| {
-        switch (entry.kind) {
-            .file => try dir.writeFile(entry.name, file_system.at(entry.id)),
-            .folder => {
+        switch (entry.handle) {
+            .file => |file| try dir.writeFile(entry.name, file_system.fileData(file)),
+            .dir => |sub_folder| {
                 try dir.makeDir(entry.name);
                 var sub_dir = try dir.openDir(entry.name, .{});
                 defer sub_dir.close();
 
-                try writeFs(sub_dir, file_system, entry.id);
+                try writeFs(sub_dir, file_system, sub_folder);
             },
         }
     }
@@ -169,6 +169,6 @@ fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Over
 
     for (overlays) |*overlay, i| {
         try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
-        try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, file_system.at(overlay.file_id.value()));
+        try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, file_system.fileData(.{ .i = overlay.file_id.value() }));
     }
 }

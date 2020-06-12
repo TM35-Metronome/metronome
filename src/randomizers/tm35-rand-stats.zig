@@ -14,7 +14,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -119,11 +119,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&pokemons, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
-            error.Overflow,
-            error.EndOfString,
-            error.InvalidCharacter,
-            error.InvalidField,
-            => true,
+            error.ParseError => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -146,35 +142,39 @@ pub fn main2(
 }
 
 fn parseLine(pokemons: *PokemonMap, str: []const u8) !bool {
-    var parser = format.Parser{ .str = str };
+    const sw = util.parse.Swhash(8);
+    const m = sw.match;
+    const c = sw.case;
+    const allocator = pokemons.allocator;
+    var p = parse.MutParser{ .str = str };
 
-    try parser.eatField("pokemons");
-    const pokemon_index = try parser.eatIndex();
+    try p.parse(comptime parse.field("pokemons"));
+    const index = try p.parse(parse.index);
+    switch (m(try p.parse(parse.anyField))) {
+        c("stats") => {
+            const entry = try pokemons.getOrPutValue(index, Pokemon{});
+            const pokemon = &entry.value;
 
-    if (parser.eatField("stats")) |_| {
-        const entry = try pokemons.getOrPutValue(pokemon_index, Pokemon.init(pokemons.allocator));
-        const pokemon = &entry.value;
+            inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
+                const i = @enumToInt(@field(Pokemon.Stat, stat.name));
+                if (p.parse(comptime parse.field(stat.name))) |_| {
+                    pokemon.stats[i] = try p.parse(parse.u8v);
+                    pokemon.output[i] = true;
+                    return false;
+                } else |_| {}
+            }
+        },
+        c("evos") => {
+            _ = try p.parse(parse.index);
+            _ = try p.parse(comptime parse.field("target"));
+            const evo_from_i = try p.parse(parse.usizev);
 
-        inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
-            const stat_i = @enumToInt(@field(Pokemon.Stat, stat.name));
-            if (parser.eatField(stat.name)) |_| {
-                pokemon.stats[stat_i] = try parser.eatUnsignedValue(u8, 10);
-                pokemon.output[stat_i] = true;
-                return false;
-            } else |_| {}
-        }
-
-        return true;
-    } else |_| if (parser.eatField("evos")) |_| {
-        _ = try parser.eatIndex();
-        try parser.eatField("target");
-        const evo_from_i = try parser.eatUnsignedValue(usize, 10);
-
-        const evo_entry = try pokemons.getOrPutValue(evo_from_i, Pokemon.init(pokemons.allocator));
-        const evo_from = &evo_entry.value;
-
-        _ = try evo_from.evolves_from.put(pokemon_index, {});
-    } else |_| {}
+            const evo_entry = try pokemons.getOrPutValue(evo_from_i, Pokemon{});
+            const evo_from = &evo_entry.value;
+            _ = try evo_from.evolves_from.put(allocator, index);
+        },
+        else => return true,
+    }
 
     return true;
 }
@@ -209,26 +209,27 @@ fn randomizeFromChildren(
     same_total_stats: bool,
     curr: usize,
 ) void {
-    if (pokemon.evolves_from.size == 0)
+    if (pokemon.evolves_from.count() == 0)
         return;
 
     // Get the average stats of all the prevolutions
     var stats = [_]u64{0} ** Pokemon.stats;
-    var iter = pokemon.evolves_from.iterator();
+    for (pokemon.evolves_from.span()) |range| {
+        var prevolution = range.start;
+        while (prevolution <= range.end) : (prevolution += 1) {
+            // If prevolution == curr, then we have a cycle.
+            if (prevolution == curr)
+                continue;
 
-    while (iter.next()) |prevolution| {
-        // If prevolution == curr, then we have a cycle.
-        if (prevolution.key == curr)
-            continue;
+            // TODO: Can this ever happen???
+            //                                         VVVVVVVV
+            const p = pokemons.get(prevolution) orelse continue;
 
-        // TODO: Can this ever happen???
-        //                                             VVVVVVVV
-        const p = pokemons.get(prevolution.key) orelse continue;
-
-        // We should randomize prevolution by the same rules.
-        randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
-        for (p.value.stats) |stat, i|
-            stats[i] += stat;
+            // We should randomize prevolution by the same rules.
+            randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
+            for (p.value.stats) |stat, i|
+                stats[i] += stat;
+        }
     }
 
     // Average calculated here
@@ -303,20 +304,12 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
 }
 
 const PokemonMap = std.AutoHashMap(usize, Pokemon);
-const EvoMap = std.AutoHashMap(usize, void);
+const Evos = util.container.IntSet.Unmanaged(usize);
 
 const Pokemon = struct {
-    stats: [stats]u8,
-    output: [stats]bool,
-    evolves_from: EvoMap,
-
-    fn init(allocator: *mem.Allocator) Pokemon {
-        return Pokemon{
-            .stats = [_]u8{0} ** stats,
-            .output = [_]bool{false} ** stats,
-            .evolves_from = EvoMap.init(allocator),
-        };
-    }
+    stats: [stats]u8 = [_]u8{0} ** stats,
+    output: [stats]bool = [_]bool{false} ** stats,
+    evolves_from: Evos = Evos{},
 
     const stats = @typeInfo(Stat).Enum.fields.len;
     const Stat = enum {

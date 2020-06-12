@@ -64,11 +64,6 @@ pub fn testProgram(
         debug.warn("\n======== instead found this: =========\n", .{});
         debug.warn("{}", .{stdout.getWritten()});
         debug.warn("\n======================================\n", .{});
-        debug.warn("\n====== expected this output: =========\n", .{});
-        debug.warn("{x}", .{out});
-        debug.warn("\n======== instead found this: =========\n", .{});
-        debug.warn("{x}", .{stdout.getWritten()});
-        debug.warn("\n======================================\n", .{});
         testing.expect(false);
     }
     testing.expectEqualSlices(u8, out, stdout.getWritten());

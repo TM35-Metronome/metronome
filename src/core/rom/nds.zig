@@ -126,11 +126,11 @@ pub const Rom = struct {
         const h = rom.header();
         const fnt_bytes = h.fnt.slice(rom.data.items);
         const fat_bytes = h.fat.slice(rom.data.items);
-        return fs.Fs{
-            .fnt = fnt_bytes,
-            .fat = mem.bytesAsSlice(Range, fat_bytes),
-            .data = rom.data.items,
-        };
+        return fs.Fs.fromFnt(
+            fnt_bytes,
+            mem.bytesAsSlice(Range, fat_bytes),
+            rom.data.items,
+        );
     }
 
     /// Decodes the arm9 section of the rom in place. This function might not do anything

@@ -14,7 +14,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -123,11 +123,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
-            error.Overflow,
-            error.EndOfString,
-            error.InvalidCharacter,
-            error.InvalidField,
-            => true,
+            error.ParseError => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -145,23 +141,28 @@ pub fn main2(
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
+    const sw = parse.Swhash(16);
+    const m = sw.match;
+    const c = sw.case;
     const allocator = data.pokeballs.allocator;
-    var parser = format.Parser{ .str = str };
+    var p = parse.MutParser{ .str = str };
 
-    if (parser.eatField("pokeball_items")) |_| {
-        const ball_index = try parser.eatIndex();
-        _ = try parser.eatField("item");
-        const ball_item = try parser.eatUnsignedValue(usize, 10);
-        _ = try data.pokeballs.put(ball_index, ball_item);
-        return false;
-    } else |_| if (parser.eatField("items")) |_| {
-        const index = try parser.eatIndex();
-        const item_entry = try data.items.getOrPutValue(index, Item{ .pocket = null });
-
-        if (parser.eatField("pocket")) |_| {
-            item_entry.value.pocket = try mem.dupe(allocator, u8, try parser.eatValue());
-        } else |_| {}
-    } else |_| {}
+    switch (m(try p.parse(parse.anyField))) {
+        c("pokeball_items") => {
+            const ball_index = try p.parse(parse.index);
+            _ = try p.parse(comptime parse.field("item"));
+            const ball_item = try p.parse(parse.usizev);
+            _ = try data.pokeballs.put(ball_index, ball_item);
+            return false;
+        },
+        c("items") => {
+            const index = try p.parse(parse.index);
+            const item_entry = try data.items.getOrPutValue(index, Item{});
+            try p.parse(comptime parse.field("pocket"));
+            item_entry.value.pocket = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+        },
+        else => return true,
+    }
 
     return true;
 }
@@ -182,6 +183,7 @@ fn randomize(data: Data, seed: u64, include_tms_hms: bool, include_key_items: bo
     };
 
     const pick_from = try data.getItems(pocket_blacklist);
+    const max = pick_from.count();
 
     var it = data.pokeballs.iterator();
     outer: while (it.next()) |kv| {
@@ -192,10 +194,11 @@ fn randomize(data: Data, seed: u64, include_tms_hms: bool, include_key_items: bo
                 continue :outer;
         }
 
-        kv.value = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+        kv.value = pick_from.at(random.intRangeLessThan(usize, 0, max));
     }
 }
 
+const Set = util.container.IntSet.Unmanaged(usize);
 const Pokeballs = std.AutoHashMap(usize, usize);
 const Items = std.AutoHashMap(usize, Item);
 
@@ -203,9 +206,9 @@ const Data = struct {
     pokeballs: Pokeballs,
     items: Items,
 
-    fn getItems(d: Data, pocket_blacklist: []const []const u8) ![]usize {
-        var res = std.ArrayList(usize).init(d.pokeballs.allocator);
-        errdefer res.deinit();
+    fn getItems(d: Data, pocket_blacklist: []const []const u8) !Set {
+        var res = Set{};
+        errdefer res.deinit(d.pokeballs.allocator);
 
         var it = d.items.iterator();
         outer: while (it.next()) |item_kv| {
@@ -216,15 +219,15 @@ const Data = struct {
                     continue :outer;
             }
 
-            try res.append(item_kv.key);
+            _ = try res.put(d.pokeballs.allocator, item_kv.key);
         }
 
-        return res.toOwnedSlice();
+        return res;
     }
 };
 
 const Item = struct {
-    pocket: ?[]const u8,
+    pocket: ?[]const u8 = null,
 };
 
 test "tm35-rand-pokeball-items" {
@@ -251,30 +254,30 @@ test "tm35-rand-pokeball-items" {
         H.pokeball("3", "3");
 
     util.testing.testProgram(main2, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
-        \\.pokeball_items[3].item=3
-        \\.pokeball_items[1].item=1
+        \\.pokeball_items[3].item=1
+        \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[0].item=0
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--include-key-items" }, test_string, result_prefix ++
-        \\.pokeball_items[3].item=3
-        \\.pokeball_items[1].item=0
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--include-key-items" }, test_string, result_prefix ++
+        \\.pokeball_items[3].item=1
+        \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[0].item=3
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--include-tms-hms" }, test_string, result_prefix ++
-        \\.pokeball_items[3].item=3
-        \\.pokeball_items[1].item=2
+    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--include-tms-hms" }, test_string, result_prefix ++
+        \\.pokeball_items[3].item=2
+        \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=3
         \\.pokeball_items[0].item=0
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[3].item=1
-        \\.pokeball_items[1].item=0
-        \\.pokeball_items[2].item=3
+        \\.pokeball_items[1].item=3
+        \\.pokeball_items[2].item=0
         \\.pokeball_items[0].item=1
         \\
     );

@@ -14,7 +14,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -122,8 +122,6 @@ pub fn main2(
 
     var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
-        .starters = Starters.init(allocator),
-        .pokemons = Set.init(allocator),
         .evolves_from = Evolutions.init(allocator),
         .evolves_to = Evolutions.init(allocator),
     };
@@ -132,11 +130,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
-            error.Overflow,
-            error.EndOfString,
-            error.InvalidCharacter,
-            error.InvalidField,
-            => true,
+            error.ParseError => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -144,78 +138,71 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(data, seed, evolutions, pick_lowest) catch |err| return errors.randErr(stdio.err, err);
+    const random = &rand.DefaultPrng.init(seed).random;
+    const pick_from = blk: {
+        var res = Set{};
+        const ranges = data.pokemons.span();
+        for (ranges) |range| {
+            var pokemon: usize = range.start;
+            while (pokemon <= range.end) : (pokemon += 1) {
+                // Only pick lowest evo pokemon if pick_lowest is true
+                if (pick_lowest and data.evolves_from.get(pokemon) != null)
+                    continue;
+                if (countEvos(data, pokemon) < evolutions)
+                    continue;
 
-    var iter = data.starters.iterator();
-    while (iter.next()) |kv| {
-        stdio.out.print(".starters[{}]={}\n", .{ kv.key, kv.value }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                _ = res.put(allocator, pokemon) catch return errors.allocErr(stdio.err);
+            }
+        }
+        if (res.count() == 0)
+            _ = res.put(allocator, 0) catch return errors.allocErr(stdio.err);
+
+        break :blk res;
+    };
+
+    const ranges = data.starters.span();
+    for (ranges) |range| {
+        var i: usize = range.start;
+        while (i <= range.end) : (i += 1) {
+            const index = random.intRangeLessThan(usize, 0, pick_from.count());
+            const res = pick_from.at(index);
+            stdio.out.print(".starters[{}]={}\n", .{ i, res }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        }
     }
     return 0;
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
-    var p = format.Parser{ .str = str };
-    const allocator = data.starters.allocator;
+    const sw = parse.Swhash(8);
+    const m = sw.match;
+    const c = sw.case;
+    const allocator = data.evolves_from.allocator;
 
-    if (p.eatField("starters")) |_| {
-        const starter_index = try p.eatIndex();
-        const starter = try p.eatUnsignedValue(usize, 10);
-        const get_or_put_result = try data.starters.getOrPut(starter_index);
-        get_or_put_result.kv.value = starter;
-        return false;
-    } else |_| if (p.eatField("pokemons")) |_| {
-        const evolves_from = try p.eatIndex();
-        _ = try data.pokemons.put(evolves_from, {});
-        try p.eatField("evos");
+    var p = parse.MutParser{ .str = str };
+    switch (m(try p.parse(parse.anyField))) {
+        c("starters") => {
+            const starter_index = try p.parse(parse.index);
+            _ = try p.parse(parse.usizev);
+            _ = try data.starters.put(allocator, starter_index);
+            return false;
+        },
+        c("pokemons") => {
+            const evolves_from = try p.parse(parse.index);
+            _ = try data.pokemons.put(allocator, evolves_from);
+            _ = try p.parse(comptime parse.field("evos"));
+            _ = try p.parse(parse.index);
+            _ = try p.parse(comptime parse.field("target"));
 
-        // We don't care about the evolution index.
-        _ = try p.eatIndex();
-        try p.eatField("target");
-        const evolves_to = try p.eatUnsignedValue(usize, 10);
-        _ = try data.pokemons.put(evolves_to, {});
+            const evolves_to = try p.parse(parse.usizev);
+            const from_set = try data.evolves_from.getOrPutValue(evolves_to, Set{});
+            const to_set = try data.evolves_to.getOrPutValue(evolves_from, Set{});
+            _ = try data.pokemons.put(allocator, evolves_to);
+            _ = try from_set.value.put(allocator, evolves_from);
+            _ = try to_set.value.put(allocator, evolves_to);
 
-        {
-            const entry = try data.evolves_from.getOrPutValue(evolves_to, Set.init(allocator));
-            _ = try entry.value.put(evolves_from, {});
-        }
-
-        {
-            const entry = try data.evolves_to.getOrPutValue(evolves_from, Set.init(allocator));
-            _ = try entry.value.put(evolves_to, {});
-        }
-
-        return true;
-    } else |_| {}
-
-    return true;
-}
-
-fn randomize(data: Data, seed: u64, evolutions: usize, pick_lowest: bool) !void {
-    const allocator = data.starters.allocator;
-    const random = &rand.DefaultPrng.init(seed).random;
-
-    const pick_from = blk: {
-        var res = std.ArrayList(usize).init(allocator);
-        var iter = data.pokemons.iterator();
-        while (iter.next()) |kv| {
-            const pokemon = kv.key;
-            // Only pick lowest evo pokemon if pick_lowest is true
-            if (pick_lowest and data.evolves_from.get(pokemon) != null)
-                continue;
-            if (countEvos(data, pokemon) < evolutions)
-                continue;
-
-            try res.append(pokemon);
-        }
-
-        break :blk res.toOwnedSlice();
-    };
-    if (pick_from.len == 0)
-        return;
-
-    var iter = data.starters.iterator();
-    while (iter.next()) |kv| {
-        kv.value = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+            return true;
+        },
+        else => return true,
     }
 }
 
@@ -224,22 +211,24 @@ fn countEvos(data: Data, pokemon: usize) usize {
     const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
 
     // TODO: We don't handle cycles here.
-    var iter = evolves_to.value.iterator();
-    while (iter.next()) |evo| {
-        const evos = countEvos(data, evo.key) + 1;
-        res = math.max(res, evos);
+    const ranges = evolves_to.value.span();
+    for (ranges) |range| {
+        var evo = range.start;
+        while (evo <= range.end) : (evo += 1) {
+            const evos = countEvos(data, evo) + 1;
+            res = math.max(res, evos);
+        }
     }
 
     return res;
 }
 
-const Starters = std.AutoHashMap(usize, usize);
-const Set = std.AutoHashMap(usize, void);
+const Set = util.container.IntSet.Unmanaged(usize);
 const Evolutions = std.AutoHashMap(usize, Set);
 
 const Data = struct {
-    starters: Starters,
-    pokemons: Set,
+    starters: Set = Set{},
+    pokemons: Set = Set{},
     evolves_from: Evolutions,
     evolves_to: Evolutions,
 };
@@ -262,27 +251,27 @@ test "tm35-rand-starters" {
     ;
 
     util.testing.testProgram(main2, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
+        \\.starters[0]=1
         \\.starters[1]=5
         \\.starters[2]=0
-        \\.starters[0]=4
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
+        \\.starters[0]=0
         \\.starters[1]=5
         \\.starters[2]=0
-        \\.starters[0]=5
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
+        \\.starters[0]=0
         \\.starters[1]=3
         \\.starters[2]=0
-        \\.starters[0]=3
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
+        \\.starters[0]=0
         \\.starters[1]=0
         \\.starters[2]=0
-        \\.starters[0]=0
         \\
     );
 }

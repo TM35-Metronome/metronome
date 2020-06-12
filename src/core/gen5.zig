@@ -1070,8 +1070,8 @@ pub const Game = struct {
         return error.NotGen5Game;
     }
 
-    pub fn getNarc(file_system: nds.fs.Fs, path: []const []const u8) !nds.fs.Fs {
-        const file = file_system.lookup(path) orelse return error.FileNotFound;
+    pub fn getNarc(fs: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
+        const file = try fs.openFileData(nds.fs.root, path);
         return try nds.fs.Fs.fromNarc(file);
     }
 };

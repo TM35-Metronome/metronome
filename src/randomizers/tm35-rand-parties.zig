@@ -14,7 +14,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -137,11 +137,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
-            error.Overflow,
-            error.EndOfString,
-            error.InvalidCharacter,
-            error.InvalidField,
-            => true,
+            error.ParseError => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -176,94 +172,97 @@ pub fn main2(
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
+    const sw = parse.Swhash(16);
+    const m = sw.match;
+    const c = sw.case;
     const allocator = data.pokemons.allocator;
-    var parser = format.Parser{ .str = str };
+    var p = parse.MutParser{ .str = str };
 
-    if (parser.eatField("pokemons")) |_| {
-        const poke_index = try parser.eatIndex();
-        const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
-        const pokemon = &poke_entry.value;
+    switch (m(try p.parse(parse.anyField))) {
+        c("pokemons") => {
+            const poke_index = try p.parse(parse.index);
+            const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
+            const pokemon = &poke_entry.value;
 
-        if (parser.eatField("catch_rate")) |_| {
-            pokemon.catch_rate = try parser.eatUnsignedValue(usize, 10);
-        } else |_| if (parser.eatField("stats")) |_| {
-            if (parser.eatField("hp")) |_| {
-                pokemon.stats[0] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("attack")) |_| {
-                pokemon.stats[1] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("defense")) |_| {
-                pokemon.stats[2] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("speed")) |_| {
-                pokemon.stats[3] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_attack")) |_| {
-                pokemon.stats[4] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_defense")) |_| {
-                pokemon.stats[5] = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {}
-        } else |_| if (parser.eatField("types")) |_| {
-            _ = try parser.eatIndex();
+            switch (m(try p.parse(parse.anyField))) {
+                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
+                c("stats") => switch (m(try p.parse(parse.anyField))) {
+                    c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
+                    c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
+                    c("defense") => pokemon.stats[2] = try p.parse(parse.u8v),
+                    c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
+                    c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
+                    c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
+                    else => return true,
+                },
+                c("types") => {
+                    _ = try p.parse(parse.index);
 
-            // To keep it simple, we just leak a shit ton of type names here.
-            const type_name = try mem.dupe(allocator, u8, try parser.eatValue());
-            try data.type_set.put(type_name);
-            try pokemon.types.append(type_name);
-        } else |_| if (parser.eatField("moves")) |_| {
-            const move_index = try parser.eatIndex();
-            const move_entry = try pokemon.lvl_up_moves.getOrPutValue(move_index, LvlUpMove{
-                .level = null,
-                .id = null,
+                    // To keep it simple, we just leak a shit ton of type names here.
+                    const type_name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+                    try data.type_set.put(type_name);
+                    try pokemon.types.append(type_name);
+                },
+                c("moves") => {
+                    const move_index = try p.parse(parse.index);
+                    const move_entry = try pokemon.lvl_up_moves.getOrPutValue(move_index, LvlUpMove{
+                        .level = null,
+                        .id = null,
+                    });
+                    const move = &move_entry.value;
+
+                    switch (m(try p.parse(parse.anyField))) {
+                        c("id") => move.id = try p.parse(parse.usizev),
+                        c("level") => move.level = try p.parse(parse.u16v),
+                        else => return true,
+                    }
+                },
+                else => return true,
+            }
+        },
+        c("trainers") => {
+            const trainer_index = try p.parse(parse.index);
+            try p.parse(comptime parse.field("party"));
+            const party_index = try p.parse(parse.index);
+
+            const trainer_entry = try data.trainers.getOrPutValue(trainer_index, Trainer.init(allocator));
+            const trainer = &trainer_entry.value;
+
+            const member_entry = try trainer.party.getOrPutValue(party_index, PartyMember.init(allocator));
+            const member = &member_entry.value;
+
+            switch (m(try p.parse(parse.anyField))) {
+                c("species") => member.species = try p.parse(parse.usizev),
+                c("level") => member.level = try p.parse(parse.u16v),
+                c("moves") => {
+                    const move_index = try p.parse(parse.index);
+                    _ = try member.moves.put(move_index, try p.parse(parse.usizev));
+                },
+                else => return true,
+            }
+
+            return false;
+        },
+        c("moves") => {
+            const index = try p.parse(parse.index);
+            const entry = try data.moves.getOrPutValue(index, Move{
+                .power = null,
+                .accuracy = null,
+                .pp = null,
+                .type = null,
             });
-            const move = &move_entry.value;
+            const move = &entry.value;
 
-            if (parser.eatField("id")) |_| {
-                move.id = try parser.eatUnsignedValue(usize, 10);
-            } else |_| if (parser.eatField("level")) |_| {
-                move.level = try parser.eatUnsignedValue(u16, 10);
-            } else |_| {}
-        } else |_| {}
-    } else |_| if (parser.eatField("trainers")) |_| {
-        const trainer_index = try parser.eatIndex();
-        try parser.eatField("party");
-        const party_index = try parser.eatIndex();
-
-        const trainer_entry = try data.trainers.getOrPutValue(trainer_index, Trainer.init(allocator));
-        const trainer = &trainer_entry.value;
-
-        const member_entry = try trainer.party.getOrPutValue(party_index, PartyMember.init(allocator));
-        const member = &member_entry.value;
-
-        if (parser.eatField("species")) |_| {
-            member.species = try parser.eatUnsignedValue(usize, 10);
-        } else |_| if (parser.eatField("level")) |_| {
-            member.level = try parser.eatUnsignedValue(u16, 10);
-        } else |_| if (parser.eatField("moves")) |_| {
-            const move_index = try parser.eatIndex();
-            _ = try member.moves.put(move_index, try parser.eatUnsignedValue(usize, 10));
-        } else |_| {
-            return true;
-        }
-
-        return false;
-    } else |_| if (parser.eatField("moves")) |_| {
-        const index = try parser.eatIndex();
-        const entry = try data.moves.getOrPutValue(index, Move{
-            .power = null,
-            .accuracy = null,
-            .pp = null,
-            .type = null,
-        });
-        const move = &entry.value;
-
-        if (parser.eatField("power")) |_| {
-            move.power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("type")) |_| {
-            move.type = try mem.dupe(allocator, u8, try parser.eatValue());
-        } else |_| if (parser.eatField("pp")) |_| {
-            move.pp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("accuracy")) |_| {
-            move.accuracy = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {}
-    } else |_| {}
+            switch (m(try p.parse(parse.anyField))) {
+                c("power") => move.power = try p.parse(parse.u8v),
+                c("type") => move.type = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+                c("pp") => move.pp = try p.parse(parse.u8v),
+                c("accuracy") => move.accuracy = try p.parse(parse.u8v),
+                else => return true,
+            }
+        },
+        else => return true,
+    }
 
     return true;
 }
@@ -330,12 +329,13 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                 .themed => theme,
             };
 
-            const pick_from = species_by_type.get(new_type).?.value.items;
+            const pick_from = species_by_type.get(new_type).?.value;
+            const pick_max = pick_from.count();
             if (simular_total_stats) blk: {
                 // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                 // We therefor just pick a random pokemon and continue.
                 const poke_kv = data.pokemons.get(old_species) orelse {
-                    member.species = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+                    member.species = pick_from.at(random.intRangeLessThan(usize, 0, pick_max));
                     break :blk;
                 };
                 const pokemon = poke_kv.value;
@@ -348,17 +348,20 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                     min -= 5;
                     max += 5;
                 }) {
-                    for (pick_from) |s| {
-                        const p = data.pokemons.get(s).?.value;
-                        const total = @intCast(i64, sum(u8, &p.stats));
-                        if (min <= total and total <= max)
-                            try simular.append(s);
+                    for (pick_from.span()) |range| {
+                        var s = range.start;
+                        while (s <= range.end) : (s += 1) {
+                            const p = data.pokemons.get(s).?.value;
+                            const total = @intCast(i64, sum(u8, &p.stats));
+                            if (min <= total and total <= max)
+                                try simular.append(s);
+                        }
                     }
                 }
 
                 member.species = simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
             } else {
-                member.species = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+                member.species = pick_from.at(random.intRangeLessThan(usize, 0, pick_max));
             }
 
             if (fix_moves and member.moves.count() != 0) blk: {
@@ -422,7 +425,8 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const SpeciesByType = std.StringHashMap(std.ArrayList(usize));
+const Set = util.container.IntSet.Unmanaged(usize);
+const SpeciesByType = std.StringHashMap(Set);
 const Pokemons = std.AutoHashMap(usize, Pokemon);
 const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
 const Trainers = std.AutoHashMap(usize, Trainer);
@@ -452,7 +456,7 @@ const Data = struct {
         errdefer {
             var it = res.iterator();
             while (it.next()) |kv|
-                kv.value.deinit();
+                kv.value.deinit(d.allocator());
             res.deinit();
         }
 
@@ -467,8 +471,8 @@ const Data = struct {
                 continue;
 
             for (pokemon.types.items) |t| {
-                const entry = try res.getOrPutValue(t, std.ArrayList(usize).init(d.allocator()));
-                try entry.value.append(s);
+                const entry = try res.getOrPutValue(t, Set{});
+                _ = try entry.value.put(d.allocator(), s);
             }
         }
 
@@ -489,29 +493,27 @@ const Trainer = struct {
 };
 
 const PartyMember = struct {
-    species: ?usize,
-    level: ?u16,
+    species: ?usize = null,
+    level: ?u16 = null,
     moves: MemberMoves,
 
     fn init(allocator: *mem.Allocator) PartyMember {
         return PartyMember{
-            .species = null,
-            .level = null,
             .moves = MemberMoves.init(allocator),
         };
     }
 };
 
 const LvlUpMove = struct {
-    level: ?u16,
-    id: ?usize,
+    level: ?u16 = null,
+    id: ?usize = null,
 };
 
 const Move = struct {
-    power: ?u8,
-    accuracy: ?u8,
-    pp: ?u8,
-    type: ?[]const u8,
+    power: ?u8 = null,
+    accuracy: ?u8 = null,
+    pp: ?u8 = null,
+    type: ?[]const u8 = null,
 };
 
 // Represents a moves power in relation to the pokemon who uses it
@@ -551,17 +553,15 @@ const RelativeMove = struct {
 };
 
 const Pokemon = struct {
-    stats: [6]u8,
+    stats: [6]u8 = [_]u8{0} ** 6,
     types: std.ArrayList([]const u8),
     lvl_up_moves: LvlUpMoves,
-    catch_rate: usize,
+    catch_rate: usize = 1,
 
     fn init(allocator: *mem.Allocator) Pokemon {
         return Pokemon{
-            .stats = [_]u8{0} ** 6,
             .types = std.ArrayList([]const u8).init(allocator),
             .lvl_up_moves = LvlUpMoves.init(allocator),
-            .catch_rate = 1,
         };
     }
 };

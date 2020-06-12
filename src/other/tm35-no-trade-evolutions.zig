@@ -14,7 +14,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -113,10 +113,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
-            error.Overflow,
-            error.EndOfString,
-            error.InvalidCharacter,
-            => true,
+            error.ParseError => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -140,32 +137,29 @@ pub fn main2(
 }
 
 fn parseLine(data: *Data, str: []const u8) !bool {
+    const sw = parse.Swhash(16);
+    const m = sw.match;
+    const c = sw.case;
     const allocator = data.pokemons.allocator;
-    var parser = format.Parser{ .str = str };
+    var p = parse.MutParser{ .str = str };
 
-    if (parser.eatField("pokemons")) |_| {
-        const poke_index = try parser.eatIndex();
-        const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
-        const pokemon = &poke_entry.value;
+    try p.parse(comptime parse.field("pokemons"));
+    const poke_index = try p.parse(parse.index);
+    const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
+    const pokemon = &poke_entry.value;
 
-        if (parser.eatField("evos")) |_| {
-            const evo_index = try parser.eatIndex();
-            const evo_entry = try pokemon.evos.getOrPutValue(evo_index, Evolution{});
-            const evo = &evo_entry.value;
+    try p.parse(comptime parse.field("evos"));
+    const evo_index = try p.parse(parse.index);
+    const evo_entry = try pokemon.evos.getOrPutValue(evo_index, Evolution{});
+    const evo = &evo_entry.value;
 
-            if (parser.eatField("param")) |_| {
-                evo.param = try parser.eatUnsignedValue(usize, 10);
-            } else |_| if (parser.eatField("method")) |_| {
-                evo.method = try mem.dupe(allocator, u8, try parser.eatValue());
-            } else |_| {
-                return true;
-            }
+    switch (m(try p.parse(parse.anyField))) {
+        c("param") => evo.param = try p.parse(parse.usizev),
+        c("method") => evo.method = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+        else => return true,
+    }
 
-            return false;
-        } else |_| {}
-    } else |_| {}
-
-    return true;
+    return false;
 }
 
 fn removeTradeEvolutions(data: Data) void {

@@ -3,10 +3,11 @@ const std = @import("std");
 
 const mem = std.mem;
 
-const Step = std.build.Step;
 const Builder = std.build.Builder;
-const RunStep = std.build.RunStep;
 const LibExeObjStep = std.build.LibExeObjStep;
+const Pkg = std.build.Pkg;
+const RunStep = std.build.RunStep;
+const Step = std.build.Step;
 const Target = std.build.Target;
 
 const src_folder = "src";
@@ -43,17 +44,39 @@ const gui_exes = [_][]const u8{
     "tm35-randomizer",
 };
 
-const lib_pkgs = [_][2][]const u8{
-    [_][]const u8{ "clap", lib_folder ++ "/zig-clap/clap.zig" },
-    [_][]const u8{ "fun", lib_folder ++ "/fun-with-zig/fun.zig" },
-    [_][]const u8{ "crc", lib_folder ++ "/zig-crc/crc.zig" },
+const clap_pkg = Pkg{
+    .name = "clap",
+    .path = lib_folder ++ "/zig-clap/clap.zig",
+};
+const crc_pkg = Pkg{
+    .name = "crc",
+    .path = lib_folder ++ "/zig-crc/crc.zig",
+};
+const mecha_pkg = Pkg{
+    .name = "mecha",
+    .path = lib_folder ++ "/mecha/mecha.zig",
 };
 
-const src_pkgs = [_][2][]const u8{
-    [_][]const u8{ "util", src_folder ++ "/common/util.zig" },
+const util_pkg = Pkg{
+    .name = "util",
+    .path = src_folder ++ "/common/util.zig",
+
+    // Why is this field no const? I have to do
+    // this awful hack because of it...
+    .dependencies = &struct {
+        var dep = [2]Pkg{
+            clap_pkg,
+            mecha_pkg,
+        };
+    }.dep,
 };
 
-const pkgs = lib_pkgs ++ src_pkgs;
+const pkgs = [_]Pkg{
+    clap_pkg,
+    crc_pkg,
+    mecha_pkg,
+    util_pkg,
+};
 
 pub fn build(b: *Builder) void {
     b.setPreferredReleaseMode(.ReleaseFast);
@@ -97,11 +120,11 @@ pub fn build(b: *Builder) void {
     build_cli_step.dependOn(build_randomizers_step);
 
     for (modes_to_test) |test_mode| {
-        for (src_pkgs) |pkg| {
-            const pkg_test = b.addTest(pkg[1]);
-            pkg_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
-            test_step.dependOn(&pkg_test.step);
-        }
+        const util_test = b.addTest(util_pkg.path);
+        for (pkgs) |pkg|
+            util_test.addPackage(pkg);
+        util_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
+        test_step.dependOn(&util_test.step);
 
         for (tool_exes) |name|
             testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/{}.zig", .{ tools_folder, name }));
@@ -116,7 +139,7 @@ pub fn build(b: *Builder) void {
             const source = b.fmt("{}/gui/{}.zig", .{ src_folder, tool });
             const exe_test = b.addTest(source);
             for (pkgs) |pkg|
-                exe_test.addPackagePath(pkg[0], pkg[1]);
+                exe_test.addPackage(pkg);
 
             exe_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
             exe_test.setBuildMode(test_mode);
@@ -142,7 +165,7 @@ pub fn build(b: *Builder) void {
         const source = b.fmt("{}/gui/{}.zig", .{ src_folder, tool });
         const exe = b.addExecutable(tool, source);
         for (pkgs) |pkg|
-            exe.addPackagePath(pkg[0], pkg[1]);
+            exe.addPackage(pkg);
 
         switch (target.getOsTag()) {
             .windows => {
@@ -192,7 +215,7 @@ fn buildAndInstallCmdlineProgram(
 ) void {
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
-        exe.addPackagePath(pkg[0], pkg[1]);
+        exe.addPackage(pkg);
 
     if (install)
         exe.install();
@@ -205,7 +228,7 @@ fn buildAndInstallCmdlineProgram(
 fn testCmdlineProgram(b: *Builder, parent_step: *Step, mode: builtin.Mode, src: []const u8) void {
     const exe_test = b.addTest(src);
     for (pkgs) |pkg|
-        exe_test.addPackagePath(pkg[0], pkg[1]);
+        exe_test.addPackage(pkg);
 
     exe_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
     exe_test.setBuildMode(mode);

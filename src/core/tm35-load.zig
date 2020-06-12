@@ -373,7 +373,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         if (parties.fat.len <= i)
             continue;
 
-        const party_data = parties.at(i);
+        const party_data = parties.fileData(.{ .i = @intCast(u32, i) });
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
             const base = trainer.partyMember(game.version, party_data, i) orelse continue;
@@ -464,7 +464,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         }
 
         if (i < game.evolutions.fat.len) {
-            const bytes = game.evolutions.at(i);
+            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen4.Evolution);
             const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
             for (evos) |evo, j| {
@@ -477,7 +477,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         }
 
         if (i < game.level_up_moves.fat.len) {
-            const bytes = game.level_up_moves.at(i);
+            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
             const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
             for (level_up_moves) |move, j| {
@@ -543,12 +543,12 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
             // TODO: Get rid of inline for in favor of a function to call
             inline for ([_][]const u8{
-                "swarm_replacements",
-                "day_replacements",
-                "night_replacements",
-                "radar_replacements",
-                "unknown_replacements",
-                "gba_replacements",
+                "swarm_replace",
+                "day_replace",
+                "night_replace",
+                "radar_replace",
+                "unknown_replace",
+                "gba_replace",
             }) |area_name| {
                 for (@field(wild_mons, area_name)) |replacement, k| {
                     try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, k, replacement.species.value() });
@@ -658,7 +658,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         if (parties.fat.len <= i)
             continue;
 
-        const party_data = parties.at(i);
+        const party_data = parties.fileData(.{ .i = @intCast(u32, i) });
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
             const base = trainer.partyMember(party_data, j) orelse continue;
@@ -791,7 +791,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
 
         if (i < game.evolutions.fat.len) {
-            const bytes = game.evolutions.at(i);
+            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen5.Evolution);
             const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
             for (evos) |evo, j| {
@@ -804,7 +804,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
 
         if (i < game.level_up_moves.fat.len) {
-            const bytes = game.level_up_moves.at(i);
+            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
             const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
             for (level_up_moves) |move, j| {
@@ -895,5 +895,5 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 }
 
 test "" {
-    _ = @import("load-apply-test.zig");
+    //_ = @import("load-apply-test.zig");
 }
