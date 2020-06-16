@@ -121,14 +121,11 @@ pub fn main2(
     const pick_lowest = args.flag("--pick-lowest-evolution");
 
     var line_buf = std.ArrayList(u8).init(allocator);
-    var data = Data{
-        .evolves_from = Evolutions.init(allocator),
-        .evolves_to = Evolutions.init(allocator),
-    };
+    var data = Data{};
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch |err| switch (err) {
+        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
             error.ParseError => true,
         };
@@ -172,11 +169,10 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     const sw = parse.Swhash(8);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.evolves_from.allocator;
 
     var p = parse.MutParser{ .str = str };
     switch (m(try p.parse(parse.anyField))) {
@@ -194,11 +190,11 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             _ = try p.parse(comptime parse.field("target"));
 
             const evolves_to = try p.parse(parse.usizev);
-            const from_set = try data.evolves_from.getOrPutValue(evolves_to, Set{});
-            const to_set = try data.evolves_to.getOrPutValue(evolves_from, Set{});
+            const from_set = try data.evolves_from.getOrPutValue(allocator, evolves_to, Set{});
+            const to_set = try data.evolves_to.getOrPutValue(allocator, evolves_from, Set{});
             _ = try data.pokemons.put(allocator, evolves_to);
-            _ = try from_set.value.put(allocator, evolves_from);
-            _ = try to_set.value.put(allocator, evolves_to);
+            _ = try from_set.put(allocator, evolves_from);
+            _ = try to_set.put(allocator, evolves_to);
 
             return true;
         },
@@ -211,8 +207,7 @@ fn countEvos(data: Data, pokemon: usize) usize {
     const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
 
     // TODO: We don't handle cycles here.
-    const ranges = evolves_to.value.span();
-    for (ranges) |range| {
+    for (evolves_to.span()) |range| {
         var evo = range.start;
         while (evo <= range.end) : (evo += 1) {
             const evos = countEvos(data, evo) + 1;
@@ -224,13 +219,13 @@ fn countEvos(data: Data, pokemon: usize) usize {
 }
 
 const Set = util.container.IntSet.Unmanaged(usize);
-const Evolutions = std.AutoHashMap(usize, Set);
+const Evolutions = util.container.IntMap.Unmanaged(usize, Set);
 
 const Data = struct {
     starters: Set = Set{},
     pokemons: Set = Set{},
-    evolves_from: Evolutions,
-    evolves_to: Evolutions,
+    evolves_from: Evolutions = Evolutions{},
+    evolves_to: Evolutions = Evolutions{},
 };
 
 test "tm35-rand-starters" {

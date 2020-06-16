@@ -105,13 +105,11 @@ pub fn main2(
     }
 
     var line_buf = std.ArrayList(u8).init(allocator);
-    var data = Data{
-        .pokemons = Pokemons.init(allocator),
-    };
+    var data = Data{};
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch |err| switch (err) {
+        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
             error.ParseError => true,
         };
@@ -123,35 +121,32 @@ pub fn main2(
 
     removeTradeEvolutions(data);
 
-    var p_it = data.pokemons.iterator();
-    while (p_it.next()) |p_kv| {
-        var e_it = p_kv.value.evos.iterator();
-        while (e_it.next()) |e_kv| {
-            if (e_kv.value.param) |param|
-                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ p_kv.key, e_kv.key, param }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-            if (e_kv.value.method) |method|
-                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ p_kv.key, e_kv.key, method }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+    for (data.pokemons.values()) |pokemon, i| {
+        const pokemon_i = data.pokemons.at(i).key;
+        for (pokemon.evos.values()) |evo, j| {
+            const evo_i = pokemon.evos.at(j).key;
+            if (evo.param) |param|
+                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            if (evo.method) |method|
+                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, method }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         }
     }
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.pokemons.allocator;
     var p = parse.MutParser{ .str = str };
 
     try p.parse(comptime parse.field("pokemons"));
     const poke_index = try p.parse(parse.index);
-    const poke_entry = try data.pokemons.getOrPutValue(poke_index, Pokemon.init(allocator));
-    const pokemon = &poke_entry.value;
+    const pokemon = try data.pokemons.getOrPutValue(allocator, poke_index, Pokemon{});
 
     try p.parse(comptime parse.field("evos"));
     const evo_index = try p.parse(parse.index);
-    const evo_entry = try pokemon.evos.getOrPutValue(evo_index, Evolution{});
-    const evo = &evo_entry.value;
+    const evo = try pokemon.evos.getOrPutValue(allocator, evo_index, Evolution{});
 
     switch (m(try p.parse(parse.anyField))) {
         c("param") => evo.param = try p.parse(parse.usizev),
@@ -167,11 +162,9 @@ fn removeTradeEvolutions(data: Data) void {
     var has_level_up = false;
     var has_level_up_holding = false;
     var has_level_up_party = false;
-    var p_it = data.pokemons.iterator();
-    while (p_it.next()) |p_kv| {
-        var e_it = p_kv.value.evos.iterator();
-        while (e_it.next()) |e_kv| {
-            const method = e_kv.value.method orelse continue;
+    for (data.pokemons.values()) |pokemon| {
+        for (pokemon.evos.values()) |evo| {
+            const method = evo.method orelse continue;
             has_level_up = has_level_up or mem.eql(u8, method, "level_up");
             has_level_up_holding = has_level_up_holding or mem.eql(u8, method, "level_up_holding_item_during_daytime");
             has_level_up_party = has_level_up_party or mem.eql(u8, method, "level_up_with_other_pokemon_in_party");
@@ -186,41 +179,33 @@ fn removeTradeEvolutions(data: Data) void {
     const trade_param_holding_replace: ?usize = if (has_level_up_holding) null else trade_param_replace;
     const trade_param_pokemon_replace: ?usize = if (has_level_up_party) null else trade_param_replace;
 
-    p_it = data.pokemons.iterator();
-    while (p_it.next()) |p_kv| {
-        var e_it = p_kv.value.evos.iterator();
-        while (e_it.next()) |e_kv| {
-            const method = e_kv.value.method orelse continue;
-            const param = e_kv.value.param;
+    for (data.pokemons.values()) |pokemon| {
+        for (pokemon.evos.values()) |*evo| {
+            const method = evo.method orelse continue;
+            const param = evo.param;
             if (mem.eql(u8, method, "trade")) {
-                e_kv.value.method = trade_method_replace orelse method;
-                e_kv.value.param = trade_param_replace orelse param;
+                evo.method = trade_method_replace orelse method;
+                evo.param = trade_param_replace orelse param;
             } else if (mem.eql(u8, method, "trade_holding_item")) {
-                e_kv.value.method = trade_method_holding_replace orelse method;
-                e_kv.value.param = trade_param_holding_replace orelse param;
+                evo.method = trade_method_holding_replace orelse method;
+                evo.param = trade_param_holding_replace orelse param;
             } else if (mem.eql(u8, method, "trade_with_pokemon")) {
-                e_kv.value.method = trade_method_pokemon_replace orelse method;
-                e_kv.value.param = trade_param_pokemon_replace orelse param;
+                evo.method = trade_method_pokemon_replace orelse method;
+                evo.param = trade_param_pokemon_replace orelse param;
             }
         }
     }
 }
 
-const Pokemons = std.AutoHashMap(usize, Pokemon);
-const Evolutions = std.AutoHashMap(usize, Evolution);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
 
 const Data = struct {
-    pokemons: Pokemons,
+    pokemons: Pokemons = Pokemons{},
 };
 
 const Pokemon = struct {
-    evos: Evolutions,
-
-    fn init(allocator: *mem.Allocator) Pokemon {
-        return Pokemon{
-            .evos = Evolutions.init(allocator),
-        };
-    }
+    evos: Evolutions = Evolutions{},
 };
 
 const Evolution = struct {
@@ -249,31 +234,31 @@ test "tm35-rand-static" {
         main2,
         &[_][]const u8{},
         test_string,
-        H.evo("3", "level_up", "36") ++
+        H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up", "36") ++
-            H.evo("0", "level_up", "12"),
+            H.evo("3", "level_up", "36"),
     );
     util.testing.testProgram(
         main2,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
-        H.evo("4", "level_up_holding_item_during_daytime", "1") ++
-            H.evo("3", "level_up", "36") ++
+        H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up_holding_item_during_daytime", "1") ++
-            H.evo("0", "level_up", "12"),
+            H.evo("3", "level_up", "36") ++
+            H.evo("4", "level_up_holding_item_during_daytime", "1"),
     );
     util.testing.testProgram(
         main2,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),
-        H.evo("4", "level_up_with_other_pokemon_in_party", "1") ++
-            H.evo("3", "level_up_with_other_pokemon_in_party", "1") ++
+        H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up", "36") ++
-            H.evo("0", "level_up", "12"),
+            H.evo("3", "level_up_with_other_pokemon_in_party", "1") ++
+            H.evo("4", "level_up_with_other_pokemon_in_party", "1"),
     );
 }

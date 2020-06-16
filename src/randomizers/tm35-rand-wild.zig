@@ -111,8 +111,8 @@ pub fn main2(
 
     var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
-        .pokemons = Pokemons.init(allocator),
-        .zones = Zones.init(allocator),
+        .types = std.StringHashMap(usize).init(allocator),
+        .areas = std.StringHashMap(usize).init(allocator),
     };
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
@@ -129,21 +129,17 @@ pub fn main2(
 
     randomize(data, seed, simular_total_stats) catch |err| return errors.randErr(stdio.err, err);
 
-    var zone_iter = data.zones.iterator();
-    while (zone_iter.next()) |zone_kw| {
-        const zone_i = zone_kw.key;
-        const zone = zone_kw.value;
+    for (data.zones.values()) |zone, i| {
+        const zone_i = data.zones.at(i).key;
 
-        var area_iter = zone.wild_areas.iterator();
-        while (area_iter.next()) |area_kw| {
-            const area_name = area_kw.key;
-            const area = area_kw.value;
+        var area_iter = data.areas.iterator();
+        while (area_iter.next()) |area_kv| {
+            const area_name = area_kv.key;
+            const area_id = area_kv.value;
+            const area = zone.wild_areas.get(area_id) orelse continue;
 
-            var poke_iter = area.pokemons.iterator();
-            while (poke_iter.next()) |poke_kw| {
-                const poke_i = poke_kw.key;
-                const pokemon = poke_kw.value;
-
+            for (area.pokemons.values()) |*pokemon, j| {
+                const poke_i = area.pokemons.at(j).key;
                 if (pokemon.min_level) |l|
                     stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
                 if (pokemon.max_level) |l|
@@ -161,14 +157,13 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.pokemons.allocator;
+    const allocator = data.types.allocator;
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
         c("pokemons") => {
             const index = try p.parse(parse.index);
-            const poke_entry = try data.pokemons.getOrPutValue(index, Pokemon.init(allocator));
-            const pokemon = &poke_entry.value;
+            const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
 
             switch (m(try p.parse(parse.anyField))) {
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
@@ -184,34 +179,24 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 // TODO: We're not using type information for anything yet
                 c("types") => {
                     _ = try p.parse(parse.index);
-
-                    // To keep it simple, we just leak a shit ton of type names here.
-                    const type_name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
-                    try pokemon.types.append(type_name);
+                    const type_name = try p.parse(parse.strv);
+                    _ = try pokemon.types.put(allocator, try getStringId(&data.types, type_name));
                 },
                 else => return true,
             }
         },
         c("zones") => {
             const zone_index = try p.parse(parse.index);
-            const zone_entry = try data.zones.getOrPutValue(zone_index, Zone.init(allocator));
-            const zone = &zone_entry.value;
+            const zone = try data.zones.getOrPutValue(allocator, zone_index, Zone{});
             try p.parse(comptime parse.field("wild"));
             const area_name = try p.parse(parse.anyField);
 
-            // To keep it simple, we just leak a shit ton of area names here
-            const area_name_dupe = try mem.dupe(allocator, u8, area_name);
-            const area_entry = try zone.wild_areas.getOrPutValue(area_name_dupe, WildArea.init(allocator));
-            const area = &area_entry.value;
+            const area_id = try getStringId(&data.areas, area_name);
+            const area = try zone.wild_areas.getOrPutValue(allocator, area_id, WildArea{});
 
             try p.parse(comptime parse.field("pokemons"));
             const poke_index = try p.parse(parse.index);
-            const poke_entry = try area.pokemons.getOrPutValue(poke_index, WildPokemon{
-                .min_level = null,
-                .max_level = null,
-                .species = null,
-            });
-            const pokemon = &poke_entry.value;
+            const pokemon = try area.pokemons.getOrPutValue(allocator, poke_index, WildPokemon{});
 
             // TODO: We're not using min/max level for anything yet
             switch (m(try p.parse(parse.anyField))) {
@@ -230,37 +215,25 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 }
 
 fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
-    const allocator = data.pokemons.allocator;
+    const allocator = data.types.allocator;
     const random = &rand.DefaultPrng.init(seed).random;
     var simular = std.ArrayList(usize).init(allocator);
 
     const species = try data.species();
     const species_max = species.count();
 
-    var zone_iter = data.zones.iterator();
-    while (zone_iter.next()) |zone_kw| {
-        const zone_i = zone_kw.key;
-        const zone = zone_kw.value;
-
-        var area_iter = zone.wild_areas.iterator();
-        while (area_iter.next()) |area_kw| {
-            const area_name = area_kw.key;
-            const area = area_kw.value;
-
-            var poke_iter = area.pokemons.iterator();
-            while (poke_iter.next()) |poke_kw| {
-                const poke_i = poke_kw.key;
-                const wild_pokemon = &poke_kw.value;
+    for (data.zones.values()) |zone| {
+        for (zone.wild_areas.values()) |area| {
+            for (area.pokemons.values()) |*wild_pokemon| {
                 const old_species = wild_pokemon.species orelse continue;
 
                 if (simular_total_stats) blk: {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
-                    const poke_kv = data.pokemons.get(old_species) orelse {
+                    const pokemon = data.pokemons.get(old_species) orelse {
                         wild_pokemon.species = species.at(random.intRangeLessThan(usize, 0, species_max));
                         break :blk;
                     };
-                    const pokemon = poke_kv.value;
 
                     var stats: [Pokemon.stats.len]u8 = undefined;
                     var min = @intCast(i64, sum(u8, pokemon.toBuf(&stats)));
@@ -274,7 +247,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         for (species.span()) |range| {
                             var s = range.start;
                             while (s <= range.end) : (s += 1) {
-                                const p = data.pokemons.get(s).?.value;
+                                const p = data.pokemons.get(s).?;
                                 const total = @intCast(i64, sum(u8, p.toBuf(&stats)));
                                 if (min <= total and total <= max)
                                     try simular.append(s);
@@ -308,51 +281,53 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
 }
 
 const Set = util.container.IntSet.Unmanaged(usize);
-const Pokemons = std.AutoHashMap(usize, Pokemon);
-const Zones = std.AutoHashMap(usize, Zone);
-const WildAreas = std.StringHashMap(WildArea);
-const WildPokemons = std.AutoHashMap(usize, WildPokemon);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Zones = util.container.IntMap.Unmanaged(usize, Zone);
+const WildAreas = util.container.IntMap.Unmanaged(usize, WildArea);
+const WildPokemons = util.container.IntMap.Unmanaged(usize, WildPokemon);
+
+fn getStringId(map: *std.StringHashMap(usize), str: []const u8) !usize {
+    const res = try map.getOrPut(str);
+    if (!res.found_existing) {
+        res.kv.key = try mem.dupe(map.allocator, u8, str);
+        res.kv.value = map.count() - 1;
+    }
+    return res.kv.value;
+}
 
 const Data = struct {
-    pokemons: Pokemons,
-    zones: Zones,
+    areas: std.StringHashMap(usize),
+    types: std.StringHashMap(usize),
+    pokemons: Pokemons = Pokemons{},
+    zones: Zones = Zones{},
 
     fn species(d: Data) !Set {
         var res = Set{};
         errdefer res.deinit(d.allocator());
 
-        var p_it = d.pokemons.iterator();
-        while (p_it.next()) |kv| {
+        for (d.pokemons.values()) |pokemon, i| {
             // We shouldn't pick Pokemon with 0 catch rate as they tend to be
             // Pokemon not meant to be used in the standard game.
             // Pokemons from the film studio in bw2 have 0 catch rate.
-            if (kv.value.catch_rate == 0)
+            if (pokemon.catch_rate == 0)
                 continue;
-            _ = try res.put(d.allocator(), kv.key);
+            _ = try res.put(d.allocator(), d.pokemons.at(i).key);
         }
 
         return res;
     }
 
     fn allocator(d: Data) *mem.Allocator {
-        return d.pokemons.allocator;
+        return d.types.allocator;
     }
 };
 
 const Zone = struct {
-    wild_areas: WildAreas,
-
-    fn init(allocator: *mem.Allocator) Zone {
-        return Zone{ .wild_areas = WildAreas.init(allocator) };
-    }
+    wild_areas: WildAreas = WildAreas{},
 };
 
 const WildArea = struct {
-    pokemons: WildPokemons,
-
-    fn init(allocator: *mem.Allocator) WildArea {
-        return WildArea{ .pokemons = WildPokemons.init(allocator) };
-    }
+    pokemons: WildPokemons = WildPokemons{},
 };
 
 const WildPokemon = struct {
@@ -369,13 +344,7 @@ const Pokemon = struct {
     sp_attack: ?u8 = null,
     sp_defense: ?u8 = null,
     catch_rate: usize = 1,
-    types: std.ArrayList([]const u8),
-
-    fn init(allocator: *mem.Allocator) Pokemon {
-        return Pokemon{
-            .types = std.ArrayList([]const u8).init(allocator),
-        };
-    }
+    types: Set = Set{},
 
     const stats = [_][]const u8{
         "hp",
@@ -504,41 +473,41 @@ test "tm35-rand-wild" {
         \\
     ;
     util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.zones[3].wild.grass.pokemons[3].species=2
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=0
-        \\.zones[3].wild.grass.pokemons[0].species=2
-        \\.zones[1].wild.grass.pokemons[3].species=3
+        \\.zones[0].wild.grass.pokemons[0].species=2
+        \\.zones[0].wild.grass.pokemons[1].species=0
+        \\.zones[0].wild.grass.pokemons[2].species=0
+        \\.zones[0].wild.grass.pokemons[3].species=2
+        \\.zones[1].wild.grass.pokemons[0].species=3
         \\.zones[1].wild.grass.pokemons[1].species=7
         \\.zones[1].wild.grass.pokemons[2].species=1
-        \\.zones[1].wild.grass.pokemons[0].species=6
-        \\.zones[2].wild.grass.pokemons[3].species=6
+        \\.zones[1].wild.grass.pokemons[3].species=6
+        \\.zones[2].wild.grass.pokemons[0].species=6
         \\.zones[2].wild.grass.pokemons[1].species=6
         \\.zones[2].wild.grass.pokemons[2].species=8
-        \\.zones[2].wild.grass.pokemons[0].species=8
-        \\.zones[0].wild.grass.pokemons[3].species=0
-        \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=4
-        \\.zones[0].wild.grass.pokemons[0].species=7
+        \\.zones[2].wild.grass.pokemons[3].species=8
+        \\.zones[3].wild.grass.pokemons[0].species=0
+        \\.zones[3].wild.grass.pokemons[1].species=0
+        \\.zones[3].wild.grass.pokemons[2].species=4
+        \\.zones[3].wild.grass.pokemons[3].species=7
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
-        \\.zones[3].wild.grass.pokemons[3].species=0
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=0
-        \\.zones[3].wild.grass.pokemons[0].species=0
-        \\.zones[1].wild.grass.pokemons[3].species=0
-        \\.zones[1].wild.grass.pokemons[1].species=1
-        \\.zones[1].wild.grass.pokemons[2].species=0
-        \\.zones[1].wild.grass.pokemons[0].species=0
-        \\.zones[2].wild.grass.pokemons[3].species=0
-        \\.zones[2].wild.grass.pokemons[1].species=0
-        \\.zones[2].wild.grass.pokemons[2].species=1
-        \\.zones[2].wild.grass.pokemons[0].species=1
-        \\.zones[0].wild.grass.pokemons[3].species=0
+        \\.zones[0].wild.grass.pokemons[0].species=0
         \\.zones[0].wild.grass.pokemons[1].species=0
         \\.zones[0].wild.grass.pokemons[2].species=0
-        \\.zones[0].wild.grass.pokemons[0].species=1
+        \\.zones[0].wild.grass.pokemons[3].species=0
+        \\.zones[1].wild.grass.pokemons[0].species=0
+        \\.zones[1].wild.grass.pokemons[1].species=1
+        \\.zones[1].wild.grass.pokemons[2].species=0
+        \\.zones[1].wild.grass.pokemons[3].species=0
+        \\.zones[2].wild.grass.pokemons[0].species=0
+        \\.zones[2].wild.grass.pokemons[1].species=0
+        \\.zones[2].wild.grass.pokemons[2].species=1
+        \\.zones[2].wild.grass.pokemons[3].species=1
+        \\.zones[3].wild.grass.pokemons[0].species=0
+        \\.zones[3].wild.grass.pokemons[1].species=0
+        \\.zones[3].wild.grass.pokemons[2].species=0
+        \\.zones[3].wild.grass.pokemons[3].species=1
         \\
     );
 }

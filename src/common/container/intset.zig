@@ -37,6 +37,10 @@ pub fn Managed(comptime Int: type) type {
             return set.inner.at(i);
         }
 
+        pub fn index(set: *const @This(), i: Int) ?usize {
+            return set.inner.index(i);
+        }
+
         pub fn put(set: *@This(), i: Int) !bool {
             return set.inner.put(set.allocator, i);
         }
@@ -94,6 +98,20 @@ pub fn Unmanaged(comptime Int: type) type {
                 tmp -= len;
             }
             unreachable;
+        }
+
+        pub fn index(set: *const @This(), i: Int) ?usize {
+            var tmp: usize = 0;
+            const items = set.span();
+            for (items) |range| {
+                const len = (range.end + 1) - range.start;
+                if (i < range.start)
+                    return null;
+                if (i <= range.end)
+                    return tmp + (i - range.start);
+                tmp += len;
+            }
+            return null;
         }
 
         pub fn put(set: *@This(), allocator: *mem.Allocator, i: Int) !bool {
@@ -159,29 +177,29 @@ pub fn Unmanaged(comptime Int: type) type {
             return set.data.big.ptr[0..set.entries];
         }
 
-        fn merge(set: *@This(), allocator: *mem.Allocator, index: usize) void {
+        fn merge(set: *@This(), allocator: *mem.Allocator, idx: usize) void {
             const items = set.span();
-            if (index + 1 == items.len)
+            if (idx + 1 == items.len)
                 return;
 
-            const a = items[index];
-            const b = &items[index + 1];
+            const a = items[idx];
+            const b = &items[idx + 1];
             if (a.end != b.start - 1)
                 return;
 
             b.start = a.start;
             var list = set.toOwnedList(allocator) catch unreachable;
-            _ = list.orderedRemove(index);
+            _ = list.orderedRemove(idx);
             set.* = fromOwnedList(list);
         }
 
         fn lookup(set: *const @This(), i: Int) struct { found: bool, index: usize } {
             const items = set.span();
-            for (items) |range, index| {
+            for (items) |range, idx| {
                 if (i < range.start)
-                    return .{ .found = false, .index = index };
+                    return .{ .found = false, .index = idx };
                 if (i <= range.end)
-                    return .{ .found = true, .index = index };
+                    return .{ .found = true, .index = idx };
             }
             return .{ .found = false, .index = items.len };
         }
@@ -246,6 +264,7 @@ test "IntSet" {
     testing.expectEqual(false, set.exists(11));
     testing.expectEqual(@as(usize, 3), set.count());
     testing.expectEqual(@as(usize, 5), set.at(1));
+    testing.expectEqual(@as(?usize, 1), set.index(5));
     testing.expectEqual(@as(usize, 1), set.inner.entries);
     testing.expectEqual(@as(u8, 4), set.inner.data.small[0].start);
     testing.expectEqual(@as(u8, 6), set.inner.data.small[0].end);
@@ -265,6 +284,8 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 6), set.count());
     testing.expectEqual(@as(usize, 5), set.at(1));
     testing.expectEqual(@as(usize, 9), set.at(4));
+    testing.expectEqual(@as(?usize, 1), set.index(5));
+    testing.expectEqual(@as(?usize, 4), set.index(9));
     testing.expectEqual(@as(usize, 2), set.inner.entries);
     testing.expectEqual(@as(u8, 4), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 6), set.inner.data.big.ptr[0].end);
@@ -287,6 +308,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 5), set.at(4));
     testing.expectEqual(@as(usize, 9), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(5));
+    testing.expectEqual(@as(?usize, 7), set.index(9));
     testing.expectEqual(@as(usize, 3), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 2), set.inner.data.big.ptr[0].end);
@@ -304,6 +328,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 4), set.at(4));
     testing.expectEqual(@as(usize, 8), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(4));
+    testing.expectEqual(@as(?usize, 7), set.index(8));
     testing.expectEqual(@as(usize, 2), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 6), set.inner.data.big.ptr[0].end);
@@ -318,6 +345,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 4), set.at(4));
     testing.expectEqual(@as(usize, 7), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(4));
+    testing.expectEqual(@as(?usize, 7), set.index(7));
     testing.expectEqual(@as(usize, 1), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.small[0].start);
     testing.expectEqual(@as(u8, 10), set.inner.data.small[0].end);
@@ -329,6 +359,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 4), set.at(4));
     testing.expectEqual(@as(usize, 8), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(4));
+    testing.expectEqual(@as(?usize, 7), set.index(8));
     testing.expectEqual(@as(usize, 2), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 6), set.inner.data.big.ptr[0].end);
@@ -342,6 +375,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 4), set.at(4));
     testing.expectEqual(@as(usize, 9), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(4));
+    testing.expectEqual(@as(?usize, 7), set.index(9));
     testing.expectEqual(@as(usize, 2), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 5), set.inner.data.big.ptr[0].end);
@@ -355,6 +391,9 @@ test "IntSet" {
     testing.expectEqual(@as(usize, 1), set.at(1));
     testing.expectEqual(@as(usize, 4), set.at(4));
     testing.expectEqual(@as(usize, 10), set.at(7));
+    testing.expectEqual(@as(?usize, 1), set.index(1));
+    testing.expectEqual(@as(?usize, 4), set.index(4));
+    testing.expectEqual(@as(?usize, 7), set.index(10));
     testing.expectEqual(@as(usize, 2), set.inner.entries);
     testing.expectEqual(@as(u8, 0), set.inner.data.big.ptr[0].start);
     testing.expectEqual(@as(u8, 5), set.inner.data.big.ptr[0].end);
