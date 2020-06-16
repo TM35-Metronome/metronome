@@ -254,28 +254,52 @@ pub const Builder = struct {
         };
     }
 
-    pub fn createDir(b: Builder, dir: Handle, path: []const u8) !Handle {
+    pub fn createTree(b: *Builder, dir: Dir, path: []const u8) !Dir {
+        var curr = dir;
+        const relative = if (mem.startsWith(u8, path, "/")) blk: {
+            curr = root; // Set handle to root
+            break :blk path[1..];
+        } else path;
+
+        var split = mem.split(relative, "/");
+        while (split.next()) |name|
+            curr = try b.createDir(curr, name);
+
+        return curr;
+    }
+
+    pub fn createDir(b: *Builder, dir: Dir, path: []const u8) !Dir {
         const fs = b.toFs();
-        const dir_name = path.basenamePosix();
-        const parent = if (path.dirnamePosix()) |parent_path|
+        const dir_name = std.fs.path.basenamePosix(path);
+        const parent = if (std.fs.path.dirnamePosix(path)) |parent_path|
             try fs.openDir(dir, parent_path)
         else
             dir;
 
-        if (fs.openDir(parent, dir_name))
-            return error.DirAlreadyExist;
+        if (fs.openDir(parent, dir_name)) |handle| {
+            return handle;
+        } else |err| switch (err) {
+            error.DoesntExist => {},
+        }
 
-        const parent_entry = b.fnt_main.items[parent];
+        const parent_entry = b.fnt_main.items[parent.i];
         const parent_offset = parent_entry.offset_to_subtable.value();
-        const handle = @intCast(Handle, b.fnt_main.items.len);
-        const offset = @intCast(u32, b.fnt.items.len);
+        const handle = @intCast(u16, b.fnt_main.items.len);
 
         var buf: [1024]u8 = undefined;
         const fbs = io.fixedBufferStream(&buf).outStream();
+        const len = @intCast(u7, dir_name.len);
+        const kind = @as(u8, @boolToInt(true)) << 7;
+        const id = @intCast(u16, 0x8000 | b.fnt_main.items.len);
+        try fbs.writeByte(kind | len);
+        try fbs.writeAll(dir_name);
+        try fbs.writeAll(&lu16.init(id).bytes);
 
         const written = fbs.context.getWritten();
         try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len + 1);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
+
+        const offset = @intCast(u32, b.fnt_sub.items.len);
         b.fnt_sub.append(0) catch unreachable;
 
         for (b.fnt_main.items) |*entry| {
@@ -286,124 +310,64 @@ pub const Builder = struct {
         }
 
         try b.fnt_main.append(.{
-            .sub_table_offset = lu32.init(offset),
+            .offset_to_subtable = lu32.init(offset),
             .first_file_handle = parent_entry.first_file_handle,
             .parent_id = lu16.init(parent.i),
         });
-        return handle;
+        return Dir{ .i = handle };
     }
 
-    pub fn createFile(b: Builder, dir: Handle, path: []const u8) !Handle {
-        const dir_name = path.basenamePosix();
-        const parent = if (path.dirnamePosix()) |parent_path|
-            try b.toFs().openDir(dir, parent_path)
+    pub fn createFile(b: *Builder, dir: Dir, path: []const u8) !File {
+        const fs = b.toFs();
+        const file_name = std.fs.path.basenamePosix(path);
+        const parent = if (std.fs.path.dirnamePosix(path)) |parent_path|
+            try fs.openDir(dir, parent_path)
         else
             dir;
+
+        if (fs.openFile(parent, file_name)) |handle| {
+            return handle;
+        } else |err| switch (err) {
+            error.DoesntExist => {},
+        }
+
+        const parent_entry = b.fnt_main.items[parent.i];
+        const parent_offset = parent_entry.offset_to_subtable.value();
+        const handle = parent_entry.first_file_handle.value();
+
+        var buf: [1024]u8 = undefined;
+        const fbs = io.fixedBufferStream(&buf).outStream();
+        const len = @intCast(u7, file_name.len);
+        const kind = @as(u8, @boolToInt(false)) << 7;
+        try fbs.writeByte(kind | len);
+        try fbs.writeAll(file_name);
+
+        const written = fbs.context.getWritten();
+        try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len);
+        b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
+
+        for (b.fnt_main.items) |*entry, i| {
+            const old_offset = entry.offset_to_subtable.value();
+            const new_offset = old_offset + written.len;
+            if (old_offset > parent_offset)
+                entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
+            const old_file_handle = entry.first_file_handle.value();
+            const new_file_handle = old_file_handle + 1;
+            if (old_file_handle >= handle and parent.i != i)
+                entry.first_file_handle = lu16.init(@intCast(u16, new_file_handle));
+        }
+
+        try b.fat.insert(handle, nds.Range.init(0, 0));
+        return File{ .i = handle };
     }
 
     fn toFs(b: Builder) Fs {
         return Fs{
-            .fnt_main = b.fnt_main.toSlice(),
-            .fnt = b.fnt_sub.toSlice(),
-            .fat = b.fat.toOwnedSlice(),
+            .fnt_main = b.fnt_main.items,
+            .fnt = b.fnt_sub.items,
+            .fat = b.fat.items,
             .data = &[_]u8{},
         };
-    }
-
-    pub fn add(builder: *Builder, path: []const []const u8, size: u32) !void {
-        var folder_entry: usize = 0;
-
-        const relative_path = outer: for (path) |name, i| {
-            const is_file = i == path.len - 1;
-
-            const folder = builder.fnt_main.items[folder_entry];
-            const offset = folder.offset_to_subtable.value();
-            var it = Iterator{
-                .file_handle = folder.first_file_handle.value(),
-                .fnt_sub_table = builder.fnt_sub.items[offset..],
-            };
-            while (it.next()) |entry| {
-                switch (entry.kind) {
-                    .file => {
-                        if (is_file and mem.eql(u8, entry.name, name))
-                            return error.AlreadyFileExists;
-                    },
-                    .folder => {
-                        if (is_file or !mem.eql(u8, entry.name, name))
-                            continue;
-
-                        folder_entry = entry.id;
-                        continue :outer; // We found the folder. Continue on to the next one
-                    },
-                }
-            }
-            break :outer path[i..];
-        } else path;
-
-        const file_start = if (builder.fat.items.len != 0)
-            builder.fat.items[builder.fat.items.len - 1].end.value()
-        else
-            0;
-        const relative_root = builder.fnt_main.items[folder_entry];
-        const file_handle = relative_root.first_file_handle.value();
-        try builder.fat.insert(file_handle, nds.Range.init(file_start, file_start + size));
-
-        // Correct fnt_main after their file_handles moved around
-        for (builder.fnt_main.items) |*entry| {
-            const no_new_folders = relative_path.len == 1;
-            const old_file_handle = entry.first_file_handle.value();
-            const new_file_handle = old_file_handle + 1;
-            if (old_file_handle > file_handle)
-                entry.first_file_handle = lu16.init(new_file_handle);
-            // If we're creating new folders, then the current folder will
-            // point to the new folder at the first entry. The first file
-            // of this folder will then also have been moved and we will
-            // need to correct this.
-            if (!no_new_folders and old_file_handle == file_handle)
-                entry.first_file_handle = lu16.init(new_file_handle);
-        }
-
-        var buf: [1024]u8 = undefined;
-        for (relative_path) |name, i| {
-            const fbs = io.fixedBufferStream(&buf).outStream();
-            const is_folder = i != relative_path.len - 1;
-            const len = @intCast(u7, name.len);
-            const kind = @as(u8, @boolToInt(is_folder)) << 7;
-            try fbs.writeByte(kind | len);
-            try fbs.writeAll(name);
-            if (is_folder) {
-                const folder_id = @intCast(u16, 0x8000 | builder.fnt_main.items.len);
-                try fbs.writeAll(&lu16.init(folder_id).bytes);
-            }
-
-            const written = fbs.context.getWritten();
-            const folder = builder.fnt_main.items[folder_entry];
-            const offset = folder.offset_to_subtable.value();
-            try builder.fnt_sub.insertSlice(offset, written);
-
-            for (builder.fnt_main.items) |*entry| {
-                const old_offset = entry.offset_to_subtable.value();
-                const new_offset = old_offset + written.len;
-                if (old_offset > offset)
-                    entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
-            }
-
-            if (is_folder) {
-                const fnt_len = builder.fnt_sub.items.len;
-                try builder.fnt_main.append(.{
-                    .offset_to_subtable = lu32.init(@intCast(u32, fnt_len)),
-                    .first_file_handle = lu16.init(@intCast(u16, file_handle)),
-                    .parent_id = lu16.init(@intCast(u16, folder_entry)),
-                });
-
-                const old_count = builder.fnt_main.items[0].parent_id.value();
-                builder.fnt_main.items[0].parent_id = lu16.init(old_count + 1);
-
-                folder_entry = builder.fnt_main.items.len - 1;
-                try builder.fnt_sub.append(0);
-            }
-        }
-        return;
     }
 
     // Leaves builder in a none usable state. Only `deinit` is valid
@@ -418,6 +382,7 @@ pub const Builder = struct {
         const fnt_main_bytes = mem.sliceAsBytes(builder.fnt_main.items);
         try builder.fnt_sub.insertSlice(0, fnt_main_bytes);
         return Fs{
+            .fnt_main = builder.fnt_main.toOwnedSlice(),
             .fnt = builder.fnt_sub.toOwnedSlice(),
             .fat = builder.fat.toOwnedSlice(),
             .data = &[_]u8{},
@@ -432,28 +397,30 @@ pub const Builder = struct {
 };
 
 test "Builder" {
-    const paths = [_][]const []const u8{
-        &[_][]const u8{ "a", "a" },
-        &[_][]const u8{ "a", "b" },
-        &[_][]const u8{ "a", "c", "a" },
-        &[_][]const u8{"b"},
-        &[_][]const u8{ "d", "a" },
+    const paths = [_][]const u8{
+        "a/a",
+        "a/b",
+        "a/c/a",
+        "b",
+        "d/a",
     };
     var b = try Builder.init(testing.allocator);
     defer b.deinit();
 
-    for (paths) |path|
-        try b.add(path, 0);
+    for (paths) |path| {
+        if (std.fs.path.dirnamePosix(path)) |dir_path|
+            _ = try b.createTree(root, dir_path);
+        _ = try b.createFile(root, path);
+    }
 
     const fs = try b.finish();
+    defer testing.allocator.free(fs.fnt_main);
     defer testing.allocator.free(fs.fnt);
     defer testing.allocator.free(fs.fat);
 
     for (paths) |path, i|
-        testing.expect(fs.lookupIndex(path) != null);
-    testing.expect(fs.lookupIndex(&[_][]const u8{}) == null);
-    testing.expect(fs.lookupIndex(&[_][]const u8{""}) == null);
-    testing.expect(fs.lookupIndex(&[_][]const u8{ "", "" }) == null);
-    testing.expect(fs.lookupIndex(&[_][]const u8{"a"}) == null);
-    testing.expect(fs.lookupIndex(&[_][]const u8{ "a", "a", "a" }) == null);
+        _ = try fs.openFile(root, path);
+    testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
+    testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
+    testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
 }
