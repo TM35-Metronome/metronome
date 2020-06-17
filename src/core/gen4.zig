@@ -257,20 +257,11 @@ pub const DpptWildPokemons = extern struct {
     unknown_replace: [6]Replacement, // ???
     gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
 
-    surf_rate: lu32,
-    surf: [5]Sea,
-
-    sea_unknown_rate: lu32,
-    sea_unknown: [5]Sea,
-
-    old_rod_rate: lu32,
-    old_rod: [5]Sea,
-
-    good_rod_rate: lu32,
-    good_rod: [5]Sea,
-
-    super_rod_rate: lu32,
-    super_rod: [5]Sea,
+    surf: Sea,
+    sea_unknown: Sea,
+    old_rod: Sea,
+    good_rod: Sea,
+    super_rod: Sea,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 424);
@@ -288,6 +279,11 @@ pub const DpptWildPokemons = extern struct {
     };
 
     pub const Sea = extern struct {
+        rate: lu32,
+        mons: [5]SeaMon,
+    };
+
+    pub const SeaMon = extern struct {
         max_level: u8,
         min_level: u8,
         pad1: [2]u8,
@@ -342,7 +338,7 @@ pub const HgssWildPokemons = extern struct {
 
 pub const Pocket = packed struct {
     pocket: PocketKind,
-    unknown: u4,
+    unknown: u4 = 0,
 };
 
 pub const PocketKind = packed enum(u4) {
@@ -350,18 +346,8 @@ pub const PocketKind = packed enum(u4) {
     tms_hms = 0x01,
     berries = 0x02,
     key_items = 0x03,
-    unknown_0x04 = 0x04,
-    unknown_0x05 = 0x05,
-    unknown_0x06 = 0x06,
-    unknown_0x07 = 0x07,
-    unknown_0x08 = 0x08,
     balls = 0x09,
-    unknown_0xa = 0xA,
-    unknown_0xb = 0xB,
-    unknown_0xc = 0xC,
-    unknown_0xd = 0xD,
-    unknown_0xe = 0xE,
-    unknown_0xf = 0xF,
+    _,
 };
 
 pub const Item = extern struct {
@@ -416,19 +402,23 @@ pub const Game = struct {
     allocator: *mem.Allocator,
 
     starters: [3]*lu16,
-    pokemons: nds.fs.Fs,
-    evolutions: nds.fs.Fs,
-    moves: nds.fs.Fs,
-    level_up_moves: nds.fs.Fs,
-    trainers: nds.fs.Fs,
-    parties: nds.fs.Fs,
-    wild_pokemons: nds.fs.Fs,
-    itemdata: nds.fs.Fs,
-    scripts: nds.fs.Fs,
+    pokemons: []BasePokemon,
+    moves: []Move,
+    trainers: []Trainer,
+    wild_pokemons: union {
+        dppt: []DpptWildPokemons,
+        hgss: []HgssWildPokemons,
+    },
+    items: []Item,
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
+
+    evolutions: nds.fs.Fs,
+    level_up_moves: nds.fs.Fs,
+    parties: nds.fs.Fs,
+    scripts: nds.fs.Fs,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -477,19 +467,32 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try getNarc(file_system, info.pokemons),
-            .evolutions = try getNarc(file_system, info.evolutions),
-            .level_up_moves = try getNarc(file_system, info.level_up_moves),
-            .moves = try getNarc(file_system, info.moves),
-            .trainers = try getNarc(file_system, info.trainers),
-            .parties = try getNarc(file_system, info.parties),
-            .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
-            .itemdata = try getNarc(file_system, info.itemdata),
-            .scripts = scripts,
+            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(BasePokemon),
+            .moves = try (try getNarc(file_system, info.moves)).toSlice(Move),
+            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(Trainer),
+            .items = try (try getNarc(file_system, info.itemdata)).toSlice(Item),
+            .wild_pokemons = blk: {
+                const narc = try getNarc(file_system, info.wild_pokemons);
+                switch (info.version) {
+                    .diamond,
+                    .pearl,
+                    .platinum,
+                    => break :blk .{ .dppt = try narc.toSlice(DpptWildPokemons) },
+                    .heart_gold,
+                    .soul_silver,
+                    => break :blk .{ .hgss = try narc.toSlice(HgssWildPokemons) },
+                    else => unreachable,
+                }
+            },
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
             .static_pokemons = commands.static_pokemons,
             .pokeball_items = commands.pokeball_items,
+
+            .parties = try getNarc(file_system, info.parties),
+            .evolutions = try getNarc(file_system, info.evolutions),
+            .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .scripts = scripts,
         };
     }
 

@@ -59,11 +59,13 @@ pub const Fs = struct {
 
         var split = mem.split(relative, "/");
         while (split.next()) |name| {
-            if (handle != .dir)
-                return error.DoesntExist;
-
-            var it = fs.iterate(handle.dir);
-            handle = it.find(name) orelse return error.DoesntExist;
+            switch (handle) {
+                .file => return error.DoesntExist,
+                .dir => |d| {
+                    var it = fs.iterate(d);
+                    handle = it.find(name) orelse return error.DoesntExist;
+                },
+            }
         }
 
         return handle;
@@ -193,8 +195,8 @@ pub const Iterator = struct {
 
         const handle = if (is_folder) blk: {
             const read_id = stream.readIntLittle(u16) catch return null;
-            debug.assert(read_id >= 0x8001 and read_id <= 0xFFFF);
-            break :blk read_id & 0x7FFF;
+            debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
+            break :blk read_id & 0x0FFF;
         } else blk: {
             defer it.file_handle += 1;
             break :blk it.file_handle;
@@ -233,6 +235,7 @@ pub const Builder = struct {
     fnt_main: std.ArrayList(FntMainEntry),
     fnt_sub: std.ArrayList(u8),
     fat: std.ArrayList(nds.Range),
+    file_bytes: u32,
 
     pub fn init(allocator: *mem.Allocator) !Builder {
         var fnt_main = std.ArrayList(FntMainEntry).init(allocator);
@@ -251,6 +254,7 @@ pub const Builder = struct {
             .fnt_main = fnt_main,
             .fnt_sub = fnt_sub,
             .fat = std.ArrayList(nds.Range).init(allocator),
+            .file_bytes = 0,
         };
     }
 
@@ -290,7 +294,7 @@ pub const Builder = struct {
         const fbs = io.fixedBufferStream(&buf).outStream();
         const len = @intCast(u7, dir_name.len);
         const kind = @as(u8, @boolToInt(true)) << 7;
-        const id = @intCast(u16, 0x8000 | b.fnt_main.items.len);
+        const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
         try fbs.writeByte(kind | len);
         try fbs.writeAll(dir_name);
         try fbs.writeAll(&lu16.init(id).bytes);
@@ -317,7 +321,7 @@ pub const Builder = struct {
         return Dir{ .i = handle };
     }
 
-    pub fn createFile(b: *Builder, dir: Dir, path: []const u8) !File {
+    pub fn createFile(b: *Builder, dir: Dir, path: []const u8, size: u32) !File {
         const fs = b.toFs();
         const file_name = std.fs.path.basenamePosix(path);
         const parent = if (std.fs.path.dirnamePosix(path)) |parent_path|
@@ -357,11 +361,14 @@ pub const Builder = struct {
                 entry.first_file_handle = lu16.init(@intCast(u16, new_file_handle));
         }
 
-        try b.fat.insert(handle, nds.Range.init(0, 0));
+        const start = b.file_bytes;
+        try b.fat.insert(handle, nds.Range.init(start, start + size));
+
+        b.file_bytes += size;
         return File{ .i = handle };
     }
 
-    fn toFs(b: Builder) Fs {
+    pub fn toFs(b: Builder) Fs {
         return Fs{
             .fnt_main = b.fnt_main.items,
             .fnt = b.fnt_sub.items,
@@ -410,7 +417,7 @@ test "Builder" {
     for (paths) |path| {
         if (std.fs.path.dirnamePosix(path)) |dir_path|
             _ = try b.createTree(root, dir_path);
-        _ = try b.createFile(root, path);
+        _ = try b.createFile(root, path, 0);
     }
 
     const fs = try b.finish();

@@ -164,6 +164,45 @@ pub const Rom = struct {
         return;
     }
 
+    pub fn newFileSystem(rom: *Rom, builder: fs.Builder) !void {
+        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+        h.fnt.len = lu32.init(0);
+        h.fat.len = lu32.init(0);
+
+        const fnt_sub = builder.fnt;
+        const fnt_main = builder.fnt_main;
+        const fnt_main_size = fnt_main.len * @sizeOf(fs.FntMainEntry);
+        const fnt_size = fnt_sub.len + fnt_main_size * @boolToInt(fnt_sub.ptr != fnt_main.ptr);
+        try rom.resizeSection(h.fnt, fnt_size);
+        try rom.resizeSection(h.fat, builder.fat.len * @sizeOf(Range));
+
+        const new_fs = rom.fileSystem();
+        mem.set(Range, new_fs.fat, Range.init(0, 0));
+
+        // To avoid allocations in this function, we use a local 1MB
+        // buffer. This is a guess for the maximum bytes we will ever
+        // realistically need to perform this resize.
+        var buf: [1 * (1024 * 1024)]u8 = undefined;
+        const fba = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+        const sections = try rom.buildSectionTable(fba);
+        const end = sections[sections.len - 1].toSlice().end();
+
+        for (new_fs.fat) |*new, i| {
+            const f = builder.fat[i];
+            new.* = nds.Range.init(
+                f.start.value() + end,
+                f.end.value() + end,
+            );
+            if (f.end.value() <= builder.data.len) {
+                const data = builder.data[f.start.value()..f.end.value()];
+                mem.copy(u8, new_fs.data[new.start.value()..], data);
+            }
+        }
+
+        mem.copy(u8, new_fs.fnt, mem.sliceAsBytes(builder.fnt_main));
+        mem.copy(u8, new_fs.fnt[fnt_size - fnt_sub.len ..], builder.fnt);
+    }
+
     /// A generic structure for pointing to memory in the nds rom. The memory
     /// pointed to is the memory for a `start/end` or `start/len` pair. This
     /// structure does NOT point to the memory that these `start/X` pairs
@@ -308,53 +347,17 @@ pub const Rom = struct {
     /// It it needs to move sections, it will correct the offsets that
     /// point to those sections as well.
     fn resizeSection(rom: *Rom, section_to_resize: Slice, new_size: u32) !void {
-        const file_system = rom.fileSystem();
-        const nitro_footer = rom.nitroFooter();
-
         // Nds internals like this functions are allowed to modify data
         // that is returned as `const` to the user, so we discard `const`
         // here. This is always safe.
         const h = @intToPtr(*Header, @ptrToInt(rom.header()));
-        const fat = @intToPtr([*]Range, @ptrToInt(file_system.fat.ptr))[0..file_system.fat.len];
 
         // To avoid allocations in this function, we use a local 1MB
         // buffer. This is a guess for the maximum bytes we will ever
         // realistically need to perform this resize.
         var buf: [1 * (1024 * 1024)]u8 = undefined;
-
-        // First we build a table of all sections in the rom.
-        // This table will contain indexes to the place in the
-        // rom where the offsets to the sections are stored. It
-        // will not point to the sections them self, as this
-        // function will need to both move sections around, and
-        // correct the offsets that point to the sections.
-        const sections = blk: {
-            const fba = &heap.FixedBufferAllocator.init(&buf).allocator;
-            var sections = std.ArrayList(Section).init(fba);
-
-            try sections.append(Section.fromStartLen(
-                rom.data.items,
-                &h.banner_offset,
-                &h.banner_size,
-                .{},
-            ));
-            try sections.append(Section.fromArm(rom.data.items, &h.arm9, .{
-                .range = .{ .start = 0x4000, .end = 0x4000 },
-                .trailing_data = @intCast(u16, nitro_footer.len),
-            }));
-            try sections.append(Section.fromArm(rom.data.items, &h.arm7, .{}));
-            try sections.append(Section.fromSlice(rom.data.items, &h.arm9_overlay, .{}));
-            try sections.append(Section.fromSlice(rom.data.items, &h.arm7_overlay, .{}));
-            try sections.append(Section.fromSlice(rom.data.items, &h.fat, .{}));
-            try sections.append(Section.fromSlice(rom.data.items, &h.fnt, .{}));
-            for (fat) |*f|
-                try sections.append(Section.fromRange(rom.data.items, f, .{}));
-
-            break :blk sections.toOwnedSlice();
-        };
-
-        // Sort sections by where they appear in the rom.
-        std.sort.sort(Section, sections, Section.before);
+        const fba = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+        const sections = try rom.buildSectionTable(fba);
 
         // Find the index to the section the caller wants to resize.
         // It is the callers job to ensure that the section they pass in
@@ -474,6 +477,40 @@ pub const Rom = struct {
 
         h.header_checksum = lu16.init(h.calcChecksum());
         return;
+    }
+
+    fn buildSectionTable(rom: Rom, allocator: *mem.Allocator) ![]Section {
+        // Nds internals like this functions are allowed to modify data
+        // that is returned as `const` to the user, so we discard `const`
+        // here. This is always safe.
+        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+
+        const nitro_footer = rom.nitroFooter();
+        const file_system = rom.fileSystem();
+        const fat = file_system.fat;
+
+        var sections = std.ArrayList(Section).init(allocator);
+        try sections.append(Section.fromStartLen(
+            rom.data.items,
+            &h.banner_offset,
+            &h.banner_size,
+            .{},
+        ));
+        try sections.append(Section.fromArm(rom.data.items, &h.arm9, .{
+            .range = .{ .start = 0x4000, .end = 0x4000 },
+            .trailing_data = @intCast(u16, nitro_footer.len),
+        }));
+        try sections.append(Section.fromArm(rom.data.items, &h.arm7, .{}));
+        try sections.append(Section.fromSlice(rom.data.items, &h.arm9_overlay, .{}));
+        try sections.append(Section.fromSlice(rom.data.items, &h.arm7_overlay, .{}));
+        try sections.append(Section.fromSlice(rom.data.items, &h.fat, .{}));
+        try sections.append(Section.fromSlice(rom.data.items, &h.fnt, .{}));
+        for (fat) |*f|
+            try sections.append(Section.fromRange(rom.data.items, f, .{}));
+
+        // Sort sections by where they appear in the rom.
+        std.sort.sort(Section, sections.items, Section.before);
+        return sections.toOwnedSlice();
     }
 
     pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {

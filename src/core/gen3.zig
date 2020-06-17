@@ -194,18 +194,13 @@ pub const BasePokemon = extern struct {
     abilities: [2]u8,
     safari_zone_rate: u8,
 
-    color_flip: ColorFlip,
+    color: common.Color,
 
     padding: [2]u8,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 28);
     }
-
-    pub const ColorFlip = packed struct {
-        color: common.Color,
-        flip: bool,
-    };
 };
 
 pub const Trainer = extern struct {

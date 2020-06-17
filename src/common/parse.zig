@@ -38,24 +38,20 @@ fn slice(str: []const u8, s: var, comptime converters: var) !void {
 
 pub fn anyT(str: []const u8, ptr: var, comptime converters: var) !void {
     const T = @TypeOf(ptr).Child;
-    switch (@typeInfo(T)) {
+    comptime var i = 0;
+    inline while (i < converters.len) : (i += 1) {
+        const conv = converters[i];
+        const Return = @TypeOf(conv).ReturnType.Child;
+        if (T == Return) {
+            const v = value(T, conv)(str) orelse return error.FoundNoValue;
+            ptr.* = v.value;
+            break;
+        }
+    } else switch (@typeInfo(T)) {
         .Struct => return structure(str, ptr, converters),
         .Array => |a| return slice(str, ptr, converters),
         .Pointer => |s| return slice(str, ptr.*, converters),
-        else => {
-            comptime var i = 0;
-            inline while (i < converters.len) : (i += 1) {
-                const conv = converters[i];
-                const Return = @TypeOf(conv).ReturnType.Child;
-                if (T == Return) {
-                    const v = value(T, conv)(str) orelse return error.FoundNoValue;
-                    ptr.* = v.value;
-                    break;
-                }
-            } else {
-                @compileError("No converter for '" ++ @typeName(T) ++ "'");
-            }
-        },
+        else => @compileError("No converter for '" ++ @typeName(T) ++ "'"),
     }
 }
 
@@ -164,18 +160,12 @@ pub const MutParser = struct {
 /// * "abc" and "abc\x00" would match the same hash.
 /// * for Swhash(4) an "\xff\xff\xff\xff" case will match any string larger than 4 bytes.
 pub fn Swhash(comptime max_bytes: comptime_int) type {
-    const I = std.meta.IntType(false, max_bytes * 8);
     const L = std.math.IntFittingRange(0, max_bytes + 1);
-    const ResultStruct = packed struct {
-        length: L,
-        hash: I,
-    };
-
-    const Hash = std.meta.IntType(false, @bitSizeOf(ResultStruct));
+    const Hash = std.meta.IntType(false, (max_bytes + @sizeOf(L)) * 8);
 
     return struct {
         pub fn match(str: []const u8) Hash {
-            return hash(str) orelse result(max_bytes + 1, 0);
+            return hash(str) orelse result(max_bytes + 1, "");
         }
 
         pub fn case(comptime str: []const u8) Hash {
@@ -184,16 +174,47 @@ pub fn Swhash(comptime max_bytes: comptime_int) type {
 
         fn hash(str: []const u8) ?Hash {
             if (str.len > max_bytes) return null;
-            var tmp = [_]u8{0} ** max_bytes;
-            std.mem.copy(u8, &tmp, str);
-            return result(@intCast(L, str.len), @bitCast(I, tmp));
+            return result(@intCast(L, str.len), str);
         }
 
-        fn result(length: L, h: I) Hash {
-            return @bitCast(Hash, ResultStruct{
-                .length = length,
-                .hash = h,
-            });
+        fn result(length: L, h: []const u8) Hash {
+            var res: Hash = length;
+            for (h) |r|
+                res = (res * 256) + r;
+            return res;
         }
     };
+}
+
+test "Swhash" {
+    const sw = Swhash(15);
+    inline for ([_][]const u8{
+        "EqO8Asds",
+        "77WmE2bzo",
+        "Q96oTxDiKY",
+        "rgRIc2jEFu",
+        "bssHOVhQMXF",
+        "k4GWfgQJY",
+        "WY1F5RMj",
+        "hICKcKI",
+        "3Xh12ag5",
+        "NCH6LrS",
+        "tXPOk2u1ur",
+        "OWo4hmbeMCm",
+        "mzHyzU2ETog",
+        "fromSF6rzT",
+        "5dDlTmSwY0hx",
+        "0d1dCGpTzRf",
+        "PqZe0A7UPLUzA",
+        "HX1SuW2vA",
+        "hSUwTBgIptkRuV",
+        "typedguRB85VsU",
+        "YxnhFMqqajVgTN",
+        "SAqF09YXpvO0oo",
+        "ScvpzsaEWwWmrK",
+        "vhwUblIcVZLtoqj",
+        "9ByMKBa",
+    }) |str| {
+        testing.expectEqual(sw.case(str), sw.match(str));
+    }
 }
