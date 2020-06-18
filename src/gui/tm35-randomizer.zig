@@ -62,9 +62,7 @@ pub fn main() u8 {
 
     // Set up essetial state for the program to run. If any of these
     // fail, the only thing we can do is exit.
-    const stderr = std.io.getStdErr();
     var timer = time.Timer.start() catch |err| return errPrint("Could not create timer: {}\n", .{err});
-    var tmp_buf: [128]u8 = undefined;
 
     const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return errPrint("Could not create nuklear context\n", .{});
     defer c.nkDeinit(ctx);
@@ -118,7 +116,7 @@ pub fn main() u8 {
     }
 
     // From this point on, we can report errors to the user. This is done
-    // with this 'Popups' struct. If an error occures, it should be appended
+    // with this 'Popups' struct. If an error occurs, it should be appended
     // with 'popups.err("error str {}", arg1, arg2...)'.
     // It is also possible to report a fatal error with
     // 'popups.fatal("error str {}", arg1, arg2...)'. A fatal error means, that
@@ -152,376 +150,34 @@ pub fn main() u8 {
             return 0;
 
         const window_rect = nk.rect(0, 0, @intToFloat(f32, c.width), @intToFloat(f32, c.height));
-
         if (nk.begin(ctx, "", window_rect, c.NK_WINDOW_NO_SCROLLBAR)) {
             const layout = ctx.current.*.layout;
-            const min_height = layout.*.row.min_height;
+            const group_height = groupHeight(ctx);
 
-            var total_space: c.struct_nk_rect = undefined;
-            c.nkWindowGetContentRegion(ctx, &total_space);
-
-            const group_height = total_space.h - ctx.style.window.padding.y * 2;
-            const inner_height = group_height - groupOuterHeight(ctx);
             c.nk_layout_row_template_begin(ctx, group_height);
-            c.nk_layout_row_template_push_static(ctx, 300);
+            c.nk_layout_row_template_push_static(ctx, 200);
             c.nk_layout_row_template_push_dynamic(ctx);
-            c.nk_layout_row_template_push_static(ctx, 180);
             c.nk_layout_row_template_end(ctx);
-
-            // +---------------------------+
-            // | Commands                   |
-            // +---------------------------+
-            // | +-+ +-------------------+ |
-            // | |^| | # tm35-rand-stats | |
-            // | +-+ | # tm35-rand-wild  | |
-            // | +-+ |                   | |
-            // | |V| |                   | |
-            // | +-+ |                   | |
-            // |     +-------------------+ |
-            // +---------------------------+
-            if (c.nk_group_begin(ctx, "Commands", border_title_group) != 0) {
-                defer c.nk_group_end(ctx);
-                c.nk_layout_row_template_begin(ctx, inner_height);
-                c.nk_layout_row_template_push_static(ctx, min_height);
+            selected = drawCommands(ctx, exes, settings, selected);
+            if (nk.nonPaddedGroupBegin(ctx, "opt_and_actions", c.NK_WINDOW_NO_SCROLLBAR)) {
+                defer nk.nonPaddedGroupEnd(ctx);
+                const action_group_height = 92;
+                c.nk_layout_row_template_begin(ctx, action_group_height);
+                c.nk_layout_row_template_push_static(ctx, 250);
+                c.nk_layout_row_template_push_dynamic(ctx);
                 c.nk_layout_row_template_push_dynamic(ctx);
                 c.nk_layout_row_template_end(ctx);
+                rom_path = drawActions(ctx, &popups, rom_path, exes, settings);
+                noopGroup(ctx, "");
+                noopGroup(ctx, "");
 
-                if (nk.nonPaddedGroupBegin(ctx, "command-buttons", c.NK_WINDOW_NO_SCROLLBAR)) {
-                    defer nk.nonPaddedGroupEnd(ctx);
-                    c.nk_layout_row_dynamic(ctx, 0, 1);
-                    if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_UP) != 0) {
-                        const before = math.sub(usize, selected, 1) catch 0;
-                        mem.swap(usize, &settings.order[before], &settings.order[selected]);
-                        selected = before;
-                    }
-                    if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_DOWN) != 0) {
-                        const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
-                        mem.swap(usize, &settings.order[selected], &settings.order[after]);
-                        selected = after;
-                    }
-                }
-
-                var list_view: c.nk_list_view = undefined;
-                if (c.nk_list_view_begin(ctx, &list_view, "command-list", c.NK_WINDOW_BORDER, 0, @intCast(c_int, exes.commands.len)) != 0) {
-                    defer c.nk_list_view_end(&list_view);
-                    for (settings.order) |command_i, i| {
-                        const command = exes.commands[command_i];
-                        if (i < @intCast(usize, list_view.begin))
-                            continue;
-                        if (@intCast(usize, list_view.end) <= i)
-                            break;
-
-                        c.nk_layout_row_template_begin(ctx, 0);
-                        c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
-                        c.nk_layout_row_template_push_dynamic(ctx);
-                        c.nk_layout_row_template_end(ctx);
-
-                        const command_name = path.basename(command.path);
-                        const ui_name = toUserfriendly(&tmp_buf, command_name[0..math.min(command_name.len, tmp_buf.len)]);
-                        settings.checks[command_i] = c.nk_check_label(ctx, "", @boolToInt(settings.checks[command_i])) != 0;
-                        if (c.nk_select_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT, @boolToInt(i == selected)) != 0)
-                            selected = i;
-                    }
-                }
+                const options_group_height = group_height - (action_group_height +
+                    ctx.style.window.spacing.y);
+                c.nk_layout_row_dynamic(ctx, options_group_height, 1);
+                drawOptions(ctx, &popups, exes, settings, selected);
             }
 
-            // +---------------------------+
-            // | Options                   |
-            // +---------------------------+
-            // | This is the help message  |
-            // | # flag-a                  |
-            // | # flag-b                  |
-            // | drop-down |            V| |
-            // | field-a   |             | |
-            // | field-b   |             | |
-            // |                           |
-            // +---------------------------+
-            if (c.nk_group_begin(ctx, "Options", border_title_group) != 0) blk: {
-                defer c.nk_group_end(ctx);
-                if (exes.commands.len == 0)
-                    break :blk;
-
-                const command = exes.commands[settings.order[selected]];
-                var it = mem.split(command.help, "\n");
-                while (it.next()) |line_notrim| {
-                    const line = mem.trimRight(u8, line_notrim, " ");
-                    if (line.len == 0)
-                        continue;
-                    if (mem.startsWith(u8, line, "Usage:"))
-                        continue;
-                    if (mem.startsWith(u8, line, "Options:"))
-                        continue;
-                    if (mem.startsWith(u8, line, " "))
-                        continue;
-                    if (mem.startsWith(u8, line, "\t"))
-                        continue;
-
-                    c.nk_layout_row_dynamic(ctx, 0, 1);
-                    c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), c.NK_TEXT_LEFT);
-                }
-
-                var biggest_width: f32 = 0;
-                for (command.params) |param, i| {
-                    const text = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-                    if (!param.takes_value)
-                        continue;
-                    if (mem.eql(u8, text, "help"))
-                        continue;
-                    if (mem.eql(u8, text, "version"))
-                        continue;
-
-                    const text_width = nk.fontWidth(ctx, text);
-                    if (biggest_width < text_width)
-                        biggest_width = text_width;
-                }
-
-                for (command.params) |param, i| {
-                    var bounds: c.struct_nk_rect = undefined;
-                    const arg = &settings.commands_args[settings.order[selected]][i];
-                    const help = param.id.msg;
-                    const value = param.id.value;
-                    const param_name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-                    const ui_name = toUserfriendly(&tmp_buf, param_name[0..math.min(param_name.len, tmp_buf.len)]);
-                    if (mem.eql(u8, param_name, "help"))
-                        continue;
-                    if (mem.eql(u8, param_name, "version"))
-                        continue;
-
-                    if (!param.takes_value) {
-                        c.nk_layout_row_dynamic(ctx, 0, 1);
-
-                        c.nkWidgetBounds(ctx, &bounds);
-                        if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-                            c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
-
-                        // For flags, we only care about whether it's checked or not. We indicate this
-                        // by having a slice of len 1 instead of 0.
-                        const checked = c.nk_check_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), @boolToInt(arg.len != 0)) != 0;
-                        arg.len = @boolToInt(checked);
-                        continue;
-                    }
-
-                    const prompt_width = nk.fontWidth(ctx, "a" ** 30);
-                    c.nk_layout_row_template_begin(ctx, 0);
-                    c.nk_layout_row_template_push_static(ctx, biggest_width);
-                    c.nk_layout_row_template_push_static(ctx, prompt_width);
-                    c.nk_layout_row_template_push_dynamic(ctx);
-                    c.nk_layout_row_template_end(ctx);
-
-                    c.nkWidgetBounds(ctx, &bounds);
-                    if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-                        c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
-
-                    c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
-
-                    if (mem.eql(u8, value, "NUM")) {
-                        _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
-                        continue;
-                    }
-                    if (mem.indexOfScalar(u8, value, '|')) |_| {
-                        const selected_name = arg.toSliceConst();
-                        const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
-                        if (c.nkComboBeginText(ctx, selected_ui_name.ptr, @intCast(c_int, selected_ui_name.len), &nk.vec2(prompt_width, 500)) != 0) {
-                            c.nk_layout_row_dynamic(ctx, 0, 1);
-                            if (c.nk_combo_item_label(ctx, "", c.NK_TEXT_LEFT) != 0)
-                                arg.len = 0;
-
-                            var item_it = mem.split(value, "|");
-                            while (item_it.next()) |item| {
-                                const item_ui_name = toUserfriendly(&tmp_buf, item[0..math.min(item.len, tmp_buf.len)]);
-                                if (c.nk_combo_item_text(ctx, item_ui_name.ptr, @intCast(c_int, item_ui_name.len), c.NK_TEXT_LEFT) == 0)
-                                    continue;
-
-                                arg.* = Settings.Arg.fromSlice(item) catch {
-                                    popups.err("{}", .{bug_message});
-                                    continue;
-                                };
-                            }
-                            c.nk_combo_end(ctx);
-                        }
-                        continue;
-                    }
-
-                    _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_default);
-                }
-            }
-
-            // +-------------------+
-            // | Actions           |
-            // +-------------------+
-            // | +---+ +---------+ |
-            // | | f | | in.nds  | |
-            // | +---+ +---------+ |
-            // | +---------------+ |
-            // | |   Randomize   | |
-            // | +---------------+ |
-            // | +---------------+ |
-            // | | Load Settings | |
-            // | +---------------+ |
-            // | +---------------+ |
-            // | | Save Settings | |
-            // | +---------------+ |
-            // +-------------------+
-            if (c.nk_group_begin(ctx, "Actions", border_title_group) != 0) done: {
-                defer c.nk_group_end(ctx);
-                c.nk_layout_row_template_begin(ctx, 0);
-                c.nk_layout_row_template_push_static(ctx, min_height);
-                c.nk_layout_row_template_push_dynamic(ctx);
-                c.nk_layout_row_template_end(ctx);
-
-                const FileBrowserKind = enum {
-                    load_rom,
-                    randomize,
-                    load_settings,
-                    save_settings,
-                };
-                var m_file_browser_kind: ?FileBrowserKind = null;
-
-                // TODO: Draw folder icon
-                if (c.nk_button_symbol(ctx, .NK_SYMBOL_PLUS) != 0)
-                    m_file_browser_kind = .load_rom;
-
-                const rom_slice = if (rom_path) |*i| i.toSliceConst() else "< Open rom (No rom open)";
-                var basename = path.basename(rom_slice);
-                _ = c.nk_edit_string(
-                    ctx,
-                    c.NK_EDIT_READ_ONLY,
-                    // with edit_string being READ_ONLY always, it should be safe to cast away const
-                    @intToPtr([*]u8, @ptrToInt(basename.ptr)),
-                    @ptrCast(*c_int, &basename.len),
-                    @intCast(c_int, basename.len + 1),
-                    c.nk_filter_default,
-                );
-
-                c.nk_layout_row_dynamic(ctx, 0, 1);
-                if (nk.buttonActivatable(ctx, "Randomize", rom_path != null))
-                    m_file_browser_kind = .randomize;
-                if (nk.button(ctx, "Load settings"))
-                    m_file_browser_kind = .load_settings;
-                if (nk.button(ctx, "Save settings"))
-                    m_file_browser_kind = .save_settings;
-
-                const file_browser_kind = m_file_browser_kind orelse break :done;
-
-                var m_out_path: ?[*:0]u8 = null;
-                const dialog_result = switch (file_browser_kind) {
-                    .save_settings => c.NFD_SaveDialog(null, null, &m_out_path),
-                    .load_settings => c.NFD_OpenDialog(null, null, &m_out_path),
-                    .load_rom => c.NFD_OpenDialog("gb,gba,nds", null, &m_out_path),
-                    .randomize => c.NFD_SaveDialog("gb,gba,nds", null, &m_out_path),
-                };
-
-                const selected_path = switch (dialog_result) {
-                    .NFD_ERROR => {
-                        popups.err("Could not open file browser: {s}", .{c.NFD_GetError()});
-                        break :done;
-                    },
-                    .NFD_CANCEL => break :done,
-                    .NFD_OKAY => blk: {
-                        const out_path = m_out_path.?;
-                        defer std.c.free(out_path);
-
-                        break :blk util.Path.fromSlice(mem.span(out_path)) catch {
-                            popups.err("File name '{s}' is too long", .{out_path});
-                            break :done;
-                        };
-                    },
-                    else => unreachable,
-                };
-
-                switch (file_browser_kind) {
-                    .load_rom => rom_path = selected_path,
-                    .randomize => {
-                        // in should never be null here as the "Randomize" button is inactive when
-                        // it is.
-                        const in_path = rom_path.?.toSliceConst();
-                        const out_path = selected_path.toSliceConst();
-
-                        outputScript(stderr.outStream(), exes, settings, in_path, out_path) catch {};
-                        stderr.writeAll("\n") catch {};
-                        randomize(exes, settings, in_path, out_path) catch |err| {
-                            // TODO: Maybe print the stderr from the command we run in the randomizer function
-                            popups.err("Failed to randomize '{}': {}", .{ in_path, err });
-                            break :done;
-                        };
-
-                        popups.info("Rom has been randomized!", .{});
-                    },
-                    .load_settings => {
-                        const file = fs.cwd().openFile(selected_path.toSliceConst(), .{}) catch |err| {
-                            popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
-                            break :done;
-                        };
-                        defer file.close();
-                        settings.load(exes, file.inStream()) catch |err| {
-                            popups.err("Failed to load from '{}': {}", .{ selected_path.toSliceConst(), err });
-                            break :done;
-                        };
-                    },
-                    .save_settings => {
-                        // TODO: Warn if the user tries to overwrite existing file.
-                        const file = fs.cwd().openFile(selected_path.toSliceConst(), .{ .write = true }) catch |err| {
-                            popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
-                            break :done;
-                        };
-                        defer file.close();
-                        settings.save(exes, file.outStream()) catch |err| {
-                            popups.err("Failed to write to '{}': {}", .{ selected_path.toSliceConst(), err });
-                            break :done;
-                        };
-                    },
-                }
-            }
-
-            // +-------------------+
-            // | Error             |
-            // +-------------------+
-            // | This is an error  |
-            // |          +------+ |
-            // |          |  Ok  | |
-            // |          +------+ |
-            // +-------------------+
-            const w: f32 = 350;
-            const h: f32 = 150;
-            const x = (@intToFloat(f32, c.width) / 2) - (w / 2);
-            const y = (@intToFloat(f32, c.height) / 2) - (h / 2);
-            const popup_rect = nk.rect(x, y, w, h);
-            const fatal_err = popups.fatalError();
-            const is_err = popups.errors.items.len != 0;
-            const is_info = popups.infos.items.len != 0;
-            if (fatal_err != null or is_err or is_info) {
-                const title = if (fatal_err) |_| "Fatal error!" else if (is_err) "Error" else "Info";
-                if (c.nkPopupBegin(ctx, .NK_POPUP_STATIC, title, border_title_group, &popup_rect) != 0) {
-                    defer c.nk_popup_end(ctx);
-                    const text = fatal_err orelse if (is_err) popups.lastError() else popups.lastInfo();
-
-                    const padding_height = groupOuterHeight(ctx);
-                    const buttons_height = ctx.style.window.spacing.y +
-                        min_height;
-                    const text_height = h - (padding_height + buttons_height);
-
-                    c.nk_layout_row_dynamic(ctx, text_height, 1);
-                    c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
-
-                    switch (nk.buttons(ctx, .right, nk.buttonWidth(ctx, "Quit"), 0, &[_]nk.Button{
-                        nk.Button{ .text = if (fatal_err) |_| "Quit" else "Ok" },
-                    })) {
-                        0 => {
-                            if (fatal_err) |_|
-                                return 1;
-                            if (is_err) {
-                                popups.errors.allocator.free(popups.errors.pop());
-                                c.nk_popup_close(ctx);
-                            }
-                            if (is_info) {
-                                popups.infos.allocator.free(popups.infos.pop());
-                                c.nk_popup_close(ctx);
-                            }
-                        },
-                        else => {},
-                    }
-                }
-            }
+            drawPopups(ctx, &popups) catch return 1;
         }
         c.nk_end(ctx);
 
@@ -530,6 +186,382 @@ pub fn main() u8 {
     }
 
     return 0;
+}
+
+pub fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {
+    if (c.nk_group_begin(ctx, name, border_title_group) != 0) {
+        defer c.nk_group_end(ctx);
+    }
+}
+
+// +---------------------------+
+// | Commands                   |
+// +---------------------------+
+// | +-+ +-------------------+ |
+// | |^| | # tm35-rand-stats | |
+// | +-+ | # tm35-rand-wild  | |
+// | +-+ |                   | |
+// | |V| |                   | |
+// | +-+ |                   | |
+// |     +-------------------+ |
+// +---------------------------+
+pub fn drawCommands(
+    ctx: *nk.Context,
+    exes: Exes,
+    settings: Settings,
+    in_selected: usize,
+) usize {
+    var tmp_buf: [128]u8 = undefined;
+    var selected = in_selected;
+    const layout = ctx.current.*.layout;
+    const min_height = layout.*.row.min_height;
+    const inner_height = groupHeight(ctx) - groupOuterHeight(ctx);
+
+    if (c.nk_group_begin(ctx, "Commands", border_title_group) != 0) {
+        defer c.nk_group_end(ctx);
+        c.nk_layout_row_template_begin(ctx, inner_height);
+        c.nk_layout_row_template_push_static(ctx, min_height);
+        c.nk_layout_row_template_push_dynamic(ctx);
+        c.nk_layout_row_template_end(ctx);
+
+        if (nk.nonPaddedGroupBegin(ctx, "command-buttons", c.NK_WINDOW_NO_SCROLLBAR)) {
+            defer nk.nonPaddedGroupEnd(ctx);
+            c.nk_layout_row_dynamic(ctx, 0, 1);
+            if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_UP) != 0) {
+                const before = math.sub(usize, selected, 1) catch 0;
+                mem.swap(usize, &settings.order[before], &settings.order[selected]);
+                selected = before;
+            }
+            if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_DOWN) != 0) {
+                const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
+                mem.swap(usize, &settings.order[selected], &settings.order[after]);
+                selected = after;
+            }
+        }
+
+        var list_view: c.nk_list_view = undefined;
+        if (c.nk_list_view_begin(ctx, &list_view, "command-list", c.NK_WINDOW_BORDER, 0, @intCast(c_int, exes.commands.len)) != 0) {
+            defer c.nk_list_view_end(&list_view);
+            for (settings.order) |command_i, i| {
+                const command = exes.commands[command_i];
+                if (i < @intCast(usize, list_view.begin))
+                    continue;
+                if (@intCast(usize, list_view.end) <= i)
+                    break;
+
+                c.nk_layout_row_template_begin(ctx, 0);
+                c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
+                c.nk_layout_row_template_push_dynamic(ctx);
+                c.nk_layout_row_template_end(ctx);
+
+                const command_name = path.basename(command.path);
+                const ui_name = toUserfriendly(&tmp_buf, command_name[0..math.min(command_name.len, tmp_buf.len)]);
+                settings.checks[command_i] = c.nk_check_label(ctx, "", @boolToInt(settings.checks[command_i])) != 0;
+                if (c.nk_select_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT, @boolToInt(i == selected)) != 0)
+                    selected = i;
+            }
+        }
+    }
+    return selected;
+}
+
+// +---------------------------+
+// | Options                   |
+// +---------------------------+
+// | This is the help message  |
+// | # flag-a                  |
+// | # flag-b                  |
+// | drop-down |            V| |
+// | field-a   |             | |
+// | field-b   |             | |
+// |                           |
+// +--------------------------+
+pub fn drawOptions(
+    ctx: *nk.Context,
+    popups: *Popups,
+    exes: Exes,
+    settings: Settings,
+    selected: usize,
+) void {
+    var tmp_buf: [128]u8 = undefined;
+    if (c.nk_group_begin(ctx, "Options", border_title_group) != 0) blk: {
+        defer c.nk_group_end(ctx);
+        if (exes.commands.len == 0)
+            break :blk;
+
+        const command = exes.commands[settings.order[selected]];
+        var it = mem.split(command.help, "\n");
+        while (it.next()) |line_notrim| {
+            const line = mem.trimRight(u8, line_notrim, " ");
+            if (line.len == 0)
+                continue;
+            if (mem.startsWith(u8, line, "Usage:"))
+                continue;
+            if (mem.startsWith(u8, line, "Options:"))
+                continue;
+            if (mem.startsWith(u8, line, " "))
+                continue;
+            if (mem.startsWith(u8, line, "\t"))
+                continue;
+
+            c.nk_layout_row_dynamic(ctx, 0, 1);
+            c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), c.NK_TEXT_LEFT);
+        }
+
+        var biggest_width: f32 = 0;
+        for (command.params) |param, i| {
+            const text = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
+            if (!param.takes_value)
+                continue;
+            if (mem.eql(u8, text, "help"))
+                continue;
+            if (mem.eql(u8, text, "version"))
+                continue;
+
+            const text_width = nk.fontWidth(ctx, text);
+            if (biggest_width < text_width)
+                biggest_width = text_width;
+        }
+
+        for (command.params) |param, i| {
+            var bounds: c.struct_nk_rect = undefined;
+            const arg = &settings.commands_args[settings.order[selected]][i];
+            const help = param.id.msg;
+            const value = param.id.value;
+            const param_name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
+            const ui_name = toUserfriendly(&tmp_buf, param_name[0..math.min(param_name.len, tmp_buf.len)]);
+            if (mem.eql(u8, param_name, "help"))
+                continue;
+            if (mem.eql(u8, param_name, "version"))
+                continue;
+
+            if (!param.takes_value) {
+                c.nk_layout_row_dynamic(ctx, 0, 1);
+
+                c.nkWidgetBounds(ctx, &bounds);
+                if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
+                    c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+
+                // For flags, we only care about whether it's checked or not. We indicate this
+                // by having a slice of len 1 instead of 0.
+                const checked = c.nk_check_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), @boolToInt(arg.len != 0)) != 0;
+                arg.len = @boolToInt(checked);
+                continue;
+            }
+
+            const prompt_width = nk.fontWidth(ctx, "a" ** 30);
+            c.nk_layout_row_template_begin(ctx, 0);
+            c.nk_layout_row_template_push_static(ctx, biggest_width);
+            c.nk_layout_row_template_push_static(ctx, prompt_width);
+            c.nk_layout_row_template_push_dynamic(ctx);
+            c.nk_layout_row_template_end(ctx);
+
+            c.nkWidgetBounds(ctx, &bounds);
+            if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
+                c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+
+            c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
+
+            if (mem.eql(u8, value, "NUM")) {
+                _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
+                continue;
+            }
+            if (mem.indexOfScalar(u8, value, '|')) |_| {
+                const selected_name = arg.toSliceConst();
+                const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
+                if (c.nkComboBeginText(ctx, selected_ui_name.ptr, @intCast(c_int, selected_ui_name.len), &nk.vec2(prompt_width, 500)) != 0) {
+                    c.nk_layout_row_dynamic(ctx, 0, 1);
+                    if (c.nk_combo_item_label(ctx, "", c.NK_TEXT_LEFT) != 0)
+                        arg.len = 0;
+
+                    var item_it = mem.split(value, "|");
+                    while (item_it.next()) |item| {
+                        const item_ui_name = toUserfriendly(&tmp_buf, item[0..math.min(item.len, tmp_buf.len)]);
+                        if (c.nk_combo_item_text(ctx, item_ui_name.ptr, @intCast(c_int, item_ui_name.len), c.NK_TEXT_LEFT) == 0)
+                            continue;
+
+                        arg.* = Settings.Arg.fromSlice(item) catch {
+                            popups.err("{}", .{bug_message});
+                            continue;
+                        };
+                    }
+                    c.nk_combo_end(ctx);
+                }
+                continue;
+            }
+
+            _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_default);
+        }
+    }
+}
+
+// +-------------------------------------+
+// | Actions                             |
+// +-------------------------------------+
+// | +---------------+ +---------------+ |
+// | |   Open Rom    | |   Randomize   | |
+// | +---------------+ +---------------+ |
+// | +---------------+ +---------------+ |
+// | | Load Settings | | Save Settings | |
+// | +---------------+ +---------------+ |
+// +-------------------------------------+
+pub fn drawActions(
+    ctx: *nk.Context,
+    popups: *Popups,
+    in_rom_path: ?util.Path,
+    exes: Exes,
+    settings: Settings,
+) ?util.Path {
+    var rom_path = in_rom_path;
+    const layout = ctx.current.*.layout;
+    const min_height = layout.*.row.min_height;
+    if (c.nk_group_begin(ctx, "Actions", border_title_group) != 0) done: {
+        defer c.nk_group_end(ctx);
+
+        var m_file_browser_kind: ?enum {
+            load_rom,
+            randomize,
+            load_settings,
+            save_settings,
+        } = null;
+
+        c.nk_layout_row_dynamic(ctx, 0, 2);
+        if (nk.button(ctx, "Open rom"))
+            m_file_browser_kind = .load_rom;
+        if (nk.buttonActivatable(ctx, "Randomize", rom_path != null))
+            m_file_browser_kind = .randomize;
+        if (nk.button(ctx, "Load settings"))
+            m_file_browser_kind = .load_settings;
+        if (nk.button(ctx, "Save settings"))
+            m_file_browser_kind = .save_settings;
+
+        const file_browser_kind = m_file_browser_kind orelse break :done;
+
+        var m_out_path: ?[*:0]u8 = null;
+        const dialog_result = switch (file_browser_kind) {
+            .save_settings => c.NFD_SaveDialog(null, null, &m_out_path),
+            .load_settings => c.NFD_OpenDialog(null, null, &m_out_path),
+            .load_rom => c.NFD_OpenDialog("gb,gba,nds", null, &m_out_path),
+            .randomize => c.NFD_SaveDialog("gb,gba,nds", null, &m_out_path),
+        };
+
+        const selected_path = switch (dialog_result) {
+            .NFD_ERROR => {
+                popups.err("Could not open file browser: {s}", .{c.NFD_GetError()});
+                break :done;
+            },
+            .NFD_CANCEL => break :done,
+            .NFD_OKAY => blk: {
+                const out_path = m_out_path.?;
+                defer std.c.free(out_path);
+
+                break :blk util.Path.fromSlice(mem.span(out_path)) catch {
+                    popups.err("File name '{s}' is too long", .{out_path});
+                    break :done;
+                };
+            },
+            else => unreachable,
+        };
+
+        switch (file_browser_kind) {
+            .load_rom => rom_path = selected_path,
+            .randomize => {
+                // in should never be null here as the "Randomize" button is inactive when
+                // it is.
+                const in_path = rom_path.?.toSliceConst();
+                const out_path = selected_path.toSliceConst();
+
+                const stderr = std.io.getStdErr();
+                outputScript(stderr.outStream(), exes, settings, in_path, out_path) catch {};
+                stderr.writeAll("\n") catch {};
+                randomize(exes, settings, in_path, out_path) catch |err| {
+                    // TODO: Maybe print the stderr from the command we run in the randomizer function
+                    popups.err("Failed to randomize '{}': {}", .{ in_path, err });
+                    break :done;
+                };
+
+                popups.info("Rom has been randomized!", .{});
+            },
+            .load_settings => {
+                const file = fs.cwd().openFile(selected_path.toSliceConst(), .{}) catch |err| {
+                    popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
+                    break :done;
+                };
+                defer file.close();
+                settings.load(exes, file.inStream()) catch |err| {
+                    popups.err("Failed to load from '{}': {}", .{ selected_path.toSliceConst(), err });
+                    break :done;
+                };
+            },
+            .save_settings => {
+                // TODO: Warn if the user tries to overwrite existing file.
+                const file = fs.cwd().openFile(selected_path.toSliceConst(), .{ .write = true }) catch |err| {
+                    popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
+                    break :done;
+                };
+                defer file.close();
+                settings.save(exes, file.outStream()) catch |err| {
+                    popups.err("Failed to write to '{}': {}", .{ selected_path.toSliceConst(), err });
+                    break :done;
+                };
+            },
+        }
+    }
+    return rom_path;
+}
+// +-------------------+
+// | Error             |
+// +-------------------+
+// | This is an error  |
+// |          +------+ |
+// |          |  Ok  | |
+// |          +------+ |
+// +-------------------+
+
+pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
+    const layout = ctx.current.*.layout;
+    const min_height = layout.*.row.min_height;
+    const w: f32 = 350;
+    const h: f32 = 150;
+    const x = (@intToFloat(f32, c.width) / 2) - (w / 2);
+    const y = (@intToFloat(f32, c.height) / 2) - (h / 2);
+    const popup_rect = nk.rect(x, y, w, h);
+    const fatal_err = popups.fatalError();
+    const is_err = popups.errors.items.len != 0;
+    const is_info = popups.infos.items.len != 0;
+    if (fatal_err != null or is_err or is_info) {
+        const title = if (fatal_err) |_| "Fatal error!" else if (is_err) "Error" else "Info";
+        if (c.nkPopupBegin(ctx, .NK_POPUP_STATIC, title, border_title_group, &popup_rect) != 0) {
+            defer c.nk_popup_end(ctx);
+            const text = fatal_err orelse if (is_err) popups.lastError() else popups.lastInfo();
+
+            const padding_height = groupOuterHeight(ctx);
+            const buttons_height = ctx.style.window.spacing.y +
+                min_height;
+            const text_height = h - (padding_height + buttons_height);
+
+            c.nk_layout_row_dynamic(ctx, text_height, 1);
+            c.nk_text_wrap(ctx, text.ptr, @intCast(c_int, text.len));
+
+            switch (nk.buttons(ctx, .right, nk.buttonWidth(ctx, "Quit"), 0, &[_]nk.Button{
+                nk.Button{ .text = if (fatal_err) |_| "Quit" else "Ok" },
+            })) {
+                0 => {
+                    if (fatal_err) |_|
+                        return error.FatalError;
+                    if (is_err) {
+                        popups.errors.allocator.free(popups.errors.pop());
+                        c.nk_popup_close(ctx);
+                    }
+                    if (is_info) {
+                        popups.infos.allocator.free(popups.infos.pop());
+                        c.nk_popup_close(ctx);
+                    }
+                },
+                else => {},
+            }
+        }
+    }
 }
 
 const Popups = struct {
@@ -591,6 +623,12 @@ fn errPrint(comptime format_str: []const u8, args: var) u8 {
 
 fn groupOuterHeight(ctx: *const nk.Context) f32 {
     return headerHeight(ctx) + (ctx.style.window.group_padding.y * 2) + ctx.style.window.spacing.y;
+}
+
+fn groupHeight(ctx: *nk.Context) f32 {
+    var total_space: c.struct_nk_rect = undefined;
+    c.nkWindowGetContentRegion(ctx, &total_space);
+    return total_space.h - ctx.style.window.padding.y * 2;
 }
 
 fn headerHeight(ctx: *const nk.Context) f32 {

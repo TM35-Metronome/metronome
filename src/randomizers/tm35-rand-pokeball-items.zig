@@ -38,7 +38,7 @@ fn usage(stream: var) !void {
     try clap.usage(stream, &params);
     try stream.writeAll(
         \\
-        \\Randomizes static Pokémons.
+        \\Randomizes the items found in pokeballs lying around.
         \\Only works properly for dppt and b2w2.
         \\
         \\Options:
