@@ -610,14 +610,20 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 .platinum,
                 => {
                     const wilds = &wild_pokemons.dppt[index];
-                    if (parser.parse(comptime parse.field("grass"))) |_| {
-                        return;
-                    } else |_| {}
-
                     switch (m(try parser.parse(parse.anyField))) {
                         c("grass") => switch (m(try parser.parse(parse.anyField))) {
                             c("encounter_rate") => wilds.grass_rate = try parser.parse(parselu32v),
-                            c("pokemons") => try parse.anyT(parser.str, &wilds.grass, converters),
+                            c("pokemons") => {
+                                const i = try parser.parse(parse.index);
+                                if (i >= wilds.grass.len)
+                                    return error.IndexOutOfBound;
+                                switch (m(try parser.parse(parse.anyField))) {
+                                    c("min_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
+                                    c("max_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
+                                    c("species") => wilds.grass[i].species = try parser.parse(parselu16v),
+                                    else => return error.NoField,
+                                }
+                            },
                             else => return error.NoField,
                         },
                         c("swarm_replace") => try applyDpptReplacement(&parser, &wilds.swarm_replace),
@@ -807,11 +813,11 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             }
         },
         c("pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.pokemons.len)
+            const index = @intCast(u32, try parser.parse(parse.index));
+            if (index >= game.pokemons.fat.len)
                 return error.Error;
-            const pokemon = &game.pokemons[index];
 
+            const pokemon = try game.pokemons.fileAs(.{ .i = index }, gen5.BasePokemon);
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
                 c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
@@ -845,7 +851,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                         return error.Error;
 
                     const rindex = if (is_tms)
-                        tindex + (game.tms1.len + game.hms.len) * @boolToInt(tindex >= game.tms1.len)
+                        tindex + game.hms.len * @boolToInt(tindex >= game.tms1.len)
                     else
                         tindex + game.tms1.len;
                     const learnset = &pokemon.machine_learnset;
@@ -905,13 +911,13 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 }
             };
 
-            const index = try parser.parse(parse.index);
+            const index = @intCast(u32, try parser.parse(parse.index));
             try parser.parse(comptime parse.field("wild"));
 
-            if (index >= game.wild_pokemons.len)
+            if (index >= game.wild_pokemons.fat.len)
                 return error.Error;
-            const wilds = &game.wild_pokemons[index];
 
+            const wilds = try game.wild_pokemons.fileAs(.{ .i = index }, gen5.WildPokemons);
             switch (m(try parser.parse(parse.anyField))) {
                 c("grass") => try H.applyArea(&parser, "grass", 0, wilds),
                 c("dark_grass") => try H.applyArea(&parser, "dark_grass", 1, wilds),

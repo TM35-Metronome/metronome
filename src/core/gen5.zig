@@ -166,7 +166,7 @@ pub const Trainer = extern struct {
     }
 };
 
-pub const Move = extern struct {
+pub const Move = packed struct {
     type: Type,
     effect_category: u8,
     category: common.MoveCategory,
@@ -174,7 +174,8 @@ pub const Move = extern struct {
     accuracy: u8,
     pp: u8,
     priority: u8,
-    min_max_hits: MinMaxPair,
+    min_hits: u4,
+    max_hits: u4,
     result_effect: lu16,
     effect_chance: u8,
     status: u8,
@@ -186,22 +187,26 @@ pub const Move = extern struct {
     target_hp: u8,
     user_hp: u8,
     target: u8,
-    stats_affected: [3]u8,
-    stats_affected_magnetude: [3]u8,
-    stats_affected_chance: [3]u8,
+    // TODO: Arrays of uneven elements doesn't quite work in
+    //       packed structs.
+    stats_affected1: u8,
+    stats_affected2: u8,
+    stats_affected3: u8,
+    stats_affected_magnetude1: u8,
+    stats_affected_magnetude2: u8,
+    stats_affected_magnetude3: u8,
+    stats_affected_chance1: u8,
+    stats_affected_chance2: u8,
+    stats_affected_chance3: u8,
 
     // TODO: Figure out if this is actually how the last fields are layed out.
-    padding: [2]u8,
+    padding1: [2]u8,
     flags: lu16,
+    padding2: [2]u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 34);
+        std.debug.assert(@sizeOf(@This()) == 36);
     }
-
-    const MinMaxPair = packed struct {
-        min: u4,
-        max: u4,
-    };
 };
 
 pub const LevelUpMove = extern struct {
@@ -328,11 +333,16 @@ pub const WildPokemons = extern struct {
     }
 };
 
-pub const Pocket = packed enum(u8) {
-    items = 0x00, tms_hms = 0x01, key_items = 0x02, balls = 0x08, _
+pub const Pocket = packed enum(u4) {
+    items = 0x00,
+    tms_hms = 0x01,
+    key_items = 0x02,
+    balls = 0x08,
+    _,
 };
 
-pub const Item = extern struct {
+// https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
+pub const Item = packed struct {
     price: lu16,
     battle_effect: u8,
     gain: u8,
@@ -342,6 +352,7 @@ pub const Item = extern struct {
     natural_gift_power: u8,
     flag: u8,
     pocket: Pocket,
+    unknown: u4,
     type: u8,
     category: u8,
     category2: lu16,
@@ -352,8 +363,15 @@ pub const Item = extern struct {
     ev_yield: common.EvYield,
     hp_restore: u8,
     pp_restore: u8,
-    happy: [3]u8,
-    padding: [2]u8,
+    happy1: u8,
+    happy2: u8,
+    happy3: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    padding4: u8,
+    padding5: u8,
+    padding6: u8,
 
     pub const Boost = packed struct {
         hp: u2,
@@ -370,6 +388,10 @@ pub const Item = extern struct {
         target: u8,
         target2: u8,
     };
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 36);
+    }
 };
 
 const PokeballItem = struct {
@@ -382,10 +404,8 @@ pub const Game = struct {
     allocator: *mem.Allocator,
 
     starters: [3][]*lu16,
-    pokemons: []BasePokemon,
     moves: []Move,
     trainers: []Trainer,
-    wild_pokemons: []WildPokemons,
     items: []Item,
     tms1: []lu16,
     hms: []lu16,
@@ -393,6 +413,8 @@ pub const Game = struct {
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
 
+    wild_pokemons: nds.fs.Fs,
+    pokemons: nds.fs.Fs,
     scripts: nds.fs.Fs,
     evolutions: nds.fs.Fs,
     level_up_moves: nds.fs.Fs,
@@ -439,19 +461,18 @@ pub const Game = struct {
 
                 break :blk res;
             },
-            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(BasePokemon),
-            .moves = try (try getNarc(file_system, info.moves)).toSlice(Move),
-            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(Trainer),
-            .wild_pokemons = try (try getNarc(file_system, info.wild_pokemons)).toSlice(WildPokemons),
-            .items = try (try getNarc(file_system, info.itemdata)).toSlice(Item),
+            .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
+            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(1, Trainer),
+            .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
             .static_pokemons = commands.static_pokemons,
             .pokeball_items = commands.pokeball_items,
 
+            .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
             .parties = try getNarc(file_system, info.parties),
-
+            .pokemons = try getNarc(file_system, info.pokemons),
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,

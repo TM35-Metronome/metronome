@@ -336,12 +336,7 @@ pub const HgssWildPokemons = extern struct {
     };
 };
 
-pub const Pocket = packed struct {
-    pocket: PocketKind,
-    unknown: u4 = 0,
-};
-
-pub const PocketKind = packed enum(u4) {
+pub const Pocket = packed enum(u4) {
     items = 0x00,
     tms_hms = 0x01,
     berries = 0x02,
@@ -350,7 +345,8 @@ pub const PocketKind = packed enum(u4) {
     _,
 };
 
-pub const Item = extern struct {
+// https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
+pub const Item = packed struct {
     price: lu16,
     battle_effect: u8,
     gain: u8,
@@ -360,6 +356,7 @@ pub const Item = extern struct {
     natural_gift_power: u8,
     flag: u8,
     pocket: Pocket,
+    unknown: u4,
     type: u8,
     category: u8,
     category2: lu16,
@@ -368,8 +365,17 @@ pub const Item = extern struct {
     ev_yield: common.EvYield,
     hp_restore: u8,
     pp_restore: u8,
-    happy: [3]u8,
-    padding: [8]u8,
+    happy1: u8,
+    happy2: u8,
+    happy3: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    padding4: u8,
+    padding5: u8,
+    padding6: u8,
+    padding7: u8,
+    padding8: u8,
 
     pub const Boost = packed struct {
         hp: u2,
@@ -467,20 +473,20 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(BasePokemon),
-            .moves = try (try getNarc(file_system, info.moves)).toSlice(Move),
-            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(Trainer),
-            .items = try (try getNarc(file_system, info.itemdata)).toSlice(Item),
+            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(0, BasePokemon),
+            .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
+            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
+            .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
             .wild_pokemons = blk: {
                 const narc = try getNarc(file_system, info.wild_pokemons);
                 switch (info.version) {
                     .diamond,
                     .pearl,
                     .platinum,
-                    => break :blk .{ .dppt = try narc.toSlice(DpptWildPokemons) },
+                    => break :blk .{ .dppt = try narc.toSlice(0, DpptWildPokemons) },
                     .heart_gold,
                     .soul_silver,
-                    => break :blk .{ .hgss = try narc.toSlice(HgssWildPokemons) },
+                    => break :blk .{ .hgss = try narc.toSlice(0, HgssWildPokemons) },
                     else => unreachable,
                 }
             },

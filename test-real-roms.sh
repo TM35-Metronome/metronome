@@ -31,4 +31,5 @@ for rom in $@; do
     zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" < "$expect"
     zig-cache/bin/tm35-load "$rom_dest" > "$found"
     diff -q "$expect" "$found"
+    rm "$rom_dest" "$expect" "$found"
 done

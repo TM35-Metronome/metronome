@@ -83,6 +83,13 @@ pub const Fs = struct {
         };
     }
 
+    pub fn fileAs(fs: Fs, file: File, comptime T: type) !*T {
+        const data = fs.fileData(file);
+        if (@sizeOf(T) > data.len)
+            return error.FileToSmall;
+        return @ptrCast(*T, data.ptr);
+    }
+
     pub fn fileData(fs: Fs, file: File) []u8 {
         const f = fs.fat[file.i];
         return fs.data[f.start.value()..f.end.value()];
@@ -96,13 +103,13 @@ pub const Fs = struct {
     ///
     /// This function is useful when working with roms that stores arrays
     /// of structs in narc file systems.
-    pub fn toSlice(fs: Fs, comptime T: type) ![]T {
-        if (fs.fat.len == 0)
+    pub fn toSlice(fs: Fs, first: usize, comptime T: type) ![]T {
+        if (fs.fat.len == first)
             return &[0]T{};
 
-        const start = fs.fat[0].start.value();
+        const start = fs.fat[first].start.value();
         var end = start;
-        for (fs.fat) |fat, i| {
+        for (fs.fat[first..]) |fat, i| {
             const fat_start = fat.start.value();
             if (fat_start != end)
                 return error.FsIsNotSequential;

@@ -45,7 +45,7 @@ pub fn anyT(str: []const u8, ptr: var, comptime converters: var) !void {
         if (T == Return) {
             const v = value(T, conv)(str) orelse return error.FoundNoValue;
             ptr.* = v.value;
-            break;
+            return;
         }
     } else switch (@typeInfo(T)) {
         .Struct => return structure(str, ptr, converters),
@@ -53,6 +53,7 @@ pub fn anyT(str: []const u8, ptr: var, comptime converters: var) !void {
         .Pointer => |s| return slice(str, ptr.*, converters),
         else => @compileError("No converter for '" ++ @typeName(T) ++ "'"),
     }
+    unreachable;
 }
 
 test "anyT" {

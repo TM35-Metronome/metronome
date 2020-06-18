@@ -519,19 +519,19 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".items[{}].category={}\n", .{ i, item.category });
         try stream.print(".items[{}].category2={}\n", .{ i, item.category2.value() });
         try stream.print(".items[{}].index={}\n", .{ i, item.index });
-        try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
-        try stream.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
-        try stream.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
-        try stream.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
-        try stream.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
-        try stream.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
-        try stream.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
-        try stream.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
-        try stream.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
-        try stream.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
-        try stream.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
-        try stream.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
-        try stream.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
+        //try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
+        //try stream.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
+        //try stream.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
+        //try stream.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
+        //try stream.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
+        //try stream.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
+        //try stream.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
+        //try stream.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
+        //try stream.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
+        //try stream.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
+        //try stream.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
+        //try stream.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
+        //try stream.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
         try stream.print(".items[{}].ev_yield.hp={}\n", .{ i, item.ev_yield.hp });
         try stream.print(".items[{}].ev_yield.attack={}\n", .{ i, item.ev_yield.attack });
         try stream.print(".items[{}].ev_yield.defense={}\n", .{ i, item.ev_yield.defense });
@@ -713,8 +713,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
         try stream.print(".moves[{}].pp={}\n", .{ i, move.pp });
         try stream.print(".moves[{}].priority={}\n", .{ i, move.priority });
-        try stream.print(".moves[{}].min_hits={}\n", .{ i, move.min_max_hits.min });
-        try stream.print(".moves[{}].max_hits={}\n", .{ i, move.min_max_hits.max });
+        try stream.print(".moves[{}].min_hits={}\n", .{ i, move.min_hits });
+        try stream.print(".moves[{}].max_hits={}\n", .{ i, move.max_hits });
         try stream.print(".moves[{}].result_effect={}\n", .{ i, move.result_effect.value() });
         try stream.print(".moves[{}].effect_chance={}\n", .{ i, move.effect_chance });
         try stream.print(".moves[{}].status={}\n", .{ i, move.status });
@@ -727,17 +727,17 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".moves[{}].user_hp={}\n", .{ i, move.user_hp });
         try stream.print(".moves[{}].target={}\n", .{ i, move.target });
 
-        const stats_affected = move.stats_affected;
-        for (stats_affected) |stat_affected, j|
-            try stream.print(".moves[{}].stats_affected[{}]={}\n", .{ i, j, stat_affected });
+        //const stats_affected = move.stats_affected;
+        //for (stats_affected) |stat_affected, j|
+        //    try stream.print(".moves[{}].stats_affected[{}]={}\n", .{ i, j, stat_affected });
 
-        const stats_affected_magnetude = move.stats_affected_magnetude;
-        for (stats_affected_magnetude) |stat_affected_magnetude, j|
-            try stream.print(".moves[{}].stats_affected_magnetude[{}]={}\n", .{ i, j, stat_affected_magnetude });
+        //const stats_affected_magnetude = move.stats_affected_magnetude;
+        //for (stats_affected_magnetude) |stat_affected_magnetude, j|
+        //    try stream.print(".moves[{}].stats_affected_magnetude[{}]={}\n", .{ i, j, stat_affected_magnetude });
 
-        const stats_affected_chance = move.stats_affected_chance;
-        for (stats_affected_chance) |stat_affected_chance, j|
-            try stream.print(".moves[{}].stats_affected_chance[{}]={}\n", .{ i, j, stat_affected_chance });
+        //const stats_affected_chance = move.stats_affected_chance;
+        //for (stats_affected_chance) |stat_affected_chance, j|
+        //    try stream.print(".moves[{}].stats_affected_chance[{}]={}\n", .{ i, j, stat_affected_chance });
     }
 
     // HACK: Pokemon bw2 have these movie pokemons that are not allowed to appear
@@ -747,83 +747,87 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     //       emit these Pokémons.
     const number_of_pokemons = 649;
 
-    for (game.pokemons[0..number_of_pokemons]) |pokemon, i| {
-        try stream.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
-        try stream.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
-        try stream.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
-        try stream.print(".pokemons[{}].stats.speed={}\n", .{ i, pokemon.stats.speed });
-        try stream.print(".pokemons[{}].stats.sp_attack={}\n", .{ i, pokemon.stats.sp_attack });
-        try stream.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
+    {
+        var i: u32 = 0;
+        while (i < number_of_pokemons) : (i += 1) {
+            const pokemon = try game.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
+            try stream.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
+            try stream.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
+            try stream.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
+            try stream.print(".pokemons[{}].stats.speed={}\n", .{ i, pokemon.stats.speed });
+            try stream.print(".pokemons[{}].stats.sp_attack={}\n", .{ i, pokemon.stats.sp_attack });
+            try stream.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
 
-        const types = pokemon.types;
-        for (types) |t, j|
-            try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, @tagName(t) });
+            const types = pokemon.types;
+            for (types) |t, j|
+                try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, @tagName(t) });
 
-        try stream.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
+            try stream.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
 
-        // TODO: Figure out if common.EvYield fits in these 3 bytes
-        // evs: [3]u8,
+            // TODO: Figure out if common.EvYield fits in these 3 bytes
+            // evs: [3]u8,
 
-        const items = pokemon.items;
-        for (items) |item, j|
-            try stream.print(".pokemons[{}].items[{}]={}\n", .{ i, j, item.value() });
+            const items = pokemon.items;
+            for (items) |item, j|
+                try stream.print(".pokemons[{}].items[{}]={}\n", .{ i, j, item.value() });
 
-        try stream.print(".pokemons[{}].gender_ratio={}\n", .{ i, pokemon.gender_ratio });
-        try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
-        try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
-        try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 0), @tagName(pokemon.egg_group1) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 1), @tagName(pokemon.egg_group2) });
+            try stream.print(".pokemons[{}].gender_ratio={}\n", .{ i, pokemon.gender_ratio });
+            try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
+            try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
+            try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
+            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 0), @tagName(pokemon.egg_group1) });
+            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 1), @tagName(pokemon.egg_group2) });
 
-        const abilities = pokemon.abilities;
-        for (abilities) |ability, j|
-            try stream.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
+            const abilities = pokemon.abilities;
+            for (abilities) |ability, j|
+                try stream.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
 
-        // TODO: The three fields below are kinda unknown
-        // flee_rate: u8,
-        // form_stats_start: [2]u8,
-        // form_sprites_start: [2]u8,
-        // form_count: u8,
+            // TODO: The three fields below are kinda unknown
+            // flee_rate: u8,
+            // form_stats_start: [2]u8,
+            // form_sprites_start: [2]u8,
+            // form_count: u8,
 
-        try stream.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
-        try stream.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
-        try stream.print(".pokemons[{}].height={}\n", .{ i, pokemon.height.value() });
-        try stream.print(".pokemons[{}].weight={}\n", .{ i, pokemon.weight.value() });
+            //try stream.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
+            try stream.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
+            try stream.print(".pokemons[{}].height={}\n", .{ i, pokemon.height.value() });
+            try stream.print(".pokemons[{}].weight={}\n", .{ i, pokemon.weight.value() });
 
-        {
-            const machine_learnset = pokemon.machine_learnset.value();
-            var j: usize = 0;
-            while (j < game.tms1.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+            {
+                const machine_learnset = pokemon.machine_learnset.value();
+                var j: usize = 0;
+                while (j < game.tms1.len) : (j += 1) {
+                    try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+                }
+                while (j < game.tms1.len + game.hms.len) : (j += 1) {
+                    try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+                }
+                while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1) {
+                    try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+                }
             }
-            while (j < game.tms1.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            }
-            while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            }
-        }
 
-        if (i < game.evolutions.fat.len) {
-            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen5.Evolution);
-            const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-            for (evos) |evo, j| {
-                if (evo.method == .unused)
-                    continue;
-                try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-                try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
-                try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
+            if (i < game.evolutions.fat.len) {
+                const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
+                const rem = bytes.len % @sizeOf(gen5.Evolution);
+                const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
+                for (evos) |evo, j| {
+                    if (evo.method == .unused)
+                        continue;
+                    try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
+                    try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
+                    try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
+                }
             }
-        }
 
-        if (i < game.level_up_moves.fat.len) {
-            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
-            for (level_up_moves) |move, j| {
-                try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id.value() });
-                try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level.value() });
+            if (i < game.level_up_moves.fat.len) {
+                const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+                const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
+                const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+                for (level_up_moves) |move, j| {
+                    try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id.value() });
+                    try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level.value() });
+                }
             }
         }
     }
@@ -851,19 +855,19 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".items[{}].category3={}\n", .{ i, item.category3 });
         try stream.print(".items[{}].index={}\n", .{ i, item.index });
         try stream.print(".items[{}].anti_index={}\n", .{ i, item.anti_index });
-        try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
-        try stream.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
-        try stream.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
-        try stream.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
-        try stream.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
-        try stream.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
-        try stream.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
-        try stream.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
-        try stream.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
-        try stream.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
-        try stream.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
-        try stream.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
-        try stream.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
+        //try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
+        //try stream.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
+        //try stream.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
+        //try stream.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
+        //try stream.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
+        //try stream.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
+        //try stream.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
+        //try stream.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
+        //try stream.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
+        //try stream.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
+        //try stream.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
+        //try stream.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
+        //try stream.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
         try stream.print(".items[{}].ev_yield.hp={}\n", .{ i, item.ev_yield.hp });
         try stream.print(".items[{}].ev_yield.attack={}\n", .{ i, item.ev_yield.attack });
         try stream.print(".items[{}].ev_yield.defense={}\n", .{ i, item.ev_yield.defense });
@@ -874,7 +878,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
     }
 
-    for (game.wild_pokemons) |wild_mons, i| {
+    for (game.wild_pokemons.fat) |_, i| {
+        const wild_mons = try game.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
         // TODO: Get rid of inline for in favor of a function to call
         inline for ([_][]const u8{
             "grass",
