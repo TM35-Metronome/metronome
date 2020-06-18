@@ -13,3 +13,6 @@
 [submodule "lib/nativefiledialog"]
 	path = lib/nativefiledialog
 	url = https://github.com/mlabbe/nativefiledialog.git
+[submodule "lib/mecha"]
+	path = lib/mecha
+	url = https://github.com/Hejsil/mecha.git

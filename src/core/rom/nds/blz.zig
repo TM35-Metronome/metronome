@@ -12,7 +12,7 @@ const default_mask = 0x80;
 // TODO: This file could use some love in the form of a refactor. So far, it is mostly
 //       a direct translation of blz.c, but with some minor refactors here and there.
 //       Sadly, it's still not clear at all what this code is trying to do other than
-//       some kind of encoding. searchMatch is an example of my refactor, that actually
+//       some kind of encoding. `searchMatch` is an example of my refactor, that actually
 //       did help make a little piece of this code clearer.
 
 // TODO: Figure out if it's possible to make these encode and decode functions use streams.
@@ -272,7 +272,7 @@ fn searchMatch(data: []const u8, match: []const u8) []const u8 {
 }
 
 /// Finding best match of data[raw..raw+0x12] in data[max(0, raw - 0x1002)..raw]
-/// and return the pos and lenght to that match
+/// and return the pos and length to that match
 fn search(data: []const u8, raw: usize) []const u8 {
     const max = math.min(raw, @as(usize, 0x1002));
     const pattern = data[raw..math.min(@as(usize, 0x12) + raw, data.len)];
@@ -281,6 +281,7 @@ fn search(data: []const u8, raw: usize) []const u8 {
     return searchMatch(d, pattern);
 }
 
+// TODO: Remove in favor of `mem.reverse`
 fn invert(data: []u8) void {
     var bottom = data.len - 1;
     var i = @as(usize, 0);

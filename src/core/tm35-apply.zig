@@ -8,6 +8,7 @@ const gen4 = @import("gen4.zig");
 const gen5 = @import("gen5.zig");
 const rom = @import("rom.zig");
 
+const builtin = std.builtin;
 const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -23,7 +24,7 @@ const nds = rom.nds;
 
 const bit = util.bit;
 const errors = util.errors;
-const format = util.format;
+const parse = util.parse;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -66,7 +67,6 @@ pub fn main() u8 {
     defer stdio.err.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.page_allocator);
-    defer arena.deinit();
 
     var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
         return errors.allocErr(stdio.err.outStream());
@@ -142,11 +142,11 @@ pub fn main2(
             return 1;
         };
 
-        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |game| {
+        const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
             break :blk Game{ .gen4 = game };
         } else |err| err;
 
-        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
+        const gen5_error = if (gen5.Game.fromRom(allocator, &nds_rom)) |game| {
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
@@ -195,1230 +195,764 @@ const Game = union(enum) {
     gen5: gen5.Game,
 };
 
+const sw = parse.Swhash(16);
+const c = sw.case;
+const m = sw.match;
+
+pub fn toInt(
+    comptime Int: type,
+    comptime endian: builtin.Endian,
+) fn ([]const u8) ?rom.int.Int(Int, endian) {
+    return struct {
+        const Res = rom.int.Int(Int, endian);
+        fn func(str: []const u8) ?Res {
+            const i = parse.toInt(Int, 10)(str) orelse return null;
+            return Res.init(i);
+        }
+    }.func;
+}
+
+pub const parselu16v = parse.value(lu16, toInt(u16, .Little));
+pub const parselu32v = parse.value(lu32, toInt(u32, .Little));
+pub const parselu64v = parse.value(lu64, toInt(u64, .Little));
+
+pub const converters = .{
+    parse.toBool,
+    parse.toEnum(common.MoveCategory),
+    parse.toEnum(common.EvoMethod),
+    parse.toEnum(gen3.Type),
+    parse.toEnum(gen4.Type),
+    parse.toEnum(gen4.Pocket),
+    parse.toEnum(gen5.Type),
+    parse.toEnum(gen5.Evolution.Method),
+    parse.toEnum(gen5.Pocket),
+    parse.toInt(u1, 10),
+    parse.toInt(u2, 10),
+    parse.toInt(u4, 10),
+    parse.toInt(u7, 10),
+    parse.toInt(u8, 10),
+    parse.toInt(u9, 10),
+    parse.toInt(u16, 10),
+    parse.toInt(u32, 10),
+    parse.toInt(u64, 10),
+    toInt(u16, .Little),
+    toInt(u32, .Little),
+    toInt(u64, .Little),
+};
+
 fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser{ .str = str };
+    var parser = parse.MutParser{ .str = str };
+    switch (m(try parser.parse(parse.anyField))) {
+        c("version") => {
+            const value = try parser.parse(comptime parse.enumv(common.Version));
+            if (value != game.version)
+                return error.VersionDontMatch;
+        },
+        c("game_title") => {
+            const value = try parser.parse(parse.strv);
+            if (!mem.eql(u8, value, &game.header.game_title))
+                return error.GameTitleDontMatch;
+        },
+        c("gamecode") => {
+            const value = try parser.parse(parse.strv);
+            if (!mem.eql(u8, value, &game.header.gamecode))
+                return error.GameCodeDontMatch;
+        },
+        c("starters") => {
+            const index = try parser.parse(parse.index);
+            const value = try parser.parse(parselu16v);
+            if (index >= game.starters.len)
+                return error.Error;
+            game.starters[index].* = value;
+            game.starters_repeat[index].* = value;
+        },
+        c("trainers") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.trainers.len)
+                return error.Error;
+            const trainer = &game.trainers[index];
 
-    if (parser.eatField("version")) {
-        const version = try parser.eatEnumValue(common.Version);
-        if (version != game.version)
-            return error.VersionDontMatch;
-    } else |_| if (parser.eatField("game_title")) {
-        const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &game.header.game_title))
-            return error.GameTitleDontMatch;
-    } else |_| if (parser.eatField("gamecode")) {
-        const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &game.header.gamecode))
-            return error.GameCodeDontMatch;
-    } else |_| if (parser.eatField("starters")) {
-        const starter_index = try parser.eatIndexMax(game.starters.len);
-        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        game.starters[starter_index].* = value;
-        game.starters_repeat[starter_index].* = value;
-    } else |_| if (parser.eatField("trainers")) {
-        const trainer_index = try parser.eatIndexMax(game.trainers.len);
-        const trainer = &game.trainers[trainer_index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("class") => trainer.class = try parser.parse(parse.u8v),
+                c("encounter_music") => trainer.encounter_music = try parser.parse(parse.u8v),
+                c("trainer_picture") => trainer.trainer_picture = try parser.parse(parse.u8v),
+                c("is_double") => trainer.is_double = try parser.parse(parselu32v),
+                c("ai") => trainer.ai = try parser.parse(parselu32v),
+                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party") => {
+                    const pindex = try parser.parse(parse.index);
+                    if (pindex >= trainer.partyLen())
+                        return error.Error;
+                    const member = try trainer.partyAt(pindex, game.data);
 
-        if (parser.eatField("class")) {
-            trainer.class = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("encounter_music")) {
-            trainer.encounter_music = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("trainer_picture")) {
-            trainer.trainer_picture = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(trainer.items.len);
-            trainer.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("is_double")) {
-            trainer.is_double = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| if (parser.eatField("ai")) {
-            trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| if (parser.eatField("party")) {
-            const party_index = try parser.eatIndexMax(trainer.partyLen());
-            const member = try trainer.partyAt(party_index, game.data);
-
-            if (parser.eatField("iv")) {
-                member.iv = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("level")) {
-                member.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("species")) {
-                member.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("item")) {
-                const item = try parser.eatUnsignedValue(u16, 10);
-                switch (trainer.party_type) {
-                    .item => member.toParent(gen3.PartyMemberItem).item = lu16.init(item),
-                    .both => member.toParent(gen3.PartyMemberBoth).item = lu16.init(item),
-                    else => return error.NoField,
-                }
-            } else |_| if (parser.eatField("moves")) {
-                const mv_ptr = switch (trainer.party_type) {
-                    .moves => blk: {
-                        const move_member = member.toParent(gen3.PartyMemberMoves);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    .both => blk: {
-                        const move_member = member.toParent(gen3.PartyMemberBoth);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    else => return error.NoField,
-                };
-
-                mv_ptr.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("moves")) {
-        const move_index = try parser.eatIndexMax(game.moves.len);
-        const move = &game.moves[move_index];
-
-        if (parser.eatField("effect")) {
-            move.effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("power")) {
-            move.power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("type")) {
-            move.@"type" = try parser.eatEnumValue(gen3.Type);
-        } else |_| if (parser.eatField("accuracy")) {
-            move.accuracy = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pp")) {
-            move.pp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("side_effect_chance")) {
-            move.side_effect_chance = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("target")) {
-            move.target = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("priority")) {
-            move.priority = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("flags")) {
-            move.flags = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokemons")) {
-        const pokemon_index = try parser.eatIndexMax(game.pokemons.len);
-        const pokemon = &game.pokemons[pokemon_index];
-
-        if (parser.eatField("stats")) {
-            if (parser.eatField("hp")) {
-                pokemon.stats.hp = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("attack")) {
-                pokemon.stats.attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("defense")) {
-                pokemon.stats.defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("speed")) {
-                pokemon.stats.speed = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                pokemon.stats.sp_attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                pokemon.stats.sp_defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("types")) {
-            const type_index = try parser.eatIndexMax(pokemon.types.len);
-            pokemon.types[type_index] = try parser.eatEnumValue(gen3.Type);
-        } else |_| if (parser.eatField("catch_rate")) {
-            pokemon.catch_rate = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("base_exp_yield")) {
-            pokemon.base_exp_yield = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("ev_yield")) {
-            if (parser.eatField("hp")) {
-                pokemon.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("attack")) {
-                pokemon.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("defense")) {
-                pokemon.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("speed")) {
-                pokemon.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                pokemon.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                pokemon.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(pokemon.items.len);
-            pokemon.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("gender_ratio")) {
-            pokemon.gender_ratio = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("egg_cycles")) {
-            pokemon.egg_cycles = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("base_friendship")) {
-            pokemon.base_friendship = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("growth_rate")) {
-            pokemon.growth_rate = try parser.eatEnumValue(common.GrowthRate);
-        } else |_| if (parser.eatField("egg_groups")) {
-            const egg_index = try parser.eatIndexMax(2);
-            const egg_group = try parser.eatEnumValue(common.EggGroup);
-            switch (egg_index) {
-                0 => pokemon.egg_group1 = egg_group,
-                1 => pokemon.egg_group2 = egg_group,
-                else => unreachable,
-            }
-        } else |_| if (parser.eatField("abilities")) {
-            const ability_index = try parser.eatIndexMax(pokemon.abilities.len);
-            pokemon.abilities[ability_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("safari_zone_rate")) {
-            pokemon.safari_zone_rate = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("color")) {
-            pokemon.color_flip.color = try parser.eatEnumValue(common.Color);
-        } else |_| if (parser.eatField("flip")) {
-            pokemon.color_flip.flip = try parser.eatBoolValue();
-        } else |_| if (parser.eatField("tms")) {
-            const tm_index = try parser.eatIndexMax(game.tms.len);
-            const value = try parser.eatBoolValue();
-            const learnset = &game.machine_learnsets[pokemon_index];
-            learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, tm_index), value));
-        } else |_| if (parser.eatField("hms")) {
-            const hm_index = try parser.eatIndexMax(game.hms.len);
-            const value = try parser.eatBoolValue();
-            const learnset = &game.machine_learnsets[pokemon_index];
-            learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, hm_index + game.tms.len), value));
-        } else |_| if (parser.eatField("evos")) {
-            const evos = &game.evolutions[pokemon_index];
-            const evo_index = try parser.eatIndexMax(evos.len);
-            const evo = &evos[evo_index];
-
-            if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(common.EvoMethod);
-            } else |_| if (parser.eatField("param")) {
-                evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("target")) {
-                evo.target = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("moves")) {
-            const lvl_up_moves = try game.level_up_learnset_pointers[pokemon_index].toSliceTerminated(game.data, struct {
-                fn isTerm(move: gen3.LevelUpMove) bool {
-                    return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
-                }
-            }.isTerm);
-
-            const lvl_up_index = try parser.eatIndexMax(lvl_up_moves.len);
-            const lvl_up_move = &lvl_up_moves[lvl_up_index];
-            if (parser.eatField("id")) {
-                lvl_up_move.id = try parser.eatUnsignedValue(u9, 10);
-            } else |_| if (parser.eatField("level")) {
-                lvl_up_move.level = try parser.eatUnsignedValue(u7, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("tms")) {
-        const tm_index = try parser.eatIndexMax(game.tms.len);
-        game.tms[tm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("hms")) {
-        const tm_index = try parser.eatIndexMax(game.hms.len);
-        game.hms[tm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("items")) {
-        const item_index = try parser.eatIndexMax(game.items.len);
-        const item = &game.items[item_index];
-
-        if (parser.eatField("id")) {
-            item.id = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("price")) {
-            item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("hold_effect")) {
-            item.hold_effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("hold_effect_param")) {
-            item.hold_effect_param = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("importance")) {
-            item.importance = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pocket")) switch (game.version) {
-            .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.eatEnumValue(gen3.RSEPocket) },
-            .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.eatEnumValue(gen3.FRLGPocket) },
-            else => unreachable,
-        } else |_| if (parser.eatField("type")) {
-            item.@"type" = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("battle_usage")) {
-            item.battle_usage = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| if (parser.eatField("secondary_id")) {
-            item.secondary_id = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("zones")) {
-        const zone_index = try parser.eatIndexMax(game.wild_pokemon_headers.len);
-        const header = &game.wild_pokemon_headers[zone_index];
-        try parser.eatField("wild");
-
-        const Fn = struct {
-            fn applyArea(p: *format.Parser, g: gen3.Game, area: var) !void {
-                if (p.eatField("encounter_rate")) {
-                    area.encounter_rate = try p.eatUnsignedValue(u8, 10);
-                } else |_| if (p.eatField("pokemons")) {
-                    const wilds = try area.wild_pokemons.toSingle(g.data);
-                    const wild_index = try p.eatIndexMax(wilds.len);
-                    const wild = &wilds[wild_index];
-
-                    if (p.eatField("min_level")) {
-                        wild.min_level = try p.eatUnsignedValue(u8, 10);
-                    } else |_| if (p.eatField("max_level")) {
-                        wild.max_level = try p.eatUnsignedValue(u8, 10);
-                    } else |_| if (p.eatField("species")) {
-                        wild.species = lu16.init(try p.eatUnsignedValue(u16, 10));
-                    } else |_| {
-                        return error.NoField;
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("iv") => member.iv = try parser.parse(parselu16v),
+                        c("level") => member.level = try parser.parse(parselu16v),
+                        c("species") => member.species = try parser.parse(parselu16v),
+                        c("item") => {
+                            const item = try parser.parse(parselu16v);
+                            switch (trainer.party_type) {
+                                .item => member.toParent(gen3.PartyMemberItem).item = item,
+                                .both => member.toParent(gen3.PartyMemberBoth).item = item,
+                                else => return error.NoField,
+                            }
+                        },
+                        c("moves") => switch (trainer.party_type) {
+                            .moves => {
+                                const move_member = member.toParent(gen3.PartyMemberMoves);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            .both => {
+                                const move_member = member.toParent(gen3.PartyMemberBoth);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            else => return error.NoField,
+                        },
+                        else => return error.NoField,
                     }
-                } else |_| {
-                    return error.NoField;
-                }
+                },
+                else => return error.NoField,
             }
-        };
+        },
+        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
+        c("pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.pokemons.len)
+                return error.Error;
+            const pokemon = &game.pokemons[index];
 
-        if (parser.eatField("land")) {
-            try Fn.applyArea(&parser, game, try header.land.toSingle(game.data));
-        } else |_| if (parser.eatField("surf")) {
-            try Fn.applyArea(&parser, game, try header.surf.toSingle(game.data));
-        } else |_| if (parser.eatField("rock_smash")) {
-            try Fn.applyArea(&parser, game, try header.rock_smash.toSingle(game.data));
-        } else |_| if (parser.eatField("fishing")) {
-            try Fn.applyArea(&parser, game, try header.fishing.toSingle(game.data));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("static_pokemons")) {
-        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
-        const static_mon = game.static_pokemons[static_mon_index];
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
+                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
+                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
+                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
+                c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
+                c("evos") => try parse.anyT(parser.str, &game.evolutions[index], converters),
+                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
+                c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
+                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
+                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
+                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
+                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
+                c("safari_zone_rate") => pokemon.safari_zone_rate = try parser.parse(parse.u8v),
+                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
+                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
+                c("egg_groups") => {
+                    const eindex = try parser.parse(parse.index);
+                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
+                    switch (eindex) {
+                        0 => pokemon.egg_group1 = evalue,
+                        1 => pokemon.egg_group2 = evalue,
+                        else => return error.Error,
+                    }
+                },
+                c("tms"), c("hms") => {
+                    const is_tms = c("tms") == m(field);
+                    const tindex = try parser.parse(parse.index);
+                    const value = try parser.parse(parse.boolv);
+                    const len = if (is_tms) game.tms.len else game.hms.len;
+                    if (tindex >= len)
+                        return error.Error;
 
-        if (parser.eatField("species")) {
-            static_mon.data().setwildbattle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("level")) {
-            static_mon.data().setwildbattle.level = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("item")) {
-            static_mon.data().setwildbattle.item = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokeball_items")) {
-        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
-        const given_item = game.pokeball_items[given_index];
+                    const rindex = tindex + game.tms.len * @boolToInt(!is_tms);
+                    const learnset = &game.machine_learnsets[index];
+                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, rindex), value));
+                },
+                c("moves") => {
+                    const lvl_up_moves = try game.level_up_learnset_pointers[index].toSliceTerminated(game.data, struct {
+                        fn isTerm(move: gen3.LevelUpMove) bool {
+                            return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
+                        }
+                    }.isTerm);
+                    try parse.anyT(parser.str, &lvl_up_moves, converters);
+                },
+                else => return error.NoField,
+            }
+        },
+        c("tms") => try parse.anyT(parser.str, &game.tms, converters),
+        c("hms") => try parse.anyT(parser.str, &game.hms, converters),
+        c("items") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.items.len)
+                return error.Error;
+            const item = &game.items[index];
 
-        if (parser.eatField("item")) {
-            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("amount")) {
-            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| {
-        return error.NoField;
+            switch (m(try parser.parse(parse.anyField))) {
+                c("id") => item.id = try parser.parse(parselu16v),
+                c("price") => item.price = try parser.parse(parselu16v),
+                c("hold_effect") => item.hold_effect = try parser.parse(parse.u8v),
+                c("hold_effect_par") => item.hold_effect_param = try parser.parse(parse.u8v),
+                c("importance") => item.importance = try parser.parse(parse.u8v),
+                c("type") => item.@"type" = try parser.parse(parse.u8v),
+                c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
+                c("secondary_id") => item.secondary_id = try parser.parse(parselu32v),
+                c("pocket") => switch (game.version) {
+                    .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.parse(comptime parse.enumv(gen3.RSEPocket)) },
+                    .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.parse(comptime parse.enumv(gen3.FRLGPocket)) },
+                    else => unreachable,
+                },
+                else => return error.NoField,
+            }
+        },
+        c("zones") => {
+            const index = try parser.parse(parse.index);
+            try parser.parse(comptime parse.field("wild"));
+            if (index >= game.wild_pokemon_headers.len)
+                return error.Error;
+
+            const header = &game.wild_pokemon_headers[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("land") => {
+                    const land = try header.land.toSingle(game.data);
+                    const wilds = try land.wild_pokemons.toSingle(game.data);
+                    try applyGen3Area(&parser, &land.encounter_rate, wilds);
+                },
+                c("surf") => {
+                    const surf = try header.surf.toSingle(game.data);
+                    const wilds = try surf.wild_pokemons.toSingle(game.data);
+                    try applyGen3Area(&parser, &surf.encounter_rate, wilds);
+                },
+                c("rock_smash") => {
+                    const rock = try header.rock_smash.toSingle(game.data);
+                    const wilds = try rock.wild_pokemons.toSingle(game.data);
+                    try applyGen3Area(&parser, &rock.encounter_rate, wilds);
+                },
+                c("fishing") => {
+                    const fish = try header.fishing.toSingle(game.data);
+                    const wilds = try fish.wild_pokemons.toSingle(game.data);
+                    try applyGen3Area(&parser, &fish.encounter_rate, wilds);
+                },
+                else => return error.NoField,
+            }
+        },
+        c("static_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.static_pokemons.len)
+                return error.Error;
+            const static_mon = game.static_pokemons[index].data();
+
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => static_mon.setwildbattle.species = try parser.parse(parselu16v),
+                c("level") => static_mon.setwildbattle.level = try parser.parse(parse.u8v),
+                c("item") => static_mon.setwildbattle.item = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        c("pokeball_items") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.pokeball_items.len)
+                return error.Error;
+            const given_item = game.pokeball_items[index];
+
+            switch (m(try parser.parse(parse.anyField))) {
+                c("item") => given_item.item.* = try parser.parse(parselu16v),
+                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        else => return error.NoField,
+    }
+}
+
+fn applyGen3Area(par: *parse.MutParser, rate: *u8, wilds: []gen3.WildPokemon) !void {
+    switch (m(try par.parse(parse.anyField))) {
+        c("encounter_rate") => rate.* = try par.parse(parse.u8v),
+        c("pokemons") => try parse.anyT(par.str, &wilds, converters),
+        else => return error.NoField,
     }
 }
 
 fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser{ .str = str };
+    var parser = parse.MutParser{ .str = str };
+    const header = nds_rom.header();
+    switch (m(try parser.parse(parse.anyField))) {
+        c("version") => {
+            const value = try parser.parse(comptime parse.enumv(common.Version));
+            if (value != game.version)
+                return error.VersionDontMatch;
+        },
+        c("game_title") => {
+            const value = try parser.parse(parse.strv);
+            const null_index = mem.indexOfScalar(u8, &header.game_title, 0) //
+                orelse header.game_title.len;
+            if (!mem.eql(u8, value, header.game_title[0..null_index]))
+                return error.GameTitleDontMatch;
+        },
+        c("gamecode") => {
+            const value = try parser.parse(parse.strv);
+            if (!mem.eql(u8, value, &header.gamecode))
+                return error.GameCodeDontMatch;
+        },
+        c("starters") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.starters.len)
+                return error.Error;
+            game.starters[index].* = try parser.parse(parselu16v);
+        },
+        c("trainers") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.trainers.len)
+                return error.Error;
 
-    if (parser.eatField("version")) {
-        const version = try parser.eatEnumValue(common.Version);
-        if (version != game.version)
-            return error.VersionDontMatch;
-    } else |_| if (parser.eatField("game_title")) {
-        const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
-        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
-            return error.GameTitleDontMatch;
-    } else |_| if (parser.eatField("gamecode")) {
-        const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
-            return error.GameCodeDontMatch;
-    } else |_| if (parser.eatField("starters")) {
-        const starter_index = try parser.eatIndexMax(game.starters.len);
-        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        game.starters[starter_index].* = value;
-    } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.items;
-        const trainer_index = try parser.eatIndexMax(trainers.len);
-        const trainer = try trainers[trainer_index].asDataFile(gen4.Trainer);
+            const trainer = &game.trainers[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("class") => trainer.class = try parser.parse(parse.u8v),
+                c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
+                c("battle_type2") => trainer.battle_type2 = try parser.parse(parse.u8v),
+                c("ai") => trainer.ai = try parser.parse(parselu32v),
+                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party") => {
+                    const pindex = try parser.parse(parse.index);
+                    if (pindex >= trainer.party_size)
+                        return error.Error;
+                    const party_file = game.parties.fileData(.{ .i = @intCast(u32, index) });
+                    const member = trainer.partyMember(game.version, party_file, pindex) orelse return error.OutOfBound;
 
-        if (parser.eatField("class")) {
-            trainer.class = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("battle_type")) {
-            trainer.battle_type = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("battle_type2")) {
-            trainer.battle_type2 = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(trainer.items.len);
-            trainer.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("ai")) {
-            trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.items;
-            const party_index = try parser.eatIndexMax(trainer.party_size);
-            const party_file = try parties[trainer_index].asFile();
-            const member = trainer.partyMember(game.version, party_file.data, party_index) orelse return error.OutOfBound;
-
-            if (parser.eatField("iv")) {
-                member.iv = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("gender")) {
-                member.gender_ability.gender = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("ability")) {
-                member.gender_ability.ability = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("level")) {
-                member.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("species")) {
-                member.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("item")) {
-                const item = try parser.eatUnsignedValue(u16, 10);
-                switch (trainer.party_type) {
-                    .item => member.toParent(gen4.PartyMemberItem).item = lu16.init(item),
-                    .both => member.toParent(gen4.PartyMemberBoth).item = lu16.init(item),
-                    else => return error.NoField,
-                }
-            } else |_| if (parser.eatField("moves")) {
-                const mv_ptr = switch (trainer.party_type) {
-                    .moves => blk: {
-                        const move_member = member.toParent(gen4.PartyMemberMoves);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    .both => blk: {
-                        const move_member = member.toParent(gen4.PartyMemberBoth);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    else => return error.NoField,
-                };
-
-                mv_ptr.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.items;
-        const move_index = try parser.eatIndexMax(moves.len);
-        const move = try moves[move_index].asDataFile(gen4.Move);
-
-        if (parser.eatField("category")) {
-            move.category = try parser.eatEnumValue(common.MoveCategory);
-        } else |_| if (parser.eatField("power")) {
-            move.power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("type")) {
-            move.@"type" = try parser.eatEnumValue(gen4.Type);
-        } else |_| if (parser.eatField("accuracy")) {
-            move.accuracy = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pp")) {
-            move.pp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.items;
-        const pokemon_index = try parser.eatIndexMax(pokemons.len);
-        const pokemon = try pokemons[pokemon_index].asDataFile(gen4.BasePokemon);
-
-        if (parser.eatField("stats")) {
-            if (parser.eatField("hp")) {
-                pokemon.stats.hp = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("attack")) {
-                pokemon.stats.attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("defense")) {
-                pokemon.stats.defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("speed")) {
-                pokemon.stats.speed = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                pokemon.stats.sp_attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                pokemon.stats.sp_defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("types")) {
-            const type_index = try parser.eatIndexMax(pokemon.types.len);
-            pokemon.types[type_index] = try parser.eatEnumValue(gen4.Type);
-        } else |_| if (parser.eatField("catch_rate")) {
-            pokemon.catch_rate = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("base_exp_yield")) {
-            pokemon.base_exp_yield = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("ev_yield")) {
-            if (parser.eatField("hp")) {
-                pokemon.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("attack")) {
-                pokemon.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("defense")) {
-                pokemon.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("speed")) {
-                pokemon.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                pokemon.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                pokemon.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(pokemon.items.len);
-            pokemon.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("gender_ratio")) {
-            pokemon.gender_ratio = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("egg_cycles")) {
-            pokemon.egg_cycles = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("base_friendship")) {
-            pokemon.base_friendship = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("growth_rate")) {
-            pokemon.growth_rate = try parser.eatEnumValue(common.GrowthRate);
-        } else |_| if (parser.eatField("egg_groups")) {
-            const egg_index = try parser.eatIndexMax(2);
-            const egg_group = try parser.eatEnumValue(common.EggGroup);
-            switch (egg_index) {
-                0 => pokemon.egg_group1 = egg_group,
-                1 => pokemon.egg_group2 = egg_group,
-                else => return error.OutOfBound,
-            }
-        } else |_| if (parser.eatField("abilities")) {
-            const ability_index = try parser.eatIndexMax(pokemon.abilities.len);
-            pokemon.abilities[ability_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("flee_rate")) {
-            pokemon.flee_rate = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("color")) {
-            pokemon.color = try parser.eatEnumValue(common.Color);
-        } else |_| if (parser.eatField("tms")) {
-            const tm_index = try parser.eatIndexMax(game.tms.len);
-            const value = try parser.eatBoolValue();
-            const learnset = &pokemon.machine_learnset;
-            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, tm_index), value));
-        } else |_| if (parser.eatField("hms")) {
-            const hm_index = try parser.eatIndexMax(game.hms.len);
-            const value = try parser.eatBoolValue();
-            const learnset = &pokemon.machine_learnset;
-            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms.len), value));
-        } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
-            const bytes = evos_file.data;
-            const rem = bytes.len % @sizeOf(gen4.Evolution);
-            const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
-            const evo_index = try parser.eatIndexMax(evos.len);
-            const evo = &evos[evo_index];
-
-            if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(common.EvoMethod);
-            } else |_| if (parser.eatField("param")) {
-                evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("target")) {
-                evo.target = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
-            const bytes = level_up_moves_file.data;
-            const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
-            const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
-            const index = try parser.eatIndexMax(level_up_moves.len);
-            const level_up_move = &level_up_moves[index];
-            if (parser.eatField("id")) {
-                level_up_move.id = try parser.eatUnsignedValue(u9, 10);
-            } else |_| if (parser.eatField("level")) {
-                level_up_move.level = try parser.eatUnsignedValue(u7, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("tms")) {
-        const tm_index = try parser.eatIndexMax(game.tms.len);
-        game.tms[tm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("hms")) {
-        const hm_index = try parser.eatIndexMax(game.hms.len);
-        game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.items;
-        const item_index = try parser.eatIndexMax(items.len);
-        const item = try items[item_index].asDataFile(gen4.Item);
-
-        if (parser.eatField("price")) {
-            item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("battle_effect")) {
-            item.battle_effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("gain")) {
-            item.gain = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("berry")) {
-            item.berry = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("fling_effect")) {
-            item.fling_effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("fling_power")) {
-            item.fling_power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("natural_gift_power")) {
-            item.natural_gift_power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("flag")) {
-            item.flag = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pocket")) {
-            item.pocket.pocket = try parser.eatEnumValue(gen4.PocketKind);
-        } else |_| if (parser.eatField("type")) {
-            item.type = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("category")) {
-            item.category = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("category2")) {
-            item.category2 = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("index")) {
-            item.index = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("statboosts")) {
-            if (parser.eatField("hp")) {
-                item.statboosts.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("level")) {
-                item.statboosts.level = try parser.eatUnsignedValue(u1, 10);
-            } else |_| if (parser.eatField("evolution")) {
-                item.statboosts.evolution = try parser.eatUnsignedValue(u1, 10);
-            } else |_| if (parser.eatField("attack")) {
-                item.statboosts.attack = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("defense")) {
-                item.statboosts.defense = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                item.statboosts.sp_attack = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                item.statboosts.sp_defense = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("speed")) {
-                item.statboosts.speed = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("accuracy")) {
-                item.statboosts.accuracy = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("crit")) {
-                item.statboosts.crit = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("pp")) {
-                item.statboosts.pp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("target")) {
-                item.statboosts.target = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("target2")) {
-                item.statboosts.target2 = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("ev_yield")) {
-            if (parser.eatField("hp")) {
-                item.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("attack")) {
-                item.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("defense")) {
-                item.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("speed")) {
-                item.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                item.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                item.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("hp_restore")) {
-            item.hp_restore = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pp_restore")) {
-            item.pp_restore = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.items;
-        const zone_index = try parser.eatIndexMax(wild_pokemons.len);
-        try parser.eatField("wild");
-
-        switch (game.version) {
-            .diamond,
-            .pearl,
-            .platinum,
-            => {
-                const wilds = try wild_pokemons[zone_index].asDataFile(gen4.DpptWildPokemons);
-                if (parser.eatField("grass")) {
-                    if (parser.eatField("encounter_rate")) {
-                        wilds.grass_rate = lu32.init(try parser.eatUnsignedValue(u32, 10));
-                        return;
-                    } else |_| if (parser.eatField("pokemons")) {
-                        const wild_index = try parser.eatIndexMax(wilds.grass.len);
-                        const wild = &wilds.grass[wild_index];
-
-                        if (parser.eatField("min_level")) {
-                            wild.level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("max_level")) {
-                            wild.level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("species")) {
-                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-                            return;
-                        } else |_| {
-                            return error.NoField;
-                        }
-                    } else |_| {
-                        return error.NoField;
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("iv") => member.iv = try parser.parse(parse.u8v),
+                        c("gender") => member.gender_ability.gender = try parser.parse(parse.u4v),
+                        c("ability") => member.gender_ability.ability = try parser.parse(parse.u4v),
+                        c("level") => member.level = try parser.parse(parselu16v),
+                        c("species") => member.species = try parser.parse(parselu16v),
+                        c("item") => switch (trainer.party_type) {
+                            .item => member.toParent(gen4.PartyMemberItem).item = try parser.parse(parselu16v),
+                            .both => member.toParent(gen4.PartyMemberBoth).item = try parser.parse(parselu16v),
+                            else => return error.NoField,
+                        },
+                        c("moves") => switch (trainer.party_type) {
+                            .moves => {
+                                const move_member = member.toParent(gen4.PartyMemberMoves);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            .both => {
+                                const move_member = member.toParent(gen4.PartyMemberBoth);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            else => return error.NoField,
+                        },
+                        else => return error.NoField,
                     }
-                } else |_| {}
+                },
+                else => return error.NoField,
+            }
+        },
+        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
+        c("pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.pokemons.len)
+                return error.Error;
+            const pokemon = &game.pokemons[index];
 
-                inline for ([_][]const u8{
-                    "swarm_replacements",
-                    "day_replacements",
-                    "night_replacements",
-                    "radar_replacements",
-                    "unknown_replacements",
-                    "gba_replacements",
-                }) |area_name| skip: {
-                    parser.eatField(area_name) catch break :skip;
-                    parser.eatField("pokemons") catch break :skip;
-
-                    const area = &@field(wilds, area_name);
-                    const wild_index = try parser.eatIndexMax(area.len);
-                    const wild = &area[wild_index];
-
-                    if (parser.eatField("species")) {
-                        wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-                        return;
-                    } else |_| {
-                        return error.NoField;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
+                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
+                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
+                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
+                c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
+                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
+                c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
+                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
+                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
+                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
+                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
+                c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
+                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
+                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
+                c("egg_groups") => {
+                    const eindex = try parser.parse(parse.index);
+                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
+                    switch (eindex) {
+                        0 => pokemon.egg_group1 = evalue,
+                        1 => pokemon.egg_group2 = evalue,
+                        else => return error.Error,
                     }
-                }
+                },
+                c("tms"), c("hms") => {
+                    const is_tms = c("tms") == m(field);
+                    const tindex = try parser.parse(parse.index);
+                    const value = try parser.parse(parse.boolv);
+                    const len = if (is_tms) game.tms.len else game.hms.len;
+                    if (tindex >= len)
+                        return error.Error;
 
-                inline for ([_][]const u8{
-                    "surf",
-                    "sea_unknown",
-                    "old_rod",
-                    "good_rod",
-                    "super_rod",
-                }) |area_name| skip: {
-                    parser.eatField(area_name) catch break :skip;
-                    if (parser.eatField("encounter_rate")) {
-                        @field(wilds, area_name ++ "_rate") = lu32.init(try parser.eatUnsignedValue(u32, 10));
-                        return;
-                    } else |_| if (parser.eatField("pokemons")) {
-                        const area = &@field(wilds, area_name);
-                        const wild_index = try parser.eatIndexMax(area.len);
-                        const wild = &area[wild_index];
+                    const rindex = tindex + game.tms.len * @boolToInt(!is_tms);
+                    const learnset = &pokemon.machine_learnset;
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
+                },
+                c("moves") => {
+                    const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
+                    const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
+                    const lum = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+                    try parse.anyT(parser.str, &lum, converters);
+                },
+                c("evos") => {
+                    const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, index) });
+                    const rem = bytes.len % @sizeOf(gen4.Evolution);
+                    const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
+                    try parse.anyT(parser.str, &evos, converters);
+                },
+                else => return error.NoField,
+            }
+        },
+        c("tms") => try parse.anyT(parser.str, &game.tms, converters),
+        c("hms") => try parse.anyT(parser.str, &game.hms, converters),
+        c("items") => try parse.anyT(parser.str, &game.items, converters),
+        c("zones") => {
+            const wild_pokemons = game.wild_pokemons;
+            const index = try parser.parse(parse.index);
+            try parser.parse(comptime parse.field("wild"));
 
-                        if (parser.eatField("min_level")) {
-                            wild.min_level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("max_level")) {
-                            wild.max_level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("species")) {
-                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-                            return;
-                        } else |_| {
-                            return error.NoField;
-                        }
-                    } else |_| {}
-                }
+            switch (game.version) {
+                .diamond,
+                .pearl,
+                .platinum,
+                => {
+                    const wilds = &wild_pokemons.dppt[index];
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("grass") => switch (m(try parser.parse(parse.anyField))) {
+                            c("encounter_rate") => wilds.grass_rate = try parser.parse(parselu32v),
+                            c("pokemons") => {
+                                const i = try parser.parse(parse.index);
+                                if (i >= wilds.grass.len)
+                                    return error.IndexOutOfBound;
+                                switch (m(try parser.parse(parse.anyField))) {
+                                    c("min_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
+                                    c("max_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
+                                    c("species") => wilds.grass[i].species = try parser.parse(parselu16v),
+                                    else => return error.NoField,
+                                }
+                            },
+                            else => return error.NoField,
+                        },
+                        c("swarm_replace") => try applyDpptReplacement(&parser, &wilds.swarm_replace),
+                        c("day_replace") => try applyDpptReplacement(&parser, &wilds.day_replace),
+                        c("night_replace") => try applyDpptReplacement(&parser, &wilds.night_replace),
+                        c("radar_replace") => try applyDpptReplacement(&parser, &wilds.radar_replace),
+                        c("unknown_replace") => try applyDpptReplacement(&parser, &wilds.unknown_replace),
+                        c("gba_replace") => try applyDpptReplacement(&parser, &wilds.gba_replace),
+                        c("surf") => try applyDpptSea(&parser, &wilds.surf),
+                        c("sea_unknown") => try applyDpptSea(&parser, &wilds.sea_unknown),
+                        c("old_rod") => try applyDpptSea(&parser, &wilds.old_rod),
+                        c("good_rod") => try applyDpptSea(&parser, &wilds.good_rod),
+                        c("super_rod") => try applyDpptSea(&parser, &wilds.super_rod),
+                        else => return error.NoField,
+                    }
+                },
 
-                return error.NoField;
-            },
+                .heart_gold,
+                .soul_silver,
+                => {
+                    const wilds = &wild_pokemons.hgss[index];
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("grass_morning") => try applyHgssGrass(&parser, wilds, &wilds.grass_morning),
+                        c("grass_day") => try applyHgssGrass(&parser, wilds, &wilds.grass_day),
+                        c("grass_night") => try applyHgssGrass(&parser, wilds, &wilds.grass_night),
+                        c("surf") => try applyHgssSea(&parser, &wilds.sea_rates[0], &wilds.surf),
+                        c("sea_unknown") => try applyHgssSea(&parser, &wilds.sea_rates[1], &wilds.sea_unknown),
+                        c("old_rod") => try applyHgssSea(&parser, &wilds.sea_rates[2], &wilds.old_rod),
+                        c("good_rod") => try applyHgssSea(&parser, &wilds.sea_rates[3], &wilds.good_rod),
+                        c("super_rod") => try applyHgssSea(&parser, &wilds.sea_rates[4], &wilds.super_rod),
+                        else => return error.NoField,
+                    }
+                },
+                else => unreachable,
+            }
+        },
+        c("static_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.static_pokemons.len)
+                return error.Error;
+            const static_mon = game.static_pokemons[index].data();
 
-            .heart_gold,
-            .soul_silver,
-            => {
-                const wilds = try wild_pokemons[zone_index].asDataFile(gen4.HgssWildPokemons);
-                inline for ([_][]const u8{
-                    "grass_morning",
-                    "grass_day",
-                    "grass_night",
-                }) |area_name| skip: {
-                    parser.eatField(area_name) catch break :skip;
-                    if (parser.eatField("encounter_rate")) {
-                        wilds.grass_rate = try parser.eatUnsignedValue(u8, 10);
-                        return;
-                    } else |_| if (parser.eatField("pokemons")) {
-                        const area = &@field(wilds, area_name);
-                        const wild_index = try parser.eatIndexMax(area.len);
-                        const wild = &area[wild_index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => static_mon.wild_battle.species = try parser.parse(parselu16v),
+                c("level") => static_mon.wild_battle.level = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        c("pokeball_items") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.pokeball_items.len)
+                return error.Error;
+            const given_item = game.pokeball_items[index];
 
-                        if (parser.eatField("min_level")) {
-                            wilds.grass_levels[wild_index] = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("max_level")) {
-                            wilds.grass_levels[wild_index] = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("species")) {
-                            wild.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-                            return;
-                        } else |_| {
-                            return error.NoField;
-                        }
-                    } else |_| {}
-                }
+            switch (m(try parser.parse(parse.anyField))) {
+                c("item") => given_item.item.* = try parser.parse(parselu16v),
+                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        else => return error.NoField,
+    }
+}
+fn applyHgssGrass(par: *parse.MutParser, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
+    switch (m(try par.parse(parse.anyField))) {
+        c("encounter_rate") => wilds.grass_rate = try par.parse(parse.u8v),
+        c("pokemons") => {
+            const index = try par.parse(parse.index);
+            if (index >= grass.len)
+                return error.Error;
+            switch (m(try par.parse(parse.anyField))) {
+                c("min_level") => wilds.grass_levels[index] = try par.parse(parse.u8v),
+                c("max_level") => wilds.grass_levels[index] = try par.parse(parse.u8v),
+                c("species") => grass[index] = try par.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        else => return error.NoField,
+    }
+}
 
-                inline for ([_][]const u8{
-                    "surf",
-                    "sea_unknown",
-                    "old_rod",
-                    "good_rod",
-                    "super_rod",
-                }) |area_name, j| skip: {
-                    parser.eatField(area_name) catch break :skip;
-                    if (parser.eatField("encounter_rate")) {
-                        wilds.sea_rates[j] = try parser.eatUnsignedValue(u8, 10);
-                        return;
-                    } else |_| if (parser.eatField("pokemons")) {
-                        const area = &@field(wilds, area_name);
-                        const wild_index = try parser.eatIndexMax(area.len);
-                        const wild = &area[wild_index];
+fn applyHgssSea(par: *parse.MutParser, rate: *u8, sea: []gen4.HgssWildPokemons.Sea) !void {
+    switch (m(try par.parse(parse.anyField))) {
+        c("encounter_rate") => rate.* = try par.parse(parse.u8v),
+        c("pokemons") => try parse.anyT(par.str, &sea, converters),
+        else => return error.NoField,
+    }
+}
 
-                        if (parser.eatField("min_level")) {
-                            wild.min_level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("max_level")) {
-                            wild.max_level = try parser.eatUnsignedValue(u8, 10);
-                            return;
-                        } else |_| if (parser.eatField("species")) {
-                            wild.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-                            return;
-                        } else |_| {
-                            return error.NoField;
-                        }
-                    } else |_| {}
-                }
+fn applyDpptReplacement(par: *parse.MutParser, area: []gen4.DpptWildPokemons.Replacement) !void {
+    try par.parse(comptime parse.field("pokemons"));
+    try parse.anyT(par.str, &area, converters);
+}
 
-                // TODO: radio, swarm
-                return error.NoField;
-            },
-            else => unreachable,
-        }
-    } else |_| if (parser.eatField("static_pokemons")) {
-        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
-        const static_mon = game.static_pokemons[static_mon_index];
-
-        if (parser.eatField("species")) {
-            static_mon.data().wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("level")) {
-            static_mon.data().wild_battle.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokeball_items")) {
-        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
-        const given_item = game.pokeball_items[given_index];
-
-        if (parser.eatField("item")) {
-            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("amount")) {
-            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |err| {
-        return error.NoField;
+fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
+    switch (m(try par.parse(parse.anyField))) {
+        c("encounter_rate") => sea.rate = try par.parse(parselu32v),
+        c("pokemons") => try parse.anyT(par.str, &sea.mons, converters),
+        else => return error.NoField,
     }
 }
 
 fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
-    var parser = format.Parser{ .str = str };
+    var parser = parse.MutParser{ .str = str };
+    const header = nds_rom.header();
 
-    if (parser.eatField("version")) {
-        const version = try parser.eatEnumValue(common.Version);
-        if (version != game.version)
-            return error.VersionDontMatch;
-    } else |_| if (parser.eatField("game_title")) {
-        const value = try parser.eatValue();
-        const null_index = mem.indexOfScalar(u8, &nds_rom.header.game_title, 0) orelse nds_rom.header.game_title.len;
-        if (!mem.eql(u8, value, nds_rom.header.game_title[0..null_index]))
-            return error.GameTitleDontMatch;
-    } else |_| if (parser.eatField("gamecode")) {
-        const value = try parser.eatValue();
-        if (!mem.eql(u8, value, &nds_rom.header.gamecode))
-            return error.GameCodeDontMatch;
-    } else |_| if (parser.eatField("starters")) {
-        const starter_index = try parser.eatIndexMax(game.starters.len);
-        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        for (game.starters[starter_index]) |starter|
-            starter.* = value;
-    } else |_| if (parser.eatField("trainers")) {
-        const trainers = game.trainers.nodes.items;
-        const trainer_index = try parser.eatIndexMax(trainers.len);
-        const trainer = try trainers[trainer_index].asDataFile(gen5.Trainer);
+    switch (m(try parser.parse(parse.anyField))) {
+        c("version") => {
+            const value = try parser.parse(comptime parse.enumv(common.Version));
+            if (value != game.version)
+                return error.VersionDontMatch;
+        },
+        c("game_title") => {
+            const value = try parser.parse(parse.strv);
+            const null_index = mem.indexOfScalar(u8, &header.game_title, 0) //
+                orelse header.game_title.len;
+            if (!mem.eql(u8, value, header.game_title[0..null_index]))
+                return error.GameTitleDontMatch;
+        },
+        c("gamecode") => {
+            const value = try parser.parse(parse.strv);
+            if (!mem.eql(u8, value, &header.gamecode))
+                return error.GameCodeDontMatch;
+        },
+        c("starters") => {
+            const index = try parser.parse(parse.index);
+            const value = try parser.parse(parselu16v);
+            if (index >= game.starters.len)
+                return error.Error;
+            for (game.starters[index]) |starter|
+                starter.* = value;
+        },
+        c("trainers") => {
+            const index = try parser.parse(parse.index);
+            const field = try parser.parse(parse.anyField);
+            const trainer_index = @intCast(u32, index);
+            if (trainer_index >= game.trainers.len)
+                return error.Error;
+            const trainer = &game.trainers[trainer_index];
 
-        if (parser.eatField("class")) {
-            trainer.class = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("battle_type")) {
-            trainer.battle_type = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(trainer.items.len);
-            trainer.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("ai")) {
-            trainer.ai = lu32.init(try parser.eatUnsignedValue(u32, 10));
-        } else |_| if (parser.eatField("is_healer")) {
-            trainer.healer = try parser.eatBoolValue();
-        } else |_| if (parser.eatField("cash")) {
-            trainer.cash = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("post_battle_item")) {
-            trainer.post_battle_item = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("party")) {
-            const parties = game.parties.nodes.items;
-            const party_index = try parser.eatIndexMax(trainer.party_size);
-            const party_file = try parties[trainer_index].asFile();
-            const member = trainer.partyMember(party_file.data, party_index) orelse return error.OutOfBound;
+            switch (m(field)) {
+                c("class") => trainer.class = try parser.parse(parse.u8v),
+                c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
+                c("ai") => trainer.ai = try parser.parse(parselu32v),
+                c("is_healer") => trainer.healer = try parser.parse(parse.boolv),
+                c("cash") => trainer.cash = try parser.parse(parse.u8v),
+                c("post_battle_item") => trainer.post_battle_item = try parser.parse(parselu16v),
+                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party") => {
+                    const pindex = try parser.parse(parse.index);
+                    const pfield = try parser.parse(parse.anyField);
+                    if (pindex >= trainer.party_size)
+                        return error.Error;
+                    const party_file = game.parties.fileData(.{ .i = trainer_index });
+                    const member = trainer.partyMember(party_file, pindex) orelse return error.OutOfBound;
 
-            if (parser.eatField("iv")) {
-                member.iv = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("gender")) {
-                member.gender_ability.gender = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("ability")) {
-                member.gender_ability.ability = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("level")) {
-                member.level = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("species")) {
-                member.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("form")) {
-                member.form = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("item")) {
-                const item = try parser.eatUnsignedValue(u16, 10);
-                switch (trainer.party_type) {
-                    .item => member.toParent(gen5.PartyMemberItem).item = lu16.init(item),
-                    .both => member.toParent(gen5.PartyMemberBoth).item = lu16.init(item),
-                    else => return error.NoField,
+                    switch (m(pfield)) {
+                        c("iv") => member.iv = try parser.parse(parse.u8v),
+                        c("gender") => member.gender_ability.gender = try parser.parse(parse.u4v),
+                        c("ability") => member.gender_ability.ability = try parser.parse(parse.u4v),
+                        c("level") => member.level = try parser.parse(parse.u8v),
+                        c("species") => member.species = try parser.parse(parselu16v),
+                        c("form") => member.form = try parser.parse(parselu16v),
+                        c("item") => {
+                            const item = try parser.parse(parselu16v);
+                            switch (trainer.party_type) {
+                                .item => member.toParent(gen5.PartyMemberItem).item = item,
+                                .both => member.toParent(gen5.PartyMemberBoth).item = item,
+                                else => return error.NoField,
+                            }
+                        },
+                        c("moves") => switch (trainer.party_type) {
+                            .moves => {
+                                const move_member = member.toParent(gen5.PartyMemberMoves);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            .both => {
+                                const move_member = member.toParent(gen5.PartyMemberBoth);
+                                try parse.anyT(parser.str, &move_member.moves, converters);
+                            },
+                            else => return error.NoField,
+                        },
+                        else => return error.Error,
+                    }
+                },
+                else => return error.Error,
+            }
+        },
+        c("pokemons") => {
+            const index = @intCast(u32, try parser.parse(parse.index));
+            if (index >= game.pokemons.fat.len)
+                return error.Error;
+
+            const pokemon = try game.pokemons.fileAs(.{ .i = index }, gen5.BasePokemon);
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
+                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
+                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
+                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
+                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
+                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
+                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
+                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
+                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
+                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
+                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
+                c("height") => pokemon.height = try parser.parse(parselu16v),
+                c("weight") => pokemon.weight = try parser.parse(parselu16v),
+                c("egg_groups") => {
+                    const eindex = try parser.parse(parse.index);
+                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
+                    switch (eindex) {
+                        0 => pokemon.egg_group1 = evalue,
+                        1 => pokemon.egg_group2 = evalue,
+                        else => return error.IndexOutOfBound,
+                    }
+                },
+                c("tms"), c("hms") => {
+                    const is_tms = c("tms") == m(field);
+                    const tindex = try parser.parse(parse.index);
+                    const value = try parser.parse(parse.boolv);
+                    const len = if (is_tms) game.tms1.len + game.tms2.len else game.hms.len;
+                    if (tindex >= len)
+                        return error.Error;
+
+                    const rindex = if (is_tms)
+                        tindex + game.hms.len * @boolToInt(tindex >= game.tms1.len)
+                    else
+                        tindex + game.tms1.len;
+                    const learnset = &pokemon.machine_learnset;
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
+                },
+                c("moves") => {
+                    const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
+                    const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
+                    const lum = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+                    try parse.anyT(parser.str, &lum, converters);
+                },
+                c("evos") => {
+                    const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, index) });
+                    const rem = bytes.len % @sizeOf(gen5.Evolution);
+                    const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
+                    try parse.anyT(parser.str, &evos, converters);
+                },
+                else => return error.NoField,
+            }
+        },
+        c("tms") => {
+            const index = try parser.parse(parse.index);
+            const value = try parser.parse(parselu16v);
+            if (index >= game.tms1.len + game.tms2.len)
+                return error.Error;
+            if (index < game.tms1.len) {
+                game.tms1[index] = value;
+            } else {
+                game.tms2[index - game.tms1.len] = value;
+            }
+        },
+        c("hms") => try parse.anyT(parser.str, &game.hms, converters),
+        c("items") => try parse.anyT(parser.str, &game.items, converters),
+        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
+        c("zones") => {
+            const H = struct {
+                fn applyArea(par: *parse.MutParser, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
+                    switch (m(try par.parse(parse.anyField))) {
+                        c("encounter_rate") => wilds.rates[index] = try par.parse(parse.u8v),
+                        c("pokemons") => {
+                            const windex = try par.parse(parse.index);
+                            const area = &@field(wilds, name);
+                            if (windex >= area.len)
+                                return error.Error;
+                            const wild = &area[windex];
+
+                            switch (m(try par.parse(parse.anyField))) {
+                                c("min_level") => wild.min_level = try par.parse(parse.u8v),
+                                c("max_level") => wild.max_level = try par.parse(parse.u8v),
+                                c("species") => wild.species.setSpecies(try par.parse(parse.u10v)),
+                                c("form") => wild.species.setForm(try par.parse(parse.u6v)),
+                                else => return error.NoField,
+                            }
+                        },
+                        else => return error.Error,
+                    }
                 }
-            } else |_| if (parser.eatField("moves")) {
-                const mv_ptr = switch (trainer.party_type) {
-                    .moves => blk: {
-                        const move_member = member.toParent(gen5.PartyMemberMoves);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    .both => blk: {
-                        const move_member = member.toParent(gen5.PartyMemberBoth);
-                        const move_index = try parser.eatIndexMax(move_member.moves.len);
-                        break :blk &move_member.moves[move_index];
-                    },
-                    else => return error.NoField,
-                };
+            };
 
-                mv_ptr.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
+            const index = @intCast(u32, try parser.parse(parse.index));
+            try parser.parse(comptime parse.field("wild"));
+
+            if (index >= game.wild_pokemons.fat.len)
+                return error.Error;
+
+            const wilds = try game.wild_pokemons.fileAs(.{ .i = index }, gen5.WildPokemons);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("grass") => try H.applyArea(&parser, "grass", 0, wilds),
+                c("dark_grass") => try H.applyArea(&parser, "dark_grass", 1, wilds),
+                c("rustling_grass") => try H.applyArea(&parser, "rustling_grass", 2, wilds),
+                c("surf") => try H.applyArea(&parser, "surf", 3, wilds),
+                c("ripple_surf") => try H.applyArea(&parser, "ripple_surf", 4, wilds),
+                c("fishing") => try H.applyArea(&parser, "fishing", 5, wilds),
+                c("ripple_fishing") => try H.applyArea(&parser, "ripple_fishing", 6, wilds),
+                else => return error.NoField,
             }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("moves")) {
-        const moves = game.moves.nodes.items;
-        const move_index = try parser.eatIndexMax(moves.len);
-        const move = try moves[move_index].asDataFile(gen5.Move);
+        },
+        c("static_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.static_pokemons.len)
+                return error.Error;
+            const static_mon = game.static_pokemons[index].data();
 
-        if (parser.eatField("type")) {
-            move.@"type" = try parser.eatEnumValue(gen5.Type);
-        } else |_| if (parser.eatField("effect_category")) {
-            move.effect_category = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("category")) {
-            move.category = try parser.eatEnumValue(common.MoveCategory);
-        } else |_| if (parser.eatField("power")) {
-            move.power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("accuracy")) {
-            move.accuracy = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pp")) {
-            move.pp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("priority")) {
-            move.priority = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("min_hits")) {
-            move.min_max_hits.min = try parser.eatUnsignedValue(u4, 10);
-        } else |_| if (parser.eatField("max_hits")) {
-            move.min_max_hits.max = try parser.eatUnsignedValue(u4, 10);
-        } else |_| if (parser.eatField("result_effect")) {
-            move.result_effect = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("effect_chance")) {
-            move.effect_chance = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("status")) {
-            move.status = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("min_turns")) {
-            move.min_turns = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("max_turns")) {
-            move.max_turns = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("crit")) {
-            move.crit = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("flinch")) {
-            move.flinch = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("effect")) {
-            move.effect = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("target_hp")) {
-            move.target_hp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("user_hp")) {
-            move.user_hp = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("target")) {
-            move.target = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("stats_affected")) {
-            const status_index = try parser.eatIndexMax(move.stats_affected.len);
-            move.stats_affected[status_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("stats_affected_magnetude")) {
-            const status_index = try parser.eatIndexMax(move.stats_affected_magnetude.len);
-            move.stats_affected_magnetude[status_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("stats_affected_chance")) {
-            const status_index = try parser.eatIndexMax(move.stats_affected_chance.len);
-            move.stats_affected_chance[status_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokemons")) {
-        const pokemons = game.pokemons.nodes.items;
-        const pokemon_index = try parser.eatIndexMax(pokemons.len);
-        const pokemon = try pokemons[pokemon_index].asDataFile(gen5.BasePokemon);
-
-        if (parser.eatField("stats")) {
-            if (parser.eatField("hp")) {
-                pokemon.stats.hp = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("attack")) {
-                pokemon.stats.attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("defense")) {
-                pokemon.stats.defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("speed")) {
-                pokemon.stats.speed = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                pokemon.stats.sp_attack = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                pokemon.stats.sp_defense = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {
-                return error.NoField;
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => static_mon.wild_battle.species = try parser.parse(parselu16v),
+                c("level") => static_mon.wild_battle.level = try parser.parse(parse.u8v),
+                else => return error.NoField,
             }
-        } else |_| if (parser.eatField("types")) {
-            const type_index = try parser.eatIndexMax(pokemon.types.len);
-            pokemon.types[type_index] = try parser.eatEnumValue(gen5.Type);
-        } else |_| if (parser.eatField("catch_rate")) {
-            pokemon.catch_rate = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("items")) {
-            const item_index = try parser.eatIndexMax(pokemon.items.len);
-            pokemon.items[item_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("gender_ratio")) {
-            pokemon.gender_ratio = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("egg_cycles")) {
-            pokemon.egg_cycles = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("base_friendship")) {
-            pokemon.base_friendship = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("growth_rate")) {
-            pokemon.growth_rate = try parser.eatEnumValue(common.GrowthRate);
-        } else |_| if (parser.eatField("egg_groups")) {
-            const egg_index = try parser.eatIndexMax(2);
-            const egg_group = try parser.eatEnumValue(common.EggGroup);
-            switch (egg_index) {
-                0 => pokemon.egg_group1 = egg_group,
-                1 => pokemon.egg_group2 = egg_group,
-                else => unreachable,
+        },
+        c("pokeball_items") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.pokeball_items.len)
+                return error.Error;
+            const given_item = game.pokeball_items[index];
+
+            switch (m(try parser.parse(parse.anyField))) {
+                c("item") => given_item.item.* = try parser.parse(parselu16v),
+                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
+                else => return error.NoField,
             }
-        } else |_| if (parser.eatField("abilities")) {
-            const ability_index = try parser.eatIndexMax(pokemon.abilities.len);
-            pokemon.abilities[ability_index] = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("color")) {
-            pokemon.color = try parser.eatEnumValue(common.Color);
-        } else |_| if (parser.eatField("height")) {
-            pokemon.height = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("weight")) {
-            pokemon.weight = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("tms")) {
-            const tm_index = try parser.eatIndexMax(game.tms1.len + game.tms2.len);
-            const real_index = if (tm_index < game.tms1.len) tm_index else tm_index + game.hms.len;
-            const value = try parser.eatBoolValue();
-            const learnset = &pokemon.machine_learnset;
-            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, real_index), value));
-        } else |_| if (parser.eatField("hms")) {
-            const hm_index = try parser.eatIndexMax(game.hms.len);
-            const value = try parser.eatBoolValue();
-            const learnset = &pokemon.machine_learnset;
-            learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, hm_index + game.tms1.len), value));
-        } else |_| if (parser.eatField("moves")) {
-            const level_up_moves_file = try game.level_up_moves.nodes.items[pokemon_index].asFile();
-            const bytes = level_up_moves_file.data;
-            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
-            const index = try parser.eatIndexMax(level_up_moves.len);
-            const level_up_move = &level_up_moves[index];
-
-            if (parser.eatField("id")) {
-                level_up_move.id = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("level")) {
-                level_up_move.level = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("evos")) {
-            const evos_file = try game.evolutions.nodes.items[pokemon_index].asFile();
-            const bytes = evos_file.data;
-            const rem = bytes.len % @sizeOf(gen5.Evolution);
-            const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-            const evo_index = try parser.eatIndexMax(evos.len);
-            const evo = &evos[evo_index];
-
-            if (parser.eatField("method")) {
-                evo.method = try parser.eatEnumValue(gen5.Evolution.Method);
-            } else |_| if (parser.eatField("param")) {
-                evo.param = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| if (parser.eatField("target")) {
-                evo.target = lu16.init(try parser.eatUnsignedValue(u16, 10));
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("tms")) {
-        const tm_index = try parser.eatIndexMax(game.tms1.len + game.tms2.len);
-        const value = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        if (tm_index < game.tms1.len) {
-            game.tms1[tm_index] = value;
-        } else {
-            game.tms2[tm_index - game.tms1.len] = value;
-        }
-    } else |_| if (parser.eatField("hms")) {
-        const hm_index = try parser.eatIndexMax(game.hms.len);
-        game.hms[hm_index] = lu16.init(try parser.eatUnsignedValue(u16, 10));
-    } else |_| if (parser.eatField("items")) {
-        const items = game.itemdata.nodes.items;
-        const item_index = try parser.eatIndexMax(items.len);
-        const item = try items[item_index].asDataFile(gen5.Item);
-
-        if (parser.eatField("price")) {
-            item.price = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("battle_effect")) {
-            item.battle_effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("gain")) {
-            item.gain = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("berry")) {
-            item.berry = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("fling_effect")) {
-            item.fling_effect = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("fling_power")) {
-            item.fling_power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("natural_gift_power")) {
-            item.natural_gift_power = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("flag")) {
-            item.flag = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pocket")) {
-            item.pocket.pocket = try parser.eatEnumValue(gen5.PocketKind);
-        } else |_| if (parser.eatField("type")) {
-            item.type = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("category")) {
-            item.category = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("category2")) {
-            item.category2 = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("category3")) {
-            item.category3 = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("index")) {
-            item.index = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("anti_index")) {
-            item.anti_index = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("statboosts")) {
-            if (parser.eatField("hp")) {
-                item.statboosts.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("level")) {
-                item.statboosts.level = try parser.eatUnsignedValue(u1, 10);
-            } else |_| if (parser.eatField("evolution")) {
-                item.statboosts.evolution = try parser.eatUnsignedValue(u1, 10);
-            } else |_| if (parser.eatField("attack")) {
-                item.statboosts.attack = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("defense")) {
-                item.statboosts.defense = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                item.statboosts.sp_attack = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                item.statboosts.sp_defense = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("speed")) {
-                item.statboosts.speed = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("accuracy")) {
-                item.statboosts.accuracy = try parser.eatUnsignedValue(u4, 10);
-            } else |_| if (parser.eatField("crit")) {
-                item.statboosts.crit = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("pp")) {
-                item.statboosts.pp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("target")) {
-                item.statboosts.target = try parser.eatUnsignedValue(u8, 10);
-            } else |_| if (parser.eatField("target2")) {
-                item.statboosts.target2 = try parser.eatUnsignedValue(u8, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("ev_yield")) {
-            if (parser.eatField("hp")) {
-                item.ev_yield.hp = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("attack")) {
-                item.ev_yield.attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("defense")) {
-                item.ev_yield.defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("speed")) {
-                item.ev_yield.speed = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_attack")) {
-                item.ev_yield.sp_attack = try parser.eatUnsignedValue(u2, 10);
-            } else |_| if (parser.eatField("sp_defense")) {
-                item.ev_yield.sp_defense = try parser.eatUnsignedValue(u2, 10);
-            } else |_| {
-                return error.NoField;
-            }
-        } else |_| if (parser.eatField("hp_restore")) {
-            item.hp_restore = try parser.eatUnsignedValue(u8, 10);
-        } else |_| if (parser.eatField("pp_restore")) {
-            item.pp_restore = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("zones")) {
-        const wild_pokemons = game.wild_pokemons.nodes.items;
-        const zone_index = try parser.eatIndexMax(wild_pokemons.len);
-        const wilds = try wild_pokemons[zone_index].asDataFile(gen5.WildPokemons);
-        try parser.eatField("wild");
-
-        inline for ([_][]const u8{
-            "grass",
-            "dark_grass",
-            "rustling_grass",
-            "surf",
-            "ripple_surf",
-            "fishing",
-            "ripple_fishing",
-        }) |area_name, j| skip: {
-            parser.eatField(area_name) catch break :skip;
-            if (parser.eatField("encounter_rate")) {
-                wilds.rates[j] = try parser.eatUnsignedValue(u8, 10);
-                return;
-            } else |_| if (parser.eatField("pokemons")) {
-                const area = &@field(wilds, area_name);
-                const wild_index = try parser.eatIndexMax(area.len);
-                const wild = &area[wild_index];
-
-                if (parser.eatField("min_level")) {
-                    wild.min_level = try parser.eatUnsignedValue(u8, 10);
-                    return;
-                } else |_| if (parser.eatField("max_level")) {
-                    wild.max_level = try parser.eatUnsignedValue(u8, 10);
-                    return;
-                } else |_| if (parser.eatField("species")) {
-                    wild.species.setSpecies(try parser.eatUnsignedValue(u10, 10));
-                    return;
-                } else |_| if (parser.eatField("form")) {
-                    wild.species.setForm(try parser.eatUnsignedValue(u6, 10));
-                    return;
-                } else |_| {
-                    return error.NoField;
-                }
-            } else |_| {}
-        }
-
-        return error.NoField;
-    } else |_| if (parser.eatField("static_pokemons")) {
-        const static_mon_index = try parser.eatIndexMax(game.static_pokemons.len);
-        const static_mon = game.static_pokemons[static_mon_index];
-
-        if (parser.eatField("species")) {
-            static_mon.data().wild_battle.species = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("level")) {
-            static_mon.data().wild_battle.level = try parser.eatUnsignedValue(u8, 10);
-        } else |_| {
-            return error.NoField;
-        }
-    } else |_| if (parser.eatField("pokeball_items")) {
-        const given_index = try parser.eatIndexMax(game.pokeball_items.len);
-        const given_item = game.pokeball_items[given_index];
-
-        if (parser.eatField("item")) {
-            given_item.item.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| if (parser.eatField("amount")) {
-            given_item.amount.* = lu16.init(try parser.eatUnsignedValue(u16, 10));
-        } else |_| {
-            return error.NoField;
-        }
-    } else |err| {
-        return error.NoField;
+        },
+        else => return error.NoField,
     }
-}
-
-test "" {
-    // tm35-load imports the "load-apply-test.zig" file, which
-    // tests both tm35-load and tm35-apply
 }

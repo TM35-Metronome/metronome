@@ -135,55 +135,40 @@ pub fn main2(
     var root_dir = out_dir.openDir("root", .{}) catch |err| return errors.openErr(stdio.err, "root", err);
     defer root_dir.close();
 
-    out_dir.writeFile("arm9", nds_rom.arm9) catch |err| return errors.writeErr(stdio.err, "arm9", err);
-    out_dir.writeFile("arm7", nds_rom.arm7) catch |err| return errors.writeErr(stdio.err, "arm7", err);
-    out_dir.writeFile("banner", &mem.toBytes(nds_rom.banner)) catch |err| return errors.writeErr(stdio.err, "banner", err);
-    if (nds_rom.hasNitroFooter())
-        out_dir.writeFile("nitro_footer", &mem.toBytes(nds_rom.nitro_footer)) catch |err| return errors.writeErr(stdio.err, "nitro_footer", err);
+    out_dir.writeFile("arm9", nds_rom.arm9()) catch |err| return errors.writeErr(stdio.err, "arm9", err);
+    out_dir.writeFile("arm7", nds_rom.arm7()) catch |err| return errors.writeErr(stdio.err, "arm7", err);
+    out_dir.writeFile("banner", mem.asBytes(nds_rom.banner())) catch |err| return errors.writeErr(stdio.err, "banner", err);
+    out_dir.writeFile("nitro_footer", nds_rom.nitroFooter()) catch |err| return errors.writeErr(stdio.err, "nitro_footer", err);
 
-    writeOverlays(arm9_overlays_dir, nds_rom.arm9_overlay_table, nds_rom.arm9_overlay_files) catch |err| return errors.writeErr(stdio.err, "arm9 overlays", err);
-    writeOverlays(arm7_overlays_dir, nds_rom.arm7_overlay_table, nds_rom.arm7_overlay_files) catch |err| return errors.writeErr(stdio.err, "arm7 overlays", err);
+    const file_system = nds_rom.fileSystem();
+    writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return errors.writeErr(stdio.err, "arm9 overlays", err);
+    writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable()) catch |err| return errors.writeErr(stdio.err, "arm7 overlays", err);
 
-    writeFs(root_dir, nds.fs.Nitro, nds_rom.root) catch |err| return errors.writeErr(stdio.err, "root file system", err);
+    writeFs(root_dir, file_system, nds.fs.root) catch |err| return errors.writeErr(stdio.err, "root file system", err);
     return 0;
 }
 
-fn writeFs(dir: fs.Dir, comptime Fs: type, folder: *Fs) anyerror!void {
-    for (folder.nodes.items) |node| {
-        switch (node.kind) {
-            .file => |f| {
-                const Tag = @TagType(nds.fs.Nitro.File);
-                switch (Fs) {
-                    nds.fs.Nitro => switch (f.*) {
-                        .binary => |bin| try dir.writeFile(node.name, bin.data),
-                        .narc => |narc| {
-                            try dir.makeDir(node.name);
-                            var narc_dir = try dir.openDir(node.name, .{});
-                            defer narc_dir.close();
-
-                            try writeFs(narc_dir, nds.fs.Narc, narc);
-                        },
-                    },
-                    nds.fs.Narc => try dir.writeFile(node.name, f.data),
-                    else => comptime unreachable,
-                }
-            },
-            .folder => |f| {
-                try dir.makeDir(node.name);
-                var sub_dir = try dir.openDir(node.name, .{});
+fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!void {
+    var it = file_system.iterate(folder);
+    while (it.next()) |entry| {
+        switch (entry.handle) {
+            .file => |file| try dir.writeFile(entry.name, file_system.fileData(file)),
+            .dir => |sub_folder| {
+                try dir.makeDir(entry.name);
+                var sub_dir = try dir.openDir(entry.name, .{});
                 defer sub_dir.close();
 
-                try writeFs(sub_dir, Fs, folder);
+                try writeFs(sub_dir, file_system, sub_folder);
             },
         }
     }
 }
 
-fn writeOverlays(dir: fs.Dir, overlays: []const nds.Overlay, files: []const []const u8) !void {
+fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay) !void {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
 
-    for (overlays) |overlay, i|
-        try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, &mem.toBytes(overlay));
-    for (files) |file, i|
-        try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, file);
+    for (overlays) |*overlay, i| {
+        try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
+        try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, file_system.fileData(.{ .i = overlay.file_id.value() }));
+    }
 }

@@ -848,7 +848,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
 
-        .color_flip = gen3.BasePokemon.ColorFlip{
+        .color = common.Color{
             .color = .red,
             .flip = false,
         },
@@ -895,7 +895,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
 
-        .color_flip = gen3.BasePokemon.ColorFlip{
+        .color = common.Color{
             .color = .green,
             .flip = false,
         },
@@ -945,7 +945,7 @@ gen3.BasePokemon{
     .abilities = [_]u8{ 26, 0 },
     .safari_zone_rate = 0,
 
-    .color_flip = gen3.BasePokemon.ColorFlip{
+    .color = common.Color{
         .color = .blue,
         .flip = false,
     },

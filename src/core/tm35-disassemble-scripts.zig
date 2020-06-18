@@ -113,7 +113,7 @@ pub fn main2(
     } else |err| err;
 
     file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
-    if (nds.Rom.fromFile(file, allocator)) |nds_rom| {
+    if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
             outputGen4GameScripts(game.*, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -183,10 +183,8 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
 }
 
 fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
-    for (game.scripts.nodes.items) |node, script_i| {
-        const script_file = node.asFile() catch continue;
-        const script_data = script_file.data;
-
+    for (game.scripts.fat) |_, script_i| {
+        const script_data = game.scripts.fileData(.{ .i = @intCast(u32, script_i) });
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();
 
@@ -247,9 +245,8 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
 }
 
 fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
-    for (game.scripts.nodes.items) |node, script_i| {
-        const script_file = node.asFile() catch continue;
-        const script_data = script_file.data;
+    for (game.scripts.fat) |fat, script_i| {
+        const script_data = game.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();

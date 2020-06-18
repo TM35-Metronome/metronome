@@ -40,9 +40,10 @@ pub const BasePokemon = extern struct {
     // Memory layout
     // TMS 01-92, HMS 01-08
     machine_learnset: lu128,
+    pad: [2]u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 42);
+        std.debug.assert(@sizeOf(@This()) == 44);
     }
 };
 
@@ -150,9 +151,10 @@ pub const Trainer = extern struct {
     items: [4]lu16,
     ai: lu32,
     battle_type2: u8,
+    pad: [3]u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 17);
+        std.debug.assert(@sizeOf(@This()) == 20);
     }
 
     pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
@@ -248,27 +250,18 @@ pub const LevelUpMove = packed struct {
 pub const DpptWildPokemons = extern struct {
     grass_rate: lu32,
     grass: [12]Grass,
-    swarm_replacements: [2]Replacement, // Replaces grass[0, 1]
-    day_replacements: [2]Replacement, // Replaces grass[2, 3]
-    night_replacements: [2]Replacement, // Replaces grass[2, 3]
-    radar_replacements: [4]Replacement, // Replaces grass[4, 5, 10, 11]
-    unknown_replacements: [6]Replacement, // ???
-    gba_replacements: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
+    swarm_replace: [2]Replacement, // Replaces grass[0, 1]
+    day_replace: [2]Replacement, // Replaces grass[2, 3]
+    night_replace: [2]Replacement, // Replaces grass[2, 3]
+    radar_replace: [4]Replacement, // Replaces grass[4, 5, 10, 11]
+    unknown_replace: [6]Replacement, // ???
+    gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
 
-    surf_rate: lu32,
-    surf: [5]Sea,
-
-    sea_unknown_rate: lu32,
-    sea_unknown: [5]Sea,
-
-    old_rod_rate: lu32,
-    old_rod: [5]Sea,
-
-    good_rod_rate: lu32,
-    good_rod: [5]Sea,
-
-    super_rod_rate: lu32,
-    super_rod: [5]Sea,
+    surf: Sea,
+    sea_unknown: Sea,
+    old_rod: Sea,
+    good_rod: Sea,
+    super_rod: Sea,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 424);
@@ -286,6 +279,11 @@ pub const DpptWildPokemons = extern struct {
     };
 
     pub const Sea = extern struct {
+        rate: lu32,
+        mons: [5]SeaMon,
+    };
+
+    pub const SeaMon = extern struct {
         max_level: u8,
         min_level: u8,
         pad1: [2]u8,
@@ -338,31 +336,17 @@ pub const HgssWildPokemons = extern struct {
     };
 };
 
-pub const Pocket = packed struct {
-    pocket: PocketKind,
-    unknown: u4,
-};
-
-pub const PocketKind = packed enum(u4) {
+pub const Pocket = packed enum(u4) {
     items = 0x00,
     tms_hms = 0x01,
     berries = 0x02,
     key_items = 0x03,
-    unknown_0x04 = 0x04,
-    unknown_0x05 = 0x05,
-    unknown_0x06 = 0x06,
-    unknown_0x07 = 0x07,
-    unknown_0x08 = 0x08,
     balls = 0x09,
-    unknown_0xa = 0xA,
-    unknown_0xb = 0xB,
-    unknown_0xc = 0xC,
-    unknown_0xd = 0xD,
-    unknown_0xe = 0xE,
-    unknown_0xf = 0xF,
+    _,
 };
 
-pub const Item = extern struct {
+// https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
+pub const Item = packed struct {
     price: lu16,
     battle_effect: u8,
     gain: u8,
@@ -372,6 +356,7 @@ pub const Item = extern struct {
     natural_gift_power: u8,
     flag: u8,
     pocket: Pocket,
+    unknown: u4,
     type: u8,
     category: u8,
     category2: lu16,
@@ -380,8 +365,17 @@ pub const Item = extern struct {
     ev_yield: common.EvYield,
     hp_restore: u8,
     pp_restore: u8,
-    happy: [3]u8,
-    padding: [2]u8,
+    happy1: u8,
+    happy2: u8,
+    happy3: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    padding4: u8,
+    padding5: u8,
+    padding6: u8,
+    padding7: u8,
+    padding8: u8,
 
     pub const Boost = packed struct {
         hp: u2,
@@ -398,6 +392,10 @@ pub const Item = extern struct {
         target: u8,
         target2: u8,
     };
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 36);
+    }
 };
 
 const PokeballItem = struct {
@@ -410,28 +408,38 @@ pub const Game = struct {
     allocator: *mem.Allocator,
 
     starters: [3]*lu16,
-    pokemons: *const nds.fs.Narc,
-    evolutions: *const nds.fs.Narc,
-    moves: *const nds.fs.Narc,
-    level_up_moves: *const nds.fs.Narc,
-    trainers: *const nds.fs.Narc,
-    parties: *const nds.fs.Narc,
-    wild_pokemons: *const nds.fs.Narc,
-    itemdata: *const nds.fs.Narc,
-    scripts: *const nds.fs.Narc,
+    pokemons: []BasePokemon,
+    moves: []Move,
+    trainers: []Trainer,
+    wild_pokemons: union {
+        dppt: []DpptWildPokemons,
+        hgss: []HgssWildPokemons,
+    },
+    items: []Item,
     tms: []lu16,
     hms: []lu16,
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
 
-    pub fn fromRom(allocator: *mem.Allocator, nds_rom: nds.Rom) !Game {
-        const info = try getOffsets(&nds_rom.header.game_title, &nds_rom.header.gamecode);
-        const hm_tm_prefix_index = mem.indexOf(u8, nds_rom.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+    evolutions: nds.fs.Fs,
+    level_up_moves: nds.fs.Fs,
+    parties: nds.fs.Fs,
+    scripts: nds.fs.Fs,
+
+    pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
+        try nds_rom.decodeArm9();
+        const header = nds_rom.header();
+        const arm9 = nds_rom.arm9();
+        const file_system = nds_rom.fileSystem();
+        const arm9_overlay_table = nds_rom.arm9OverlayTable();
+
+        const info = try getOffsets(&header.game_title, &header.gamecode);
+        const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = mem.bytesAsSlice(lu16, nds_rom.arm9[hm_tm_index..][0..hm_tms_len]);
+        const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
 
-        const scripts = try getNarc(nds_rom.root, info.scripts);
+        const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -444,9 +452,9 @@ pub const Game = struct {
 
             .starters = switch (info.starters) {
                 .arm9 => |offset| blk: {
-                    if (nds_rom.arm9.len < offset + offsets.starters_len)
+                    if (arm9.len < offset + offsets.starters_len)
                         return error.CouldNotFindStarters;
-                    const starters_section = mem.bytesAsSlice(lu16, nds_rom.arm9[offset..][0..offsets.starters_len]);
+                    const starters_section = mem.bytesAsSlice(lu16, arm9[offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -454,14 +462,10 @@ pub const Game = struct {
                     };
                 },
                 .overlay9 => |overlay| blk: {
-                    if (nds_rom.arm9_overlay_files.len <= overlay.file)
-                        return error.CouldNotFindStarters;
-
-                    const file = nds_rom.arm9_overlay_files[overlay.file];
-                    if (file.len < overlay.offset + offsets.starters_len)
-                        return error.CouldNotFindStarters;
-
-                    const starters_section = mem.bytesAsSlice(lu16, file[overlay.offset..][0..offsets.starters_len]);
+                    const overlay_entry = arm9_overlay_table[overlay.file];
+                    const fat_entry = file_system.fat[overlay_entry.file_id.value()];
+                    const file_data = file_system.data[fat_entry.start.value()..fat_entry.end.value()];
+                    const starters_section = mem.bytesAsSlice(lu16, file_data[overlay.offset..][0..offsets.starters_len]);
                     break :blk [_]*lu16{
                         &starters_section[0],
                         &starters_section[2],
@@ -469,19 +473,32 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try getNarc(nds_rom.root, info.pokemons),
-            .evolutions = try getNarc(nds_rom.root, info.evolutions),
-            .level_up_moves = try getNarc(nds_rom.root, info.level_up_moves),
-            .moves = try getNarc(nds_rom.root, info.moves),
-            .trainers = try getNarc(nds_rom.root, info.trainers),
-            .parties = try getNarc(nds_rom.root, info.parties),
-            .wild_pokemons = try getNarc(nds_rom.root, info.wild_pokemons),
-            .itemdata = try getNarc(nds_rom.root, info.itemdata),
-            .scripts = scripts,
+            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(0, BasePokemon),
+            .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
+            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
+            .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
+            .wild_pokemons = blk: {
+                const narc = try getNarc(file_system, info.wild_pokemons);
+                switch (info.version) {
+                    .diamond,
+                    .pearl,
+                    .platinum,
+                    => break :blk .{ .dppt = try narc.toSlice(0, DpptWildPokemons) },
+                    .heart_gold,
+                    .soul_silver,
+                    => break :blk .{ .hgss = try narc.toSlice(0, HgssWildPokemons) },
+                    else => unreachable,
+                }
+            },
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
             .static_pokemons = commands.static_pokemons,
             .pokeball_items = commands.pokeball_items,
+
+            .parties = try getNarc(file_system, info.parties),
+            .evolutions = try getNarc(file_system, info.evolutions),
+            .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .scripts = scripts,
         };
     }
 
@@ -495,7 +512,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(version: common.Version, scripts: *const nds.fs.Narc, allocator: *mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
         if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
@@ -512,9 +529,8 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.nodes.items) |node, script_i| {
-            const script_file = node.asFile() catch continue;
-            const script_data = script_file.data;
+        for (scripts.fat) |fat, script_i| {
+            const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.resize(0) catch unreachable;
 
             for (script.getScriptOffsets(script_data)) |relative_offset, i| {
@@ -617,11 +633,8 @@ pub const Game = struct {
         return error.NotGen4Game;
     }
 
-    pub fn getNarc(file_system: *nds.fs.Nitro, path: []const u8) !*const nds.fs.Narc {
-        const file = file_system.getFile(path) orelse return error.FileNotFound;
-        switch (file.*) {
-            .binary => return error.FileNotNarc,
-            .narc => |res| return res,
-        }
+    pub fn getNarc(file_system: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
+        const file = try file_system.openFileData(nds.fs.root, path);
+        return try nds.fs.Fs.fromNarc(file);
     }
 };
