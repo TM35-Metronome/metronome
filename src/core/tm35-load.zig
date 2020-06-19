@@ -912,3 +912,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 }
+
+test "" {
+    std.meta.refAllDecls(@This());
+}

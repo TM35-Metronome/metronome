@@ -3,8 +3,13 @@ const std = @import("std");
 const common = @import("common.zig");
 const rom = @import("rom.zig");
 
+pub const encodings = @import("gen4/encodings.zig");
 pub const offsets = @import("gen4/offsets.zig");
 pub const script = @import("gen4/script.zig");
+
+comptime {
+    _ = encodings;
+}
 
 const mem = std.mem;
 
