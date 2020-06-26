@@ -167,157 +167,142 @@ fn getOffsets(
     software_version: u8,
 ) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons
-    const trainer_searcher = Searcher(gen3.Trainer, &[_][]const []const u8{
+    const Trainers = Searcher(gen3.Trainer, &[_][]const []const u8{
         &[_][]const u8{"party"},
         &[_][]const u8{"name"},
-    }){ .data = data };
-    const trainers = switch (version) {
-        .emerald => trainer_searcher.findSlice3(
-            &em_first_trainers,
-            &em_last_trainers,
-        ),
-        .ruby, .sapphire => trainer_searcher.findSlice3(
-            &rs_first_trainers,
-            &rs_last_trainers,
-        ),
-        .fire_red, .leaf_green => trainer_searcher.findSlice3(
-            &frls_first_trainers,
-            &frls_last_trainers,
-        ),
-        else => null,
-    } orelse return error.UnableToFindTrainerOffset;
-
-    const move_searcher = Searcher(gen3.Move, &[_][]const []const u8{}){ .data = data };
-    const moves = move_searcher.findSlice3(
-        &first_moves,
-        &last_moves,
-    ) orelse return error.UnableToFindMoveOffset;
-
-    const machine_searcher = Searcher(lu64, &[_][]const []const u8{}){ .data = data };
-    const machine_learnset = machine_searcher.findSlice3(
-        &first_machine_learnsets,
-        &last_machine_learnsets,
-    ) orelse return error.UnableToFindTmHmLearnsetOffset;
-
-    const pokemons_searcher = Searcher(gen3.BasePokemon, &[_][]const []const u8{
+    });
+    const Moves = Searcher(gen3.Move, &[_][]const []const u8{});
+    const Machines = Searcher(lu64, &[_][]const []const u8{});
+    const Pokemons = Searcher(gen3.BasePokemon, &[_][]const []const u8{
         &[_][]const u8{"padding"},
         &[_][]const u8{"egg_group1_pad"},
         &[_][]const u8{"egg_group2_pad"},
-    }){ .data = data };
-    const pokemons = pokemons_searcher.findSlice3(
-        &first_pokemons,
-        &last_pokemons,
-    ) orelse return error.UnableToFindBaseStatsOffset;
-
-    const evolution_searcher = Searcher([5]gen3.Evolution, &[_][]const []const u8{&[_][]const u8{"padding"}}){ .data = data };
-    const evolution_table = evolution_searcher.findSlice3(
-        &first_evolutions,
-        &last_evolutions,
-    ) orelse return error.UnableToFindEvolutionTableOffset;
-
-    const level_up_learnset_pointers = blk: {
-        const level_upRef = gen3.Ptr(gen3.LevelUpMove);
-        const level_up_searcher = Searcher(u8, &[_][]const []const u8{}){ .data = data };
-
-        var first_pointers: [first_levelup_learnsets.len]level_upRef = undefined;
-        for (first_levelup_learnsets) |learnset, i| {
-            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindlevel_upLearnsetOffset;
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            first_pointers[i] = try level_upRef.init(@intCast(u32, offset));
-        }
-
-        var last_pointers: [last_levelup_learnsets.len]level_upRef = undefined;
-        for (last_levelup_learnsets) |learnset, i| {
-            const p = level_up_searcher.findSlice(learnset) orelse return error.UnableToFindlevel_upLearnsetOffset;
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            last_pointers[i] = try level_upRef.init(@intCast(u32, offset));
-        }
-
-        const pointer_searcher = Searcher(level_upRef, &[_][]const []const u8{}){ .data = data };
-        break :blk pointer_searcher.findSlice3(&first_pointers, &last_pointers) orelse return error.UnableToFindlevel_upLearnsetOffset;
-    };
-
-    const hm_tm_searcher = Searcher(lu16, &[_][]const []const u8{}){ .data = data };
-    const hms_slice = hm_tm_searcher.findSlice(&hms) orelse return error.UnableToFindHmOffset;
-
-    // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
-    //       if it turns out that both tables are actually used. For now, I'll
-    //       assume that the first table is the only one used.
-    const tms_slice = hm_tm_searcher.findSlice(&tms) orelse return error.UnableToFindTmOffset;
-
-    const items_searcher = Searcher(gen3.Item, &[_][]const []const u8{
+    });
+    const Evos = Searcher([5]gen3.Evolution, &[_][]const []const u8{&[_][]const u8{"padding"}});
+    const LvlUpMoves = Searcher(u8, &[_][]const []const u8{});
+    const HmTms = Searcher(lu16, &[_][]const []const u8{});
+    const Items = Searcher(gen3.Item, &[_][]const []const u8{
         &[_][]const u8{"name"},
         &[_][]const u8{"description"},
         &[_][]const u8{"field_use_func"},
         &[_][]const u8{"battle_use_func"},
-    }){ .data = data };
-    const items = switch (version) {
-        .emerald => items_searcher.findSlice3(
-            &em_first_items,
-            &em_last_items,
-        ),
-        .ruby, .sapphire => items_searcher.findSlice3(
-            &rs_first_items,
-            &rs_last_items,
-        ),
-        .fire_red, .leaf_green => items_searcher.findSlice3(
-            &frlg_first_items,
-            &frlg_last_items,
-        ),
-        else => null,
-    } orelse return error.UnableToFindItemsOffset;
-
-    const wild_pokemon_headers_searcher = Searcher(gen3.WildPokemonHeader, &[_][]const []const u8{
+    });
+    const WildPokemonHeaders = Searcher(gen3.WildPokemonHeader, &[_][]const []const u8{
         &[_][]const u8{"pad"},
         &[_][]const u8{"land"},
         &[_][]const u8{"surf"},
         &[_][]const u8{"rock_smash"},
         &[_][]const u8{"fishing"},
-    }){ .data = data };
-    const maybe_wild_pokemon_headers = switch (version) {
-        .emerald => wild_pokemon_headers_searcher.findSlice3(
-            &em_first_wild_mon_headers,
-            &em_last_wild_mon_headers,
-        ),
-        .ruby, .sapphire => wild_pokemon_headers_searcher.findSlice3(
-            &rs_first_wild_mon_headers,
-            &rs_last_wild_mon_headers,
-        ),
-        .fire_red, .leaf_green => wild_pokemon_headers_searcher.findSlice3(
-            &frlg_first_wild_mon_headers,
-            &frlg_last_wild_mon_headers,
-        ),
-        else => null,
-    };
-    const wild_pokemon_headers = maybe_wild_pokemon_headers orelse return error.UnableToFindWildPokemonHeaders;
-
-    const map_header_searcher = Searcher(gen3.MapHeader, &[_][]const []const u8{
+    });
+    const MapHeaders = Searcher(gen3.MapHeader, &[_][]const []const u8{
         &[_][]const u8{"map_data"},
         &[_][]const u8{"map_events"},
         &[_][]const u8{"map_scripts"},
         &[_][]const u8{"map_connections"},
         &[_][]const u8{"pad"},
-    }){ .data = data };
-    const maybe_map_headers = switch (version) {
+    });
+    const LvlUpRef = gen3.Ptr(gen3.LevelUpMove);
+    const LvlUpRefs = Searcher(LvlUpRef, &[_][]const []const u8{});
+    const U8Ptr = gen3.Ptr(u8);
+    const U8Ptrs = Searcher(U8Ptr, &[_][]const []const u8{});
+    const Strings = Searcher(u8, &[_][]const []const u8{});
+
+    const trainers = switch (version) {
+        .emerald => try Trainers.find4(data, &em_first_trainers, &em_last_trainers),
         .ruby,
         .sapphire,
-        => map_header_searcher.findSlice3(
-            &rs_first_map_headers,
-            &rs_last_map_headers,
-        ),
-        .emerald => map_header_searcher.findSlice3(
-            &em_first_map_headers,
-            &em_last_map_headers,
-        ),
+        => try Trainers.find4(data, &rs_first_trainers, &rs_last_trainers),
         .fire_red,
         .leaf_green,
-        => map_header_searcher.findSlice3(
-            &frlg_first_map_headers,
-            &frlg_last_map_headers,
-        ),
-        else => null,
+        => try Trainers.find4(data, &frls_first_trainers, &frls_last_trainers),
+        else => unreachable,
     };
-    const map_headers = maybe_map_headers orelse return error.UnableToFindMapHeaders;
+    const moves = try Moves.find4(data, &first_moves, &last_moves);
+    const machine_learnset = try Machines.find4(data, &first_machine_learnsets, &last_machine_learnsets);
+    const pokemons = try Pokemons.find4(data, &first_pokemons, &last_pokemons);
+    const evolution_table = try Evos.find4(data, &first_evolutions, &last_evolutions);
+
+    const level_up_learnset_pointers = blk: {
+        var first_pointers: [first_levelup_learnsets.len]LvlUpRef = undefined;
+        for (first_levelup_learnsets) |learnset, i| {
+            const p = try LvlUpMoves.find2(data, learnset);
+            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
+            first_pointers[i] = try LvlUpRef.init(@intCast(u32, offset));
+        }
+
+        var last_pointers: [last_levelup_learnsets.len]LvlUpRef = undefined;
+        for (last_levelup_learnsets) |learnset, i| {
+            const p = try LvlUpMoves.find2(data, learnset);
+            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
+            last_pointers[i] = try LvlUpRef.init(@intCast(u32, offset));
+        }
+
+        break :blk try LvlUpRefs.find4(data, &first_pointers, &last_pointers);
+    };
+
+    debug.warn("test1\n", .{});
+    const pokemon_names = blk: {
+        var first_pointers: [first_pokemon_names.len]U8Ptr = undefined;
+        for (first_pokemon_names) |name, i| {
+            debug.warn("test3 {x} {}\n", .{ name, i });
+
+            const p = try Strings.find2(data, name);
+            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
+            first_pointers[i] = try U8Ptr.init(@intCast(u32, offset));
+        }
+
+        debug.warn("test2\n", .{});
+        var last_pointers: [last_pokemon_names.len]U8Ptr = undefined;
+        for (last_pokemon_names) |name, i| {
+            debug.warn("test4 {x} {}\n", .{ name, i });
+            const p = try Strings.find2(data, name);
+            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
+            last_pointers[i] = try U8Ptr.init(@intCast(u32, offset));
+        }
+
+        break :blk try U8Ptrs.find4(data, &first_pointers, &last_pointers);
+    };
+    debug.warn("{}\n", .{@ptrToInt(pokemon_names.ptr) - @ptrToInt(data.ptr)});
+
+    const hms_slice = try HmTms.find2(data, &hms);
+
+    // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
+    //       if it turns out that both tables are actually used. For now, I'll
+    //       assume that the first table is the only one used.
+    const tms_slice = try HmTms.find2(data, &tms);
+
+    const items = switch (version) {
+        .emerald => try Items.find4(data, &em_first_items, &em_last_items),
+        .ruby,
+        .sapphire,
+        => try Items.find4(data, &rs_first_items, &rs_last_items),
+        .fire_red,
+        .leaf_green,
+        => try Items.find4(data, &frlg_first_items, &frlg_last_items),
+        else => unreachable,
+    };
+
+    const wild_pokemon_headers = switch (version) {
+        .emerald => try WildPokemonHeaders.find4(data, &em_first_wild_mon_headers, &em_last_wild_mon_headers),
+        .ruby,
+        .sapphire,
+        => try WildPokemonHeaders.find4(data, &rs_first_wild_mon_headers, &rs_last_wild_mon_headers),
+        .fire_red,
+        .leaf_green,
+        => try WildPokemonHeaders.find4(data, &frlg_first_wild_mon_headers, &frlg_last_wild_mon_headers),
+        else => unreachable,
+    };
+
+    const map_headers = switch (version) {
+        .emerald => try MapHeaders.find4(data, &em_first_map_headers, &em_last_map_headers),
+        .ruby,
+        .sapphire,
+        => try MapHeaders.find4(data, &rs_first_map_headers, &rs_last_map_headers),
+        .fire_red,
+        .leaf_green,
+        => try MapHeaders.find4(data, &frlg_first_map_headers, &frlg_last_map_headers),
+        else => unreachable,
+    };
 
     return offsets.Info{
         .game_title = game_title,
@@ -345,42 +330,40 @@ fn getOffsets(
 // fields and nested fields.
 pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []const u8) type {
     return struct {
-        data: []const u8,
-
-        pub fn find(searcher: @This(), item: T) ?*const T {
-            const slice = searcher.findSlice(&[_]T{item}) orelse return null;
+        pub fn find1(data: []const u8, item: T) !*const T {
+            const slice = try find2(data, &[_]T{item});
             return &slice[0];
         }
 
-        pub fn findSlice(searcher: @This(), items: []const T) ?[]const T {
-            return searcher.findSlice3(items, &[_]T{});
+        pub fn find2(data: []const u8, items: []const T) ![]const T {
+            return find4(data, items, &[_]T{});
         }
 
-        pub fn findSlice2(searcher: @This(), start: T, end: T) ?[]const T {
-            return searcher.findSlice3(&[_]T{start}, &[_]T{end}) orelse return null;
+        pub fn find3(data: []const u8, start: T, end: T) ![]const T {
+            return find4(data, &[_]T{start}, &[_]T{end});
         }
 
-        pub fn findSlice3(searcher: @This(), start: []const T, end: []const T) ?[]const T {
-            const found_start = searcher.findSliceHelper(0, 1, start) orelse return null;
+        pub fn find4(data: []const u8, start: []const T, end: []const T) ![]const T {
+            const found_start = try findSliceHelper(data, 0, 1, start);
             const start_offset = @ptrToInt(found_start.ptr);
-            const next_offset = (start_offset - @ptrToInt(searcher.data.ptr)) + start.len * @sizeOf(T);
+            const next_offset = (start_offset - @ptrToInt(data.ptr)) + start.len * @sizeOf(T);
 
-            const found_end = searcher.findSliceHelper(next_offset, @sizeOf(T), end) orelse return null;
+            const found_end = try findSliceHelper(data, next_offset, @sizeOf(T), end);
             const end_offset = @ptrToInt(found_end.ptr) + found_end.len * @sizeOf(T);
             const len = @divExact(end_offset - start_offset, @sizeOf(T));
 
             return found_start.ptr[0..len];
         }
 
-        fn findSliceHelper(searcher: @This(), offset: usize, skip: usize, items: []const T) ?[]const T {
+        fn findSliceHelper(data: []const u8, offset: usize, skip: usize, items: []const T) ![]const T {
             const bytes = items.len * @sizeOf(T);
-            if (searcher.data.len < bytes)
-                return null;
+            if (data.len < bytes)
+                return error.DataNotFound;
 
             var i: usize = offset;
-            const end = searcher.data.len - bytes;
+            const end = data.len - bytes;
             next: while (i <= end) : (i += skip) {
-                const data_slice = searcher.data[i .. i + bytes];
+                const data_slice = data[i .. i + bytes];
                 const data_items = mem.bytesAsSlice(T, data_slice);
                 for (items) |item_a, j| {
                     const item_b = data_items[j];
@@ -395,7 +378,7 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
                 return @ptrCast([*]const T, data_slice.ptr)[0..data_items.len];
             }
 
-            return null;
+            return error.DataNotFound;
         }
     };
 }
@@ -1548,3 +1531,31 @@ gen3.MapHeader{
     .flags = 0x0,
     .map_battle_scene = 0x0,
 }};
+
+fn __(comptime s: []const u8) []const u8 {
+    @setEvalBranchQuota(100000);
+    var res: [16]u8 = undefined;
+    var fis = io.fixedBufferStream(s);
+    var fos = io.fixedBufferStream(&res);
+
+    const encoding = &gen3.encodings.en_us;
+    rom.encoding.encode(encoding, 0, fis.inStream(), fos.outStream()) catch unreachable;
+    fos.outStream().writeByte(0xff) catch unreachable;
+
+    return fos.getWritten();
+}
+
+const first_pokemon_names = [_][]const u8{
+    __("??????????"),
+    __("BULBASAUR"),
+    __("IVYSAUR"),
+    __("VENUSAUR"),
+};
+
+const last_pokemon_names = [_][]const u8{
+    __("LATIAS"),
+    __("LATIOS"),
+    __("JIRACHI"),
+    __("DEOXYS"),
+    __("CHIMECHO"),
+};
