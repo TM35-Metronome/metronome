@@ -253,27 +253,20 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokemons[{}].safari_zone_rate={}\n", .{ i, pokemon.safari_zone_rate });
         try stream.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
         try stream.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
+    }
 
-        {
-            const machine_learnset = game.machine_learnsets[i].value();
-            var j: usize = 0;
-            while (j < game.tms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u64, machine_learnset, @intCast(u6, j)) });
-            }
-            while (j < game.tms.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u64, machine_learnset, @intCast(u6, j)) });
-            }
-        }
-
-        for (game.evolutions[i]) |evo, j| {
+    for (game.evolutions) |evos, i| {
+        for (evos) |evo, j| {
             if (evo.method == .unused)
                 continue;
             try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
             try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
             try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
         }
+    }
 
-        const learnset = try game.level_up_learnset_pointers[i].toSliceTerminated(game.data, struct {
+    for (game.level_up_learnset_pointers) |lvl_up_learnset, i| {
+        const learnset = try lvl_up_learnset.toSliceTerminated(game.data, struct {
             fn isTerm(move: gen3.LevelUpMove) bool {
                 return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
             }
@@ -282,6 +275,22 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
             try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, l.id });
             try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, l.level });
         }
+    }
+
+    for (game.machine_learnsets) |machine_learnset, i| {
+        var j: usize = 0;
+        while (j < game.tms.len) : (j += 1)
+            try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) });
+        while (j < game.tms.len + game.hms.len) : (j += 1)
+            try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) });
+    }
+
+    for (game.pokemon_names) |name, i| {
+        const end = mem.indexOfScalar(u8, &name, 0xff) orelse name.len;
+        var fis = io.fixedBufferStream(name[0..end]);
+        try stream.print(".pokemons[{}].name=", .{i});
+        try rom.encoding.encode(&gen3.encodings.en_us, 1, fis.inStream(), stream);
+        try stream.writeByte('\n');
     }
 
     for (game.tms) |tm, i| {
@@ -462,18 +471,18 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".pokemons[{}].flee_rate={}\n", .{ i, pokemon.flee_rate });
         try stream.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
         try stream.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
-        {
-            const machine_learnset = pokemon.machine_learnset.value();
-            var j: usize = 0;
-            while (j < game.tms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            }
-            while (j < game.tms.len + game.hms.len) : (j += 1) {
-                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            }
-        }
 
-        if (i < game.evolutions.fat.len) {
+        const machine_learnset = pokemon.machine_learnset.value();
+        var j: usize = 0;
+        while (j < game.tms.len) : (j += 1)
+            try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+        while (j < game.tms.len + game.hms.len) : (j += 1)
+            try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+    }
+
+    {
+        var i: usize = 0;
+        while (i < game.evolutions.fat.len) : (i += 1) {
             const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen4.Evolution);
             const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
@@ -485,8 +494,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
             }
         }
+    }
 
-        if (i < game.level_up_moves.fat.len) {
+    {
+        var i: usize = 0;
+        while (i < game.level_up_moves.fat.len) : (i += 1) {
             const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
             const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
             const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
@@ -793,41 +805,42 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             try stream.print(".pokemons[{}].height={}\n", .{ i, pokemon.height.value() });
             try stream.print(".pokemons[{}].weight={}\n", .{ i, pokemon.weight.value() });
 
-            {
-                const machine_learnset = pokemon.machine_learnset.value();
-                var j: usize = 0;
-                while (j < game.tms1.len) : (j += 1) {
-                    try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-                }
-                while (j < game.tms1.len + game.hms.len) : (j += 1) {
-                    try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-                }
-                while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1) {
-                    try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-                }
-            }
+            const machine_learnset = pokemon.machine_learnset.value();
+            var j: usize = 0;
+            while (j < game.tms1.len) : (j += 1)
+                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+            while (j < game.tms1.len + game.hms.len) : (j += 1)
+                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+            while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1)
+                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+        }
+    }
 
-            if (i < game.evolutions.fat.len) {
-                const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
-                const rem = bytes.len % @sizeOf(gen5.Evolution);
-                const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-                for (evos) |evo, j| {
-                    if (evo.method == .unused)
-                        continue;
-                    try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-                    try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
-                    try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
-                }
+    {
+        var i: usize = 0;
+        while (i < number_of_pokemons) : (i += 1) {
+            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
+            const rem = bytes.len % @sizeOf(gen5.Evolution);
+            const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
+            for (evos) |evo, j| {
+                if (evo.method == .unused)
+                    continue;
+                try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
+                try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
+                try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
             }
+        }
+    }
 
-            if (i < game.level_up_moves.fat.len) {
-                const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
-                const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-                const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
-                for (level_up_moves) |move, j| {
-                    try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id.value() });
-                    try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level.value() });
-                }
+    {
+        var i: usize = 0;
+        while (i < number_of_pokemons) : (i += 1) {
+            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
+            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            for (level_up_moves) |move, j| {
+                try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id.value() });
+                try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level.value() });
             }
         }
     }

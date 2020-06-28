@@ -367,6 +367,19 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                     }.isTerm);
                     try parse.anyT(parser.str, &lvl_up_moves, converters);
                 },
+                c("name") => {
+                    if (index >= game.pokemon_names.len)
+                        return error.Error;
+
+                    const old_name = &game.pokemon_names[index];
+                    const new_name = try parser.parse(parse.strv);
+                    var res = [_]u8{0x00} ** 11;
+                    var fis = io.fixedBufferStream(new_name);
+                    var fos = io.fixedBufferStream(&res);
+                    try rom.encoding.encode(&gen3.encodings.en_us, 0, fis.inStream(), fos.outStream());
+                    try fos.outStream().writeByte(0xff);
+                    old_name.* = res;
+                },
                 else => return error.NoField,
             }
         },

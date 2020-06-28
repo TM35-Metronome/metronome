@@ -604,6 +604,7 @@ pub const Game = struct {
     map_headers: []MapHeader,
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
+    pokemon_names: [][11]u8,
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
         const in_stream = file.inStream();
@@ -730,6 +731,7 @@ pub const Game = struct {
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
             .pokeball_items = script_data.pokeball_items.toOwnedSlice(),
+            .pokemon_names = info.pokemon_names.slice(gda_rom),
         };
     }
 

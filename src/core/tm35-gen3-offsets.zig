@@ -142,6 +142,8 @@ fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].wild_pokemon_headers.len={}\n", .{ i, info.wild_pokemon_headers.len });
     try stream.print(".game[{}].map_headers.start={}\n", .{ i, info.map_headers.start });
     try stream.print(".game[{}].map_headers.len={}\n", .{ i, info.map_headers.len });
+    try stream.print(".game[{}].pokemon_names.start={}\n", .{ i, info.pokemon_names.start });
+    try stream.print(".game[{}].pokemon_names.len={}\n", .{ i, info.pokemon_names.len });
 }
 
 fn getVersion(gamecode: []const u8) !common.Version {
@@ -203,8 +205,7 @@ fn getOffsets(
     });
     const LvlUpRef = gen3.Ptr(gen3.LevelUpMove);
     const LvlUpRefs = Searcher(LvlUpRef, &[_][]const []const u8{});
-    const U8Ptr = gen3.Ptr(u8);
-    const U8Ptrs = Searcher(U8Ptr, &[_][]const []const u8{});
+    const PokemonNames = Searcher([11]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
 
     const trainers = switch (version) {
@@ -240,30 +241,7 @@ fn getOffsets(
         break :blk try LvlUpRefs.find4(data, &first_pointers, &last_pointers);
     };
 
-    debug.warn("test1\n", .{});
-    const pokemon_names = blk: {
-        var first_pointers: [first_pokemon_names.len]U8Ptr = undefined;
-        for (first_pokemon_names) |name, i| {
-            debug.warn("test3 {x} {}\n", .{ name, i });
-
-            const p = try Strings.find2(data, name);
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            first_pointers[i] = try U8Ptr.init(@intCast(u32, offset));
-        }
-
-        debug.warn("test2\n", .{});
-        var last_pointers: [last_pokemon_names.len]U8Ptr = undefined;
-        for (last_pokemon_names) |name, i| {
-            debug.warn("test4 {x} {}\n", .{ name, i });
-            const p = try Strings.find2(data, name);
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            last_pointers[i] = try U8Ptr.init(@intCast(u32, offset));
-        }
-
-        break :blk try U8Ptrs.find4(data, &first_pointers, &last_pointers);
-    };
-    debug.warn("{}\n", .{@ptrToInt(pokemon_names.ptr) - @ptrToInt(data.ptr)});
-
+    const pokemon_names = try PokemonNames.find4(data, &first_pokemon_names, &last_pokemon_names);
     const hms_slice = try HmTms.find2(data, &hms);
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
@@ -323,6 +301,7 @@ fn getOffsets(
         .items = offsets.ItemSection.init(data, items),
         .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
         .map_headers = offsets.MapHeaderSection.init(data, map_headers),
+        .pokemon_names = offsets.PokemonNameSection.init(data, pokemon_names),
     };
 }
 
@@ -1532,27 +1511,26 @@ gen3.MapHeader{
     .map_battle_scene = 0x0,
 }};
 
-fn __(comptime s: []const u8) []const u8 {
+fn __(comptime s: []const u8) [11]u8 {
     @setEvalBranchQuota(100000);
-    var res: [16]u8 = undefined;
+    var res = [_]u8{0x00} ** 11;
     var fis = io.fixedBufferStream(s);
     var fos = io.fixedBufferStream(&res);
 
     const encoding = &gen3.encodings.en_us;
     rom.encoding.encode(encoding, 0, fis.inStream(), fos.outStream()) catch unreachable;
-    fos.outStream().writeByte(0xff) catch unreachable;
-
-    return fos.getWritten();
+    try fos.outStream().writeByte(0xff);
+    return res;
 }
 
-const first_pokemon_names = [_][]const u8{
+const first_pokemon_names = [_][11]u8{
     __("??????????"),
     __("BULBASAUR"),
     __("IVYSAUR"),
     __("VENUSAUR"),
 };
 
-const last_pokemon_names = [_][]const u8{
+const last_pokemon_names = [_][11]u8{
     __("LATIAS"),
     __("LATIOS"),
     __("JIRACHI"),
