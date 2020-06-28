@@ -2,6 +2,7 @@ const common = @import("common.zig");
 const rom = @import("rom.zig");
 const std = @import("std");
 
+const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
@@ -17,8 +18,33 @@ pub const encodings = @import("gen3/encodings.zig");
 pub const offsets = @import("gen3/offsets.zig");
 pub const script = @import("gen3/script.zig");
 
-comptime {
-    _ = encodings;
+test "" {
+    std.meta.refAllDecls(@This());
+}
+
+pub const Language = enum {
+    en_us,
+};
+
+pub fn encode(comptime len: usize, lang: Language, str: []const u8) ![len]u8 {
+    const map = switch (lang) {
+        .en_us => &encodings.en_us,
+    };
+
+    var res = [_]u8{0} ** len;
+    var fos = io.fixedBufferStream(&res);
+    try rom.encoding.encode(map, 0, str, fos.outStream());
+    try fos.outStream().writeByte(0xff);
+    return res;
+}
+
+pub fn decode(lang: Language, str: []const u8, out_stream: var) !void {
+    const map = switch (lang) {
+        .en_us => &encodings.en_us,
+    };
+
+    const end = mem.indexOfScalar(u8, str, 0xff) orelse str.len;
+    try rom.encoding.encode(map, 1, str[0..end], out_stream);
 }
 
 /// A pointer to an unknown number of elements.

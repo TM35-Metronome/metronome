@@ -449,20 +449,20 @@ test "searcher.Searcher.find" {
         S{ .a = 0, .b = 1 },
         S{ .a = 2, .b = 3 },
     };
-    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+    const data = mem.sliceAsBytes(s_array[0..]);
+    const S1 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"a"},
-    }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+    });
+    const S2 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"b"},
-    }){ .data = s_byte_array };
+    });
 
     const search_for = S{ .a = 0, .b = 3 };
-    testing.expectEqual(s_searcher1.find(search_for).?, &s_array[1]);
-    testing.expectEqual(s_searcher2.find(search_for).?, &s_array[0]);
+    testing.expectEqual(try S1.find1(data, search_for), &s_array[1]);
+    testing.expectEqual(try S2.find1(data, search_for), &s_array[0]);
 }
 
-test "searcher.Searcher.findSlice" {
+test "searcher.Searcher.find2" {
     const S = packed struct {
         a: u16,
         b: u32,
@@ -472,13 +472,13 @@ test "searcher.Searcher.findSlice" {
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
     };
-    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+    const data = mem.sliceAsBytes(s_array[0..]);
+    const S1 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"a"},
-    }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+    });
+    const S2 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"b"},
-    }){ .data = s_byte_array };
+    });
 
     const search_for = &[_]S{
         S{ .a = 4, .b = 3 },
@@ -487,16 +487,16 @@ test "searcher.Searcher.findSlice" {
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..3]),
-        mem.sliceAsBytes(s_searcher1.findSlice(search_for).?),
+        mem.sliceAsBytes(try S1.find2(data, search_for)),
     );
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..2]),
-        mem.sliceAsBytes(s_searcher2.findSlice(search_for).?),
+        mem.sliceAsBytes(try S2.find2(data, search_for)),
     );
 }
 
-test "searcher.Searcher.findSlice2" {
+test "searcher.Searcher.find3" {
     const S = packed struct {
         a: u16,
         b: u32,
@@ -507,29 +507,29 @@ test "searcher.Searcher.findSlice2" {
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
     };
-    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+    const data = mem.sliceAsBytes(s_array[0..]);
+    const S1 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"a"},
-    }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+    });
+    const S2 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"b"},
-    }){ .data = s_byte_array };
+    });
 
     const a = S{ .a = 4, .b = 3 };
     const b = S{ .a = 4, .b = 3 };
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..4]),
-        mem.sliceAsBytes(s_searcher1.findSlice2(a, b).?),
+        mem.sliceAsBytes(try S1.find3(data, a, b)),
     );
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..3]),
-        mem.sliceAsBytes(s_searcher2.findSlice2(a, b).?),
+        mem.sliceAsBytes(try S2.find3(data, a, b)),
     );
 }
 
-test "searcher.Searcher.findSlice3" {
+test "searcher.Searcher.find4" {
     const S = packed struct {
         a: u16,
         b: u32,
@@ -542,13 +542,13 @@ test "searcher.Searcher.findSlice3" {
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
     };
-    const s_byte_array = mem.sliceAsBytes(s_array[0..]);
-    const s_searcher1 = Searcher(S, &[_][]const []const u8{
+    const data = mem.sliceAsBytes(s_array[0..]);
+    const S1 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"a"},
-    }){ .data = s_byte_array };
-    const s_searcher2 = Searcher(S, &[_][]const []const u8{
+    });
+    const S2 = Searcher(S, &[_][]const []const u8{
         &[_][]const u8{"b"},
-    }){ .data = s_byte_array };
+    });
 
     const a = &[_]S{
         S{ .a = 4, .b = 3 },
@@ -561,12 +561,12 @@ test "searcher.Searcher.findSlice3" {
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..6]),
-        mem.sliceAsBytes(s_searcher1.findSlice3(a, b).?),
+        mem.sliceAsBytes(try S1.find4(data, a, b)),
     );
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..5]),
-        mem.sliceAsBytes(s_searcher2.findSlice3(a, b).?),
+        mem.sliceAsBytes(try S2.find4(data, a, b)),
     );
 }
 
@@ -1511,29 +1511,23 @@ gen3.MapHeader{
     .map_battle_scene = 0x0,
 }};
 
-fn __(comptime s: []const u8) [11]u8 {
+const first_pokemon_names = blk: {
     @setEvalBranchQuota(100000);
-    var res = [_]u8{0x00} ** 11;
-    var fis = io.fixedBufferStream(s);
-    var fos = io.fixedBufferStream(&res);
-
-    const encoding = &gen3.encodings.en_us;
-    rom.encoding.encode(encoding, 0, fis.inStream(), fos.outStream()) catch unreachable;
-    try fos.outStream().writeByte(0xff);
-    return res;
-}
-
-const first_pokemon_names = [_][11]u8{
-    __("??????????"),
-    __("BULBASAUR"),
-    __("IVYSAUR"),
-    __("VENUSAUR"),
+    break :blk [_][11]u8{
+        gen3.encode(11, .en_us, "??????????") catch unreachable,
+        gen3.encode(11, .en_us, "BULBASAUR") catch unreachable,
+        gen3.encode(11, .en_us, "IVYSAUR") catch unreachable,
+        gen3.encode(11, .en_us, "VENUSAUR") catch unreachable,
+    };
 };
 
-const last_pokemon_names = [_][11]u8{
-    __("LATIAS"),
-    __("LATIOS"),
-    __("JIRACHI"),
-    __("DEOXYS"),
-    __("CHIMECHO"),
+const last_pokemon_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][11]u8{
+        gen3.encode(11, .en_us, "LATIAS") catch unreachable,
+        gen3.encode(11, .en_us, "LATIOS") catch unreachable,
+        gen3.encode(11, .en_us, "JIRACHI") catch unreachable,
+        gen3.encode(11, .en_us, "DEOXYS") catch unreachable,
+        gen3.encode(11, .en_us, "CHIMECHO") catch unreachable,
+    };
 };

@@ -152,8 +152,9 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music });
         try stream.print(".trainers[{}].trainer_picture={}\n", .{ i, trainer.trainer_picture });
-        // TODO: Convert the trainer name to utf-8 and then write out.
-        // try stream.print(".trainers[{}].name={}\n", .{i, trainer.name});
+        try stream.print(".trainers[{}].name=", .{i});
+        try gen3.decode(.en_us, &trainer.name, stream);
+        try stream.writeByte('\n');
 
         for (trainer.items) |item, j| {
             try stream.print(".trainers[{}].items[{}]={}\n", .{ i, j, item.value() });
@@ -286,10 +287,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.pokemon_names) |name, i| {
-        const end = mem.indexOfScalar(u8, &name, 0xff) orelse name.len;
-        var fis = io.fixedBufferStream(name[0..end]);
         try stream.print(".pokemons[{}].name=", .{i});
-        try rom.encoding.encode(&gen3.encodings.en_us, 1, fis.inStream(), stream);
+        try gen3.decode(.en_us, &name, stream);
         try stream.writeByte('\n');
     }
 
@@ -308,7 +307,9 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
             else => unreachable,
         };
 
-        // try stream.print(".items[{}].name={}\n", .{i, item.name});
+        try stream.print(".items[{}].name=", .{i});
+        try gen3.decode(.en_us, &item.name, stream);
+        try stream.writeByte('\n');
         try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].hold_effect={}\n", .{ i, item.hold_effect });

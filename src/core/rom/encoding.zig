@@ -15,7 +15,7 @@ pub const Char = [2][]const u8;
 /// `curr` specifies what the encoding the `in_stream` is in and is an index
 /// into entries in `map`. `out_stream` will always be the opposite encoding
 /// of `in_stream`.
-pub fn encode(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
+pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
     const in: usize = @boolToInt(curr == 1);
     const out: usize = @boolToInt(curr != 1);
     var buf: [64]u8 = undefined;
@@ -45,15 +45,19 @@ pub fn encode(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
     }
 }
 
-fn testHelpder(map: CharMap, curr: u1, comptime func: var, in: []const u8, out: []const u8) !void {
-    var res: [1024]u8 = undefined;
+pub fn encode(map: CharMap, curr: u1, in: []const u8, out_stream: var) !void {
     var fis = io.fixedBufferStream(in);
+    try encodeEx(map, curr, fis.inStream(), out_stream);
+}
+
+fn testHelper(map: CharMap, curr: u1, in: []const u8, out: []const u8) !void {
+    var res: [1024]u8 = undefined;
     var fos = io.fixedBufferStream(&res);
-    try func(map, curr, fis.inStream(), fos.outStream());
+    try encode(map, curr, in, fos.outStream());
     testing.expectEqualSlices(u8, out, fos.getWritten());
 }
 
 pub fn testCharMap(map: CharMap, a: []const u8, b: []const u8) !void {
-    try testHelpder(map, 0, encode, a, b);
-    try testHelpder(map, 1, encode, b, a);
+    try testHelper(map, 0, a, b);
+    try testHelper(map, 1, b, a);
 }
