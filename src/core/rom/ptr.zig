@@ -44,8 +44,10 @@ pub fn RelativePointer(
 
         /// Given a slice of data, and a pointer that points into this
         /// data, construct a `RelativePointer`.
-        pub fn init(ptr: Ptr, data: []const u8) Error!@This() {
-            if (is_optional and ptr == null)
+        pub fn init(ptr: var, data: []const u8) Error!@This() {
+            const ptr_is_optional = @typeInfo(@TypeOf(ptr)) == .Optional or
+                @typeInfo(@TypeOf(ptr)) == .Null;
+            if (is_optional and ptr_is_optional and ptr == null)
                 return @This(){ .inner = Inner.init(null_ptr) };
 
             const i = @intCast(Int, @ptrToInt(ptr) - @ptrToInt(data.ptr));
@@ -76,13 +78,12 @@ pub fn RelativePointer(
             if (len == 0)
                 return @as(Ptr, undefined)[0..0];
 
-            const start = std.math.sub(Int, ptr.inner.value(), offset) //
-                catch return error.InvalidPointer;
+            const p = try ptr.toPtr(data);
+            const start = @ptrToInt(p) - @ptrToInt(data.ptr);
             const end = start + len * @sizeOf(ptr_info.child);
-            if (data.len <= end)
+            if (data.len < end)
                 return error.InvalidPointer;
 
-            const p = try ptr.toPtr(data);
             return p[0..len];
         }
 
@@ -100,8 +101,21 @@ pub fn RelativePointer(
         pub fn toSliceZ(ptr: @This(), data: Data) Error!Slice {
             const res = try ptr.toSliceEnd(data);
             for (res) |item, len| {
-                if (item == ptr_info.sentinel.?)
+                if (std.meta.eql(item, ptr_info.sentinel.?))
                     return res[0..len :ptr_info.sentinel.?];
+            }
+
+            return error.InvalidPointer;
+        }
+
+        /// Converts a `RelativePointer` to an unknown number of
+        /// elements to a slice that contains all the elements until
+        /// the sentinel.
+        pub fn toSliceZ2(ptr: @This(), data: Data, sentinel: ptr_info.child) Error!SliceNoSentinel {
+            const res = try ptr.toSliceEnd(data);
+            for (res) |item, len| {
+                if (std.meta.eql(item, sentinel))
+                    return res[0..len];
             }
 
             return error.InvalidPointer;
@@ -174,49 +188,53 @@ pub fn RelativeSlice(
     comptime offset: comptime_int,
 ) type {
     return packed struct {
-        inner: Ptr,
+        inner: Inner,
 
-        const Ptr = @Type(blk: {
-            var info = @typeInfo(Slice);
-            info.Pointer.size = .Many;
-            break :blk info;
+        const Ptr = @Type(builtin.TypeInfo{
+            .Pointer = .{
+                .size = .Many,
+                .is_const = @typeInfo(Slice).Pointer.is_const,
+                .is_volatile = @typeInfo(Slice).Pointer.is_volatile,
+                .alignment = @typeInfo(Slice).Pointer.alignment,
+                .child = @typeInfo(Slice).Pointer.child,
+                .is_allowzero = @typeInfo(Slice).Pointer.is_allowzero,
+                .sentinel = @typeInfo(Slice).Pointer.sentinel,
+            },
         });
-        //const RPtr = RelativePointer(Ptr, Int, endian, offset, 0);
+        const RPtr = RelativePointer(Ptr, Int, endian, offset, 0);
         const Inner = switch (layout) {
             .pointer_first => packed struct {
-                ptr: Ptr, //RPtr,
-                len: u8, //RPtr.Inner,
+                ptr: RPtr,
+                len: RPtr.Inner,
             },
             .len_first => packed struct {
-                len: u8, //RPtr.Inner,
-                ptr: u8, //RPtr,
+                len: RPtr.Inner,
+                ptr: RPtr,
             },
         };
 
-        //        pub fn init(slice: Slice, data: []const u8) Error!@This() {
-        //            const data_end = @ptrToInt(data.ptr) + data.len;
-        //            const start = @ptrToInt(slice.ptr) - @ptrToInt(data.ptr);
-        //            const end = start + (slice.len * @sizeOf(RPtr.ptr_info.child));
-        //            if (data_end < end)
-        //                return error.InvalidPointer;
-        //
-        //            return @This(){
-        //                .inner = .{
-        //                    .ptr = try RPtr.init(slice.ptr, data),
-        //                    .len = RPtr.Inner.init(@intCast(Int, slice.len)),
-        //                },
-        //            };
-        //        }
-        //
-        //        pub fn toSlice(slice: @This(), data: RPtr.Data) Error!Slice {
-        //            const start = slice.inner.ptr.inner.value();
-        //            const end = start + slice.inner.len.value();
-        //            if (data.len < end)
-        //                return error.InvalidPointer;
-        //
-        //            const ptr = try slice.inner.ptr.toPtr(data);
-        //            return ptr[0..slice.inner.len.value()];
-        //        }
+        pub fn init(slice: Slice, data: []const u8) Error!@This() {
+            const data_end = @ptrToInt(data.ptr) + data.len;
+            const start = @ptrToInt(slice.ptr) - @ptrToInt(data.ptr);
+            const end = start + (slice.len * @sizeOf(RPtr.ptr_info.child));
+            if (data_end < end)
+                return error.InvalidPointer;
+
+            return @This(){
+                .inner = .{
+                    .ptr = try RPtr.init(slice.ptr, data),
+                    .len = RPtr.Inner.init(@intCast(Int, slice.len)),
+                },
+            };
+        }
+
+        pub fn toSlice(slice: @This(), data: RPtr.Data) Error!Slice {
+            return slice.inner.ptr.toSlice(data, slice.len());
+        }
+
+        pub fn len(slice: @This()) usize {
+            return slice.inner.len.value();
+        }
     };
 }
 
@@ -246,13 +264,10 @@ test "RelativeSlice" {
         const bytes = if (Child != u8) std.mem.sliceAsBytes(&data) else &data;
         for (data[0..4]) |_, i| {
             const expect = data[i..i+1];
-            var s1: Slice1 = undefined;
-            var s2: Slice2 = undefined;
-            //const s1 = try Slice1.init(expect, bytes);
-           // const slice1 = try s1.toSlice(bytes);
-            //const slice2 = try (try Slice2.init(expect, bytes)).toSlice(bytes);
-            //std.testing.expectEqualSlices(Child, expect, slice1);
-            //std.testing.expectEqualSlices(Child, expect, slice2);
+            const slice1 = try (try Slice1.init(expect, bytes)).toSlice(bytes);
+            const slice2 = try (try Slice2.init(expect, bytes)).toSlice(bytes);
+            std.testing.expectEqualSlices(Child, expect, slice1);
+            std.testing.expectEqualSlices(Child, expect, slice2);
         }
     };
 }

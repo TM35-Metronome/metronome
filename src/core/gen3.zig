@@ -104,10 +104,10 @@ pub const Trainer = extern struct {
 
     pub fn partyAt(trainer: *Trainer, index: usize, data: []u8) !*PartyMemberBase {
         return switch (trainer.party_type) {
-            .none => &(try trainer.party.none.slice(data))[index].base,
-            .item => &(try trainer.party.item.slice(data))[index].base,
-            .moves => &(try trainer.party.moves.slice(data))[index].base,
-            .both => &(try trainer.party.both.slice(data))[index].base,
+            .none => &(try trainer.party.none.toSlice(data))[index].base,
+            .item => &(try trainer.party.item.toSlice(data))[index].base,
+            .moves => &(try trainer.party.moves.toSlice(data))[index].base,
+            .both => &(try trainer.party.both.toSlice(data))[index].base,
         };
     }
 
@@ -336,7 +336,7 @@ pub const Evolution = extern struct {
 pub const MapHeader = extern struct {
     map_data: Ptr(*c_void),
     map_events: Ptr(*MapEvents),
-    map_scripts: Ptr(*MapScript),
+    map_scripts: Ptr([*]MapScript),
     map_connections: Ptr(*c_void),
     music: lu16,
     map_data_id: lu16,

@@ -203,7 +203,7 @@ fn getOffsets(
         &[_][]const u8{"map_connections"},
         &[_][]const u8{"pad"},
     });
-    const LvlUpRef = gen3.Ptr(gen3.LevelUpMove);
+    const LvlUpRef = gen3.Ptr([*]gen3.LevelUpMove);
     const LvlUpRefs = Searcher(LvlUpRef, &[_][]const []const u8{});
     const PokemonNames = Searcher([11]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
@@ -227,15 +227,13 @@ fn getOffsets(
         var first_pointers: [first_levelup_learnsets.len]LvlUpRef = undefined;
         for (first_levelup_learnsets) |learnset, i| {
             const p = try LvlUpMoves.find2(data, learnset);
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            first_pointers[i] = try LvlUpRef.init(@intCast(u32, offset));
+            first_pointers[i] = try LvlUpRef.init(p.ptr, data);
         }
 
         var last_pointers: [last_levelup_learnsets.len]LvlUpRef = undefined;
         for (last_levelup_learnsets) |learnset, i| {
             const p = try LvlUpMoves.find2(data, learnset);
-            const offset = @ptrToInt(p.ptr) - @ptrToInt(data.ptr);
-            last_pointers[i] = try LvlUpRef.init(@intCast(u32, offset));
+            last_pointers[i] = try LvlUpRef.init(p.ptr, data);
         }
 
         break :blk try LvlUpRefs.find4(data, &first_pointers, &last_pointers);

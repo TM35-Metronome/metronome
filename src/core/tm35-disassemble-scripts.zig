@@ -157,8 +157,8 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
             try stream.writeAll("\n");
         }
 
-        const events = try map_header.map_events.ptr(game.data);
-        for (try events.obj_events.slice(game.data, events.obj_events_len)) |obj_event, script_id| {
+        const events = try map_header.map_events.toPtr(game.data);
+        for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
             const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].obj_events[{}]:\n", .{ map_id, script_id });
@@ -168,7 +168,7 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
             try stream.writeAll("\n");
         }
 
-        for (try events.coord_events.slice(game.data, events.coord_events_len)) |coord_event, script_id| {
+        for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
             const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].coord_event[{}]:\n", .{ map_id, script_id });

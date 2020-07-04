@@ -362,7 +362,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 },
                 c("moves") => {
                     const ptr = &game.level_up_learnset_pointers[index];
-                    const lvl_up_moves = try ptr.toSliceZ(game.data, gen3.LevelUpMove.term);
+                    const lvl_up_moves = try ptr.toSliceZ2(game.data, gen3.LevelUpMove.term);
                     try parse.anyT(parser.str, &lvl_up_moves, converters);
                 },
                 c("name") => {
