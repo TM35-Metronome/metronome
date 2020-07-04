@@ -140,13 +140,11 @@ pub fn main2(
 fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
     @setEvalBranchQuota(100000);
     for (game.map_headers) |map_header, map_id| {
-        const scripts = try map_header.map_scripts.toSliceTerminated(game.data, struct {
-            fn isTerm(ms: gen3.MapScript) bool {
-                return ms.@"type" == 0;
-            }
-        }.isTerm);
+        const scripts = try map_header.map_scripts.toSliceEnd(game.data);
 
         for (scripts) |s, script_id| {
+            if (s.@"type" == 0)
+                break;
             if (s.@"type" == 2 or s.@"type" == 4)
                 continue;
 
@@ -159,8 +157,8 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
             try stream.writeAll("\n");
         }
 
-        const events = try map_header.map_events.toSingle(game.data);
-        for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
+        const events = try map_header.map_events.ptr(game.data);
+        for (try events.obj_events.slice(game.data, events.obj_events_len)) |obj_event, script_id| {
             const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].obj_events[{}]:\n", .{ map_id, script_id });
@@ -170,7 +168,7 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
             try stream.writeAll("\n");
         }
 
-        for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
+        for (try events.coord_events.slice(game.data, events.coord_events_len)) |coord_event, script_id| {
             const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try stream.print("map_header[{}].coord_event[{}]:\n", .{ map_id, script_id });

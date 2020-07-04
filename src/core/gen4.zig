@@ -430,6 +430,7 @@ pub const Game = struct {
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
     scripts: nds.fs.Fs,
+    text: nds.fs.Fs,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -503,6 +504,7 @@ pub const Game = struct {
             .parties = try getNarc(file_system, info.parties),
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .text = try getNarc(file_system, info.text),
             .scripts = scripts,
         };
     }

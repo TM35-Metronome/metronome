@@ -103,6 +103,8 @@ pub fn main2(
     const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
+    _ = gen3.Game.fromFile(file, allocator) catch unreachable;
+
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
         defer game.deinit();
         outputGen3Data(game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -267,12 +269,10 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.level_up_learnset_pointers) |lvl_up_learnset, i| {
-        const learnset = try lvl_up_learnset.toSliceTerminated(game.data, struct {
-            fn isTerm(move: gen3.LevelUpMove) bool {
-                return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
-            }
-        }.isTerm);
+        const learnset = try lvl_up_learnset.toSliceEnd(game.data);
         for (learnset) |l, j| {
+            if (std.meta.eql(l, gen3.LevelUpMove.term))
+                break;
             try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, l.id });
             try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, l.level });
         }
@@ -326,20 +326,20 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.wild_pokemon_headers) |header, i| {
-        if (header.land.toSingle(game.data)) |land| {
-            const wilds = try land.wild_pokemons.toSingle(game.data);
+        if (header.land.toPtr(game.data)) |land| {
+            const wilds = try land.wild_pokemons.toPtr(game.data);
             try outputGen3Area(stream, i, "land", land.encounter_rate, wilds);
         } else |_| {}
-        if (header.surf.toSingle(game.data)) |surf| {
-            const wilds = try surf.wild_pokemons.toSingle(game.data);
+        if (header.surf.toPtr(game.data)) |surf| {
+            const wilds = try surf.wild_pokemons.toPtr(game.data);
             try outputGen3Area(stream, i, "surf", surf.encounter_rate, wilds);
         } else |_| {}
-        if (header.rock_smash.toSingle(game.data)) |rock| {
-            const wilds = try rock.wild_pokemons.toSingle(game.data);
+        if (header.rock_smash.toPtr(game.data)) |rock| {
+            const wilds = try rock.wild_pokemons.toPtr(game.data);
             try outputGen3Area(stream, i, "rock_smash", rock.encounter_rate, wilds);
         } else |_| {}
-        if (header.fishing.toSingle(game.data)) |fish| {
-            const wilds = try fish.wild_pokemons.toSingle(game.data);
+        if (header.fishing.toPtr(game.data)) |fish| {
+            const wilds = try fish.wild_pokemons.toPtr(game.data);
             try outputGen3Area(stream, i, "fishing", fish.encounter_rate, wilds);
         } else |_| {}
     }
@@ -354,6 +354,12 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     for (game.pokeball_items) |given_item, i| {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
+    }
+
+    for (game.text) |text, i| {
+        try stream.print(".text[{}]=", .{i});
+        try gen3.decode(.en_us, text, stream);
+        try stream.writeByte('\n');
     }
 }
 

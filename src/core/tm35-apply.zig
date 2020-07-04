@@ -361,11 +361,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                     learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, rindex), value));
                 },
                 c("moves") => {
-                    const lvl_up_moves = try game.level_up_learnset_pointers[index].toSliceTerminated(game.data, struct {
-                        fn isTerm(move: gen3.LevelUpMove) bool {
-                            return move.id == math.maxInt(u9) and move.level == math.maxInt(u7);
-                        }
-                    }.isTerm);
+                    const ptr = &game.level_up_learnset_pointers[index];
+                    const lvl_up_moves = try ptr.toSliceZ(game.data, gen3.LevelUpMove.term);
                     try parse.anyT(parser.str, &lvl_up_moves, converters);
                 },
                 c("name") => {
@@ -414,23 +411,23 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             const header = &game.wild_pokemon_headers[index];
             switch (m(try parser.parse(parse.anyField))) {
                 c("land") => {
-                    const land = try header.land.toSingle(game.data);
-                    const wilds = try land.wild_pokemons.toSingle(game.data);
+                    const land = try header.land.toPtr(game.data);
+                    const wilds = try land.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(&parser, &land.encounter_rate, wilds);
                 },
                 c("surf") => {
-                    const surf = try header.surf.toSingle(game.data);
-                    const wilds = try surf.wild_pokemons.toSingle(game.data);
+                    const surf = try header.surf.toPtr(game.data);
+                    const wilds = try surf.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(&parser, &surf.encounter_rate, wilds);
                 },
                 c("rock_smash") => {
-                    const rock = try header.rock_smash.toSingle(game.data);
-                    const wilds = try rock.wild_pokemons.toSingle(game.data);
+                    const rock = try header.rock_smash.toPtr(game.data);
+                    const wilds = try rock.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(&parser, &rock.encounter_rate, wilds);
                 },
                 c("fishing") => {
-                    const fish = try header.fishing.toSingle(game.data);
-                    const wilds = try fish.wild_pokemons.toSingle(game.data);
+                    const fish = try header.fishing.toPtr(game.data);
+                    const wilds = try fish.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(&parser, &fish.encounter_rate, wilds);
                 },
                 else => return error.NoField,

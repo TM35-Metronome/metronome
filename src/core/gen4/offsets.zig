@@ -26,6 +26,7 @@ pub const Info = struct {
     wild_pokemons: []const u8,
     scripts: []const u8,
     itemdata: []const u8,
+    text: []const u8,
 };
 
 pub const infos = [_]Info{
@@ -52,6 +53,7 @@ const hg_info = Info{
     .wild_pokemons = "/a/0/3/7",
     .scripts = "/a/0/1/2",
     .itemdata = "/a/0/1/7",
+    .text = "/a/0/2/7",
 };
 
 const ss_info = Info{
@@ -70,6 +72,7 @@ const ss_info = Info{
     .wild_pokemons = "/a/1/3/6",
     .scripts = hg_info.scripts,
     .itemdata = hg_info.itemdata,
+    .text = hg_info.text,
 };
 
 const diamond_info = Info{
@@ -93,6 +96,7 @@ const diamond_info = Info{
     .wild_pokemons = "/fielddata/encountdata/d_enc_data.narc",
     .scripts = "/fielddata/script/scr_seq_release.narc",
     .itemdata = "/itemtool/itemdata/item_data.narc",
+    .text = "/msgdata/msg.narc",
 };
 
 const pearl_info = Info{
@@ -111,6 +115,7 @@ const pearl_info = Info{
     .wild_pokemons = "/fielddata/encountdata/p_enc_data.narc",
     .scripts = diamond_info.scripts,
     .itemdata = diamond_info.itemdata,
+    .text = diamond_info.text,
 };
 
 const platinum_info = Info{
@@ -134,6 +139,7 @@ const platinum_info = Info{
     .wild_pokemons = "/fielddata/encountdata/pl_enc_data.narc",
     .scripts = "/fielddata/script/scr_seq.narc",
     .itemdata = "/itemtool/itemdata/pl_item_data.narc",
+    .text = "/msgdata/pl_msg.narc",
 };
 
 pub const tm_count = 92;
