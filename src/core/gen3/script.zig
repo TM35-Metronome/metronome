@@ -1300,7 +1300,7 @@ pub const Command = packed struct {
     };
     pub const waitmessage = packed struct {};
     pub const message = packed struct {
-        text: lu32,
+        text: gen3.Ptr([*:0xff]u8),
     };
     pub const closemessage = packed struct {};
     pub const lockall = packed struct {};

@@ -278,7 +278,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 c("trainer_picture") => trainer.trainer_picture = try parser.parse(parse.u8v),
                 c("is_double") => trainer.is_double = try parser.parse(parselu32v),
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
-                c("name") => trainer.name = try gen3.encode(12, .en_us, try parser.parse(parse.strv)),
+                c("name") => try gen3.encode(.en_us, try parser.parse(parse.strv), &trainer.name),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
@@ -369,9 +369,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                     if (index >= game.pokemon_names.len)
                         return error.Error;
 
-                    const old_name = &game.pokemon_names[index];
                     const new_name = try parser.parse(parse.strv);
-                    old_name.* = try gen3.encode(11, .en_us, new_name);
+                    try gen3.encode(.en_us, new_name, &game.pokemon_names[index]);
                 },
                 else => return error.NoField,
             }
@@ -393,7 +392,7 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 c("type") => item.@"type" = try parser.parse(parse.u8v),
                 c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
                 c("secondary_id") => item.secondary_id = try parser.parse(parselu32v),
-                c("name") => item.name = try gen3.encode(14, .en_us, try parser.parse(parse.strv)),
+                c("name") => try gen3.encode(.en_us, try parser.parse(parse.strv), &item.name),
                 c("pocket") => switch (game.version) {
                     .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.parse(comptime parse.enumv(gen3.RSEPocket)) },
                     .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.parse(comptime parse.enumv(gen3.FRLGPocket)) },
@@ -457,6 +456,17 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 c("amount") => given_item.amount.* = try parser.parse(parselu16v),
                 else => return error.NoField,
             }
+        },
+        c("text") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.text.len)
+                return error.Error;
+            const text_ptr = game.text[index];
+            const text_slice = try text_ptr.toSliceZ(game.data);
+
+            // Slice to include the sentinel inside the slice.
+            const text = text_slice[0 .. text_slice.len + 1];
+            try gen3.encode(.en_us, try parser.parse(parse.strv), text);
         },
         else => return error.NoField,
     }

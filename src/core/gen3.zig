@@ -26,16 +26,14 @@ pub const Language = enum {
     en_us,
 };
 
-pub fn encode(comptime len: usize, lang: Language, str: []const u8) ![len]u8 {
+pub fn encode(lang: Language, str: []const u8, out: []u8) !void {
     const map = switch (lang) {
         .en_us => &encodings.en_us,
     };
 
-    var res = [_]u8{0} ** len;
-    var fos = io.fixedBufferStream(&res);
+    var fos = io.fixedBufferStream(out);
     try rom.encoding.encode(map, 0, str, fos.outStream());
     try fos.outStream().writeByte(0xff);
-    return res;
 }
 
 pub fn decode(lang: Language, str: []const u8, out_stream: var) !void {
@@ -490,7 +488,7 @@ pub const Game = struct {
 
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
-    text: [][]u8,
+    text: []*Ptr([*:0xff]u8),
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
         const in_stream = file.inStream();
@@ -520,7 +518,7 @@ pub const Game = struct {
             VAR_0x8001: ?*lu16 = null,
             static_pokemons: std.ArrayList(*script.Command),
             pokeball_items: std.ArrayList(PokeballItem),
-            text: std.ArrayList([]u8),
+            text: std.ArrayList(*Ptr([*:0xff]u8)),
 
             fn processCommand(script_data: *@This(), gba_data: []u8, command: *script.Command) !void {
                 const tag = command.tag;
@@ -545,9 +543,13 @@ pub const Game = struct {
                     .loadword => switch (data.loadword.destination) {
                         0 => {
                             const v = data.loadword.value.toSliceZ(gba_data) catch return;
-                            try script_data.text.append(v);
+                            try script_data.text.append(&data.loadword.value);
                         },
                         else => {},
+                    },
+                    .message => {
+                        const v = data.message.text.toSliceZ(gba_data) catch return;
+                        try script_data.text.append(&data.message.text);
                     },
                     else => {},
                 }
@@ -562,7 +564,7 @@ pub const Game = struct {
         var script_data = ScriptData{
             .static_pokemons = std.ArrayList(*script.Command).init(allocator),
             .pokeball_items = std.ArrayList(PokeballItem).init(allocator),
-            .text = std.ArrayList([]u8).init(allocator),
+            .text = std.ArrayList(*Ptr([*:0xff]u8)).init(allocator),
         };
         errdefer script_data.deinit();
 

@@ -103,8 +103,6 @@ pub fn main2(
     const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
     defer file.close();
 
-    _ = gen3.Game.fromFile(file, allocator) catch unreachable;
-
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
         defer game.deinit();
         outputGen3Data(game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
@@ -356,7 +354,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 
-    for (game.text) |text, i| {
+    for (game.text) |text_ptr, i| {
+        const text = try text_ptr.toSliceZ(game.data);
         try stream.print(".text[{}]=", .{i});
         try gen3.decode(.en_us, text, stream);
         try stream.writeByte('\n');

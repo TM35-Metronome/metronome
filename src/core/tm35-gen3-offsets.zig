@@ -1509,23 +1509,29 @@ gen3.MapHeader{
     .map_battle_scene = 0x0,
 }};
 
+fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
+    var res = [_]u8{0} ** len;
+    gen3.encode(.en_us, str, &res) catch unreachable;
+    return res;
+}
+
 const first_pokemon_names = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_][11]u8{
-        gen3.encode(11, .en_us, "??????????") catch unreachable,
-        gen3.encode(11, .en_us, "BULBASAUR") catch unreachable,
-        gen3.encode(11, .en_us, "IVYSAUR") catch unreachable,
-        gen3.encode(11, .en_us, "VENUSAUR") catch unreachable,
+        __(11, .en_us, "??????????"),
+        __(11, .en_us, "BULBASAUR"),
+        __(11, .en_us, "IVYSAUR"),
+        __(11, .en_us, "VENUSAUR"),
     };
 };
 
 const last_pokemon_names = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_][11]u8{
-        gen3.encode(11, .en_us, "LATIAS") catch unreachable,
-        gen3.encode(11, .en_us, "LATIOS") catch unreachable,
-        gen3.encode(11, .en_us, "JIRACHI") catch unreachable,
-        gen3.encode(11, .en_us, "DEOXYS") catch unreachable,
-        gen3.encode(11, .en_us, "CHIMECHO") catch unreachable,
+        __(11, .en_us, "LATIAS"),
+        __(11, .en_us, "LATIOS"),
+        __(11, .en_us, "JIRACHI"),
+        __(11, .en_us, "DEOXYS"),
+        __(11, .en_us, "CHIMECHO"),
     };
 };

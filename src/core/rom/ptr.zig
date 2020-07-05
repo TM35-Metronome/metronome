@@ -64,8 +64,7 @@ pub fn RelativePointer(
             if (is_optional and ptr.inner.value() == null_ptr)
                 return null;
 
-            const i = std.math.sub(Int, ptr.inner.value(), offset) //
-                catch return error.InvalidPointer;
+            const i = try ptr.toInt();
             if (data.len < i + @sizeOf(ptr_info.child) * @boolToInt(ptr_info.size == .One))
                 return error.InvalidPointer;
 
@@ -91,7 +90,8 @@ pub fn RelativePointer(
         /// elements to a slice that contains as many elements as
         /// possible from the pointer to the end of `data`.
         pub fn toSliceEnd(ptr: @This(), data: Data) Error!SliceNoSentinel {
-            const rest = data.len - ptr.inner.value();
+            const rest = std.math.sub(usize, data.len, try ptr.toInt()) //
+                catch return error.InvalidPointer;
             return ptr.toSlice(data, rest / @sizeOf(ptr_info.child));
         }
 
@@ -119,6 +119,11 @@ pub fn RelativePointer(
             }
 
             return error.InvalidPointer;
+        }
+
+        fn toInt(ptr: @This()) Error!Int {
+            return std.math.sub(Int, ptr.inner.value(), offset) //
+                catch return error.InvalidPointer;
         }
     };
 }

@@ -38,7 +38,8 @@ pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
             } else char;
         }
 
-        const best = best_match orelse return error.DecodeError;
+        const best = best_match orelse
+            return error.DecodeError;
         try out_stream.writeAll(best[out]);
         mem.copy(u8, chars, chars[best[in].len..]);
         len -= best[in].len;
