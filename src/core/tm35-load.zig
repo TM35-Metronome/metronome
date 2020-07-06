@@ -153,7 +153,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music });
         try stream.print(".trainers[{}].trainer_picture={}\n", .{ i, trainer.trainer_picture });
         try stream.print(".trainers[{}].name=", .{i});
-        try gen3.decode(.en_us, &trainer.name, stream);
+        try gen3.encodings.decode(.en_us, &trainer.name, stream);
         try stream.writeByte('\n');
 
         for (trainer.items) |item, j| {
@@ -286,7 +286,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
 
     for (game.pokemon_names) |name, i| {
         try stream.print(".pokemons[{}].name=", .{i});
-        try gen3.decode(.en_us, &name, stream);
+        try gen3.encodings.decode(.en_us, &name, stream);
         try stream.writeByte('\n');
     }
 
@@ -306,7 +306,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         };
 
         try stream.print(".items[{}].name=", .{i});
-        try gen3.decode(.en_us, &item.name, stream);
+        try gen3.encodings.decode(.en_us, &item.name, stream);
         try stream.writeByte('\n');
         try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
@@ -357,7 +357,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     for (game.text) |text_ptr, i| {
         const text = try text_ptr.toSliceZ(game.data);
         try stream.print(".text[{}]=", .{i});
-        try gen3.decode(.en_us, text, stream);
+        try gen3.encodings.decode(.en_us, text, stream);
         try stream.writeByte('\n');
     }
 }
@@ -652,6 +652,15 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
+
+    try outputStringTable(stream, "pokemons", "name", game.pokemon_names);
+    // Decrompress trainer names
+    // try outputStringTable(stream, "trainers", "name", game.trainer_names);
+    try outputStringTable(stream, "moves", "name", game.move_names);
+    try outputStringTable(stream, "moves", "description", game.move_descriptions);
+    try outputStringTable(stream, "abilities", "name", game.ability_names);
+    try outputStringTable(stream, "items", "name", game.item_names);
+    try outputStringTable(stream, "items", "description", game.item_descriptions);
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
@@ -929,6 +938,22 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     for (game.pokeball_items) |given_item, i| {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
+    }
+}
+
+fn outputStringTable(
+    stream: var,
+    array_name: []const u8,
+    field_name: []const u8,
+    est: nds.fs.EncryptedStringTable,
+) !void {
+    var buf: [1024]u8 = undefined;
+    var i: u32 = 0;
+    while (i < est.count()) : (i += 1) {
+        try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
+        const len = try est.getStringStream(i).read(&buf);
+        try gen4.encodings.decode(buf[0..len], stream);
+        try stream.writeAll("\n");
     }
 }
 

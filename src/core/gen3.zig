@@ -26,25 +26,6 @@ pub const Language = enum {
     en_us,
 };
 
-pub fn encode(lang: Language, str: []const u8, out: []u8) !void {
-    const map = switch (lang) {
-        .en_us => &encodings.en_us,
-    };
-
-    var fos = io.fixedBufferStream(out);
-    try rom.encoding.encode(map, 0, str, fos.outStream());
-    try fos.outStream().writeByte(0xff);
-}
-
-pub fn decode(lang: Language, str: []const u8, out_stream: var) !void {
-    const map = switch (lang) {
-        .en_us => &encodings.en_us,
-    };
-
-    const end = mem.indexOfScalar(u8, str, 0xff) orelse str.len;
-    try rom.encoding.encode(map, 1, str[0..end], out_stream);
-}
-
 pub fn Ptr(comptime P: type) type {
     return rom.ptr.RelativePointer(P, u32, .Little, 0x8000000, 0);
 }
@@ -380,7 +361,7 @@ pub const ObjectEvent = extern struct {
     pad2: u8,
     trainer_type: lu16,
     sight_radius_tree_etc: lu16,
-    script: Ptr([*]u8),
+    script: Ptr(?[*]u8),
     event_flag: lu16,
     pad3: [2]u8,
 
@@ -594,6 +575,13 @@ pub const Game = struct {
 
             for (try events.coord_events.toSlice(gba_rom, events.coord_events_len)) |coord_event| {
                 const script_bytes = coord_event.scripts.toSliceEnd(gba_rom) catch continue;
+                var decoder = script.CommandDecoder{ .bytes = script_bytes };
+                while (try decoder.next()) |command|
+                    try script_data.processCommand(gba_rom, command);
+            }
+
+            for (try events.obj_events.toSlice(gba_rom, events.obj_events_len)) |obj_event| {
+                const script_bytes = obj_event.script.toSliceEnd(gba_rom) catch continue;
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(gba_rom, command);

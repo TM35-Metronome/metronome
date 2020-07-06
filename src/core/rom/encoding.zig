@@ -18,7 +18,7 @@ pub const Char = [2][]const u8;
 pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
     const in: usize = @boolToInt(curr == 1);
     const out: usize = @boolToInt(curr != 1);
-    var buf: [64]u8 = undefined;
+    var buf: [16]u8 = undefined;
     var len: usize = 0;
 
     while (true) {

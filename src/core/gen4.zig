@@ -430,7 +430,14 @@ pub const Game = struct {
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
     scripts: nds.fs.Fs,
-    text: nds.fs.Fs,
+
+    pokemon_names: nds.fs.EncryptedStringTable,
+    trainer_names: nds.fs.EncryptedStringTable,
+    move_names: nds.fs.EncryptedStringTable,
+    move_descriptions: nds.fs.EncryptedStringTable,
+    ability_names: nds.fs.EncryptedStringTable,
+    item_names: nds.fs.EncryptedStringTable,
+    item_descriptions: nds.fs.EncryptedStringTable,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -445,6 +452,7 @@ pub const Game = struct {
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
 
+        const text = try getNarc(file_system, info.text);
         const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
@@ -504,8 +512,15 @@ pub const Game = struct {
             .parties = try getNarc(file_system, info.parties),
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
-            .text = try getNarc(file_system, info.text),
             .scripts = scripts,
+
+            .pokemon_names = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
+            .trainer_names = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
+            .move_names = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.move_names }) },
+            .move_descriptions = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.move_descriptions }) },
+            .ability_names = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
+            .item_names = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.item_names }) },
+            .item_descriptions = nds.fs.EncryptedStringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
         };
     }
 

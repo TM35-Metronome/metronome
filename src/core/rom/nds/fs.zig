@@ -438,3 +438,86 @@ test "Builder" {
     testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
     testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
 }
+
+pub const EncryptedStringTable = struct {
+    data: []u8,
+
+    const Header = packed struct {
+        count: lu16,
+        key: lu16,
+    };
+
+    pub fn count(est: EncryptedStringTable) u16 {
+        return est.header().count.value();
+    }
+
+    pub fn getEncryptedString(est: EncryptedStringTable, i: u32) []u8 {
+        const key = @truncate(u16, @as(u32, est.header().key.value()) * 0x2FD);
+        const encrypted_slice = est.slices()[i];
+        const slice = decryptSlice(key, i, encrypted_slice);
+        return est.data[slice.start.value()..][0 .. slice.len.value() * @sizeOf(lu16)];
+    }
+
+    pub fn getStringStream(est: EncryptedStringTable, i: u32) Stream {
+        const string = est.getEncryptedString(i);
+        return .{
+            .data = string,
+            .key = @truncate(u16, 0x91BD3 * (i + 1)),
+        };
+    }
+
+    pub fn iterator(est: EncryptedStringTable) []const void {
+        return @as([*]const void)[0..est.count()];
+    }
+
+    fn header(est: EncryptedStringTable) *Header {
+        return @ptrCast(*Header, est.data[0..@sizeOf(Header)]);
+    }
+
+    fn slices(est: EncryptedStringTable) []nds.Slice {
+        const data = est.data[@sizeOf(Header)..][0 .. est.count() * @sizeOf(nds.Slice)];
+        return mem.bytesAsSlice(nds.Slice, data);
+    }
+
+    fn decryptSlice(key: u16, i: u32, slice: nds.Slice) nds.Slice {
+        const key2 = (@as(u32, key) * (i + 1)) & 0xFFFF;
+        const key3 = key2 | (key2 << 16);
+        return nds.Slice.init(slice.start.value() ^ key3, slice.len.value() ^ key3);
+    }
+
+    fn decryptChar(key: u16, i: u32, char: lu16) lu16 {
+        const key2 = @truncate(u16, key + i * 0x493D);
+        return lu16.init(char.value() ^ key2);
+    }
+
+    const Stream = struct {
+        data: []u8,
+        key: u16,
+        pos: u32 = 0,
+
+        pub const ReadError = error{};
+
+        pub const InStream = io.InStream(*Stream, ReadError, read);
+
+        pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
+            var i: usize = 0;
+            while (i < buf.len and stream.pos < stream.data.len) {
+                const uneven = stream.pos % 2 != 0;
+                const pos = stream.pos - @boolToInt(uneven);
+                const encrypted_char = @ptrCast(*lu16, stream.data[pos..][0..2]).*;
+                const char = decryptChar(stream.key, pos / 2, encrypted_char);
+                const bytes = char.bytes[@boolToInt(uneven)..];
+                const rest = buf[i..];
+                mem.copy(u8, rest, bytes[0..math.min(rest.len, bytes.len)]);
+
+                stream.pos += @as(u32, 2) - @boolToInt(uneven);
+                i += @as(usize, 2) - @boolToInt(uneven);
+            }
+            return math.min(i, buf.len);
+        }
+
+        pub fn inStream(self: *Stream) InStream {
+            return .{ .context = self };
+        }
+    };
+};

@@ -1511,7 +1511,7 @@ gen3.MapHeader{
 
 fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
     var res = [_]u8{0} ** len;
-    gen3.encode(.en_us, str, &res) catch unreachable;
+    gen3.encodings.encode(.en_us, str, &res) catch unreachable;
     return res;
 }
 

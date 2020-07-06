@@ -25,20 +25,21 @@ pub fn RelativePointer(
 
         const Inner = int.Int(Int, endian);
         const Slice = @Type(blk: {
-            var info = @typeInfo(Ptr);
-            info.Pointer.size = .Slice;
-            break :blk info;
+            var info = ptr_info;
+            info.size = .Slice;
+            break :blk builtin.TypeInfo{ .Pointer = info };
         });
         const SliceNoSentinel = @Type(blk: {
-            var info = @typeInfo(Ptr);
-            info.Pointer.size = .Slice;
-            info.Pointer.sentinel = null;
-            break :blk info;
+            var info = ptr_info;
+            info.size = .Slice;
+            info.sentinel = null;
+            break :blk builtin.TypeInfo{ .Pointer = info };
         });
-        const ptr_info = switch (@typeInfo(Ptr)) {
-            .Optional => |opt| @typeInfo(opt.child).Pointer,
-            else => @typeInfo(Ptr).Pointer,
+        const NonOptionalPtr = switch (@typeInfo(Ptr)) {
+            .Optional => |opt| opt.child,
+            else => Ptr,
         };
+        const ptr_info = @typeInfo(NonOptionalPtr).Pointer;
         const Data = if (ptr_info.is_const) []const u8 else []u8;
         const is_optional = @typeInfo(Ptr) == .Optional;
 
@@ -74,8 +75,10 @@ pub fn RelativePointer(
         /// Converts a `RelativePointer` to an unknown number of
         /// elements to a slice.
         pub fn toSlice(ptr: @This(), data: Data, len: usize) Error!SliceNoSentinel {
+            if (is_optional and ptr.inner.value() == null_ptr)
+                return @as(NonOptionalPtr, undefined)[0..0];
             if (len == 0)
-                return @as(Ptr, undefined)[0..0];
+                return @as(NonOptionalPtr, undefined)[0..0];
 
             const p = try ptr.toPtr(data);
             const start = @ptrToInt(p) - @ptrToInt(data.ptr);
@@ -83,7 +86,7 @@ pub fn RelativePointer(
             if (data.len < end)
                 return error.InvalidPointer;
 
-            return p[0..len];
+            return if (is_optional) p.?[0..len] else p[0..len];
         }
 
         /// Converts a `RelativePointer` to an unknown number of
