@@ -947,12 +947,10 @@ fn outputStringTable(
     field_name: []const u8,
     est: nds.fs.EncryptedStringTable,
 ) !void {
-    var buf: [1024]u8 = undefined;
     var i: u32 = 0;
     while (i < est.count()) : (i += 1) {
         try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
-        const len = try est.getStringStream(i).read(&buf);
-        try gen4.encodings.decode(buf[0..len], stream);
+        try gen4.encodings.decode(est.getStringStream(i).inStream(), stream);
         try stream.writeAll("\n");
     }
 }

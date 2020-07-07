@@ -496,27 +496,44 @@ pub const EncryptedStringTable = struct {
         pos: u32 = 0,
 
         pub const ReadError = error{};
+        pub const WriteError = error{NoSpaceLeft};
 
         pub const InStream = io.InStream(*Stream, ReadError, read);
+        pub const OutStream = io.OutStream(*Stream, WriteError, write);
 
         pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
-            var i: usize = 0;
-            while (i < buf.len and stream.pos < stream.data.len) {
-                const uneven = stream.pos % 2 != 0;
-                const pos = stream.pos - @boolToInt(uneven);
-                const encrypted_char = @ptrCast(*lu16, stream.data[pos..][0..2]).*;
-                const char = decryptChar(stream.key, pos / 2, encrypted_char);
-                const bytes = char.bytes[@boolToInt(uneven)..];
-                const rest = buf[i..];
-                mem.copy(u8, rest, bytes[0..math.min(rest.len, bytes.len)]);
+            const rest = stream.data[stream.pos..];
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, buf[0..n], rest[0..n]);
+            for (mem.bytesAsSlice(lu16, buf[0..n])) |*c, i|
+                c.* = decryptChar(stream.key, (stream.pos / 2) + @intCast(u32, i), c.*);
 
-                stream.pos += @as(u32, 2) - @boolToInt(uneven);
-                i += @as(usize, 2) - @boolToInt(uneven);
-            }
-            return math.min(i, buf.len);
+            const end = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
+            stream.pos += @intCast(u32, end);
+            return end;
+        }
+
+        pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
+            const rest = stream.data[stream.pos..];
+            if (buf.len == 0)
+                return 0;
+            if (rest.len == 0)
+                return error.NoSpaceLeft;
+
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, rest[0..n], buf[0..n]);
+            for (mem.bytesAsSlice(lu16, rest[0..n])) |*c, i|
+                c.* = decryptChar(stream.key, (stream.pos / 2) + @intCast(u32, i), c.*);
+
+            stream.pos += @intCast(u32, n);
+            return n;
         }
 
         pub fn inStream(self: *Stream) InStream {
+            return .{ .context = self };
+        }
+
+        pub fn outStream(self: *Stream) OutStream {
             return .{ .context = self };
         }
     };

@@ -29,7 +29,7 @@ for release in $(printf "false\ntrue\n"); do
         diff -q "$expect" "$found"
 
         # Change all numbers in rom to 1
-        sed -i "s/=[0-9]*$/=1/" "$expect"
+        sed -i "s/=[0-9]+$/=1/" "$expect"
 
         # Change all names in rom to 'a'
         sed -i "s/\.name=.*$/.name=a/" "$expect"

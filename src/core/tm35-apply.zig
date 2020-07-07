@@ -554,7 +554,63 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 else => return error.NoField,
             }
         },
-        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
+        c("moves") => {
+            const index = try parser.parse(parse.index);
+            const prev = parser.str;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("description"), c("name") => {
+                    const est = if (m(field) == c("name")) game.move_names //
+                        else game.move_descriptions;
+                    if (index >= est.count())
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    const stream = est.getStringStream(@intCast(u32, index)).outStream();
+                    try gen4.encodings.encode(value, stream);
+                },
+                else => {
+                    if (index >= game.moves.len)
+                        return error.Error;
+                    try parse.anyT(prev, &game.moves[index], converters);
+                },
+            }
+        },
+        c("items") => {
+            const index = try parser.parse(parse.index);
+            const prev = parser.str;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("description"), c("name") => {
+                    const est = if (m(field) == c("name")) game.item_names //
+                        else game.item_descriptions;
+                    if (index >= est.count())
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    const stream = est.getStringStream(@intCast(u32, index)).outStream();
+                    try gen4.encodings.encode(value, stream);
+                },
+                else => {
+                    if (index >= game.items.len)
+                        return error.Error;
+                    try parse.anyT(prev, &game.items[index], converters);
+                },
+            }
+        },
+        c("abilities") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => {
+                    const names = game.ability_names;
+                    if (index >= names.count())
+                        return error.Error;
+
+                    const value = try parser.parse(parse.strv);
+                    const stream = names.getStringStream(@intCast(u32, index)).outStream();
+                    try gen4.encodings.encode(value, stream);
+                },
+                else => return error.Error,
+            }
+        },
         c("pokemons") => {
             const index = try parser.parse(parse.index);
             if (index >= game.pokemons.len)
@@ -577,6 +633,14 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
+                c("name") => {
+                    const names = game.pokemon_names;
+                    if (index >= names.count())
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    const stream = names.getStringStream(@intCast(u32, index)).outStream();
+                    try gen4.encodings.encode(value, stream);
+                },
                 c("egg_groups") => {
                     const eindex = try parser.parse(parse.index);
                     const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
@@ -615,7 +679,6 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("tms") => try parse.anyT(parser.str, &game.tms, converters),
         c("hms") => try parse.anyT(parser.str, &game.hms, converters),
-        c("items") => try parse.anyT(parser.str, &game.items, converters),
         c("zones") => {
             const wild_pokemons = game.wild_pokemons;
             const index = try parser.parse(parse.index);

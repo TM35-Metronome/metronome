@@ -1150,7 +1150,7 @@ pub const all = [_]rom.encoding.Char{
     .{ "험", "\xBA\x0C" },
     .{ "활", "\xE0\x0C" },
     .{ "힐", "\x2A\x0D" },
-    .{ "\n", "\x00\xE0" },
+    .{ "\\n", "\x00\xE0" },
     .{ "\\p", "\xBC\x25" },
     .{ "\\l", "\xBD\x25" },
 };
@@ -1159,13 +1159,11 @@ test "all" {
     try rom.encoding.testCharMap(&all, "HELLO WORLD", "\x32\x01\x2F\x01\x36\x01\x36\x01\x39\x01\xDE\x01\x41\x01\x39\x01\x3C\x01\x36\x01\x2E\x01");
 }
 
-pub fn encode(str: []const u8, out: []u8) !void {
-    var fos = io.fixedBufferStream(out);
-    try rom.encoding.encode(&all, 0, str, fos.outStream());
-    try fos.outStream().writeAll("\xff\xff");
+pub fn encode(str: []const u8, out_stream: var) !void {
+    try rom.encoding.encode(&all, 0, str, out_stream);
+    try out_stream.writeAll("\xff\xff");
 }
 
-pub fn decode(str: []const u8, out_stream: var) !void {
-    const end = mem.indexOf(u8, str, "\xff\xff") orelse str.len;
-    try rom.encoding.encode(&all, 1, str[0..end], out_stream);
+pub fn decode(in_stream: var, out_stream: var) !void {
+    try rom.encoding.encodeEx(&all, 1, in_stream, out_stream);
 }

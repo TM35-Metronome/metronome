@@ -33,7 +33,6 @@ pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
             if (!mem.startsWith(u8, chars, char[in]))
                 continue;
             best_match = if (best_match) |best| blk: {
-                debug.assert(best[in].len != char[in].len);
                 break :blk if (best[in].len < char[in].len) char else best;
             } else char;
         }
