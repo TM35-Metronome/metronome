@@ -14,9 +14,12 @@ const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
+const unicode = std.unicode;
 
 const gba = rom.gba;
 const nds = rom.nds;
+
+const lu16 = rom.int.lu16;
 
 const bit = util.bit;
 const errors = util.errors;
@@ -653,14 +656,28 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 
-    try outputStringTable(stream, "pokemons", "name", game.pokemon_names);
+    try outputGen4StringTable(stream, "pokemons", "name", game.pokemon_names);
     // Decrompress trainer names
-    // try outputStringTable(stream, "trainers", "name", game.trainer_names);
-    try outputStringTable(stream, "moves", "name", game.move_names);
-    try outputStringTable(stream, "moves", "description", game.move_descriptions);
-    try outputStringTable(stream, "abilities", "name", game.ability_names);
-    try outputStringTable(stream, "items", "name", game.item_names);
-    try outputStringTable(stream, "items", "description", game.item_descriptions);
+    // try outputGen4StringTable(stream, "trainers", "name", game.trainer_names);
+    try outputGen4StringTable(stream, "moves", "name", game.move_names);
+    try outputGen4StringTable(stream, "moves", "description", game.move_descriptions);
+    try outputGen4StringTable(stream, "abilities", "name", game.ability_names);
+    try outputGen4StringTable(stream, "items", "name", game.item_names);
+    try outputGen4StringTable(stream, "items", "description", game.item_descriptions);
+}
+
+fn outputGen4StringTable(
+    stream: var,
+    array_name: []const u8,
+    field_name: []const u8,
+    est: gen4.StringTable,
+) !void {
+    var i: u32 = 0;
+    while (i < est.count()) : (i += 1) {
+        try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
+        try gen4.encodings.decode(est.getStringStream(i).inStream(), stream);
+        try stream.writeAll("\n");
+    }
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
@@ -939,18 +956,35 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
+
+    try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
+    // Decrompress trainer names
+    // try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
+    //try outputGen5StringTable(stream, "moves", "name", game.move_names);
+    //try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
+    //try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
+    //try outputGen5StringTable(stream, "items", "name", game.item_names);
+    //try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
 }
 
-fn outputStringTable(
+fn outputGen5StringTable(
     stream: var,
     array_name: []const u8,
     field_name: []const u8,
-    est: nds.fs.EncryptedStringTable,
+    est: gen5.StringTable,
 ) !void {
+    var buf1: [1024]u8 = undefined;
+    var buf2: [4]u8 = undefined;
     var i: u32 = 0;
-    while (i < est.count()) : (i += 1) {
+    while (i < est.entryCount(0)) : (i += 1) {
         try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
-        try gen4.encodings.decode(est.getStringStream(i).inStream(), stream);
+        const len = try est.getStringStream(0, i).inStream().readAll(&buf1);
+        try stream.print("{x}", .{buf1[0..len]});
+        //for (mem.bytesAsSlice(lu16, buf1[0..len])) |c| {
+        //    const cl = try unicode.utf8Encode(c.value(), &buf2);
+        //    try stream.writeAll(buf2[0..cl]);
+        //}
+
         try stream.writeAll("\n");
     }
 }

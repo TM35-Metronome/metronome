@@ -6,6 +6,8 @@ const rom = @import("rom.zig");
 pub const offsets = @import("gen5/offsets.zig");
 pub const script = @import("gen5/script.zig");
 
+const io = std.io;
+const math = std.math;
 const mem = std.mem;
 
 const nds = rom.nds;
@@ -399,6 +401,123 @@ const PokeballItem = struct {
     amount: *lu16,
 };
 
+pub const StringTable = struct {
+    data: []u8,
+
+    pub fn sectionCount(table: StringTable) u16 {
+        return table.header().sections.value();
+    }
+
+    pub fn entryCount(table: StringTable, section: usize) u16 {
+        return table.header().entries.value();
+    }
+
+    pub fn getEncryptedString(table: StringTable, section_i: usize, entry_i: usize) []u8 {
+        const section_offset = table.sectionOffsets()[section_i];
+        const entry = table.entries(section_offset)[entry_i];
+        const offset = section_offset.value() + entry.offset.value();
+        return table.data[offset..][0 .. entry.count.value() * @sizeOf(lu16)];
+    }
+
+    pub fn getStringStream(table: StringTable, section: usize, entry: usize) Stream {
+        const string = table.getEncryptedString(section, entry);
+        return .{
+            .data = string[0 .. string.len - 2],
+            .key = @ptrCast(*lu16, string[string.len - 2 ..][0..2]).value() ^ 0xFFFF,
+        };
+    }
+
+    const Header = packed struct {
+        sections: lu16,
+        entries: lu16,
+        unknown1: lu32,
+        unknown2: lu32,
+    };
+
+    const Entry = packed struct {
+        offset: lu32,
+        count: lu16,
+        unknown: lu16,
+    };
+
+    fn header(table: StringTable) *Header {
+        return @ptrCast(*Header, table.data[0..@sizeOf(Header)]);
+    }
+
+    fn sectionOffsets(table: StringTable) []lu32 {
+        const h = table.header();
+        const rest = table.data[@sizeOf(Header)..];
+        return mem.bytesAsSlice(lu32, rest[0 .. @sizeOf(lu32) * h.sections.value()]);
+    }
+
+    fn entries(table: StringTable, section_offset: lu32) []Entry {
+        const h = table.header();
+        // TODO: There is a lu32 at the start of the section. Is this the len of
+        //       all entries in this section?
+        const rest = table.data[section_offset.value() + @sizeOf(lu32) ..];
+        return mem.bytesAsSlice(Entry, rest[0 .. @sizeOf(Entry) * h.entries.value()]);
+    }
+
+    const Stream = struct {
+        data: []u8,
+        key: u16,
+        pos: u32 = 0,
+
+        pub const ReadError = error{};
+        pub const WriteError = error{NoSpaceLeft};
+
+        pub const InStream = io.InStream(*Stream, ReadError, read);
+        pub const OutStream = io.OutStream(*Stream, WriteError, write);
+
+        pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
+            const rest = stream.data[stream.pos..];
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, buf[0..n], rest[0..n]);
+            for (mem.bytesAsSlice(lu16, buf[0..n])) |*c, i| {
+                c.* = lu16.init(c.value() ^ stream.keyForI(stream.pos / 2 + i));
+            }
+
+            //const end = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
+            stream.pos += @intCast(u32, n);
+            return n;
+        }
+
+        pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
+            const rest = stream.data[stream.pos..];
+            if (buf.len == 0)
+                return 0;
+            if (rest.len == 0)
+                return error.NoSpaceLeft;
+
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, rest[0..n], buf[0..n]);
+            for (mem.bytesAsSlice(lu16, rest[0..n])) |*c, i|
+                unreachable; // TODO
+
+            stream.pos += @intCast(u32, n);
+            return n;
+        }
+
+        fn keyForI(stream: Stream, i: usize) u16 {
+            const it = (stream.data.len / 2) - (i + 1);
+            var key: u32 = stream.key;
+
+            for (stream.data[0..it]) |_|
+                key = @truncate(u16, (key >> 3) | (key << 13));
+
+            return @intCast(u16, key);
+        }
+
+        pub fn inStream(self: *Stream) InStream {
+            return .{ .context = self };
+        }
+
+        pub fn outStream(self: *Stream) OutStream {
+            return .{ .context = self };
+        }
+    };
+};
+
 pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
@@ -420,6 +539,14 @@ pub const Game = struct {
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
 
+    pokemon_names: StringTable,
+    trainer_names: StringTable,
+    move_names: StringTable,
+    move_descriptions: StringTable,
+    ability_names: StringTable,
+    item_names: StringTable,
+    item_descriptions: StringTable,
+
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
         const header = nds_rom.header();
@@ -431,8 +558,9 @@ pub const Game = struct {
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tm_len]);
-        const scripts = try getNarc(file_system, info.scripts);
 
+        const text = try getNarc(file_system, info.text);
+        const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -476,6 +604,14 @@ pub const Game = struct {
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,
+
+            .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
+            .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
+            .move_names = StringTable{ .data = text.fileData(.{ .i = info.move_names }) },
+            .move_descriptions = StringTable{ .data = text.fileData(.{ .i = info.move_descriptions }) },
+            .ability_names = StringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
+            .item_names = StringTable{ .data = text.fileData(.{ .i = info.item_names }) },
+            .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
         };
     }
 
