@@ -9,6 +9,7 @@ pub const script = @import("gen5/script.zig");
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
+const unicode = std.unicode;
 
 const nds = rom.nds;
 
@@ -412,18 +413,19 @@ pub const StringTable = struct {
         return table.header().entries.value();
     }
 
-    pub fn getEncryptedString(table: StringTable, section_i: usize, entry_i: usize) []u8 {
+    pub fn getEncryptedString(table: StringTable, section_i: usize, entry_i: usize) []lu16 {
         const section_offset = table.sectionOffsets()[section_i];
         const entry = table.entries(section_offset)[entry_i];
         const offset = section_offset.value() + entry.offset.value();
-        return table.data[offset..][0 .. entry.count.value() * @sizeOf(lu16)];
+        const res = table.data[offset..][0 .. entry.count.value() * @sizeOf(lu16)];
+        return mem.bytesAsSlice(lu16, res);
     }
 
     pub fn getStringStream(table: StringTable, section: usize, entry: usize) Stream {
         const string = table.getEncryptedString(section, entry);
         return .{
-            .data = string[0 .. string.len - 2],
-            .key = @ptrCast(*lu16, string[string.len - 2 ..][0..2]).value() ^ 0xFFFF,
+            .data = string,
+            .key = string[string.len - 1].value() ^ 0xFFFF,
         };
     }
 
@@ -459,7 +461,7 @@ pub const StringTable = struct {
     }
 
     const Stream = struct {
-        data: []u8,
+        data: []lu16,
         key: u16,
         pos: u32 = 0,
 
@@ -471,39 +473,38 @@ pub const StringTable = struct {
 
         pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
             const rest = stream.data[stream.pos..];
-            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
-            mem.copy(u8, buf[0..n], rest[0..n]);
-            for (mem.bytesAsSlice(lu16, buf[0..n])) |*c, i| {
-                c.* = lu16.init(c.value() ^ stream.keyForI(stream.pos / 2 + i));
+            var n: usize = 0;
+            for (rest) |c, i| {
+                const decoded = c.value() ^ stream.keyForI(stream.pos);
+
+                const Pair = struct {
+                    len: usize,
+                    codepoint: u21,
+                };
+                const pair: Pair = switch (decoded) {
+                    0xffff => break,
+                    0xfffe => .{ .len = 1, .codepoint = '\n' },
+                    else => .{
+                        .len = unicode.utf8CodepointSequenceLength(decoded) catch unreachable,
+                        .codepoint = decoded,
+                    },
+                };
+
+                if (buf.len < n + pair.len)
+                    break;
+                n += unicode.utf8Encode(pair.codepoint, buf[n..]) catch unreachable;
+                stream.pos += 1;
             }
 
-            //const end = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
-            stream.pos += @intCast(u32, n);
-            return n;
-        }
-
-        pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
-            const rest = stream.data[stream.pos..];
-            if (buf.len == 0)
-                return 0;
-            if (rest.len == 0)
-                return error.NoSpaceLeft;
-
-            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
-            mem.copy(u8, rest[0..n], buf[0..n]);
-            for (mem.bytesAsSlice(lu16, rest[0..n])) |*c, i|
-                unreachable; // TODO
-
-            stream.pos += @intCast(u32, n);
             return n;
         }
 
         fn keyForI(stream: Stream, i: usize) u16 {
-            const it = (stream.data.len / 2) - (i + 1);
+            const it = stream.data.len - (i + 1);
             var key: u32 = stream.key;
 
             for (stream.data[0..it]) |_|
-                key = @truncate(u16, (key >> 3) | (key << 13));
+                key = (key >> 3) | (key << 13) & 0xffff;
 
             return @intCast(u16, key);
         }

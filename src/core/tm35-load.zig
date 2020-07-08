@@ -23,6 +23,7 @@ const lu16 = rom.int.lu16;
 
 const bit = util.bit;
 const errors = util.errors;
+const escape = util.escape;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
@@ -958,13 +959,12 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
-    // Decrompress trainer names
     // try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
-    //try outputGen5StringTable(stream, "moves", "name", game.move_names);
-    //try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
-    //try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
-    //try outputGen5StringTable(stream, "items", "name", game.item_names);
-    //try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
+    try outputGen5StringTable(stream, "moves", "name", game.move_names);
+    try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
+    try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
+    try outputGen5StringTable(stream, "items", "name", game.item_names);
+    try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
 }
 
 fn outputGen5StringTable(
@@ -973,18 +973,21 @@ fn outputGen5StringTable(
     field_name: []const u8,
     est: gen5.StringTable,
 ) !void {
-    var buf1: [1024]u8 = undefined;
-    var buf2: [4]u8 = undefined;
+    const escapes = comptime blk: {
+        var res: [255][]const u8 = undefined;
+        mem.copy([]const u8, res[0..], &escape.default_escapes);
+        res['\r'] = "\\r";
+        res['\n'] = "\\n";
+        res['\\'] = "\\\\";
+        break :blk res;
+    };
+
+    var buf: [1024]u8 = undefined;
     var i: u32 = 0;
     while (i < est.entryCount(0)) : (i += 1) {
         try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
-        const len = try est.getStringStream(0, i).inStream().readAll(&buf1);
-        try stream.print("{x}", .{buf1[0..len]});
-        //for (mem.bytesAsSlice(lu16, buf1[0..len])) |c| {
-        //    const cl = try unicode.utf8Encode(c.value(), &buf2);
-        //    try stream.writeAll(buf2[0..cl]);
-        //}
-
+        const len = try est.getStringStream(0, i).inStream().readAll(&buf);
+        try escape.writeEscaped(stream, buf[0..len], escapes);
         try stream.writeAll("\n");
     }
 }
