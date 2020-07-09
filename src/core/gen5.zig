@@ -509,6 +509,8 @@ pub const StringTable = struct {
                     if (stream.data.len <= stream.pos)
                         return error.NoSpaceLeft;
                     mem.set(lu16, stream.data[stream.pos..], lu16.init(0xffff));
+                    for (stream.data) |*c, i|
+                        c.* = lu16.init(c.value() ^ stream.keyForI(i));
                     stream.pos = stream.data.len;
                     return n + 2;
                 }
