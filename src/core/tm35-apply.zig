@@ -24,6 +24,7 @@ const nds = rom.nds;
 
 const bit = util.bit;
 const errors = util.errors;
+const escape = util.escape;
 const parse = util.parse;
 
 const lu16 = rom.int.lu16;
@@ -767,6 +768,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         else => return error.NoField,
     }
 }
+
 fn applyHgssGrass(par: *parse.MutParser, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
     switch (m(try par.parse(parse.anyField))) {
         c("encounter_rate") => wilds.grass_rate = try par.parse(parse.u8v),
@@ -807,6 +809,15 @@ fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
 }
 
 fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
+    const escapes = comptime blk: {
+        var res: [255][]const u8 = undefined;
+        mem.copy([]const u8, res[0..], &escape.default_escapes);
+        res['\r'] = "\\r";
+        res['\n'] = "\\n";
+        res['\\'] = "\\\\";
+        break :blk res;
+    };
+
     var parser = parse.MutParser{ .str = str };
     const header = nds_rom.header();
 
@@ -913,6 +924,16 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
                 c("height") => pokemon.height = try parser.parse(parselu16v),
                 c("weight") => pokemon.weight = try parser.parse(parselu16v),
+                c("name") => {
+                    const names = game.pokemon_names;
+                    if (index >= names.entryCount(0))
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    var stream = io.bufferedOutStream(names.getStringStream(0, index).outStream());
+                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+                    try stream.outStream().writeAll("\xff\xff");
+                    try stream.flush();
+                },
                 c("egg_groups") => {
                     const eindex = try parser.parse(parse.index);
                     const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
@@ -964,8 +985,68 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             }
         },
         c("hms") => try parse.anyT(parser.str, &game.hms, converters),
-        c("items") => try parse.anyT(parser.str, &game.items, converters),
-        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
+        c("items") => {
+            const index = try parser.parse(parse.index);
+            const prev = parser.str;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("description"), c("name") => {
+                    const est = if (m(field) == c("name")) game.item_names //
+                        else game.item_descriptions;
+                    if (index >= est.entryCount(0))
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    var stream = io.bufferedOutStream(est.getStringStream(0, index).outStream());
+                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+                    try stream.outStream().writeAll("\xff\xff");
+                    try stream.flush();
+                },
+                else => {
+                    if (index >= game.items.len)
+                        return error.Error;
+                    try parse.anyT(prev, &game.items[index], converters);
+                },
+            }
+        },
+        c("moves") => {
+            const index = try parser.parse(parse.index);
+            const prev = parser.str;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("description"), c("name") => {
+                    const est = if (m(field) == c("name")) game.move_names //
+                        else game.move_descriptions;
+                    if (index >= est.entryCount(0))
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    var stream = io.bufferedOutStream(est.getStringStream(0, index).outStream());
+                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+                    try stream.outStream().writeAll("\xff\xff");
+                    try stream.flush();
+                },
+                else => {
+                    if (index >= game.moves.len)
+                        return error.Error;
+                    try parse.anyT(prev, &game.moves[index], converters);
+                },
+            }
+        },
+        c("abilities") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => {
+                    const names = game.ability_names;
+                    if (index >= names.entryCount(0))
+                        return error.Error;
+                    const value = try parser.parse(parse.strv);
+                    var stream = io.bufferedOutStream(names.getStringStream(0, index).outStream());
+                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+                    try stream.outStream().writeAll("\xff\xff");
+                    try stream.flush();
+                },
+                else => return error.Error,
+            }
+        },
         c("zones") => {
             const H = struct {
                 fn applyArea(par: *parse.MutParser, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {

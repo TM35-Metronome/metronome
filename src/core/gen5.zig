@@ -423,6 +423,8 @@ pub const StringTable = struct {
 
     pub fn getStringStream(table: StringTable, section: usize, entry: usize) Stream {
         const string = table.getEncryptedString(section, entry);
+        const last = string[string.len - 1].value();
+        std.debug.assert(last ^ (last ^ 0xFFFF) == 0xFFFF);
         return .{
             .data = string,
             .key = string[string.len - 1].value() ^ 0xFFFF,
@@ -463,7 +465,7 @@ pub const StringTable = struct {
     const Stream = struct {
         data: []lu16,
         key: u16,
-        pos: u32 = 0,
+        pos: usize = 0,
 
         pub const ReadError = error{};
         pub const WriteError = error{NoSpaceLeft};
@@ -483,6 +485,7 @@ pub const StringTable = struct {
                 };
                 const pair: Pair = switch (decoded) {
                     0xffff => break,
+                    0xfff0...0xfffd => unreachable, // TODO
                     0xfffe => .{ .len = 1, .codepoint = '\n' },
                     else => .{
                         .len = unicode.utf8CodepointSequenceLength(decoded) catch unreachable,
@@ -494,6 +497,37 @@ pub const StringTable = struct {
                     break;
                 n += unicode.utf8Encode(pair.codepoint, buf[n..]) catch unreachable;
                 stream.pos += 1;
+            }
+
+            return n;
+        }
+
+        pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
+            var n: usize = 0;
+            while (n < buf.len) {
+                if (mem.startsWith(u8, buf[n..], "\xff\xff")) {
+                    if (stream.data.len <= stream.pos)
+                        return error.NoSpaceLeft;
+                    mem.set(lu16, stream.data[stream.pos..], lu16.init(0xffff));
+                    stream.pos = stream.data.len;
+                    return n + 2;
+                }
+
+                const len = unicode.utf8ByteSequenceLength(buf[n]) catch unreachable;
+                if (buf.len < n + len)
+                    break;
+
+                const codepoint = unicode.utf8Decode(buf[n..][0..len]) catch unreachable;
+                if (stream.data.len <= stream.pos)
+                    return error.NoSpaceLeft;
+
+                stream.data[stream.pos] = switch (codepoint) {
+                    '\n' => lu16.init(0xfffe),
+                    else => lu16.init(@intCast(u16, codepoint)),
+                };
+
+                stream.pos += 1;
+                n += len;
             }
 
             return n;
