@@ -294,13 +294,22 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.writeByte('\n');
     }
 
-    for (game.tms) |tm, i| {
-        try stream.print(".tms[{}]={}\n", .{ i, tm.value() });
+    for (game.ability_names) |name, i| {
+        try stream.print(".abilities[{}].name=", .{i});
+        try gen3.encodings.decode(.en_us, &name, stream);
+        try stream.writeByte('\n');
     }
 
-    for (game.hms) |hm, i| {
-        try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
+    for (game.move_names) |name, i| {
+        try stream.print(".moves[{}].name=", .{i});
+        try gen3.encodings.decode(.en_us, &name, stream);
+        try stream.writeByte('\n');
     }
+
+    for (game.tms) |tm, i|
+        try stream.print(".tms[{}]={}\n", .{ i, tm.value() });
+    for (game.hms) |hm, i|
+        try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
 
     for (game.items) |item, i| {
         const pocket = switch (game.version) {

@@ -144,6 +144,10 @@ fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].map_headers.len={}\n", .{ i, info.map_headers.len });
     try stream.print(".game[{}].pokemon_names.start={}\n", .{ i, info.pokemon_names.start });
     try stream.print(".game[{}].pokemon_names.len={}\n", .{ i, info.pokemon_names.len });
+    try stream.print(".game[{}].ability_names.start={}\n", .{ i, info.ability_names.start });
+    try stream.print(".game[{}].ability_names.len={}\n", .{ i, info.ability_names.len });
+    try stream.print(".game[{}].move_names.start={}\n", .{ i, info.move_names.start });
+    try stream.print(".game[{}].move_names.len={}\n", .{ i, info.move_names.len });
 }
 
 fn getVersion(gamecode: []const u8) !common.Version {
@@ -206,6 +210,8 @@ fn getOffsets(
     const LvlUpRef = gen3.Ptr([*]gen3.LevelUpMove);
     const LvlUpRefs = Searcher(LvlUpRef, &[_][]const []const u8{});
     const PokemonNames = Searcher([11]u8, &[_][]const []const u8{});
+    const AbilityNames = Searcher([13]u8, &[_][]const []const u8{});
+    const MoveNames = Searcher([13]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
 
     const trainers = switch (version) {
@@ -240,6 +246,16 @@ fn getOffsets(
     };
 
     const pokemon_names = try PokemonNames.find4(data, &first_pokemon_names, &last_pokemon_names);
+    const ability_names = try AbilityNames.find4(data, &first_ability_names, &last_ability_names);
+    const move_names = switch (version) {
+        .emerald => try MoveNames.find4(data, &e_first_move_names, &last_move_names),
+        .ruby,
+        .sapphire,
+        .fire_red,
+        .leaf_green,
+        => try MoveNames.find4(data, &rsfrlg_first_move_names, &last_move_names),
+        else => unreachable,
+    };
     const hms_slice = try HmTms.find2(data, &hms);
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
@@ -300,6 +316,8 @@ fn getOffsets(
         .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
         .map_headers = offsets.MapHeaderSection.init(data, map_headers),
         .pokemon_names = offsets.PokemonNameSection.init(data, pokemon_names),
+        .ability_names = offsets.AbilityNameSection.init(data, ability_names),
+        .move_names = offsets.MoveNameSection.init(data, move_names),
     };
 }
 
@@ -1533,5 +1551,60 @@ const last_pokemon_names = blk: {
         __(11, .en_us, "JIRACHI"),
         __(11, .en_us, "DEOXYS"),
         __(11, .en_us, "CHIMECHO"),
+    };
+};
+
+const first_ability_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][13]u8{
+        __(13, .en_us, "-------"),
+        __(13, .en_us, "STENCH"),
+        __(13, .en_us, "DRIZZLE"),
+        __(13, .en_us, "SPEED BOOST"),
+        __(13, .en_us, "BATTLE ARMOR"),
+    };
+};
+
+const last_ability_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][13]u8{
+        __(13, .en_us, "WHITE SMOKE"),
+        __(13, .en_us, "PURE POWER"),
+        __(13, .en_us, "SHELL ARMOR"),
+        __(13, .en_us, "CACOPHONY"),
+        __(13, .en_us, "AIR LOCK"),
+    };
+};
+
+const e_first_move_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][13]u8{
+        __(13, .en_us, "-"),
+        __(13, .en_us, "POUND"),
+        __(13, .en_us, "KARATE CHOP"),
+        __(13, .en_us, "DOUBLESLAP"),
+        __(13, .en_us, "COMET PUNCH"),
+    };
+};
+
+const rsfrlg_first_move_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][13]u8{
+        __(13, .en_us, "-$$$$$$"),
+        __(13, .en_us, "POUND"),
+        __(13, .en_us, "KARATE CHOP"),
+        __(13, .en_us, "DOUBLESLAP"),
+        __(13, .en_us, "COMET PUNCH"),
+    };
+};
+
+const last_move_names = blk: {
+    @setEvalBranchQuota(100000);
+    break :blk [_][13]u8{
+        __(13, .en_us, "ROCK BLAST"),
+        __(13, .en_us, "SHOCK WAVE"),
+        __(13, .en_us, "WATER PULSE"),
+        __(13, .en_us, "DOOM DESIRE"),
+        __(13, .en_us, "PSYCHO BOOST"),
     };
 };

@@ -466,6 +466,8 @@ pub const Game = struct {
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
     pokemon_names: [][11]u8,
+    ability_names: [][13]u8,
+    move_names: [][13]u8,
 
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
@@ -614,6 +616,8 @@ pub const Game = struct {
             .items = info.items.slice(gba_rom),
             .wild_pokemon_headers = info.wild_pokemon_headers.slice(gba_rom),
             .pokemon_names = info.pokemon_names.slice(gba_rom),
+            .ability_names = info.ability_names.slice(gba_rom),
+            .move_names = info.move_names.slice(gba_rom),
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
             .pokeball_items = script_data.pokeball_items.toOwnedSlice(),

@@ -78,6 +78,8 @@ pub const ItemSection = Section(gen3.Item);
 pub const WildPokemonHeaderSection = Section(gen3.WildPokemonHeader);
 pub const MapHeaderSection = Section(gen3.MapHeader);
 pub const PokemonNameSection = Section([11]u8);
+pub const AbilityNameSection = Section([13]u8);
+pub const MoveNameSection = Section([13]u8);
 
 pub const Info = struct {
     game_title: [12]u8,
@@ -103,6 +105,8 @@ pub const Info = struct {
     wild_pokemon_headers: WildPokemonHeaderSection,
     map_headers: MapHeaderSection,
     pokemon_names: PokemonNameSection,
+    ability_names: AbilityNameSection,
+    move_names: AbilityNameSection,
 };
 
 pub const infos = [_]Info{
@@ -165,6 +169,14 @@ const emerald_us_info = Info{
     .pokemon_names = .{
         .start = 3245512,
         .len = 412,
+    },
+    .ability_names = .{
+        .start = 3258075,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 3250044,
+        .len = 355,
     },
 
     .starters = .{
@@ -232,6 +244,14 @@ pub const ruby_us_info = Info{
         .start = 2060676,
         .len = 412,
     },
+    .ability_names = .{
+        .start = 2073184,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2065208,
+        .len = 355,
+    },
 
     .starters = .{
         .{ .offset = 0x003F76E0 },
@@ -297,6 +317,14 @@ pub const sapphire_us_info = Info{
     .pokemon_names = .{
         .start = 2060564,
         .len = 412,
+    },
+    .ability_names = .{
+        .start = 2073072,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2065096,
+        .len = 355,
     },
 
     .starters = .{
@@ -364,6 +392,14 @@ pub const fire_us_info = Info{
         .start = 2383696,
         .len = 412,
     },
+    .ability_names = .{
+        .start = 2423984,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2388228,
+        .len = 355,
+    },
 
     .starters = .{
         .{ .offset = 0x00169C2D },
@@ -429,6 +465,14 @@ pub const leaf_us_info = Info{
     .pokemon_names = .{
         .start = 2383660,
         .len = 412,
+    },
+    .ability_names = .{
+        .start = 2423948,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2388192,
+        .len = 355,
     },
 
     .starters = .{

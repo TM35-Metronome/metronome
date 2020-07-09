@@ -2,6 +2,7 @@ const clap = @import("clap");
 const std = @import("std");
 const util = @import("util");
 
+const ascii = std.ascii;
 const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -14,6 +15,7 @@ const rand = std.rand;
 const testing = std.testing;
 
 const errors = util.errors;
+const escape = util.escape;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
@@ -87,6 +89,7 @@ pub fn main2(
     };
     defer args.deinit();
 
+    const out = args.option("--output") orelse "site.html";
     if (args.flag("--help")) {
         usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
@@ -96,10 +99,9 @@ pub fn main2(
         stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
         return 0;
     }
-    const out = args.opens("--output") orelse "site.html";
 
     var line_buf = std.ArrayList(u8).init(allocator);
-    var obj = Object{ .fields = Fields.inir(allocator) };
+    var obj = Object{ .fields = Fields.init(allocator) };
 
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
@@ -111,36 +113,418 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
+    const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return errors.createErr(stdio.err, out, err);
+    var out_stream = io.bufferedOutStream(out_file.outStream());
+    generate(out_stream.outStream(), obj) catch |err| return errors.writeErr(stdio.err, out, err);
+    out_stream.flush() catch |err| return errors.writeErr(stdio.err, out, err);
+
     return 0;
 }
 
-fn parseLine(obj: *Object, str: []const u8) void {
+fn parseLine(obj: *Object, str: []const u8) !void {
     const allocator = obj.fields.allocator;
+    var strings = std.StringHashMap(void).init(allocator);
     var curr = obj;
     var p = parse.MutParser{ .str = str };
     while (true) {
         if (p.parse(parse.anyField)) |field| {
-            const entry = try curr.fields.getOrPutValue(field, Object{
+            const string_entry = try strings.getOrPut(field);
+            if (!string_entry.found_existing)
+                string_entry.kv.key = try mem.dupe(allocator, u8, field);
+
+            const entry = try curr.fields.getOrPutValue(string_entry.kv.key, Object{
                 .fields = Fields.init(allocator),
             });
-            if (entry.key.ptr == str.ptr)
-                entry.key = try mem.dupe(allocator, u8, field);
             curr = &entry.value;
-        } else if (p.parse(parse.index)) |index| {
-            curr = try curr.indexs.getOrPutValue(index, Object{
+        } else |_| if (p.parse(parse.index)) |index| {
+            curr = try curr.indexs.getOrPutValue(allocator, index, Object{
                 .fields = Fields.init(allocator),
             });
-        } else if (p.parse(parse.value)) |value| {
-            curr.value = try mem.dupe(allocator, u8, value);
-        } else {
+        } else |_| if (p.parse(parse.strv)) |value| {
+            const string_entry = try strings.getOrPut(value);
+            if (!string_entry.found_existing)
+                string_entry.kv.key = try mem.dupe(allocator, u8, value);
+
+            curr.value = string_entry.kv.key;
+            return;
+        } else |_| {
             return;
         }
     }
 }
 
-fn generate(stream: fs.File.OutStream, obj: Object) !void {
-    if (obj.fields.get("pokemons")) |pokemons| {
-        for (pokemons.value.indexs.values()) |pokemon, i| {}
+fn generate(stream: var, root: Object) !void {
+    const unknown = "???";
+    const escapes = comptime blk: {
+        var res: [255][]const u8 = undefined;
+        mem.copy([]const u8, res[0..], &escape.default_escapes);
+        res['\r'] = "\\r";
+        res['\n'] = "\\n";
+        res['\\'] = "\\\\";
+        break :blk res;
+    };
+    const stat_names = [_][2][]const u8{
+        .{ "hp", "Hp" },
+        .{ "attack", "Attack" },
+        .{ "defense", "Defense" },
+        .{ "sp_attack", "Sp. Atk" },
+        .{ "sp_defense", "Sp. Def" },
+        .{ "speed", "Speed" },
+    };
+
+    try stream.writeAll("<!DOCTYPE html>\n");
+    try stream.writeAll("<html>\n");
+    try stream.writeAll("<head>\n");
+    try stream.writeAll("<title>Wiki</title>\n");
+    try stream.writeAll("<style>\n");
+
+    try stream.writeAll("* {font-family: Arial, Helvetica, sans-serif;}\n");
+    try stream.writeAll(".type {border-style: solid; border-width: 1px; border-color: black; color: white;}\n");
+    try stream.writeAll(".type_bug {background-color: #88960e;}\n");
+    try stream.writeAll(".type_dark {background-color: #3c2d23;}\n");
+    try stream.writeAll(".type_dragon {background-color: #4e3ba4;}\n");
+    try stream.writeAll(".type_electric {background-color: #e79302;}\n");
+    try stream.writeAll(".type_fairy {background-color: #e08ee0;}\n");
+    try stream.writeAll(".type_fighting {background-color: #5f2311;}\n");
+    try stream.writeAll(".type_fire {background-color: #c72100;}\n");
+    try stream.writeAll(".type_flying {background-color: #5d73d4;}\n");
+    try stream.writeAll(".type_ghost {background-color: #454593;}\n");
+    try stream.writeAll(".type_grass {background-color: #389a02;}\n");
+    try stream.writeAll(".type_ground {background-color: #ad8c33;}\n");
+    try stream.writeAll(".type_ice {background-color: #6dd3f5;}\n");
+    try stream.writeAll(".type_normal {background-color: #ada594;}\n");
+    try stream.writeAll(".type_poison {background-color: #6b246e;}\n");
+    try stream.writeAll(".type_psychic {background-color: #dc3165;}\n");
+    try stream.writeAll(".type_rock {background-color: #9e863d;}\n");
+    try stream.writeAll(".type_steel {background-color: #8e8e9f;}\n");
+    try stream.writeAll(".type_water {background-color: #0c67c2;}\n");
+
+    try stream.writeAll(".pokemon_stat {width:100%;}\n");
+    try stream.writeAll(".pokemon_stat_table {width:50%;}\n");
+    try stream.writeAll(".pokemon_stat_hp {background-color: #6ab04c;}\n");
+    try stream.writeAll(".pokemon_stat_attack {background-color: #eb4d4b;}\n");
+    try stream.writeAll(".pokemon_stat_defense {background-color: #f0932b;}\n");
+    try stream.writeAll(".pokemon_stat_sp_attack {background-color:#be2edd;}\n");
+    try stream.writeAll(".pokemon_stat_sp_defense {background-color: #686de0;}\n");
+    try stream.writeAll(".pokemon_stat_speed {background-color: #f9ca24;}\n");
+    try stream.writeAll(".pokemon_stat_total {background-color: #95afc0;}\n");
+    for ([_]void{{}} ** 101) |_, i| {
+        try stream.print(".pokemon_stat_p{} {{width: {}%;}}\n", .{ i, i });
+    }
+
+    try stream.writeAll("</style>\n");
+    try stream.writeAll("</head>\n");
+    try stream.writeAll("</body>\n");
+
+    if (root.fields.getValue("starters")) |starters| {
+        try stream.writeAll("<h1>Starters</h1>\n");
+        try stream.writeAll("<table>\n");
+        for (starters.indexs.values()) |starter_v, si| {
+            const starter = fmt.parseInt(usize, starter_v.value orelse continue, 10) catch continue;
+            const starter_name = humanize(root.getArrayFieldValue("pokemons", starter, "name") orelse unknown);
+            try stream.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td></tr>", .{ starter, starter_name });
+        }
+        try stream.writeAll("</table>\n");
+    }
+
+    if (root.fields.getValue("pokemons")) |pokemons| {
+        try stream.writeAll("<h1>Pokemons</h1>\n");
+        for (pokemons.indexs.values()) |pokemon, pi| {
+            const species = pokemons.indexs.at(pi).key;
+            const pokemon_name = humanize(pokemon.getFieldValue("name") orelse unknown);
+            try stream.print("<h2 id=\"pokemon_{}\">#{} {}</h2>\n", .{ species, species, pokemon_name });
+
+            try stream.writeAll("<table>\n");
+            if (pokemon.fields.getValue("types")) |types| {
+                try stream.writeAll("<tr><td>Type:</td><td>");
+                outer: for (types.indexs.values()) |t, ti| {
+                    const type_str = t.value orelse continue;
+                    for (types.indexs.values()[0..ti]) |prev| {
+                        const prev_str = prev.value orelse continue;
+                        if (mem.eql(u8, prev_str, type_str))
+                            continue :outer;
+                    }
+
+                    if (ti != 0)
+                        try stream.writeAll(" ");
+
+                    try stream.print("<b class=\"type type_{}\">{}</b>", .{ type_str, humanize(type_str) });
+                }
+                try stream.writeAll("</td>\n");
+            }
+
+            if (pokemon.fields.getValue("abilities")) |abilities| {
+                try stream.writeAll("<tr><td>Abilities:</td><td>");
+                for (abilities.indexs.values()) |ability_v, ai| {
+                    const ability = fmt.parseInt(usize, ability_v.value orelse continue, 10) catch continue;
+                    const ability_name = root.getArrayFieldValue("abilities", ability, "name") orelse unknown;
+                    if (ability == 0)
+                        continue;
+                    if (ai != 0)
+                        try stream.writeAll(", ");
+
+                    try stream.print("<a href=\"#ability_{}\">{}</a>", .{ ability, humanize(ability_name) });
+                }
+                try stream.writeAll("</td>\n");
+            }
+
+            if (pokemon.fields.getValue("items")) |abilities| {
+                try stream.writeAll("<tr><td>Items:</td><td>");
+                for (abilities.indexs.values()) |item_v, ii| {
+                    const item = fmt.parseInt(usize, item_v.value orelse continue, 10) catch continue;
+                    const item_name = root.getArrayFieldValue("items", item, "name") orelse unknown;
+                    if (ii != 0)
+                        try stream.writeAll(", ");
+
+                    try stream.print("<a href=\"#item_{}\">{}</a>", .{ item, humanize(item_name) });
+                }
+                try stream.writeAll("</td>\n");
+            }
+
+            if (pokemon.fields.getValue("egg_groups")) |egg_groups| {
+                try stream.writeAll("<tr><td>Egg Groups:</td><td>");
+                outer: for (egg_groups.indexs.values()) |egg_group_v, ei| {
+                    const egg_group = egg_group_v.value orelse continue;
+                    for (egg_groups.indexs.values()[0..ei]) |prev| {
+                        const prev_str = prev.value orelse continue;
+                        if (mem.eql(u8, prev_str, egg_group))
+                            continue :outer;
+                    }
+
+                    if (ei != 0)
+                        try stream.writeAll(", ");
+
+                    try stream.print("{}", .{humanize(egg_group)});
+                }
+                try stream.writeAll("</td>\n");
+            }
+
+            var it = pokemon.fields.iterator();
+            while (it.next()) |field| {
+                const field_name = field.key;
+                if (mem.eql(u8, field_name, "name"))
+                    continue;
+
+                const value = field.value.value orelse continue;
+                try stream.print("<tr><td>{}:</td><td>{}</td></tr>\n", .{ humanize(field_name), humanize(value) });
+            }
+
+            try stream.writeAll("</table>\n");
+
+            if (pokemon.fields.getValue("evos")) |evos| {
+                try stream.writeAll("<h3>Evolutions</h3>\n");
+                try stream.writeAll("<table>\n");
+                try stream.writeAll("<tr><th>Evolution</th><th>Method</th></tr>\n");
+                for (evos.indexs.values()) |evo| {
+                    const method = evo.getFieldValue("method") orelse continue;
+                    const param = fmt.parseInt(usize, evo.getFieldValue("param") orelse continue, 10) catch continue;
+                    const target = fmt.parseInt(usize, evo.getFieldValue("target") orelse continue, 10) catch continue;
+
+                    const target_name = humanize(root.getArrayFieldValue("pokemons", target, "name") orelse unknown);
+                    const param_item_name = humanize(root.getArrayFieldValue("items", param, "name") orelse unknown);
+                    const param_move_name = humanize(root.getArrayFieldValue("moves", param, "name") orelse unknown);
+                    const param_pokemon_name = humanize(root.getArrayFieldValue("pokemons", param, "name") orelse unknown);
+
+                    try stream.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td><td>", .{ target, target_name });
+                    if (mem.eql(u8, method, "friend_ship")) {
+                        try stream.print("Level up with friendship high", .{});
+                    } else if (mem.eql(u8, method, "friend_ship_during_day")) {
+                        try stream.print("Level up with friendship high during daytime", .{});
+                    } else if (mem.eql(u8, method, "friend_ship_during_night")) {
+                        try stream.print("Level up with friendship high during night", .{});
+                    } else if (mem.eql(u8, method, "level_up")) {
+                        try stream.print("Level {}", .{param});
+                    } else if (mem.eql(u8, method, "trade")) {
+                        try stream.print("Trade", .{});
+                    } else if (mem.eql(u8, method, "trade_holding_item")) {
+                        try stream.print("Trade holding <a href=\"#item_{}\">{}</a>", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "use_item")) {
+                        try stream.print("Using <a href=\"#item_{}\">{}</a>", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "attack_gth_defense")) {
+                        try stream.print("Level {} when Attack > Defense", .{param});
+                    } else if (mem.eql(u8, method, "attack_eql_defense")) {
+                        try stream.print("Level {} when Attack = Defense", .{param});
+                    } else if (mem.eql(u8, method, "attack_lth_defense")) {
+                        try stream.print("Level {} when Attack < Defense", .{param});
+                    } else if (mem.eql(u8, method, "personality_value1")) {
+                        try stream.print("Level {} when having personallity value type 1", .{param});
+                    } else if (mem.eql(u8, method, "personality_value2")) {
+                        try stream.print("Level {} when having personallity value type 2", .{param});
+                    } else if (mem.eql(u8, method, "level_up_may_spawn_pokemon")) {
+                        // TODO: What Pokémon?
+                        try stream.print("Level {} (May spawn another Pokémon when evolved)", .{param});
+                    } else if (mem.eql(u8, method, "level_up_spawn_if_cond")) {
+                        // TODO: What Pokémon? What condition?
+                        try stream.print("Level {} (May spawn another Pokémon when evolved if conditions are met)", .{param});
+                    } else if (mem.eql(u8, method, "beauty")) {
+                        try stream.print("Level up when beauty hits {}", .{param});
+                    } else if (mem.eql(u8, method, "use_item_on_male")) {
+                        try stream.print("Using <a href=\"#item_{}\">{}</a> on a male", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "use_item_on_female")) {
+                        try stream.print("Using <a href=\"#item_{}\">{}</a> on a female", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "level_up_holding_item_during_daytime")) {
+                        try stream.print("Level up while holding <a href=\"#item_{}\">{}</a> during daytime", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "level_up_holding_item_during_the_night")) {
+                        try stream.print("Level up while holding <a href=\"#item_{}\">{}</a> during night", .{ param, param_item_name });
+                    } else if (mem.eql(u8, method, "level_up_knowning_move")) {
+                        try stream.print("Level up while knowing <a href=\"#move_{}\">{}</a>", .{ param, param_move_name });
+                    } else if (mem.eql(u8, method, "level_up_with_other_pokemon_in_party")) {
+                        try stream.print("Level up with <a href=\"#pokemon_{}\">{}</a> in the Party", .{ param, param_pokemon_name });
+                    } else if (mem.eql(u8, method, "level_up_male")) {
+                        try stream.print("Level {} male", .{param});
+                    } else if (mem.eql(u8, method, "level_up_female")) {
+                        try stream.print("Level {} female", .{param});
+                    } else if (mem.eql(u8, method, "level_up_in_special_magnetic_field")) {
+                        try stream.print("Level up in special magnetic field", .{});
+                    } else if (mem.eql(u8, method, "level_up_near_moss_rock")) {
+                        try stream.print("Level up near moss rock", .{});
+                    } else if (mem.eql(u8, method, "level_up_near_ice_rock")) {
+                        try stream.print("Level up near ice rock", .{});
+                    } else {
+                        try stream.print("{}", .{unknown});
+                    }
+                    try stream.writeAll("</td></tr>\n");
+                }
+                try stream.writeAll("</table>\n");
+            }
+
+            if (pokemon.fields.getValue("stats")) |stats| {
+                try stream.writeAll("<h3>Stats</h3>\n");
+                try stream.writeAll("<table class=\"pokemon_stat_table\">\n");
+
+                var total_stats: usize = 0;
+                for (stat_names) |stat| {
+                    const string = stats.getFieldValue(stat[0]) orelse continue;
+                    const value = fmt.parseInt(usize, string, 10) catch continue;
+                    const percent = @floatToInt(usize, (@intToFloat(f64, value) / 255) * 100);
+                    try stream.print("<tr><td>{}:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_{}\">{}</div></td></tr>\n", .{ stat[1], percent, stat[0], value });
+                    total_stats += value;
+                }
+
+                const percent = @floatToInt(usize, (@intToFloat(f64, total_stats) / 1000) * 100);
+                try stream.print("<tr><td>Total:</td><td><div class=\"pokemon_stat pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
+                try stream.writeAll("</table>\n");
+            }
+
+            if (pokemon.fields.getValue("ev_yield")) |stats| {
+                try stream.writeAll("<h3>Ev Yield</h3>\n");
+                try stream.writeAll("<table>\n");
+
+                var total_stats: usize = 0;
+                for (stat_names) |stat| {
+                    const string = stats.getFieldValue(stat[0]) orelse continue;
+                    const value = fmt.parseInt(usize, string, 10) catch continue;
+                    try stream.print("<tr><td>{}:</td><td>{}</td></tr>\n", .{ stat[1], value });
+                    total_stats += value;
+                }
+
+                try stream.print("<tr><td>Total:</td><td>{}</td></tr>\n", .{total_stats});
+                try stream.writeAll("</table>\n");
+            }
+        }
+    }
+
+    if (root.fields.getValue("moves")) |moves| {
+        try stream.writeAll("<h1>Moves</h1>\n");
+        for (moves.indexs.values()) |move, mi| {
+            const move_id = moves.indexs.at(mi).key;
+            const move_name = humanize(move.getFieldValue("name") orelse unknown);
+            try stream.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
+
+            if (move.getFieldValue("description")) |description| {
+                try stream.writeAll("<p>");
+                try escape.writeUnEscaped(stream, description, escapes);
+                try stream.writeAll("</p>\n");
+            }
+
+            try stream.writeAll("<table>\n");
+
+            if (move.getFieldValue("type")) |t| {
+                try stream.print("<tr><td>Type:</td><td><b class=\"type type_{}\">{}</b></td></tr>\n", .{ t, humanize(t) });
+            }
+
+            var it = move.fields.iterator();
+            while (it.next()) |field| {
+                const field_name = field.key;
+                if (mem.eql(u8, field_name, "name"))
+                    continue;
+                if (mem.eql(u8, field_name, "description"))
+                    continue;
+
+                const value = field.value.value orelse continue;
+                try stream.print("<tr><td>{}:</td><td>{}</td></tr>\n", .{ humanize(field_name), humanize(value) });
+            }
+
+            try stream.writeAll("</table>\n");
+        }
+    }
+
+    if (root.fields.getValue("items")) |items| {
+        try stream.writeAll("<h1>Items</h1>\n");
+        for (items.indexs.values()) |item, ii| {
+            const item_id = items.indexs.at(ii).key;
+            const item_name = humanize(item.getFieldValue("name") orelse unknown);
+            try stream.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });
+
+            if (item.getFieldValue("description")) |description| {
+                try stream.writeAll("<p>");
+                try escape.writeUnEscaped(stream, description, escapes);
+                try stream.writeAll("</p>\n");
+            }
+
+            try stream.writeAll("<table>\n");
+
+            var it = item.fields.iterator();
+            while (it.next()) |field| {
+                const field_name = field.key;
+                if (mem.eql(u8, field_name, "name"))
+                    continue;
+                if (mem.eql(u8, field_name, "description"))
+                    continue;
+
+                const value = field.value.value orelse continue;
+                try stream.print("<tr><td>{}:</td><td>{}</td></tr>\n", .{ humanize(field_name), humanize(value) });
+            }
+
+            try stream.writeAll("</table>\n");
+        }
+    }
+
+    try stream.writeAll("</body>\n");
+    try stream.writeAll("</html>\n");
+}
+
+const HumanizeFormatter = struct {
+    str: []const u8,
+
+    pub fn format(
+        self: HumanizeFormatter,
+        comptime f: []const u8,
+        options: std.fmt.FormatOptions,
+        out_stream: var,
+    ) !void {
+        try writeHumanized(out_stream, self.str);
+    }
+};
+
+fn humanize(str: []const u8) HumanizeFormatter {
+    return HumanizeFormatter{ .str = str };
+}
+
+fn writeHumanized(stream: var, str: []const u8) !void {
+    if (fmt.parseInt(isize, str, 10)) |_| {
+        try stream.writeAll(str);
+    } else |_| {
+        var first = true;
+        var it = mem.tokenize(str, "_ ");
+        while (it.next()) |word| : (first = false) {
+            if (!first)
+                try stream.writeAll(" ");
+
+            try stream.writeByte(ascii.toUpper(word[0]));
+            for (word[1..]) |c|
+                try stream.writeByte(ascii.toLower(c));
+        }
     }
 }
 
@@ -151,4 +535,17 @@ const Object = struct {
     fields: Fields,
     indexs: Indexs = Indexs{},
     value: ?[]const u8 = null,
+
+    fn getFieldValue(obj: Object, field: []const u8) ?[]const u8 {
+        if (obj.fields.getValue(field)) |v|
+            return v.value;
+        return null;
+    }
+
+    fn getArrayFieldValue(obj: Object, array_field: []const u8, index: usize, field: []const u8) ?[]const u8 {
+        if (obj.fields.getValue(array_field)) |array|
+            if (array.indexs.get(index)) |elem|
+                return elem.getFieldValue(field);
+        return null;
+    }
 };

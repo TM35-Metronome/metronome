@@ -316,7 +316,6 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 else => return error.NoField,
             }
         },
-        c("moves") => try parse.anyT(parser.str, &game.moves, converters),
         c("pokemons") => {
             const index = try parser.parse(parse.index);
             if (index >= game.pokemons.len)
@@ -378,6 +377,23 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
         },
         c("tms") => try parse.anyT(parser.str, &game.tms, converters),
         c("hms") => try parse.anyT(parser.str, &game.hms, converters),
+        c("moves") => {
+            const index = try parser.parse(parse.index);
+            const prev = parser.str;
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
+                c("name") => {
+                    if (index >= game.move_names.len)
+                        return error.Error;
+                    try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.move_names[index]);
+                },
+                else => {
+                    if (index >= game.moves.len)
+                        return error.Error;
+                    try parse.anyT(prev, &game.moves[index], converters);
+                },
+            }
+        },
         c("items") => {
             const index = try parser.parse(parse.index);
             if (index >= game.items.len)
@@ -400,6 +416,16 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                     else => unreachable,
                 },
                 else => return error.NoField,
+            }
+        },
+        c("abilities") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.ability_names.len)
+                return error.Error;
+
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.ability_names[index]),
+                else => return error.Error,
             }
         },
         c("zones") => {
