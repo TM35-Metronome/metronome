@@ -221,10 +221,7 @@ pub const converters = .{
     parse.toBool,
     parse.toEnum(common.MoveCategory),
     parse.toEnum(common.EvoMethod),
-    parse.toEnum(gen3.Type),
-    parse.toEnum(gen4.Type),
     parse.toEnum(gen4.Pocket),
-    parse.toEnum(gen5.Type),
     parse.toEnum(gen5.Evolution.Method),
     parse.toEnum(gen5.Pocket),
     parse.toInt(u1, 10),
@@ -428,6 +425,16 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 else => return error.Error,
             }
         },
+        c("types") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.type_names.len)
+                return error.Error;
+
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.type_names[index]),
+                else => return error.Error,
+            }
+        },
         c("zones") => {
             const index = try parser.parse(parse.index);
             try parser.parse(comptime parse.field("wild"));
@@ -586,15 +593,8 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description"), c("name") => {
-                    const est = if (m(field) == c("name")) game.move_names //
-                        else game.move_descriptions;
-                    if (index >= est.count())
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    const stream = est.getStringStream(@intCast(u32, index)).outStream();
-                    try gen4.encodings.encode(value, stream);
-                },
+                c("description") => try applyGen4String(game.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.move_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.moves.len)
                         return error.Error;
@@ -607,15 +607,8 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description"), c("name") => {
-                    const est = if (m(field) == c("name")) game.item_names //
-                        else game.item_descriptions;
-                    if (index >= est.count())
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    const stream = est.getStringStream(@intCast(u32, index)).outStream();
-                    try gen4.encodings.encode(value, stream);
-                },
+                c("description") => try applyGen4String(game.item_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.item_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.items.len)
                         return error.Error;
@@ -626,15 +619,14 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => {
-                    const names = game.ability_names;
-                    if (index >= names.count())
-                        return error.Error;
-
-                    const value = try parser.parse(parse.strv);
-                    const stream = names.getStringStream(@intCast(u32, index)).outStream();
-                    try gen4.encodings.encode(value, stream);
-                },
+                c("name") => try applyGen4String(game.ability_names, index, try parser.parse(parse.strv)),
+                else => return error.Error,
+            }
+        },
+        c("types") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => try applyGen4String(game.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -660,14 +652,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("name") => {
-                    const names = game.pokemon_names;
-                    if (index >= names.count())
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    const stream = names.getStringStream(@intCast(u32, index)).outStream();
-                    try gen4.encodings.encode(value, stream);
-                },
+                c("name") => try applyGen4String(game.pokemon_names, index, try parser.parse(parse.strv)),
                 c("egg_groups") => {
                     const eindex = try parser.parse(parse.index);
                     const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
@@ -834,16 +819,14 @@ fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
     }
 }
 
-fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
-    const escapes = comptime blk: {
-        var res: [255][]const u8 = undefined;
-        mem.copy([]const u8, res[0..], &escape.default_escapes);
-        res['\r'] = "\\r";
-        res['\n'] = "\\n";
-        res['\\'] = "\\\\";
-        break :blk res;
-    };
+fn applyGen4String(table: gen4.StringTable, index: usize, value: []const u8) !void {
+    if (index >= table.count())
+        return error.Error;
+    const stream = table.getStringStream(@intCast(u32, index)).outStream();
+    try gen4.encodings.encode(value, stream);
+}
 
+fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
     var parser = parse.MutParser{ .str = str };
     const header = nds_rom.header();
 
@@ -950,16 +933,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
                 c("height") => pokemon.height = try parser.parse(parselu16v),
                 c("weight") => pokemon.weight = try parser.parse(parselu16v),
-                c("name") => {
-                    const names = game.pokemon_names;
-                    if (index >= names.entryCount(0))
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    var stream = io.bufferedOutStream(names.getStringStream(0, index).outStream());
-                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
-                    try stream.outStream().writeAll("\xff\xff");
-                    try stream.flush();
-                },
+                c("name") => try applyGen5String(game.pokemon_names, index, try parser.parse(parse.strv)),
                 c("egg_groups") => {
                     const eindex = try parser.parse(parse.index);
                     const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
@@ -1016,17 +990,8 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description"), c("name") => {
-                    const est = if (m(field) == c("name")) game.item_names //
-                        else game.item_descriptions;
-                    if (index >= est.entryCount(0))
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    var stream = io.bufferedOutStream(est.getStringStream(0, index).outStream());
-                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
-                    try stream.outStream().writeAll("\xff\xff");
-                    try stream.flush();
-                },
+                c("description") => try applyGen5String(game.item_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.item_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.items.len)
                         return error.Error;
@@ -1039,17 +1004,8 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description"), c("name") => {
-                    const est = if (m(field) == c("name")) game.move_names //
-                        else game.move_descriptions;
-                    if (index >= est.entryCount(0))
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    var stream = io.bufferedOutStream(est.getStringStream(0, index).outStream());
-                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
-                    try stream.outStream().writeAll("\xff\xff");
-                    try stream.flush();
-                },
+                c("description") => try applyGen5String(game.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.move_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.moves.len)
                         return error.Error;
@@ -1060,16 +1016,14 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => {
-                    const names = game.ability_names;
-                    if (index >= names.entryCount(0))
-                        return error.Error;
-                    const value = try parser.parse(parse.strv);
-                    var stream = io.bufferedOutStream(names.getStringStream(0, index).outStream());
-                    try escape.writeUnEscaped(stream.outStream(), value, escapes);
-                    try stream.outStream().writeAll("\xff\xff");
-                    try stream.flush();
-                },
+                c("name") => try applyGen5String(game.ability_names, index, try parser.parse(parse.strv)),
+                else => return error.Error,
+            }
+        },
+        c("types") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("name") => try applyGen5String(game.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -1142,4 +1096,22 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         },
         else => return error.NoField,
     }
+}
+
+fn applyGen5String(table: gen5.StringTable, index: usize, value: []const u8) !void {
+    const escapes = comptime blk: {
+        var res: [255][]const u8 = undefined;
+        mem.copy([]const u8, res[0..], &escape.default_escapes);
+        res['\r'] = "\\r";
+        res['\n'] = "\\n";
+        res['\\'] = "\\\\";
+        break :blk res;
+    };
+
+    if (index >= table.entryCount(0))
+        return error.Error;
+    var stream = io.bufferedOutStream(table.getStringStream(0, index).outStream());
+    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+    try stream.outStream().writeAll("\xff\xff");
+    try stream.flush();
 }

@@ -180,24 +180,24 @@ fn generate(stream: var, root: Object) !void {
 
     try stream.writeAll("* {font-family: Arial, Helvetica, sans-serif;}\n");
     try stream.writeAll(".type {border-style: solid; border-width: 1px; border-color: black; color: white;}\n");
-    try stream.writeAll(".type_bug {background-color: #88960e;}\n");
-    try stream.writeAll(".type_dark {background-color: #3c2d23;}\n");
-    try stream.writeAll(".type_dragon {background-color: #4e3ba4;}\n");
-    try stream.writeAll(".type_electric {background-color: #e79302;}\n");
-    try stream.writeAll(".type_fairy {background-color: #e08ee0;}\n");
-    try stream.writeAll(".type_fighting {background-color: #5f2311;}\n");
-    try stream.writeAll(".type_fire {background-color: #c72100;}\n");
-    try stream.writeAll(".type_flying {background-color: #5d73d4;}\n");
-    try stream.writeAll(".type_ghost {background-color: #454593;}\n");
-    try stream.writeAll(".type_grass {background-color: #389a02;}\n");
-    try stream.writeAll(".type_ground {background-color: #ad8c33;}\n");
-    try stream.writeAll(".type_ice {background-color: #6dd3f5;}\n");
-    try stream.writeAll(".type_normal {background-color: #ada594;}\n");
-    try stream.writeAll(".type_poison {background-color: #6b246e;}\n");
-    try stream.writeAll(".type_psychic {background-color: #dc3165;}\n");
-    try stream.writeAll(".type_rock {background-color: #9e863d;}\n");
-    try stream.writeAll(".type_steel {background-color: #8e8e9f;}\n");
-    try stream.writeAll(".type_water {background-color: #0c67c2;}\n");
+    try stream.writeAll(".type_Bug {background-color: #88960e;}\n");
+    try stream.writeAll(".type_Dark {background-color: #3c2d23;}\n");
+    try stream.writeAll(".type_Dragon {background-color: #4e3ba4;}\n");
+    try stream.writeAll(".type_Electric {background-color: #e79302;}\n");
+    try stream.writeAll(".type_Fairy {background-color: #e08ee0;}\n");
+    try stream.writeAll(".type_Fighting {background-color: #5f2311;}\n");
+    try stream.writeAll(".type_Fire {background-color: #c72100;}\n");
+    try stream.writeAll(".type_Flying {background-color: #5d73d4;}\n");
+    try stream.writeAll(".type_Ghost {background-color: #454593;}\n");
+    try stream.writeAll(".type_Grass {background-color: #389a02;}\n");
+    try stream.writeAll(".type_Ground {background-color: #ad8c33;}\n");
+    try stream.writeAll(".type_Ice {background-color: #6dd3f5;}\n");
+    try stream.writeAll(".type_Normal {background-color: #ada594;}\n");
+    try stream.writeAll(".type_Poison {background-color: #6b246e;}\n");
+    try stream.writeAll(".type_Psychic {background-color: #dc3165;}\n");
+    try stream.writeAll(".type_Rock {background-color: #9e863d;}\n");
+    try stream.writeAll(".type_Steel {background-color: #8e8e9f;}\n");
+    try stream.writeAll(".type_Water {background-color: #0c67c2;}\n");
 
     try stream.writeAll(".pokemon_stat {width:100%;}\n");
     try stream.writeAll(".pokemon_stat_table {width:50%;}\n");
@@ -245,10 +245,12 @@ fn generate(stream: var, root: Object) !void {
                             continue :outer;
                     }
 
+                    const type_i = fmt.parseInt(usize, type_str, 10) catch continue;
+                    const type_name = humanize(root.getArrayFieldValue("types", type_i, "name") orelse unknown);
                     if (ti != 0)
                         try stream.writeAll(" ");
 
-                    try stream.print("<b class=\"type type_{}\">{}</b>", .{ type_str, humanize(type_str) });
+                    try stream.print("<a href=\"#type_{}\" class=\"type type_{}\"><b>{}</b></a>", .{ type_i, type_name, type_name });
                 }
                 try stream.writeAll("</td>\n");
             }
@@ -440,7 +442,9 @@ fn generate(stream: var, root: Object) !void {
             try stream.writeAll("<table>\n");
 
             if (move.getFieldValue("type")) |t| {
-                try stream.print("<tr><td>Type:</td><td><b class=\"type type_{}\">{}</b></td></tr>\n", .{ t, humanize(t) });
+                const type_i = fmt.parseInt(usize, t, 10) catch continue;
+                const type_name = humanize(root.getArrayFieldValue("types", type_i, "name") orelse unknown);
+                try stream.print("<tr><td>Type:</td><td><a href=\"type_{}\" class=\"type type_{}\"><b>{}</b></a></td></tr>\n", .{ type_i, type_name, type_name });
             }
 
             var it = move.fields.iterator();

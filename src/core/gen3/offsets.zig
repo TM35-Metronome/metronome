@@ -80,6 +80,7 @@ pub const MapHeaderSection = Section(gen3.MapHeader);
 pub const PokemonNameSection = Section([11]u8);
 pub const AbilityNameSection = Section([13]u8);
 pub const MoveNameSection = Section([13]u8);
+pub const TypeNameSection = Section([7]u8);
 
 pub const Info = struct {
     game_title: [12]u8,
@@ -107,6 +108,7 @@ pub const Info = struct {
     pokemon_names: PokemonNameSection,
     ability_names: AbilityNameSection,
     move_names: AbilityNameSection,
+    type_names: TypeNameSection,
 };
 
 pub const infos = [_]Info{
@@ -178,6 +180,10 @@ const emerald_us_info = Info{
         .start = 3250044,
         .len = 355,
     },
+    .type_names = .{
+        .start = 3255864,
+        .len = 18,
+    },
 
     .starters = .{
         .{ .offset = 0x005B1DF8 },
@@ -188,154 +194,6 @@ const emerald_us_info = Info{
         .{ .offset = 0x005B1DF8 },
         .{ .offset = 0x005B1DFA },
         .{ .offset = 0x005B1DFC },
-    },
-};
-
-pub const ruby_us_info = Info{
-    .game_title = "POKEMON RUBY".*,
-    .gamecode = "AXVE".*,
-    .version = .ruby,
-    .software_version = 1,
-    .trainers = .{
-        .start = 2032916,
-        .len = 337,
-    },
-    .moves = .{
-        .start = 2076996,
-        .len = 355,
-    },
-    .machine_learnsets = .{
-        .start = 2085128,
-        .len = 412,
-    },
-    .pokemons = .{
-        .start = 2092080,
-        .len = 412,
-    },
-    .evolutions = .{
-        .start = 2112384,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = .{
-        .start = 2128864,
-        .len = 412,
-    },
-    .hms = .{
-        .start = 2130738,
-        .len = 8,
-    },
-    .tms = .{
-        .start = 3630364,
-        .len = 50,
-    },
-    .items = .{
-        .start = 3954048,
-        .len = 349,
-    },
-    .wild_pokemon_headers = .{
-        .start = 3789932,
-        .len = 97,
-    },
-    .map_headers = .{
-        .start = 3167328,
-        .len = 394,
-    },
-    .pokemon_names = .{
-        .start = 2060676,
-        .len = 412,
-    },
-    .ability_names = .{
-        .start = 2073184,
-        .len = 78,
-    },
-    .move_names = .{
-        .start = 2065208,
-        .len = 355,
-    },
-
-    .starters = .{
-        .{ .offset = 0x003F76E0 },
-        .{ .offset = 0x003F76E2 },
-        .{ .offset = 0x003F76E4 },
-    },
-    .starters_repeat = .{
-        .{ .offset = 0x003F76E0 },
-        .{ .offset = 0x003F76E2 },
-        .{ .offset = 0x003F76E4 },
-    },
-};
-
-pub const sapphire_us_info = Info{
-    .game_title = "POKEMON SAPP".*,
-    .gamecode = "AXPE".*,
-    .version = .sapphire,
-    .software_version = 1,
-    .trainers = .{
-        .start = 2032804,
-        .len = 337,
-    },
-    .moves = .{
-        .start = 2076884,
-        .len = 355,
-    },
-    .machine_learnsets = .{
-        .start = 2085016,
-        .len = 412,
-    },
-    .pokemons = .{
-        .start = 2091968,
-        .len = 412,
-    },
-    .evolutions = .{
-        .start = 2112272,
-        .len = 412,
-    },
-    .level_up_learnset_pointers = .{
-        .start = 2128752,
-        .len = 412,
-    },
-    .hms = .{
-        .start = 2130626,
-        .len = 8,
-    },
-    .tms = .{
-        .start = 3630252,
-        .len = 50,
-    },
-    .items = .{
-        .start = 3954140,
-        .len = 349,
-    },
-    .wild_pokemon_headers = .{
-        .start = 3789492,
-        .len = 97,
-    },
-    .map_headers = .{
-        .start = 3167216,
-        .len = 394,
-    },
-    .pokemon_names = .{
-        .start = 2060564,
-        .len = 412,
-    },
-    .ability_names = .{
-        .start = 2073072,
-        .len = 78,
-    },
-    .move_names = .{
-        .start = 2065096,
-        .len = 355,
-    },
-
-    .starters = .{
-        .{ .offset = 0x003F773C },
-        .{ .offset = 0x003F773E },
-        .{ .offset = 0x003F7740 },
-    },
-    .starters_repeat = .{
-        .{ .offset = 0x003F773C },
-        .{ .offset = 0x003F773E },
-        .{ .offset = 0x003F7740 },
     },
 };
 
@@ -399,6 +257,10 @@ pub const fire_us_info = Info{
     .move_names = .{
         .start = 2388228,
         .len = 355,
+    },
+    .type_names = .{
+        .start = 2421264,
+        .len = 18,
     },
 
     .starters = .{
@@ -474,6 +336,10 @@ pub const leaf_us_info = Info{
         .start = 2388192,
         .len = 355,
     },
+    .type_names = .{
+        .start = 2421228,
+        .len = 18,
+    },
 
     .starters = .{
         .{ .offset = 0x00169C09 },
@@ -484,5 +350,161 @@ pub const leaf_us_info = Info{
         .{ .offset = 0x00169C09 + 5 + 461 },
         .{ .offset = 0x00169C09 + 5 },
         .{ .offset = 0x00169C09 + 5 + 515 },
+    },
+};
+
+pub const ruby_us_info = Info{
+    .game_title = "POKEMON RUBY".*,
+    .gamecode = "AXVE".*,
+    .version = .ruby,
+    .software_version = 1,
+    .trainers = .{
+        .start = 2032916,
+        .len = 337,
+    },
+    .moves = .{
+        .start = 2076996,
+        .len = 355,
+    },
+    .machine_learnsets = .{
+        .start = 2085128,
+        .len = 412,
+    },
+    .pokemons = .{
+        .start = 2092080,
+        .len = 412,
+    },
+    .evolutions = .{
+        .start = 2112384,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = .{
+        .start = 2128864,
+        .len = 412,
+    },
+    .hms = .{
+        .start = 2130738,
+        .len = 8,
+    },
+    .tms = .{
+        .start = 3630364,
+        .len = 50,
+    },
+    .items = .{
+        .start = 3954048,
+        .len = 349,
+    },
+    .wild_pokemon_headers = .{
+        .start = 3789932,
+        .len = 97,
+    },
+    .map_headers = .{
+        .start = 3167328,
+        .len = 394,
+    },
+    .pokemon_names = .{
+        .start = 2060676,
+        .len = 412,
+    },
+    .ability_names = .{
+        .start = 2073184,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2065208,
+        .len = 355,
+    },
+    .type_names = .{
+        .start = 2070664,
+        .len = 18,
+    },
+
+    .starters = .{
+        .{ .offset = 0x003F76E0 },
+        .{ .offset = 0x003F76E2 },
+        .{ .offset = 0x003F76E4 },
+    },
+    .starters_repeat = .{
+        .{ .offset = 0x003F76E0 },
+        .{ .offset = 0x003F76E2 },
+        .{ .offset = 0x003F76E4 },
+    },
+};
+
+pub const sapphire_us_info = Info{
+    .game_title = "POKEMON SAPP".*,
+    .gamecode = "AXPE".*,
+    .version = .sapphire,
+    .software_version = 1,
+    .trainers = .{
+        .start = 2032804,
+        .len = 337,
+    },
+    .moves = .{
+        .start = 2076884,
+        .len = 355,
+    },
+    .machine_learnsets = .{
+        .start = 2085016,
+        .len = 412,
+    },
+    .pokemons = .{
+        .start = 2091968,
+        .len = 412,
+    },
+    .evolutions = .{
+        .start = 2112272,
+        .len = 412,
+    },
+    .level_up_learnset_pointers = .{
+        .start = 2128752,
+        .len = 412,
+    },
+    .hms = .{
+        .start = 2130626,
+        .len = 8,
+    },
+    .tms = .{
+        .start = 3630252,
+        .len = 50,
+    },
+    .items = .{
+        .start = 3954140,
+        .len = 349,
+    },
+    .wild_pokemon_headers = .{
+        .start = 3789492,
+        .len = 97,
+    },
+    .map_headers = .{
+        .start = 3167216,
+        .len = 394,
+    },
+    .pokemon_names = .{
+        .start = 2060564,
+        .len = 412,
+    },
+    .ability_names = .{
+        .start = 2073072,
+        .len = 78,
+    },
+    .move_names = .{
+        .start = 2065096,
+        .len = 355,
+    },
+    .type_names = .{
+        .start = 2070552,
+        .len = 18,
+    },
+
+    .starters = .{
+        .{ .offset = 0x003F773C },
+        .{ .offset = 0x003F773E },
+        .{ .offset = 0x003F7740 },
+    },
+    .starters_repeat = .{
+        .{ .offset = 0x003F773C },
+        .{ .offset = 0x003F773E },
+        .{ .offset = 0x003F7740 },
     },
 };

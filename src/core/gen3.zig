@@ -36,7 +36,7 @@ pub fn Slice(comptime S: type) type {
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
-    types: [2]Type,
+    types: [2]u8,
 
     catch_rate: u8,
     base_exp_yield: u8,
@@ -172,7 +172,7 @@ pub const PartyMemberBoth = extern struct {
 pub const Move = extern struct {
     effect: u8,
     power: u8,
-    type: Type,
+    type: u8,
     accuracy: u8,
     pp: u8,
     side_effect_chance: u8,
@@ -227,27 +227,6 @@ pub const Item = extern struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);
     }
-};
-
-pub const Type = packed enum(u8) {
-    normal = 0x00,
-    fighting = 0x01,
-    flying = 0x02,
-    poison = 0x03,
-    ground = 0x04,
-    rock = 0x05,
-    bug = 0x06,
-    ghost = 0x07,
-    steel = 0x08,
-    unknown = 0x09,
-    fire = 0x0A,
-    water = 0x0B,
-    grass = 0x0C,
-    electric = 0x0D,
-    psychic = 0x0E,
-    ice = 0x0F,
-    dragon = 0x10,
-    dark = 0x11,
 };
 
 pub const LevelUpMove = packed struct {
@@ -468,6 +447,7 @@ pub const Game = struct {
     pokemon_names: [][11]u8,
     ability_names: [][13]u8,
     move_names: [][13]u8,
+    type_names: [][7]u8,
 
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
@@ -618,6 +598,7 @@ pub const Game = struct {
             .pokemon_names = info.pokemon_names.slice(gba_rom),
             .ability_names = info.ability_names.slice(gba_rom),
             .move_names = info.move_names.slice(gba_rom),
+            .type_names = info.type_names.slice(gba_rom),
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
             .pokeball_items = script_data.pokeball_items.toOwnedSlice(),

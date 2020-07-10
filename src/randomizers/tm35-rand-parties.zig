@@ -125,14 +125,11 @@ pub fn main2(
     const fix_moves = args.flag("--fix-moves");
     const simular_total_stats = args.flag("--simular-total-stats");
 
+    var data = Data{};
     var line_buf = std.ArrayList(u8).init(allocator);
-    var data = Data{
-        .type_set = std.StringHashMap(usize).init(allocator),
-    };
-
     while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch |err| switch (err) {
+        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
             error.OutOfMemory => return errors.allocErr(stdio.err),
             error.ParseError => true,
         };
@@ -142,7 +139,14 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(data, seed, fix_moves, simular_total_stats, types) catch |err| return errors.randErr(stdio.err, err);
+    randomize(
+        allocator,
+        data,
+        seed,
+        fix_moves,
+        simular_total_stats,
+        types,
+    ) catch |err| return errors.randErr(stdio.err, err);
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -163,11 +167,10 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.type_set.allocator;
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
@@ -188,8 +191,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 },
                 c("types") => {
                     _ = try p.parse(parse.index);
-                    const type_name = try p.parse(parse.strv);
-                    _ = try pokemon.types.put(allocator, try data.typeId(type_name));
+                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
                 },
                 c("moves") => {
                     const move_index = try p.parse(parse.index);
@@ -230,7 +232,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
             switch (m(try p.parse(parse.anyField))) {
                 c("power") => move.power = try p.parse(parse.u8v),
-                c("type") => move.type = try data.typeId(try p.parse(parse.strv)),
+                c("type") => move.type = try p.parse(parse.usizev),
                 c("pp") => move.pp = try p.parse(parse.u8v),
                 c("accuracy") => move.accuracy = try p.parse(parse.u8v),
                 else => return true,
@@ -242,8 +244,14 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     return true;
 }
 
-fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, types_op: TypesOption) !void {
-    const allocator = data.type_set.allocator;
+fn randomize(
+    allocator: *mem.Allocator,
+    data: Data,
+    seed: u64,
+    fix_moves: bool,
+    simular_total_stats: bool,
+    types_op: TypesOption,
+) !void {
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
     var simular = std.ArrayList(usize).init(allocator);
@@ -262,15 +270,14 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
         break :blk null;
     };
 
-    const all_types = try data.types();
-    const all_types_count = all_types.count();
-    const species_by_type = try data.speciesByType();
+    const species_by_type = try data.speciesByType(allocator);
+    const all_types_count = species_by_type.count();
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
 
         const theme = switch (types_op) {
-            .themed => all_types.at(random.intRangeLessThan(usize, 0, all_types_count)),
+            .themed => species_by_type.at(random.intRangeLessThan(usize, 0, all_types_count)).key,
             else => undefined,
         };
 
@@ -282,7 +289,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
                     const pokemon = data.pokemons.get(old_species) orelse {
                         // If we can't find the prev Pokemons type, then the only thing we can
                         // do is chose a random one.
-                        break :blk all_types.at(random.intRangeLessThan(usize, 0, all_types_count));
+                        break :blk species_by_type.at(random.intRangeLessThan(usize, 0, all_types_count)).key;
                     };
                     const types = pokemon.types;
                     const types_count = types.count();
@@ -291,7 +298,7 @@ fn randomize(data: Data, seed: u64, fix_moves: bool, simular_total_stats: bool, 
 
                     break :blk types.at(random.intRangeLessThan(usize, 0, types_count));
                 },
-                .random => all_types.at(random.intRangeLessThan(usize, 0, all_types_count)),
+                .random => species_by_type.at(random.intRangeLessThan(usize, 0, all_types_count)).key,
                 .themed => theme,
             };
 
@@ -394,38 +401,16 @@ const MemberMoves = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 
 const Data = struct {
-    type_set: std.StringHashMap(usize),
     pokemons: Pokemons = Pokemons{},
     trainers: Trainers = Trainers{},
     moves: Moves = Moves{},
 
-    fn typeId(d: *Data, str: []const u8) !usize {
-        const res = try d.type_set.getOrPut(str);
-        if (!res.found_existing) {
-            res.kv.key = try mem.dupe(d.allocator(), u8, str);
-            res.kv.value = d.type_set.count() - 1;
-        }
-        return res.kv.value;
-    }
-
-    fn types(d: Data) !Set {
-        var res = Set{};
-        errdefer res.deinit(d.allocator());
-
-        var it = d.type_set.iterator();
-        while (it.next()) |kv|
-            _ = try res.put(d.allocator(), kv.value);
-
-        return res;
-    }
-
-    fn speciesByType(d: Data) !SpeciesByType {
-        const a = d.allocator();
+    fn speciesByType(d: Data, allocator: *mem.Allocator) !SpeciesByType {
         var res = SpeciesByType{};
         errdefer {
             for (res.values()) |set|
-                set.deinit(a);
-            res.deinit(a);
+                set.deinit(allocator);
+            res.deinit(allocator);
         }
 
         for (d.pokemons.values()) |pokemon, i| {
@@ -439,17 +424,13 @@ const Data = struct {
             for (pokemon.types.span()) |range| {
                 var t = range.start;
                 while (t <= range.end) : (t += 1) {
-                    const set = try res.getOrPutValue(a, t, Set{});
-                    _ = try set.put(a, s);
+                    const set = try res.getOrPutValue(allocator, t, Set{});
+                    _ = try set.put(allocator, s);
                 }
             }
         }
 
         return res;
-    }
-
-    fn allocator(d: Data) *mem.Allocator {
-        return d.type_set.allocator;
     }
 };
 
@@ -557,24 +538,24 @@ test "tm35-rand-parties" {
         }
     };
 
-    const result_prefix = comptime H.pokemon("0", "10", "normal", "1", "1") ++
-        H.pokemon("1", "15", "dragon", "2", "1") ++
-        H.pokemon("2", "20", "flying", "3", "1") ++
-        H.pokemon("3", "25", "grass", "4", "1") ++
-        H.pokemon("4", "30", "fire", "5", "1") ++
-        H.pokemon("5", "35", "water", "6", "1") ++
-        H.pokemon("6", "40", "rock", "7", "1") ++
-        H.pokemon("7", "45", "ground", "8", "1") ++
-        H.pokemon("8", "45", "ground", "8", "0") ++
-        H.move("0", "0", "normal", "0", "0") ++
-        H.move("1", "10", "normal", "10", "255") ++
-        H.move("2", "10", "dragon", "10", "255") ++
-        H.move("3", "10", "flying", "10", "255") ++
-        H.move("4", "10", "grass", "10", "255") ++
-        H.move("5", "10", "fire", "10", "255") ++
-        H.move("6", "10", "water", "10", "255") ++
-        H.move("7", "10", "rock", "10", "255") ++
-        H.move("8", "10", "ground", "10", "255");
+    const result_prefix = comptime H.pokemon("0", "10", "0", "1", "1") ++
+        H.pokemon("1", "15", "16", "2", "1") ++
+        H.pokemon("2", "20", "2", "3", "1") ++
+        H.pokemon("3", "25", "12", "4", "1") ++
+        H.pokemon("4", "30", "10", "5", "1") ++
+        H.pokemon("5", "35", "11", "6", "1") ++
+        H.pokemon("6", "40", "5", "7", "1") ++
+        H.pokemon("7", "45", "4", "8", "1") ++
+        H.pokemon("8", "45", "4", "8", "0") ++
+        H.move("0", "0", "0", "0", "0") ++
+        H.move("1", "10", "0", "10", "255") ++
+        H.move("2", "10", "16", "10", "255") ++
+        H.move("3", "10", "2", "10", "255") ++
+        H.move("4", "10", "12", "10", "255") ++
+        H.move("5", "10", "10", "10", "255") ++
+        H.move("6", "10", "11", "10", "255") ++
+        H.move("7", "10", "5", "10", "255") ++
+        H.move("8", "10", "4", "10", "255");
 
     const test_string = comptime result_prefix ++
         H.trainer("0", "0", "1") ++
@@ -583,57 +564,57 @@ test "tm35-rand-parties" {
         H.trainer("3", "3", "4");
 
     util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.trainers[0].party[0].species=2
+        \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=1
         \\.trainers[0].party[1].species=0
         \\.trainers[0].party[1].level=5
         \\.trainers[0].party[1].moves[0]=1
-        \\.trainers[1].party[0].species=3
+        \\.trainers[1].party[0].species=6
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].moves[0]=2
-        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].species=2
         \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].moves[0]=2
-        \\.trainers[2].party[0].species=6
+        \\.trainers[2].party[0].species=3
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].moves[0]=3
-        \\.trainers[2].party[1].species=7
+        \\.trainers[2].party[1].species=1
         \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].moves[0]=3
         \\.trainers[3].party[0].species=0
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].moves[0]=4
-        \\.trainers[3].party[1].species=3
+        \\.trainers[3].party[1].species=6
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
-        \\.trainers[0].party[0].species=2
+        \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
-        \\.trainers[0].party[0].moves[0]=3
+        \\.trainers[0].party[0].moves[0]=8
         \\.trainers[0].party[1].species=0
         \\.trainers[0].party[1].level=5
         \\.trainers[0].party[1].moves[0]=1
-        \\.trainers[1].party[0].species=3
+        \\.trainers[1].party[0].species=6
         \\.trainers[1].party[0].level=5
-        \\.trainers[1].party[0].moves[0]=4
-        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[0].moves[0]=7
+        \\.trainers[1].party[1].species=2
         \\.trainers[1].party[1].level=5
-        \\.trainers[1].party[1].moves[0]=2
-        \\.trainers[2].party[0].species=6
+        \\.trainers[1].party[1].moves[0]=3
+        \\.trainers[2].party[0].species=3
         \\.trainers[2].party[0].level=5
-        \\.trainers[2].party[0].moves[0]=7
-        \\.trainers[2].party[1].species=7
+        \\.trainers[2].party[0].moves[0]=4
+        \\.trainers[2].party[1].species=1
         \\.trainers[2].party[1].level=5
-        \\.trainers[2].party[1].moves[0]=8
+        \\.trainers[2].party[1].moves[0]=2
         \\.trainers[3].party[0].species=0
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].moves[0]=1
-        \\.trainers[3].party[1].species=3
+        \\.trainers[3].party[1].species=6
         \\.trainers[3].party[1].level=5
-        \\.trainers[3].party[1].moves[0]=4
+        \\.trainers[3].party[1].moves[0]=7
         \\
     );
 
@@ -667,57 +648,57 @@ test "tm35-rand-parties" {
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
-        \\.trainers[0].party[0].species=2
+        \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=1
-        \\.trainers[0].party[1].species=2
+        \\.trainers[0].party[1].species=7
         \\.trainers[0].party[1].level=5
         \\.trainers[0].party[1].moves[0]=1
-        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].species=2
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].moves[0]=2
-        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].species=2
         \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].moves[0]=2
-        \\.trainers[2].party[0].species=1
+        \\.trainers[2].party[0].species=2
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].moves[0]=3
-        \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[1].species=2
         \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].moves[0]=3
-        \\.trainers[3].party[0].species=6
+        \\.trainers[3].party[0].species=3
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].moves[0]=4
-        \\.trainers[3].party[1].species=6
+        \\.trainers[3].party[1].species=3
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
-        \\.trainers[0].party[0].species=2
+        \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
-        \\.trainers[0].party[0].moves[0]=3
-        \\.trainers[0].party[1].species=2
+        \\.trainers[0].party[0].moves[0]=8
+        \\.trainers[0].party[1].species=7
         \\.trainers[0].party[1].level=5
-        \\.trainers[0].party[1].moves[0]=3
-        \\.trainers[1].party[0].species=1
+        \\.trainers[0].party[1].moves[0]=8
+        \\.trainers[1].party[0].species=2
         \\.trainers[1].party[0].level=5
-        \\.trainers[1].party[0].moves[0]=2
-        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[0].moves[0]=3
+        \\.trainers[1].party[1].species=2
         \\.trainers[1].party[1].level=5
-        \\.trainers[1].party[1].moves[0]=2
-        \\.trainers[2].party[0].species=1
+        \\.trainers[1].party[1].moves[0]=3
+        \\.trainers[2].party[0].species=2
         \\.trainers[2].party[0].level=5
-        \\.trainers[2].party[0].moves[0]=2
-        \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[2].party[1].species=2
         \\.trainers[2].party[1].level=5
-        \\.trainers[2].party[1].moves[0]=2
-        \\.trainers[3].party[0].species=6
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[3].party[0].species=3
         \\.trainers[3].party[0].level=5
-        \\.trainers[3].party[0].moves[0]=7
-        \\.trainers[3].party[1].species=6
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[3].party[1].species=3
         \\.trainers[3].party[1].level=5
-        \\.trainers[3].party[1].moves[0]=7
+        \\.trainers[3].party[1].moves[0]=4
         \\
     );
 }

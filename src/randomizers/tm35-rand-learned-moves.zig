@@ -195,10 +195,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                     if (try p.parse(parse.boolv))
                         _ = try pokemon.hms_learned.put(allocator, index);
                 },
-                c("types") => {
-                    const type_name = try p.parse(parse.strv);
-                    _ = try pokemon.types.put(allocator, try data.string(type_name));
-                },
+                c("types") => _ = try pokemon.types.put(allocator, try p.parse(parse.usizev)),
                 else => return true,
             }
             return c("tms") != m(field) and c("hms") != m(field);
@@ -323,24 +320,24 @@ const Move = struct {
 test "tm35-rand-learned-moves" {
     const result_prefix =
         \\.moves[0].power=10
-        \\.moves[0].type=normal
+        \\.moves[0].type=0
         \\.moves[1].power=30
-        \\.moves[1].type=grass
+        \\.moves[1].type=12
         \\.moves[2].power=30
-        \\.moves[2].type=dragon
+        \\.moves[2].type=16
         \\.moves[3].power=30
-        \\.moves[3].type=fire
+        \\.moves[3].type=10
         \\.moves[4].power=50
-        \\.moves[4].type=normal
+        \\.moves[4].type=0
         \\.moves[5].power=70
-        \\.moves[5].type=normal
+        \\.moves[5].type=0
         \\.tms[0]=0
         \\.tms[1]=2
         \\.tms[2]=4
         \\.hms[0]=1
         \\.hms[1]=3
         \\.hms[2]=5
-        \\.pokemons[0].types[0]=normal
+        \\.pokemons[0].types[0]=0
         \\
     ;
     const test_string = result_prefix ++

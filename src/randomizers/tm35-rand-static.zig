@@ -186,8 +186,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 },
                 c("types") => {
                     _ = try p.parse(parse.index);
-                    const type_name = try p.parse(parse.strv);
-                    _ = try pokemon.types.put(allocator, try data.string(type_name));
+                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
                 },
                 c("growth_rate") => {
                     const rate = try p.parse(parse.strv);
@@ -572,32 +571,32 @@ test "tm35-rand-static" {
         }
     };
 
-    const legendaries = comptime H.pokemon("0", "10", "ice", "flying", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("1", "10", "electric", "flying", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("2", "10", "fire", "flying", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("3", "10", "electric", "electric", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("4", "11", "water", "water", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("5", "11", "rock", "rock", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("6", "11", "ice", "ice", "slow", "3", "255", "undiscovered", null) ++
-        H.pokemon("7", "12", "dragon", "psychic", "slow", "3", "254", "undiscovered", null) ++
-        H.pokemon("8", "12", "dragon", "psychic", "slow", "3", "0", "undiscovered", null) ++
-        H.pokemon("9", "12", "water", "water", "slow", "3", "255", "water1", null);
+    const legendaries = comptime H.pokemon("0", "10", "15", "2", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("1", "10", "13", "2", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("2", "10", "10", "2", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("3", "10", "13", "13", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("4", "11", "11", "11", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("5", "11", "5", "5", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("6", "11", "15", "15", "slow", "3", "255", "undiscovered", null) ++
+        H.pokemon("7", "12", "16", "14", "slow", "3", "254", "undiscovered", null) ++
+        H.pokemon("8", "12", "16", "14", "slow", "3", "0", "undiscovered", null) ++
+        H.pokemon("9", "12", "11", "11", "slow", "3", "255", "water1", null);
 
-    const pseudo_legendaries = comptime H.pokemon("10", "10", "dragon", "dragon", "slow", "45", "127", "water1", "11") ++
-        H.pokemon("11", "10", "dragon", "flying", "slow", "45", "127", "water1", null) ++
-        H.pokemon("12", "10", "rock", "ground", "slow", "45", "127", "monster", "13") ++
-        H.pokemon("13", "10", "rock", "dark", "slow", "45", "127", "monster", null) ++
-        H.pokemon("14", "11", "dragon", "dragon", "slow", "45", "127", "dragon", "15") ++
-        H.pokemon("15", "11", "dragon", "flying2", "slow", "45", "127", "dragon", null) ++
-        H.pokemon("16", "11", "steel", "psychic", "slow", "3", "255", "mineral", "17") ++
-        H.pokemon("17", "11", "steel", "psychic", "slow", "3", "255", "mineral", null) ++
-        H.pokemon("18", "12", "dragon", "ground", "slow", "45", "127", "monster", "19") ++
-        H.pokemon("19", "12", "dragon", "ground", "slow", "45", "127", "monster", null) ++
-        H.pokemon("20", "12", "dark", "dragon", "slow", "45", "127", "dragon", "21") ++
-        H.pokemon("21", "12", "dark", "dragon", "slow", "45", "127", "dragon", null);
+    const pseudo_legendaries = comptime H.pokemon("10", "10", "16", "16", "slow", "45", "127", "water1", "11") ++
+        H.pokemon("11", "10", "16", "2", "slow", "45", "127", "water1", null) ++
+        H.pokemon("12", "10", "5", "4", "slow", "45", "127", "monster", "13") ++
+        H.pokemon("13", "10", "5", "17", "slow", "45", "127", "monster", null) ++
+        H.pokemon("14", "11", "16", "16", "slow", "45", "127", "dragon", "15") ++
+        H.pokemon("15", "11", "16", "2", "slow", "45", "127", "dragon", null) ++
+        H.pokemon("16", "11", "8", "14", "slow", "3", "255", "mineral", "17") ++
+        H.pokemon("17", "11", "8", "14", "slow", "3", "255", "mineral", null) ++
+        H.pokemon("18", "12", "16", "4", "slow", "45", "127", "monster", "19") ++
+        H.pokemon("19", "12", "16", "4", "slow", "45", "127", "monster", null) ++
+        H.pokemon("20", "12", "17", "16", "slow", "45", "127", "dragon", "21") ++
+        H.pokemon("21", "12", "17", "16", "slow", "45", "127", "dragon", null);
 
-    const pokemons_to_not_pick_ever = comptime H.pokemon("22", "12", "water", "water", "slow", "0", "255", "water1", null) ++
-        H.pokemon("23", "12", "dark", "dragon", "slow", "0", "127", "dragon", null);
+    const pokemons_to_not_pick_ever = comptime H.pokemon("22", "12", "11", "11", "slow", "0", "255", "water1", null) ++
+        H.pokemon("23", "12", "17", "16", "slow", "0", "127", "dragon", null);
 
     const result_prefix = legendaries ++ pseudo_legendaries ++ pokemons_to_not_pick_ever;
     const test_string = comptime result_prefix ++
@@ -619,8 +618,8 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
-        \\.static_pokemons[1].species=0
-        \\.static_pokemons[2].species=11
+        \\.static_pokemons[1].species=1
+        \\.static_pokemons[2].species=15
         \\.static_pokemons[3].species=3
         \\.static_pokemons[4].species=9
         \\.static_pokemons[5].species=21
@@ -636,7 +635,7 @@ test "tm35-rand-static" {
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=0
+        \\.static_pokemons[0].species=1
         \\.static_pokemons[1].species=3
         \\.static_pokemons[2].species=0
         \\.static_pokemons[3].species=1
@@ -654,9 +653,9 @@ test "tm35-rand-static" {
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=11
-        \\.static_pokemons[1].species=3
-        \\.static_pokemons[2].species=2
+        \\.static_pokemons[0].species=0
+        \\.static_pokemons[1].species=1
+        \\.static_pokemons[2].species=11
         \\.static_pokemons[3].species=3
         \\.static_pokemons[4].species=9
         \\.static_pokemons[5].species=18
@@ -672,7 +671,7 @@ test "tm35-rand-static" {
         \\
     );
     util.testing.testProgram(main2, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=6
+        \\.static_pokemons[0].species=2
         \\.static_pokemons[1].species=2
         \\.static_pokemons[2].species=2
         \\.static_pokemons[3].species=3

@@ -111,7 +111,6 @@ pub fn main2(
 
     var line_buf = std.ArrayList(u8).init(allocator);
     var data = Data{
-        .types = std.StringHashMap(usize).init(allocator),
         .areas = std.StringHashMap(usize).init(allocator),
     };
 
@@ -157,7 +156,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.types.allocator;
+    const allocator = data.areas.allocator;
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
@@ -179,8 +178,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 // TODO: We're not using type information for anything yet
                 c("types") => {
                     _ = try p.parse(parse.index);
-                    const type_name = try p.parse(parse.strv);
-                    _ = try pokemon.types.put(allocator, try getStringId(&data.types, type_name));
+                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
                 },
                 else => return true,
             }
@@ -215,7 +213,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 }
 
 fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
-    const allocator = data.types.allocator;
+    const allocator = data.areas.allocator;
     const random = &rand.DefaultPrng.init(seed).random;
     var simular = std.ArrayList(usize).init(allocator);
 
@@ -297,7 +295,6 @@ fn getStringId(map: *std.StringHashMap(usize), str: []const u8) !usize {
 
 const Data = struct {
     areas: std.StringHashMap(usize),
-    types: std.StringHashMap(usize),
     pokemons: Pokemons = Pokemons{},
     zones: Zones = Zones{},
 
@@ -318,7 +315,7 @@ const Data = struct {
     }
 
     fn allocator(d: Data) *mem.Allocator {
-        return d.types.allocator;
+        return d.areas.allocator;
     }
 };
 

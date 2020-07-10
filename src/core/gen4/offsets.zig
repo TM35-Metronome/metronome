@@ -35,6 +35,7 @@ pub const Info = struct {
     ability_names: u16,
     item_names: u16,
     item_descriptions: u16,
+    type_names: u16,
 };
 
 pub const infos = [_]Info{
@@ -70,6 +71,7 @@ const hg_info = Info{
     .ability_names = 720,
     .item_names = 222,
     .item_descriptions = 221,
+    .type_names = 735,
 };
 
 const ss_info = Info{
@@ -97,6 +99,7 @@ const ss_info = Info{
     .ability_names = hg_info.ability_names,
     .item_names = hg_info.item_names,
     .item_descriptions = hg_info.item_descriptions,
+    .type_names = hg_info.type_names,
 };
 
 const diamond_info = Info{
@@ -129,6 +132,7 @@ const diamond_info = Info{
     .ability_names = 552,
     .item_names = 344,
     .item_descriptions = 343,
+    .type_names = 565,
 };
 
 const pearl_info = Info{
@@ -156,6 +160,7 @@ const pearl_info = Info{
     .ability_names = diamond_info.ability_names,
     .item_names = diamond_info.item_names,
     .item_descriptions = diamond_info.item_descriptions,
+    .type_names = diamond_info.type_names,
 };
 
 const platinum_info = Info{
@@ -188,6 +193,7 @@ const platinum_info = Info{
     .ability_names = 610,
     .item_names = 392,
     .item_descriptions = 391,
+    .type_names = 624,
 };
 
 pub const tm_count = 92;

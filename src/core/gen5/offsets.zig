@@ -29,6 +29,7 @@ pub const Info = struct {
     ability_names: u16,
     item_names: u16,
     item_descriptions: u16,
+    type_names: u16,
 };
 
 pub const infos = [_]Info{
@@ -78,6 +79,7 @@ const black2_info = Info{
     .ability_names = 374,
     .item_names = 64,
     .item_descriptions = 63,
+    .type_names = 489,
 };
 
 const white2_info = Info{
@@ -104,6 +106,7 @@ const white2_info = Info{
     .ability_names = black2_info.ability_names,
     .item_names = black2_info.item_names,
     .item_descriptions = black2_info.item_descriptions,
+    .type_names = black2_info.type_names,
 };
 
 const black_info = Info{
@@ -155,6 +158,7 @@ const black_info = Info{
     .ability_names = 182,
     .item_names = 54,
     .item_descriptions = 53,
+    .type_names = 287,
 };
 
 const white_info = Info{
@@ -180,6 +184,7 @@ const white_info = Info{
     .ability_names = black_info.ability_names,
     .item_names = black_info.item_names,
     .item_descriptions = black_info.item_descriptions,
+    .type_names = black_info.type_names,
 };
 
 pub const tm_count = 95;

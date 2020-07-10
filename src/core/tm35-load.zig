@@ -210,7 +210,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     for (game.moves) |move, i| {
         try stream.print(".moves[{}].effect={}\n", .{ i, move.effect });
         try stream.print(".moves[{}].power={}\n", .{ i, move.power });
-        try stream.print(".moves[{}].type={}\n", .{ i, @tagName(move.@"type") });
+        try stream.print(".moves[{}].type={}\n", .{ i, move.@"type" });
         try stream.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
         try stream.print(".moves[{}].pp={}\n", .{ i, move.pp });
         try stream.print(".moves[{}].side_effect_chance={}\n", .{ i, move.side_effect_chance });
@@ -228,7 +228,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
 
         for (pokemon.types) |t, j| {
-            try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, @tagName(t) });
+            try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
         }
 
         try stream.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
@@ -302,6 +302,12 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
 
     for (game.move_names) |name, i| {
         try stream.print(".moves[{}].name=", .{i});
+        try gen3.encodings.decode(.en_us, &name, stream);
+        try stream.writeByte('\n');
+    }
+
+    for (game.type_names) |name, i| {
+        try stream.print(".types[{}].name=", .{i});
         try gen3.encodings.decode(.en_us, &name, stream);
         try stream.writeByte('\n');
     }
@@ -446,7 +452,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     for (game.moves) |move, i| {
         try stream.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
         try stream.print(".moves[{}].power={}\n", .{ i, move.power });
-        try stream.print(".moves[{}].type={}\n", .{ i, @tagName(move.@"type") });
+        try stream.print(".moves[{}].type={}\n", .{ i, move.@"type" });
         try stream.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
         try stream.print(".moves[{}].pp={}\n", .{ i, move.pp });
     }
@@ -460,7 +466,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
 
         for (pokemon.types) |t, j| {
-            try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, @tagName(t) });
+            try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
         }
 
         try stream.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
@@ -674,6 +680,17 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     try outputGen4StringTable(stream, "abilities", "name", game.ability_names);
     try outputGen4StringTable(stream, "items", "name", game.item_names);
     try outputGen4StringTable(stream, "items", "description", game.item_descriptions);
+    try outputGen4StringTable(stream, "types", "name", game.type_names);
+
+    // This snippet of code can be uncommented to output all strings in gen4 games.
+    // This is useful when looking for new strings to expose.
+    //    var buf: [1024]u8 = undefined;
+    //    for (game.text.fat) |_, i| {
+    //        const file = nds.fs.File{ .i = @intCast(u16, i) };
+    //        const table = gen4.StringTable{ .data = game.text.fileData(file) };
+    //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
+    //        outputGen4StringTable(stream, name, "", table) catch continue;
+    //    }
 }
 
 fn outputGen4StringTable(
@@ -760,7 +777,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.moves) |move, i| {
-        try stream.print(".moves[{}].type={}\n", .{ i, @tagName(move.@"type") });
+        try stream.print(".moves[{}].type={}\n", .{ i, move.@"type" });
         try stream.print(".moves[{}].effect_category={}\n", .{ i, move.effect_category });
         try stream.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
         try stream.print(".moves[{}].power={}\n", .{ i, move.power });
@@ -814,7 +831,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
             const types = pokemon.types;
             for (types) |t, j|
-                try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, @tagName(t) });
+                try stream.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
 
             try stream.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
 
@@ -974,6 +991,17 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
     try outputGen5StringTable(stream, "items", "name", game.item_names);
     try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
+    try outputGen5StringTable(stream, "types", "name", game.type_names);
+
+    // This snippet of code can be uncommented to output all strings in gen5 games.
+    // This is useful when looking for new strings to expose.
+    //    var buf: [1024]u8 = undefined;
+    //    for (game.text.fat) |_, i| {
+    //        const file = nds.fs.File{ .i = @intCast(u16, i) };
+    //        const table = gen5.StringTable{ .data = game.text.fileData(file) };
+    //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
+    //        outputGen5StringTable(stream, name, "", table) catch continue;
+    //    }
 }
 
 fn outputGen5StringTable(

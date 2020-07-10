@@ -22,7 +22,7 @@ const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
-    types: [2]Type,
+    types: [2]u8,
 
     catch_rate: u8,
 
@@ -170,7 +170,7 @@ pub const Trainer = extern struct {
 };
 
 pub const Move = packed struct {
-    type: Type,
+    type: u8,
     effect_category: u8,
     category: common.MoveCategory,
     power: u8,
@@ -219,27 +219,6 @@ pub const LevelUpMove = extern struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 4);
     }
-};
-
-pub const Type = packed enum(u8) {
-    normal = 0x00,
-    fighting = 0x01,
-    flying = 0x02,
-    poison = 0x03,
-    ground = 0x04,
-    rock = 0x05,
-    bug = 0x06,
-    ghost = 0x07,
-    steel = 0x08,
-    fire = 0x09,
-    water = 0x0A,
-    grass = 0x0B,
-    electric = 0x0C,
-    psychic = 0x0D,
-    ice = 0x0E,
-    dragon = 0x0F,
-    dark = 0x10,
-    _,
 };
 
 // TODO: Verify layout
@@ -467,7 +446,10 @@ pub const StringTable = struct {
         key: u16,
         pos: usize = 0,
 
-        pub const ReadError = error{};
+        pub const ReadError = error{
+            Utf8CannotEncodeSurrogateHalf,
+            CodepointTooLarge,
+        };
         pub const WriteError = error{NoSpaceLeft};
 
         pub const InStream = io.InStream(*Stream, ReadError, read);
@@ -495,7 +477,7 @@ pub const StringTable = struct {
 
                 if (buf.len < n + pair.len)
                     break;
-                n += unicode.utf8Encode(pair.codepoint, buf[n..]) catch unreachable;
+                n += try unicode.utf8Encode(pair.codepoint, buf[n..]);
                 stream.pos += 1;
             }
 
@@ -575,6 +557,7 @@ pub const Game = struct {
     evolutions: nds.fs.Fs,
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
+    text: nds.fs.Fs,
 
     pokemon_names: StringTable,
     trainer_names: StringTable,
@@ -583,6 +566,7 @@ pub const Game = struct {
     ability_names: StringTable,
     item_names: StringTable,
     item_descriptions: StringTable,
+    type_names: StringTable,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -641,6 +625,7 @@ pub const Game = struct {
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,
+            .text = text,
 
             .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
             .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
@@ -649,6 +634,7 @@ pub const Game = struct {
             .ability_names = StringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
             .item_names = StringTable{ .data = text.fileData(.{ .i = info.item_names }) },
             .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
+            .type_names = StringTable{ .data = text.fileData(.{ .i = info.type_names }) },
         };
     }
 

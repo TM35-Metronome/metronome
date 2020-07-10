@@ -23,7 +23,7 @@ const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
-    types: [2]Type,
+    types: [2]u8,
 
     catch_rate: u8,
     base_exp_yield: u8,
@@ -199,27 +199,6 @@ pub const Trainer = extern struct {
     }
 };
 
-pub const Type = packed enum(u8) {
-    normal = 0x00,
-    fighting = 0x01,
-    flying = 0x02,
-    poison = 0x03,
-    ground = 0x04,
-    rock = 0x05,
-    bug = 0x06,
-    ghost = 0x07,
-    steel = 0x08,
-    unknown = 0x09,
-    fire = 0x0A,
-    water = 0x0B,
-    grass = 0x0C,
-    electric = 0x0D,
-    psychic = 0x0E,
-    ice = 0x0F,
-    dragon = 0x10,
-    dark = 0x11,
-};
-
 // TODO: This is the first data structure I had to decode from scratch as I couldn't find a proper
 //       resource for it... Fill it out!
 pub const Move = extern struct {
@@ -227,7 +206,7 @@ pub const Move = extern struct {
     u8_1: u8,
     category: common.MoveCategory,
     power: u8,
-    type: Type,
+    type: u8,
     accuracy: u8,
     pp: u8,
     u8_7: u8,
@@ -475,7 +454,9 @@ pub const StringTable = struct {
             for (mem.bytesAsSlice(lu16, buf[0..n])) |*c, i|
                 c.* = decryptChar(stream.key, (stream.pos / 2) + @intCast(u32, i), c.*);
 
-            const end = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
+            const end1 = mem.indexOf(u8, buf[0..n], "\xfe\xff") orelse n;
+            const end2 = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
+            const end = math.min(end1, end2);
             stream.pos += @intCast(u32, end);
             return end;
         }
@@ -528,6 +509,7 @@ pub const Game = struct {
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
     scripts: nds.fs.Fs,
+    text: nds.fs.Fs,
 
     pokemon_names: StringTable,
     trainer_names: StringTable,
@@ -536,6 +518,7 @@ pub const Game = struct {
     ability_names: StringTable,
     item_names: StringTable,
     item_descriptions: StringTable,
+    type_names: StringTable,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -611,6 +594,7 @@ pub const Game = struct {
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,
+            .text = text,
 
             .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
             .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
@@ -619,6 +603,7 @@ pub const Game = struct {
             .ability_names = StringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
             .item_names = StringTable{ .data = text.fileData(.{ .i = info.item_names }) },
             .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
+            .type_names = StringTable{ .data = text.fileData(.{ .i = info.type_names }) },
         };
     }
 

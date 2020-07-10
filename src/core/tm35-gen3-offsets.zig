@@ -148,6 +148,8 @@ fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].ability_names.len={}\n", .{ i, info.ability_names.len });
     try stream.print(".game[{}].move_names.start={}\n", .{ i, info.move_names.start });
     try stream.print(".game[{}].move_names.len={}\n", .{ i, info.move_names.len });
+    try stream.print(".game[{}].type_names.start={}\n", .{ i, info.type_names.start });
+    try stream.print(".game[{}].type_names.len={}\n", .{ i, info.type_names.len });
 }
 
 fn getVersion(gamecode: []const u8) !common.Version {
@@ -212,6 +214,7 @@ fn getOffsets(
     const PokemonNames = Searcher([11]u8, &[_][]const []const u8{});
     const AbilityNames = Searcher([13]u8, &[_][]const []const u8{});
     const MoveNames = Searcher([13]u8, &[_][]const []const u8{});
+    const TypeNames = Searcher([7]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
 
     const trainers = switch (version) {
@@ -256,6 +259,7 @@ fn getOffsets(
         => try MoveNames.find4(data, &rsfrlg_first_move_names, &last_move_names),
         else => unreachable,
     };
+    const type_names_slice = try TypeNames.find2(data, &type_names);
     const hms_slice = try HmTms.find2(data, &hms);
 
     // TODO: Pokemon Emerald have 2 tm tables. I'll figure out some hack for that
@@ -318,6 +322,7 @@ fn getOffsets(
         .pokemon_names = offsets.PokemonNameSection.init(data, pokemon_names),
         .ability_names = offsets.AbilityNameSection.init(data, ability_names),
         .move_names = offsets.MoveNameSection.init(data, move_names),
+        .type_names = offsets.TypeNameSection.init(data, type_names_slice),
     };
 }
 
@@ -735,7 +740,7 @@ const first_moves = [_]gen3.Move{
     gen3.Move{
         .effect = 0,
         .power = 0,
-        .@"type" = .normal,
+        .@"type" = 0,
         .accuracy = 0,
         .pp = 0,
         .side_effect_chance = 0,
@@ -747,7 +752,7 @@ const first_moves = [_]gen3.Move{
     gen3.Move{
         .effect = 0,
         .power = 40,
-        .@"type" = .normal,
+        .@"type" = 0,
         .accuracy = 100,
         .pp = 35,
         .side_effect_chance = 0,
@@ -762,7 +767,7 @@ const last_moves = [_]gen3.Move{
 gen3.Move{
     .effect = 204,
     .power = 140,
-    .@"type" = .psychic,
+    .@"type" = 14,
     .accuracy = 90,
     .pp = 5,
     .side_effect_chance = 100,
@@ -797,7 +802,7 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_defense = 0,
         },
 
-        .types = [_]gen3.Type{ .normal, .normal },
+        .types = [_]u8{ 0, 0 },
 
         .catch_rate = 0,
         .base_exp_yield = 0,
@@ -844,7 +849,7 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_defense = 65,
         },
 
-        .types = [_]gen3.Type{ .grass, .poison },
+        .types = [_]u8{ 12, 3 },
 
         .catch_rate = 45,
         .base_exp_yield = 64,
@@ -894,7 +899,7 @@ gen3.BasePokemon{
         .sp_defense = 80,
     },
 
-    .types = [_]gen3.Type{ .psychic, .psychic },
+    .types = [_]u8{ 14, 14 },
 
     .catch_rate = 45,
     .base_exp_yield = 147,
@@ -1528,83 +1533,84 @@ gen3.MapHeader{
 }};
 
 fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
+    @setEvalBranchQuota(100000);
     var res = [_]u8{0} ** len;
     gen3.encodings.encode(.en_us, str, &res) catch unreachable;
     return res;
 }
 
-const first_pokemon_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][11]u8{
-        __(11, .en_us, "??????????"),
-        __(11, .en_us, "BULBASAUR"),
-        __(11, .en_us, "IVYSAUR"),
-        __(11, .en_us, "VENUSAUR"),
-    };
+const first_pokemon_names = [_][11]u8{
+    __(11, .en_us, "??????????"),
+    __(11, .en_us, "BULBASAUR"),
+    __(11, .en_us, "IVYSAUR"),
+    __(11, .en_us, "VENUSAUR"),
 };
 
-const last_pokemon_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][11]u8{
-        __(11, .en_us, "LATIAS"),
-        __(11, .en_us, "LATIOS"),
-        __(11, .en_us, "JIRACHI"),
-        __(11, .en_us, "DEOXYS"),
-        __(11, .en_us, "CHIMECHO"),
-    };
+const last_pokemon_names = [_][11]u8{
+    __(11, .en_us, "LATIAS"),
+    __(11, .en_us, "LATIOS"),
+    __(11, .en_us, "JIRACHI"),
+    __(11, .en_us, "DEOXYS"),
+    __(11, .en_us, "CHIMECHO"),
 };
 
-const first_ability_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][13]u8{
-        __(13, .en_us, "-------"),
-        __(13, .en_us, "STENCH"),
-        __(13, .en_us, "DRIZZLE"),
-        __(13, .en_us, "SPEED BOOST"),
-        __(13, .en_us, "BATTLE ARMOR"),
-    };
+const first_ability_names = [_][13]u8{
+    __(13, .en_us, "-------"),
+    __(13, .en_us, "STENCH"),
+    __(13, .en_us, "DRIZZLE"),
+    __(13, .en_us, "SPEED BOOST"),
+    __(13, .en_us, "BATTLE ARMOR"),
 };
 
-const last_ability_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][13]u8{
-        __(13, .en_us, "WHITE SMOKE"),
-        __(13, .en_us, "PURE POWER"),
-        __(13, .en_us, "SHELL ARMOR"),
-        __(13, .en_us, "CACOPHONY"),
-        __(13, .en_us, "AIR LOCK"),
-    };
+const last_ability_names = [_][13]u8{
+    __(13, .en_us, "WHITE SMOKE"),
+    __(13, .en_us, "PURE POWER"),
+    __(13, .en_us, "SHELL ARMOR"),
+    __(13, .en_us, "CACOPHONY"),
+    __(13, .en_us, "AIR LOCK"),
 };
 
-const e_first_move_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][13]u8{
-        __(13, .en_us, "-"),
-        __(13, .en_us, "POUND"),
-        __(13, .en_us, "KARATE CHOP"),
-        __(13, .en_us, "DOUBLESLAP"),
-        __(13, .en_us, "COMET PUNCH"),
-    };
+const e_first_move_names = [_][13]u8{
+    __(13, .en_us, "-"),
+    __(13, .en_us, "POUND"),
+    __(13, .en_us, "KARATE CHOP"),
+    __(13, .en_us, "DOUBLESLAP"),
+    __(13, .en_us, "COMET PUNCH"),
 };
 
-const rsfrlg_first_move_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][13]u8{
-        __(13, .en_us, "-$$$$$$"),
-        __(13, .en_us, "POUND"),
-        __(13, .en_us, "KARATE CHOP"),
-        __(13, .en_us, "DOUBLESLAP"),
-        __(13, .en_us, "COMET PUNCH"),
-    };
+const rsfrlg_first_move_names = [_][13]u8{
+    __(13, .en_us, "-$$$$$$"),
+    __(13, .en_us, "POUND"),
+    __(13, .en_us, "KARATE CHOP"),
+    __(13, .en_us, "DOUBLESLAP"),
+    __(13, .en_us, "COMET PUNCH"),
 };
 
-const last_move_names = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_][13]u8{
-        __(13, .en_us, "ROCK BLAST"),
-        __(13, .en_us, "SHOCK WAVE"),
-        __(13, .en_us, "WATER PULSE"),
-        __(13, .en_us, "DOOM DESIRE"),
-        __(13, .en_us, "PSYCHO BOOST"),
-    };
+const last_move_names = [_][13]u8{
+    __(13, .en_us, "ROCK BLAST"),
+    __(13, .en_us, "SHOCK WAVE"),
+    __(13, .en_us, "WATER PULSE"),
+    __(13, .en_us, "DOOM DESIRE"),
+    __(13, .en_us, "PSYCHO BOOST"),
+};
+
+const type_names = [_][7]u8{
+    __(7, .en_us, "NORMAL"),
+    __(7, .en_us, "FIGHT"),
+    __(7, .en_us, "FLYING"),
+    __(7, .en_us, "POISON"),
+    __(7, .en_us, "GROUND"),
+    __(7, .en_us, "ROCK"),
+    __(7, .en_us, "BUG"),
+    __(7, .en_us, "GHOST"),
+    __(7, .en_us, "STEEL"),
+    __(7, .en_us, "???"),
+    __(7, .en_us, "FIRE"),
+    __(7, .en_us, "WATER"),
+    __(7, .en_us, "GRASS"),
+    __(7, .en_us, "ELECTR"),
+    __(7, .en_us, "PSYCHC"),
+    __(7, .en_us, "ICE"),
+    __(7, .en_us, "DRAGON"),
+    __(7, .en_us, "DARK"),
 };
