@@ -423,6 +423,29 @@ fn generate(stream: var, root: Object) !void {
                 try stream.print("<tr><td>Total:</td><td>{}</td></tr>\n", .{total_stats});
                 try stream.writeAll("</table>\n");
             }
+
+            const m_tms = pokemon.fields.getValue("tms");
+            const m_hms = pokemon.fields.getValue("hms");
+            if (m_tms != null or m_hms != null) {
+                try stream.writeAll("<h3>Learnset</h3>\n");
+                try stream.writeAll("<table>\n");
+            }
+            for ([_]?Object{ m_tms, m_hms }) |m_machines, i| {
+                const machines = m_machines orelse continue;
+                const field = if (i == 0) "tms" else "hms";
+                const prefix = if (i == 0) "TM" else "HM";
+                for (machines.indexs.values()) |is_learned, index| {
+                    if (!mem.eql(u8, is_learned.value orelse continue, "true"))
+                        continue;
+                    const id = machines.indexs.at(index).key;
+                    const move_id = fmt.parseInt(usize, root.getArrayValue(field, id) orelse continue, 10) catch continue;
+                    const move_name = humanize(root.getArrayFieldValue("moves", move_id, "name") orelse unknown);
+                    try stream.print("<tr><td>{}{}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ prefix, id + 1, move_id, move_name });
+                }
+            }
+            if (m_tms != null or m_hms != null) {
+                try stream.writeAll("</table>\n");
+            }
         }
     }
 
@@ -543,6 +566,13 @@ const Object = struct {
     fn getFieldValue(obj: Object, field: []const u8) ?[]const u8 {
         if (obj.fields.getValue(field)) |v|
             return v.value;
+        return null;
+    }
+
+    fn getArrayValue(obj: Object, array_field: []const u8, index: usize) ?[]const u8 {
+        if (obj.fields.getValue(array_field)) |array|
+            if (array.indexs.get(index)) |elem|
+                return elem.value;
         return null;
     }
 

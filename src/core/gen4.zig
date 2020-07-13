@@ -43,11 +43,11 @@ pub const BasePokemon = extern struct {
     flee_rate: u8,
 
     color: common.Color,
+    unknown: [2]u8,
 
     // Memory layout
     // TMS 01-92, HMS 01-08
     machine_learnset: lu128,
-    pad: [2]u8,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);

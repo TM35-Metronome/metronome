@@ -25,8 +25,9 @@ pub const BasePokemon = extern struct {
     types: [2]u8,
 
     catch_rate: u8,
+    stage: u8,
 
-    evs: [3]u8, // TODO: Figure out if common.EvYield fits in these 3 bytes
+    evs_yield: common.EvYield,
     items: [3]lu16,
 
     gender_ratio: u8,
@@ -40,17 +41,14 @@ pub const BasePokemon = extern struct {
 
     abilities: [3]u8,
 
-    // TODO: The three fields below are kinda unknown
-    flee_rate: u8,
-    form_stats_start: [2]u8,
-    form_sprites_start: [2]u8,
-
+    flag: u8,
+    form_id: lu16,
+    forme: lu16,
     form_count: u8,
 
     color: common.Color,
 
-    base_exp_yield: u8,
-
+    base_exp_yield: lu16,
     height: lu16,
     weight: lu16,
 
@@ -66,7 +64,7 @@ pub const BasePokemon = extern struct {
     //nacrene_tutor: lu32,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 55);
+        std.debug.assert(@sizeOf(@This()) == 56);
     }
 };
 

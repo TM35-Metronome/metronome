@@ -951,10 +951,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                     if (tindex >= len)
                         return error.Error;
 
-                    const rindex = if (is_tms)
-                        tindex + game.hms.len * @boolToInt(tindex >= game.tms1.len)
-                    else
-                        tindex + game.tms1.len;
+                    const rindex = if (is_tms) tindex else tindex + game.tms1.len + game.tms2.len;
                     const learnset = &pokemon.machine_learnset;
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
                 },

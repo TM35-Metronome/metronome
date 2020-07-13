@@ -866,12 +866,10 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
             const machine_learnset = pokemon.machine_learnset.value();
             var j: usize = 0;
-            while (j < game.tms1.len) : (j += 1)
+            while (j < game.tms1.len + game.tms2.len) : (j += 1)
                 try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            while (j < game.tms1.len + game.hms.len) : (j += 1)
-                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms1.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            while (j < game.tms2.len + game.hms.len + game.tms1.len) : (j += 1)
-                try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j - game.hms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+            while (j < game.tms1.len + game.tms2.len + game.hms.len) : (j += 1)
+                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - (game.tms1.len + game.tms2.len), bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
         }
     }
 
