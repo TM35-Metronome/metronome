@@ -29,7 +29,7 @@ const params = blk: {
     break :blk [_]Param{
         clap.parseParam("-h, --help           Display this help text and exit.") catch unreachable,
         clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
-        clap.parseParam("-o, --output <FILE>  The file to output the file to.") catch unreachable,
+        clap.parseParam("-o, --output <FILE>  The file to output the file to. (default: site.html)") catch unreachable,
     };
 };
 
@@ -426,10 +426,23 @@ fn generate(stream: var, root: Object) !void {
 
             const m_tms = pokemon.fields.getValue("tms");
             const m_hms = pokemon.fields.getValue("hms");
-            if (m_tms != null or m_hms != null) {
+            const m_moves = pokemon.fields.getValue("moves");
+            if (m_tms != null or m_hms != null or m_moves != null)
                 try stream.writeAll("<h3>Learnset</h3>\n");
+
+            if (m_moves) |moves| {
                 try stream.writeAll("<table>\n");
+                for (moves.indexs.values()) |move| {
+                    const level = move.getFieldValue("level") orelse continue;
+                    const move_id = fmt.parseInt(usize, move.getFieldValue("id") orelse continue, 10) catch continue;
+                    const move_name = humanize(root.getArrayFieldValue("moves", move_id, "name") orelse unknown);
+                    try stream.print("<tr><td>Lvl {}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ level, move_id, move_name });
+                }
+                try stream.writeAll("</table>\n");
             }
+
+            if (m_tms != null or m_hms != null)
+                try stream.writeAll("<table>\n");
             for ([_]?Object{ m_tms, m_hms }) |m_machines, i| {
                 const machines = m_machines orelse continue;
                 const field = if (i == 0) "tms" else "hms";
@@ -443,9 +456,8 @@ fn generate(stream: var, root: Object) !void {
                     try stream.print("<tr><td>{}{}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ prefix, id + 1, move_id, move_name });
                 }
             }
-            if (m_tms != null or m_hms != null) {
+            if (m_tms != null or m_hms != null)
                 try stream.writeAll("</table>\n");
-            }
         }
     }
 

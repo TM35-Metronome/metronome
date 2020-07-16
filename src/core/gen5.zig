@@ -214,6 +214,11 @@ pub const LevelUpMove = extern struct {
     id: lu16,
     level: lu16,
 
+    pub const term = LevelUpMove{
+        .id = lu16.init(math.maxInt(u16)),
+        .level = lu16.init(math.maxInt(u16)),
+    };
+
     comptime {
         std.debug.assert(@sizeOf(@This()) == 4);
     }

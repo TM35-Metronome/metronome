@@ -228,6 +228,11 @@ pub const LevelUpMove = packed struct {
     id: u9,
     level: u7,
 
+    pub const term = LevelUpMove{
+        .id = math.maxInt(u9),
+        .level = math.maxInt(u7),
+    };
+
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
     }

@@ -525,9 +525,10 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         var i: usize = 0;
         while (i < game.level_up_moves.fat.len) : (i += 1) {
             const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
-            const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
+                if (std.meta.eql(move, gen4.LevelUpMove.term))
+                    break;
                 try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id });
                 try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level });
             }
@@ -893,9 +894,10 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         var i: usize = 0;
         while (i < number_of_pokemons) : (i += 1) {
             const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
+                if (std.meta.eql(move, gen5.LevelUpMove.term))
+                    break;
                 try stream.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id.value() });
                 try stream.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level.value() });
             }
