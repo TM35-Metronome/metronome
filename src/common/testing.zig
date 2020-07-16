@@ -1,3 +1,4 @@
+const clap = @import("clap");
 const std = @import("std");
 const util = @import("util.zig");
 
@@ -6,22 +7,6 @@ const heap = std.heap;
 const mem = std.mem;
 const io = std.io;
 const testing = std.testing;
-
-// I've copied SliceIterator from "clap" to this file to avoid depending on "clap".
-const SliceIterator = struct {
-    const Error = error{};
-
-    args: []const []const u8,
-    index: usize = 0,
-
-    pub fn next(iter: *SliceIterator) Error!?[]const u8 {
-        if (iter.args.len <= iter.index)
-            return null;
-
-        defer iter.index += 1;
-        return iter.args[iter.index];
-    }
-};
 
 pub fn testProgram(
     comptime main: var,
@@ -36,7 +21,7 @@ pub fn testProgram(
     var stdin = io.fixedBufferStream(in);
     var stdout = io.fixedBufferStream(&out_buf);
     var stderr = io.fixedBufferStream(&err_buf);
-    var arg_iter = SliceIterator{ .args = args };
+    var arg_iter = clap.args.SliceIterator{ .args = args };
 
     const StdIo = util.CustomStdIoStreams(
         std.io.FixedBufferStream([]const u8).InStream,
@@ -52,7 +37,7 @@ pub fn testProgram(
             .out = stdout.outStream(),
             .err = stderr.outStream(),
         },
-        SliceIterator,
+        clap.args.SliceIterator,
         &arg_iter,
     );
     debug.warn("{}", .{stderr.getWritten()});

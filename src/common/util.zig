@@ -1,3 +1,4 @@
+const clap = @import("clap");
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -26,6 +27,32 @@ test "" {
     _ = parse;
     _ = readLine;
     _ = testing;
+}
+
+pub fn generateMain(comptime main2: var) fn () u8 {
+    return struct {
+        fn main() u8 {
+            var stdio = getStdIo();
+            defer stdio.err.flush() catch {};
+
+            var arena = heap.ArenaAllocator.init(heap.page_allocator);
+            defer arena.deinit();
+
+            var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
+                return errors.allocErr(stdio.err.outStream());
+            const res = main2(
+                &arena.allocator,
+                StdIo.In.InStream,
+                StdIo.Out.OutStream,
+                stdio.streams(),
+                clap.args.OsIterator,
+                &arg_iter,
+            );
+
+            stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
+            return res;
+        }
+    }.main;
 }
 
 pub const StdIo = struct {

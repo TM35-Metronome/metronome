@@ -19,6 +19,8 @@ const parse = util.parse;
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
+pub const main = util.generateMain(main2);
+
 // TODO: proper versioning
 const program_version = "0.0.0";
 
@@ -44,28 +46,6 @@ fn usage(stream: var) !void {
         \\
     );
     try clap.help(stream, &params);
-}
-
-pub fn main() u8 {
-    var stdio = util.getStdIo();
-    defer stdio.err.flush() catch {};
-
-    var arena = heap.ArenaAllocator.init(heap.page_allocator);
-    defer arena.deinit();
-
-    var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(stdio.err.outStream());
-    const res = main2(
-        &arena.allocator,
-        util.StdIo.In.InStream,
-        util.StdIo.Out.OutStream,
-        stdio.streams(),
-        clap.args.OsIterator,
-        &arg_iter,
-    );
-
-    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
-    return res;
 }
 
 /// TODO: This function actually expects an allocator that owns all the memory allocated, such
