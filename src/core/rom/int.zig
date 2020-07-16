@@ -23,23 +23,24 @@ pub const bi32 = Int(i32, .Big);
 pub const bi128 = Int(i128, .Big);
 
 /// A data structure representing an integer of a specific endianess
-pub fn Int(comptime Inner: type, comptime endian: builtin.Endian) type {
-    comptime debug.assert(@typeInfo(Inner) == .Int);
+pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
+    comptime debug.assert(@typeInfo(_Inner) == .Int);
 
     return packed struct {
-        const Self = @This();
-
         bytes: [@sizeOf(Inner)]u8,
 
-        pub fn init(v: Inner) Self {
-            var res: Self = undefined;
+        pub const Inner = _Inner;
+        pub const endian = _endian;
+
+        pub fn init(v: Inner) @This() {
+            var res: @This() = undefined;
             mem.writeInt(Inner, &res.bytes, v, endian);
 
             return res;
         }
 
         /// Converts the integer to native endianess and returns it.
-        pub fn value(int: Self) Inner {
+        pub fn value(int: @This()) Inner {
             return mem.readInt(Inner, &int.bytes, endian);
         }
 
@@ -55,7 +56,7 @@ pub fn Int(comptime Inner: type, comptime endian: builtin.Endian) type {
         /// Here, we cannot define the tag as a `lu16´, so instead we use `valueNative`.
         /// The values of A,B,C will differ on platforms of different endianess, but
         /// the bit layout of A,B,C will always be the same no matter the endianess.
-        pub fn valueNative(int: Self) Inner {
+        pub fn valueNative(int: @This()) Inner {
             return mem.readInt(Inner, &int.bytes, builtin.endian);
         }
     };

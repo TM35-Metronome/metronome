@@ -995,14 +995,16 @@ const extension = switch (std.Target.current.os.tag) {
 };
 const program_name = "tm35-randomizer";
 const command_file_name = "commands";
-const default_commands = "tm35-rand-learned-moves" ++ extension ++ "\n" ++
-    "tm35-rand-parties" ++ extension ++ "\n" ++
+const default_commands = //
+    "tm35-rand-learned-moves" ++ extension ++ "\n" ++
+    "tm35-rand-stats" ++ extension ++ "\n" ++
     "tm35-rand-pokeball-items" ++ extension ++ "\n" ++
+    "tm35-rand-parties" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++
     "tm35-rand-static" ++ extension ++ "\n" ++
-    "tm35-rand-stats" ++ extension ++ "\n" ++
+    "tm35-rand-wild" ++ extension ++ "\n" ++
     "tm35-no-trade-evolutions" ++ extension ++ "\n" ++
-    "tm35-rand-wild" ++ extension ++ "\n";
+    "tm35-generate-site" ++ extension ++ "\n";
 
 const Exes = struct {
     allocator: *mem.Allocator,

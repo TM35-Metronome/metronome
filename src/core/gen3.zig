@@ -2,6 +2,7 @@ const common = @import("common.zig");
 const rom = @import("rom.zig");
 const std = @import("std");
 
+const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
@@ -13,167 +14,29 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
+pub const encodings = @import("gen3/encodings.zig");
 pub const offsets = @import("gen3/offsets.zig");
 pub const script = @import("gen3/script.zig");
 
-/// A pointer to an unknown number of elements.
-/// In GBA games pointers are 32 bits and the game rom is loaded into address
-/// 0x8000000. This makes 0x8000000 the null pointer. This struct helps abstract
-/// this away and translate game pointers into real pointers.
-pub fn Ptr(comptime T: type) type {
-    return extern struct {
-        const Self = @This();
-
-        v: lu32,
-
-        comptime {
-            std.debug.assert(@sizeOf(@This()) == 4);
-        }
-
-        /// Initialize a 'null' 'Ptr'
-        pub fn initNull() Self {
-            return Self{ .v = lu32.init(0) };
-        }
-
-        /// Initialize a 'Ptr' with the address 'addr' (relative to the rom).
-        pub fn init(addr: u32) !Self {
-            const v = math.add(u32, addr, 0x8000000) catch return error.InvalidPointer;
-            return Self{ .v = lu32.init(v) };
-        }
-
-        /// Slice 'data' from 'ptr' to 'ptr' + 'len'.
-        pub fn toSlice(ptr: Self, data: []u8, len: u32) ![]T {
-            if (ptr.isNull()) {
-                if (len == 0)
-                    return &[_]T{};
-
-                return error.InvalidPointer;
-            }
-
-            const slice = try ptr.toSliceEnd(data);
-            if (slice.len < len)
-                return error.InvalidPointer;
-
-            return slice[0..len];
-        }
-
-        /// Slice 'data' from 'ptr' to the maximum length allowed
-        /// within 'data'.
-        pub fn toSliceEnd(ptr: Self, data: []u8) ![]T {
-            if (ptr.isNull())
-                return error.InvalidPointer;
-
-            const start = try ptr.toInt();
-            const byte_len = data.len - start;
-            const len = byte_len - (byte_len % @sizeOf(T));
-            return mem.bytesAsSlice(T, data[start..][0..len]);
-        }
-
-        /// Slice 'data' from 'ptr' to the first item where 'isTerm'
-        /// return 'true'.
-        pub fn toSliceTerminated(ptr: Self, data: []u8, isTerm: fn (T) bool) ![]T {
-            const slice = try ptr.toSliceEnd(data);
-            for (slice) |item, len| {
-                if (isTerm(item))
-                    return slice[0..len];
-            }
-
-            return error.DidNotFindTerminator;
-        }
-
-        /// Check if the pointer is 'null'.
-        pub fn isNull(ptr: Self) bool {
-            return ptr.v.value() == 0;
-        }
-
-        /// Convert 'ptr' to its integer form (relative to the rom).
-        pub fn toInt(ptr: Self) !u32 {
-            return math.sub(u32, ptr.v.value(), 0x8000000) catch return error.InvalidPointer;
-        }
-    };
+test "" {
+    std.meta.refAllDecls(@This());
 }
 
-/// Like 'Ptr' but only to a single 'T'.
-pub fn Ref(comptime T: type) type {
-    return extern struct {
-        const Self = @This();
+pub const Language = enum {
+    en_us,
+};
 
-        ptr: Ptr(T),
-
-        comptime {
-            std.debug.assert(@sizeOf(@This()) == 4);
-        }
-
-        /// Initialize a 'null' 'Ref'
-        pub fn initNull() Self {
-            return Self{ .ptr = Ptr(T).initNull() };
-        }
-
-        /// Initialize a 'Ref' with the address 'addr' (relative to the rom).
-        pub fn init(addr: u32) !Self {
-            return Self{ .ptr = try Ptr(T).init(addr) };
-        }
-
-        /// Convert to '*T' at the address of 'ref' inside 'data'.
-        pub fn toSingle(ref: Self, data: []u8) !*T {
-            return &(try ref.ptr.toSlice(data, 1))[0];
-        }
-
-        /// Check if the pointer is 'null'.
-        pub fn isNull(ref: Self) bool {
-            return ref.ptr.isNull();
-        }
-
-        /// Convert 'ptr' to its integer form (relative to the rom).
-        pub fn toInt(ref: Self) !u32 {
-            return try ref.ptr.toInt();
-        }
-    };
+pub fn Ptr(comptime P: type) type {
+    return rom.ptr.RelativePointer(P, u32, .Little, 0x8000000, 0);
 }
 
-/// Like 'Ptr' but with a runtime known number of elements.
-pub fn Slice(comptime T: type) type {
-    return extern struct {
-        const Self = @This();
-
-        l: lu32,
-        ptr: Ptr(T),
-
-        comptime {
-            std.debug.assert(@sizeOf(@This()) == 8);
-        }
-
-        /// Initialize an empty 'Slice'.
-        pub fn initEmpty() Self {
-            return Self{
-                .l = lu32.init(0),
-                .ptr = Ptr(T).initNull(),
-            };
-        }
-
-        /// Initialize a 'Slice' from an 'addr' and a 'len'.
-        pub fn init(addr: u32, l: u32) !Self {
-            return Self{
-                .l = lu32.init(l),
-                .ptr = try Ptr(T).init(addr),
-            };
-        }
-
-        /// Convert to a slice into 'data'.
-        pub fn toSlice(slice: Self, data: []u8) ![]T {
-            return slice.ptr.toSlice(data, slice.len());
-        }
-
-        /// Get the length of 'slice'.
-        pub fn len(slice: Self) u32 {
-            return slice.l.value();
-        }
-    };
+pub fn Slice(comptime S: type) type {
+    return rom.ptr.RelativeSlice(S, u32, .Little, .len_first, 0x8000000);
 }
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
-    types: [2]Type,
+    types: [2]u8,
 
     catch_rate: u8,
     base_exp_yield: u8,
@@ -245,10 +108,10 @@ pub const PartyType = packed enum(u8) {
 };
 
 pub const Party = packed union {
-    none: Slice(PartyMemberNone),
-    item: Slice(PartyMemberItem),
-    moves: Slice(PartyMemberMoves),
-    both: Slice(PartyMemberBoth),
+    none: Slice([]PartyMemberNone),
+    item: Slice([]PartyMemberItem),
+    moves: Slice([]PartyMemberMoves),
+    both: Slice([]PartyMemberBoth),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -309,7 +172,7 @@ pub const PartyMemberBoth = extern struct {
 pub const Move = extern struct {
     effect: u8,
     power: u8,
-    type: Type,
+    type: u8,
     accuracy: u8,
     pp: u8,
     side_effect_chance: u8,
@@ -351,14 +214,14 @@ pub const Item = extern struct {
     price: lu16,
     hold_effect: u8,
     hold_effect_param: u8,
-    description: Ptr(u8),
+    description: Ptr([*:0xff]u8),
     importance: u8,
     unknown: u8,
     pocket: Pocket,
     type: u8,
-    field_use_func: Ref(u8),
+    field_use_func: Ptr(*u8),
     battle_usage: lu32,
-    battle_use_func: Ref(u8),
+    battle_use_func: Ptr(*u8),
     secondary_id: lu32,
 
     comptime {
@@ -366,30 +229,14 @@ pub const Item = extern struct {
     }
 };
 
-pub const Type = packed enum(u8) {
-    normal = 0x00,
-    fighting = 0x01,
-    flying = 0x02,
-    poison = 0x03,
-    ground = 0x04,
-    rock = 0x05,
-    bug = 0x06,
-    ghost = 0x07,
-    steel = 0x08,
-    unknown = 0x09,
-    fire = 0x0A,
-    water = 0x0B,
-    grass = 0x0C,
-    electric = 0x0D,
-    psychic = 0x0E,
-    ice = 0x0F,
-    dragon = 0x10,
-    dark = 0x11,
-};
-
 pub const LevelUpMove = packed struct {
     id: u9,
     level: u7,
+
+    pub const term = LevelUpMove{
+        .id = math.maxInt(u9),
+        .level = math.maxInt(u7),
+    };
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
@@ -410,7 +257,7 @@ pub fn WildPokemonInfo(comptime len: usize) type {
     return extern struct {
         encounter_rate: u8,
         pad: [3]u8,
-        wild_pokemons: Ref([len]WildPokemon),
+        wild_pokemons: Ptr(*[len]WildPokemon),
 
         comptime {
             std.debug.assert(@sizeOf(@This()) == 8);
@@ -422,10 +269,10 @@ pub const WildPokemonHeader = extern struct {
     map_group: u8,
     map_num: u8,
     pad: [2]u8,
-    land: Ref(WildPokemonInfo(12)),
-    surf: Ref(WildPokemonInfo(5)),
-    rock_smash: Ref(WildPokemonInfo(5)),
-    fishing: Ref(WildPokemonInfo(10)),
+    land: Ptr(*WildPokemonInfo(12)),
+    surf: Ptr(*WildPokemonInfo(5)),
+    rock_smash: Ptr(*WildPokemonInfo(5)),
+    fishing: Ptr(*WildPokemonInfo(10)),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 20);
@@ -445,10 +292,10 @@ pub const Evolution = extern struct {
 };
 
 pub const MapHeader = extern struct {
-    map_data: Ref(c_void),
-    map_events: Ref(MapEvents),
-    map_scripts: Ptr(MapScript),
-    map_connections: Ref(c_void),
+    map_data: Ptr(*c_void),
+    map_events: Ptr(*MapEvents),
+    map_scripts: Ptr([*]MapScript),
+    map_connections: Ptr(*c_void),
     music: lu16,
     map_data_id: lu16,
     map_sec: u8,
@@ -470,10 +317,10 @@ pub const MapEvents = extern struct {
     warps_len: u8,
     coord_events_len: u8,
     bg_events_len: u8,
-    obj_events: Ptr(ObjectEvent),
-    warps: Ptr(Warp),
-    coord_events: Ptr(CoordEvent),
-    bg_events: Ptr(BgEvent),
+    obj_events: Ptr([*]ObjectEvent),
+    warps: Ptr([*]Warp),
+    coord_events: Ptr([*]CoordEvent),
+    bg_events: Ptr([*]BgEvent),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 20);
@@ -493,7 +340,7 @@ pub const ObjectEvent = extern struct {
     pad2: u8,
     trainer_type: lu16,
     sight_radius_tree_etc: lu16,
-    script: Ptr(u8),
+    script: Ptr(?[*]u8),
     event_flag: lu16,
     pad3: [2]u8,
 
@@ -528,7 +375,7 @@ pub const CoordEvent = extern struct {
     trigger: lu16,
     index: lu16,
     pad2: [2]u8,
-    scripts: Ptr(u8),
+    scripts: Ptr([*]u8),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
@@ -552,8 +399,8 @@ pub const MapScript = extern struct {
     @"type": u8,
     addr: packed union {
         @"0": void,
-        @"2": Ptr(MapScript2),
-        other: Ptr(u8),
+        @"2": Ptr([*]MapScript2),
+        other: Ptr([*]u8),
     },
 
     comptime {
@@ -564,7 +411,7 @@ pub const MapScript = extern struct {
 pub const MapScript2 = extern struct {
     word1: lu16,
     word2: lu16,
-    addr: Ptr(u8),
+    addr: Ptr([*]u8),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -591,14 +438,20 @@ pub const Game = struct {
     machine_learnsets: []lu64,
     pokemons: []BasePokemon,
     evolutions: [][5]Evolution,
-    level_up_learnset_pointers: []Ptr(LevelUpMove),
+    level_up_learnset_pointers: []Ptr([*]LevelUpMove),
     hms: []lu16,
     tms: []lu16,
     items: []Item,
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
+    pokemon_names: [][11]u8,
+    ability_names: [][13]u8,
+    move_names: [][13]u8,
+    type_names: [][7]u8,
+
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
+    text: []*Ptr([*:0xff]u8),
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
         const in_stream = file.inStream();
@@ -613,12 +466,12 @@ pub const Game = struct {
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
             return error.InvalidRomSize;
 
-        const gda_rom = try allocator.alloc(u8, size);
-        errdefer allocator.free(gda_rom);
+        const gba_rom = try allocator.alloc(u8, size);
+        errdefer allocator.free(gba_rom);
 
-        try in_stream.readNoEof(gda_rom);
+        try in_stream.readNoEof(gba_rom);
 
-        const map_headers = info.map_headers.slice(gda_rom);
+        const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
 
             // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
@@ -628,103 +481,128 @@ pub const Game = struct {
             VAR_0x8001: ?*lu16 = null,
             static_pokemons: std.ArrayList(*script.Command),
             pokeball_items: std.ArrayList(PokeballItem),
+            text: std.ArrayList(*Ptr([*:0xff]u8)),
 
-            fn processCommand(script_data: *@This(), command: *script.Command) !void {
+            fn processCommand(script_data: *@This(), gba_data: []u8, command: *script.Command) !void {
                 const tag = command.tag;
                 const data = command.data();
-                if (tag == .setwildbattle)
-                    try script_data.static_pokemons.append(command);
-                if (tag == .setorcopyvar) {
-                    if (data.setorcopyvar.destination.value() == 0x8000)
-                        script_data.VAR_0x8000 = &data.setorcopyvar.source;
-                    if (data.setorcopyvar.destination.value() == 0x8001)
-                        script_data.VAR_0x8001 = &data.setorcopyvar.source;
-                }
-                if (tag == .callstd and
-                    (data.callstd.function == script.STD_OBTAIN_ITEM or
-                    data.callstd.function == script.STD_FIND_ITEM))
-                {
-                    try script_data.pokeball_items.append(PokeballItem{
-                        .item = script_data.VAR_0x8000 orelse return,
-                        .amount = script_data.VAR_0x8001 orelse return,
-                    });
+                switch (tag) {
+                    .setwildbattle => try script_data.static_pokemons.append(command),
+                    .setorcopyvar => {
+                        if (data.setorcopyvar.destination.value() == 0x8000)
+                            script_data.VAR_0x8000 = &data.setorcopyvar.source;
+                        if (data.setorcopyvar.destination.value() == 0x8001)
+                            script_data.VAR_0x8001 = &data.setorcopyvar.source;
+                    },
+                    .callstd => switch (data.callstd.function) {
+                        script.STD_OBTAIN_ITEM, script.STD_FIND_ITEM => {
+                            try script_data.pokeball_items.append(PokeballItem{
+                                .item = script_data.VAR_0x8000 orelse return,
+                                .amount = script_data.VAR_0x8001 orelse return,
+                            });
+                        },
+                        else => {},
+                    },
+                    .loadword => switch (data.loadword.destination) {
+                        0 => {
+                            const v = data.loadword.value.toSliceZ(gba_data) catch return;
+                            try script_data.text.append(&data.loadword.value);
+                        },
+                        else => {},
+                    },
+                    .message => {
+                        const v = data.message.text.toSliceZ(gba_data) catch return;
+                        try script_data.text.append(&data.message.text);
+                    },
+                    else => {},
                 }
             }
 
-            fn deinit(data: *@This()) void {
+            fn deinit(data: @This()) void {
                 data.static_pokemons.deinit();
                 data.pokeball_items.deinit();
-                data.* = undefined;
+                data.text.deinit();
             }
         };
         var script_data = ScriptData{
             .static_pokemons = std.ArrayList(*script.Command).init(allocator),
             .pokeball_items = std.ArrayList(PokeballItem).init(allocator),
+            .text = std.ArrayList(*Ptr([*:0xff]u8)).init(allocator),
         };
         errdefer script_data.deinit();
 
         @setEvalBranchQuota(100000);
         for (map_headers) |map_header| {
-            const scripts = try map_header.map_scripts.toSliceTerminated(gda_rom, struct {
-                fn isTerm(ms: MapScript) bool {
-                    return ms.@"type" == 0;
-                }
-            }.isTerm);
+            const scripts = try map_header.map_scripts.toSliceEnd(gba_rom);
 
             for (scripts) |s| {
+                if (s.@"type" == 0)
+                    break;
                 if (s.@"type" == 2 or s.@"type" == 4)
                     continue;
 
-                const script_bytes = try s.addr.other.toSliceEnd(gda_rom);
+                const script_bytes = try s.addr.other.toSliceEnd(gba_rom);
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
-                    try script_data.processCommand(command);
+                    try script_data.processCommand(gba_rom, command);
             }
 
-            const events = try map_header.map_events.toSingle(gda_rom);
-            for (try events.obj_events.toSlice(gda_rom, events.obj_events_len)) |obj_event| {
-                const script_bytes = obj_event.script.toSliceEnd(gda_rom) catch continue;
+            const events = try map_header.map_events.toPtr(gba_rom);
+            for (try events.obj_events.toSlice(gba_rom, events.obj_events_len)) |obj_event| {
+                const script_bytes = obj_event.script.toSliceEnd(gba_rom) catch continue;
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
-                    try script_data.processCommand(command);
+                    try script_data.processCommand(gba_rom, command);
             }
 
-            for (try events.coord_events.toSlice(gda_rom, events.coord_events_len)) |coord_event| {
-                const script_bytes = coord_event.scripts.toSliceEnd(gda_rom) catch continue;
+            for (try events.coord_events.toSlice(gba_rom, events.coord_events_len)) |coord_event| {
+                const script_bytes = coord_event.scripts.toSliceEnd(gba_rom) catch continue;
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
-                    try script_data.processCommand(command);
+                    try script_data.processCommand(gba_rom, command);
+            }
+
+            for (try events.obj_events.toSlice(gba_rom, events.obj_events_len)) |obj_event| {
+                const script_bytes = obj_event.script.toSliceEnd(gba_rom) catch continue;
+                var decoder = script.CommandDecoder{ .bytes = script_bytes };
+                while (try decoder.next()) |command|
+                    try script_data.processCommand(gba_rom, command);
             }
         }
 
         return Game{
             .version = info.version,
             .allocator = allocator,
-            .data = gda_rom,
-            .header = @ptrCast(*gba.Header, &gda_rom[0]),
+            .data = gba_rom,
+            .header = @ptrCast(*gba.Header, &gba_rom[0]),
             .starters = [_]*lu16{
-                info.starters[0].ptr(gda_rom),
-                info.starters[1].ptr(gda_rom),
-                info.starters[2].ptr(gda_rom),
+                info.starters[0].ptr(gba_rom),
+                info.starters[1].ptr(gba_rom),
+                info.starters[2].ptr(gba_rom),
             },
             .starters_repeat = [3]*lu16{
-                info.starters_repeat[0].ptr(gda_rom),
-                info.starters_repeat[1].ptr(gda_rom),
-                info.starters_repeat[2].ptr(gda_rom),
+                info.starters_repeat[0].ptr(gba_rom),
+                info.starters_repeat[1].ptr(gba_rom),
+                info.starters_repeat[2].ptr(gba_rom),
             },
-            .trainers = info.trainers.slice(gda_rom),
-            .moves = info.moves.slice(gda_rom),
-            .machine_learnsets = info.machine_learnsets.slice(gda_rom),
-            .pokemons = info.pokemons.slice(gda_rom),
-            .evolutions = info.evolutions.slice(gda_rom),
-            .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gda_rom),
-            .hms = info.hms.slice(gda_rom),
-            .tms = info.tms.slice(gda_rom),
-            .items = info.items.slice(gda_rom),
-            .wild_pokemon_headers = info.wild_pokemon_headers.slice(gda_rom),
+            .trainers = info.trainers.slice(gba_rom),
+            .moves = info.moves.slice(gba_rom),
+            .machine_learnsets = info.machine_learnsets.slice(gba_rom),
+            .pokemons = info.pokemons.slice(gba_rom),
+            .evolutions = info.evolutions.slice(gba_rom),
+            .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gba_rom),
+            .hms = info.hms.slice(gba_rom),
+            .tms = info.tms.slice(gba_rom),
+            .items = info.items.slice(gba_rom),
+            .wild_pokemon_headers = info.wild_pokemon_headers.slice(gba_rom),
+            .pokemon_names = info.pokemon_names.slice(gba_rom),
+            .ability_names = info.ability_names.slice(gba_rom),
+            .move_names = info.move_names.slice(gba_rom),
+            .type_names = info.type_names.slice(gba_rom),
             .map_headers = map_headers,
             .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
             .pokeball_items = script_data.pokeball_items.toOwnedSlice(),
+            .text = script_data.text.toOwnedSlice(),
         };
     }
 

@@ -26,6 +26,16 @@ pub const Info = struct {
     wild_pokemons: []const u8,
     scripts: []const u8,
     itemdata: []const u8,
+
+    text: []const u8,
+    pokemon_names: u16,
+    trainer_names: u16,
+    move_names: u16,
+    move_descriptions: u16,
+    ability_names: u16,
+    item_names: u16,
+    item_descriptions: u16,
+    type_names: u16,
 };
 
 pub const infos = [_]Info{
@@ -52,6 +62,16 @@ const hg_info = Info{
     .wild_pokemons = "/a/0/3/7",
     .scripts = "/a/0/1/2",
     .itemdata = "/a/0/1/7",
+
+    .text = "/a/0/2/7",
+    .pokemon_names = 237,
+    .trainer_names = 729,
+    .move_names = 750,
+    .move_descriptions = 749,
+    .ability_names = 720,
+    .item_names = 222,
+    .item_descriptions = 221,
+    .type_names = 735,
 };
 
 const ss_info = Info{
@@ -70,6 +90,16 @@ const ss_info = Info{
     .wild_pokemons = "/a/1/3/6",
     .scripts = hg_info.scripts,
     .itemdata = hg_info.itemdata,
+
+    .text = hg_info.text,
+    .pokemon_names = hg_info.pokemon_names,
+    .trainer_names = hg_info.trainer_names,
+    .move_names = hg_info.move_names,
+    .move_descriptions = hg_info.move_descriptions,
+    .ability_names = hg_info.ability_names,
+    .item_names = hg_info.item_names,
+    .item_descriptions = hg_info.item_descriptions,
+    .type_names = hg_info.type_names,
 };
 
 const diamond_info = Info{
@@ -93,6 +123,16 @@ const diamond_info = Info{
     .wild_pokemons = "/fielddata/encountdata/d_enc_data.narc",
     .scripts = "/fielddata/script/scr_seq_release.narc",
     .itemdata = "/itemtool/itemdata/item_data.narc",
+
+    .text = "/msgdata/msg.narc",
+    .pokemon_names = 362,
+    .trainer_names = 559,
+    .move_names = 588,
+    .move_descriptions = 587,
+    .ability_names = 552,
+    .item_names = 344,
+    .item_descriptions = 343,
+    .type_names = 565,
 };
 
 const pearl_info = Info{
@@ -111,6 +151,16 @@ const pearl_info = Info{
     .wild_pokemons = "/fielddata/encountdata/p_enc_data.narc",
     .scripts = diamond_info.scripts,
     .itemdata = diamond_info.itemdata,
+
+    .text = diamond_info.text,
+    .pokemon_names = diamond_info.pokemon_names,
+    .trainer_names = diamond_info.trainer_names,
+    .move_names = diamond_info.move_names,
+    .move_descriptions = diamond_info.move_descriptions,
+    .ability_names = diamond_info.ability_names,
+    .item_names = diamond_info.item_names,
+    .item_descriptions = diamond_info.item_descriptions,
+    .type_names = diamond_info.type_names,
 };
 
 const platinum_info = Info{
@@ -134,6 +184,16 @@ const platinum_info = Info{
     .wild_pokemons = "/fielddata/encountdata/pl_enc_data.narc",
     .scripts = "/fielddata/script/scr_seq.narc",
     .itemdata = "/itemtool/itemdata/pl_item_data.narc",
+
+    .text = "/msgdata/pl_msg.narc",
+    .pokemon_names = 412,
+    .trainer_names = 618,
+    .move_names = 647,
+    .move_descriptions = 646,
+    .ability_names = 610,
+    .item_names = 392,
+    .item_descriptions = 391,
+    .type_names = 624,
 };
 
 pub const tm_count = 92;

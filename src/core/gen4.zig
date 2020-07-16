@@ -3,9 +3,16 @@ const std = @import("std");
 const common = @import("common.zig");
 const rom = @import("rom.zig");
 
+pub const encodings = @import("gen4/encodings.zig");
 pub const offsets = @import("gen4/offsets.zig");
 pub const script = @import("gen4/script.zig");
 
+comptime {
+    _ = encodings;
+}
+
+const io = std.io;
+const math = std.math;
 const mem = std.mem;
 
 const nds = rom.nds;
@@ -16,7 +23,7 @@ const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
-    types: [2]Type,
+    types: [2]u8,
 
     catch_rate: u8,
     base_exp_yield: u8,
@@ -36,11 +43,11 @@ pub const BasePokemon = extern struct {
     flee_rate: u8,
 
     color: common.Color,
+    unknown: [2]u8,
 
     // Memory layout
     // TMS 01-92, HMS 01-08
     machine_learnset: lu128,
-    pad: [2]u8,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);
@@ -192,27 +199,6 @@ pub const Trainer = extern struct {
     }
 };
 
-pub const Type = packed enum(u8) {
-    normal = 0x00,
-    fighting = 0x01,
-    flying = 0x02,
-    poison = 0x03,
-    ground = 0x04,
-    rock = 0x05,
-    bug = 0x06,
-    ghost = 0x07,
-    steel = 0x08,
-    unknown = 0x09,
-    fire = 0x0A,
-    water = 0x0B,
-    grass = 0x0C,
-    electric = 0x0D,
-    psychic = 0x0E,
-    ice = 0x0F,
-    dragon = 0x10,
-    dark = 0x11,
-};
-
 // TODO: This is the first data structure I had to decode from scratch as I couldn't find a proper
 //       resource for it... Fill it out!
 pub const Move = extern struct {
@@ -220,7 +206,7 @@ pub const Move = extern struct {
     u8_1: u8,
     category: common.MoveCategory,
     power: u8,
-    type: Type,
+    type: u8,
     accuracy: u8,
     pp: u8,
     u8_7: u8,
@@ -241,6 +227,11 @@ pub const Move = extern struct {
 pub const LevelUpMove = packed struct {
     id: u9,
     level: u7,
+
+    pub const term = LevelUpMove{
+        .id = math.maxInt(u9),
+        .level = math.maxInt(u7),
+    };
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
@@ -403,6 +394,104 @@ const PokeballItem = struct {
     amount: *lu16,
 };
 
+pub const StringTable = struct {
+    data: []u8,
+
+    pub fn count(table: StringTable) u16 {
+        return table.header().count.value();
+    }
+
+    pub fn getEncryptedString(table: StringTable, i: u32) []u8 {
+        const key = @truncate(u16, @as(u32, table.header().key.value()) * 0x2FD);
+        const encrypted_slice = table.slices()[i];
+        const slice = decryptSlice(key, i, encrypted_slice);
+        return table.data[slice.start.value()..][0 .. slice.len.value() * @sizeOf(lu16)];
+    }
+
+    pub fn getStringStream(table: StringTable, i: u32) Stream {
+        const string = table.getEncryptedString(i);
+        return .{
+            .data = string,
+            .key = @truncate(u16, 0x91BD3 * (i + 1)),
+        };
+    }
+
+    const Header = packed struct {
+        count: lu16,
+        key: lu16,
+    };
+
+    fn header(table: StringTable) *Header {
+        return @ptrCast(*Header, table.data[0..@sizeOf(Header)]);
+    }
+
+    fn slices(table: StringTable) []nds.Slice {
+        const data = table.data[@sizeOf(Header)..][0 .. table.count() * @sizeOf(nds.Slice)];
+        return mem.bytesAsSlice(nds.Slice, data);
+    }
+
+    fn decryptSlice(key: u16, i: u32, slice: nds.Slice) nds.Slice {
+        const key2 = (@as(u32, key) * (i + 1)) & 0xFFFF;
+        const key3 = key2 | (key2 << 16);
+        return nds.Slice.init(slice.start.value() ^ key3, slice.len.value() ^ key3);
+    }
+
+    fn decryptChar(key: u16, i: u32, char: lu16) lu16 {
+        const key2 = @truncate(u16, key + i * 0x493D);
+        return lu16.init(char.value() ^ key2);
+    }
+
+    const Stream = struct {
+        data: []u8,
+        key: u16,
+        pos: u32 = 0,
+
+        pub const ReadError = error{};
+        pub const WriteError = error{NoSpaceLeft};
+
+        pub const InStream = io.InStream(*Stream, ReadError, read);
+        pub const OutStream = io.OutStream(*Stream, WriteError, write);
+
+        pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
+            const rest = stream.data[stream.pos..];
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, buf[0..n], rest[0..n]);
+            for (mem.bytesAsSlice(lu16, buf[0..n])) |*c, i|
+                c.* = decryptChar(stream.key, (stream.pos / 2) + @intCast(u32, i), c.*);
+
+            const end1 = mem.indexOf(u8, buf[0..n], "\xfe\xff") orelse n;
+            const end2 = mem.indexOf(u8, buf[0..n], "\xff\xff") orelse n;
+            const end = math.min(end1, end2);
+            stream.pos += @intCast(u32, end);
+            return end;
+        }
+
+        pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
+            const rest = stream.data[stream.pos..];
+            if (buf.len == 0)
+                return 0;
+            if (rest.len == 0)
+                return error.NoSpaceLeft;
+
+            const n = math.min(rest.len, buf.len) & (math.maxInt(usize) - 1);
+            mem.copy(u8, rest[0..n], buf[0..n]);
+            for (mem.bytesAsSlice(lu16, rest[0..n])) |*c, i|
+                c.* = decryptChar(stream.key, (stream.pos / 2) + @intCast(u32, i), c.*);
+
+            stream.pos += @intCast(u32, n);
+            return n;
+        }
+
+        pub fn inStream(self: *Stream) InStream {
+            return .{ .context = self };
+        }
+
+        pub fn outStream(self: *Stream) OutStream {
+            return .{ .context = self };
+        }
+    };
+};
+
 pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
@@ -425,6 +514,16 @@ pub const Game = struct {
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
     scripts: nds.fs.Fs,
+    text: nds.fs.Fs,
+
+    pokemon_names: StringTable,
+    trainer_names: StringTable,
+    move_names: StringTable,
+    move_descriptions: StringTable,
+    ability_names: StringTable,
+    item_names: StringTable,
+    item_descriptions: StringTable,
+    type_names: StringTable,
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         try nds_rom.decodeArm9();
@@ -439,6 +538,7 @@ pub const Game = struct {
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
 
+        const text = try getNarc(file_system, info.text);
         const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
@@ -499,6 +599,16 @@ pub const Game = struct {
             .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,
+            .text = text,
+
+            .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
+            .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
+            .move_names = StringTable{ .data = text.fileData(.{ .i = info.move_names }) },
+            .move_descriptions = StringTable{ .data = text.fileData(.{ .i = info.move_descriptions }) },
+            .ability_names = StringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
+            .item_names = StringTable{ .data = text.fileData(.{ .i = info.item_names }) },
+            .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
+            .type_names = StringTable{ .data = text.fileData(.{ .i = info.type_names }) },
         };
     }
 

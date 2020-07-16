@@ -20,6 +20,16 @@ pub const Info = struct {
     parties: []const u8,
     wild_pokemons: []const u8,
     itemdata: []const u8,
+
+    text: []const u8,
+    pokemon_names: u16,
+    trainer_names: u16,
+    move_names: u16,
+    move_descriptions: u16,
+    ability_names: u16,
+    item_names: u16,
+    item_descriptions: u16,
+    type_names: u16,
 };
 
 pub const infos = [_]Info{
@@ -60,6 +70,16 @@ const black2_info = Info{
     .parties = "/a/0/9/2",
     .wild_pokemons = "/a/1/2/7",
     .itemdata = "/a/0/2/4",
+
+    .text = "a/0/0/2",
+    .pokemon_names = 90,
+    .trainer_names = 382,
+    .move_names = 403,
+    .move_descriptions = 402,
+    .ability_names = 374,
+    .item_names = 64,
+    .item_descriptions = 63,
+    .type_names = 489,
 };
 
 const white2_info = Info{
@@ -77,6 +97,16 @@ const white2_info = Info{
     .parties = black2_info.parties,
     .wild_pokemons = black2_info.wild_pokemons,
     .itemdata = black2_info.itemdata,
+
+    .text = black2_info.text,
+    .pokemon_names = black2_info.pokemon_names,
+    .trainer_names = black2_info.trainer_names,
+    .move_names = black2_info.move_names,
+    .move_descriptions = black2_info.move_descriptions,
+    .ability_names = black2_info.ability_names,
+    .item_names = black2_info.item_names,
+    .item_descriptions = black2_info.item_descriptions,
+    .type_names = black2_info.type_names,
 };
 
 const black_info = Info{
@@ -119,6 +149,16 @@ const black_info = Info{
     .parties = "/a/0/9/3",
     .wild_pokemons = "/a/1/2/6",
     .itemdata = black2_info.itemdata,
+
+    .text = black2_info.text,
+    .pokemon_names = 70,
+    .trainer_names = 190,
+    .move_names = 203,
+    .move_descriptions = 202,
+    .ability_names = 182,
+    .item_names = 54,
+    .item_descriptions = 53,
+    .type_names = 287,
 };
 
 const white_info = Info{
@@ -136,6 +176,15 @@ const white_info = Info{
     .parties = black_info.parties,
     .wild_pokemons = black_info.wild_pokemons,
     .itemdata = black_info.itemdata,
+    .text = black_info.text,
+    .pokemon_names = black_info.pokemon_names,
+    .trainer_names = black_info.trainer_names,
+    .move_names = black_info.move_names,
+    .move_descriptions = black_info.move_descriptions,
+    .ability_names = black_info.ability_names,
+    .item_names = black_info.item_names,
+    .item_descriptions = black_info.item_descriptions,
+    .type_names = black_info.type_names,
 };
 
 pub const tm_count = 95;

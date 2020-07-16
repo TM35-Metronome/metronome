@@ -1,4 +1,6 @@
 const std = @import("std");
+
+const gen3 = @import("../gen3.zig");
 const rom = @import("../rom.zig");
 const script = @import("../script.zig");
 
@@ -20,8 +22,15 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
 
 pub const STD_OBTAIN_ITEM = 0;
 pub const STD_FIND_ITEM = 1;
+pub const STD_MSG_BOX_NPC = 2;
+pub const STD_MSG_BOX_SIGN = 3;
+pub const STD_MSG_BOX_DEFAULT = 4;
+pub const STD_MSG_BOX_YES_NO = 5;
+pub const STD_MSG_BOX_AUTO_CLOSE = 6;
 pub const STD_OBTAIN_DECORATION = 7;
 pub const STD_REGISTER_MATCH_CALL = 8;
+pub const STD_MSG_BOX_GET_POINTS = 9;
+pub const STD_10 = 10;
 
 pub const Command = packed struct {
     tag: Kind,
@@ -904,7 +913,7 @@ pub const Command = packed struct {
     };
     pub const loadword = packed struct {
         destination: u8,
-        value: lu32,
+        value: gen3.Ptr([*:0xff]u8),
     };
     pub const loadbyte = packed struct {
         destination: u8,
@@ -1291,7 +1300,7 @@ pub const Command = packed struct {
     };
     pub const waitmessage = packed struct {};
     pub const message = packed struct {
-        text: lu32,
+        text: gen3.Ptr([*:0xff]u8),
     };
     pub const closemessage = packed struct {};
     pub const lockall = packed struct {};
