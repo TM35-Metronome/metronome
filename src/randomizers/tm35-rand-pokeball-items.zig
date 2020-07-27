@@ -13,16 +13,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -57,27 +54,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
@@ -94,25 +72,26 @@ pub fn main2(
     const include_key_items = args.flag("--include-key-items");
 
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var data = Data{};
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(allocator, data, seed, include_tms_hms, include_key_items) catch |err| return errors.randErr(stdio.err, err);
+    randomize(allocator, data, seed, include_tms_hms, include_key_items) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.pokeballs.values()) |ball, i| {
         const key = data.pokeballs.at(i).key;
-        stdio.out.print(".pokeball_items[{}].item={}\n", .{ key, ball }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print(".pokeball_items[{}].item={}\n", .{ key, ball }) catch |err| return exit.stdoutErr(stdio.err, err);
     }
     return 0;
 }
@@ -233,28 +212,28 @@ test "tm35-rand-pokeball-items" {
         H.pokeball("2", "2") ++
         H.pokeball("3", "3");
 
-    util.testing.testProgram(main2, &[_][]const u8{"--seed=3"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=3"}, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[3].item=1
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--include-key-items" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=1
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[3].item=3
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=2", "--include-tms-hms" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-tms-hms" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
         \\.pokeball_items[1].item=2
         \\.pokeball_items[2].item=3
         \\.pokeball_items[3].item=3
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=1
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=0

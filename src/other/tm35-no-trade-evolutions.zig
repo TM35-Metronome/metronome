@@ -13,16 +13,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 // TODO: Have the tm35-randomizer recognize options with it's help message split onto a new line
 const params = blk: {
@@ -63,38 +60,20 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var data = Data{};
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
@@ -106,9 +85,9 @@ pub fn main2(
         for (pokemon.evos.values()) |evo, j| {
             const evo_i = pokemon.evos.at(j).key;
             if (evo.param) |param|
-                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param }) catch |err| return exit.stdoutErr(stdio.err, err);
             if (evo.method) |method|
-                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, method }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, method }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
     return 0;
@@ -212,6 +191,7 @@ test "tm35-rand-static" {
 
     util.testing.testProgram(
         main2,
+        &params,
         &[_][]const u8{},
         test_string,
         H.evo("0", "level_up", "12") ++
@@ -221,6 +201,7 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(
         main2,
+        &params,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
@@ -232,6 +213,7 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(
         main2,
+        &params,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),

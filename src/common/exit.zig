@@ -2,11 +2,19 @@ pub fn allocErr(stream: var) u8 {
     return err(stream, "Allocation failed\n", .{});
 }
 
-pub fn writeErr(stream: var, file: []const u8, errr: anyerror) u8 {
-    return err(stream, "Failed to write data to '{}': {}\n", .{ file, errr });
+pub fn stdoutErr(stream: var, errr: anyerror) u8 {
+    return writeErrs(stream, "<stdout>", errr);
 }
 
-pub fn readErr(stream: var, file: []const u8, errr: anyerror) u8 {
+pub fn stdinErr(stream: var, errr: anyerror) u8 {
+    return readErrs(stream, "<stdin>", errr);
+}
+
+pub fn writeErrs(stream: var, file: []const u8, errr: anyerror) u8 {
+    return err(stream, "failed to write data to '{}': {}\n", .{ file, errr });
+}
+
+pub fn readErrs(stream: var, file: []const u8, errr: anyerror) u8 {
     return err(stream, "Failed to read data from '{}': {}\n", .{ file, errr });
 }
 

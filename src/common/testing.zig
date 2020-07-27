@@ -10,6 +10,7 @@ const testing = std.testing;
 
 pub fn testProgram(
     comptime main: var,
+    comptime params: []const clap.Param(clap.Help),
     args: []const []const u8,
     in: []const u8,
     out: []const u8,
@@ -22,6 +23,8 @@ pub fn testProgram(
     var stdout = io.fixedBufferStream(&out_buf);
     var stderr = io.fixedBufferStream(&err_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
+    const Clap = clap.ComptimeClap(clap.Help, params);
+    const clap_args = Clap.parse(&fba.allocator, clap.args.SliceIterator, &arg_iter) catch unreachable;
 
     const StdIo = util.CustomStdIoStreams(
         std.io.FixedBufferStream([]const u8).InStream,
@@ -37,8 +40,7 @@ pub fn testProgram(
             .out = stdout.outStream(),
             .err = stderr.outStream(),
         },
-        clap.args.SliceIterator,
-        &arg_iter,
+        clap_args,
     );
     debug.warn("{}", .{stderr.getWritten()});
     testing.expectEqual(@as(u8, 0), res);

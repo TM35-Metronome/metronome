@@ -13,16 +13,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -56,27 +53,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
@@ -93,16 +71,17 @@ pub fn main2(
     const follow_evos = args.flag("--follow-evos");
 
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var pokemons = Pokemons{};
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &pokemons, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
@@ -114,7 +93,7 @@ pub fn main2(
         for (pokemon.stats) |stat, k| {
             const stat_name = @tagName(@intToEnum(Pokemon.Stat, @intCast(u3, k)));
             if (pokemon.output[i])
-                stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
     return 0;
@@ -327,7 +306,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=40
         \\
     ;
-    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -354,7 +333,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -381,7 +360,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9
@@ -408,7 +387,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=47
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9

@@ -13,16 +13,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -56,27 +53,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
@@ -101,16 +79,17 @@ pub fn main2(
     const pick_lowest = args.flag("--pick-lowest-evolution");
 
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var data = Data{};
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
@@ -128,11 +107,11 @@ pub fn main2(
                 if (countEvos(data, pokemon) < evolutions)
                     continue;
 
-                _ = res.put(allocator, pokemon) catch return errors.allocErr(stdio.err);
+                _ = res.put(allocator, pokemon) catch return exit.allocErr(stdio.err);
             }
         }
         if (res.count() == 0)
-            _ = res.put(allocator, 0) catch return errors.allocErr(stdio.err);
+            _ = res.put(allocator, 0) catch return exit.allocErr(stdio.err);
 
         break :blk res;
     };
@@ -143,7 +122,7 @@ pub fn main2(
         while (i <= range.end) : (i += 1) {
             const index = random.intRangeLessThan(usize, 0, pick_from.count());
             const res = pick_from.at(index);
-            stdio.out.print(".starters[{}]={}\n", .{ i, res }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print(".starters[{}]={}\n", .{ i, res }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
     return 0;
@@ -225,25 +204,25 @@ test "tm35-rand-starters" {
         \\
     ;
 
-    util.testing.testProgram(main2, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
         \\.starters[0]=1
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=3
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=0
         \\.starters[2]=0

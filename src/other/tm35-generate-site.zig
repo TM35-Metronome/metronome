@@ -14,17 +14,14 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const escape = util.escape;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -58,45 +55,28 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
     const out = args.option("--output") orelse "site.html";
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
 
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var obj = Object{ .fields = Fields.init(allocator) };
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&obj, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
         };
-        stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
 
-    const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return errors.createErr(stdio.err, out, err);
+    const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);
     var out_stream = io.bufferedOutStream(out_file.outStream());
-    generate(out_stream.outStream(), obj) catch |err| return errors.writeErr(stdio.err, out, err);
-    out_stream.flush() catch |err| return errors.writeErr(stdio.err, out, err);
+    generate(out_stream.outStream(), obj) catch |err| return exit.writeErrs(stdio.err, out, err);
+    out_stream.flush() catch |err| return exit.writeErrs(stdio.err, out, err);
 
     return 0;
 }

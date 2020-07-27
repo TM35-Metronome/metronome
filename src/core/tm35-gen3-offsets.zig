@@ -15,7 +15,7 @@ const mem = std.mem;
 const fs = std.fs;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 
 const gba = rom.gba;
 const offsets = gen3.offsets;
@@ -30,8 +30,7 @@ const TypeInfo = builtin.TypeInfo;
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
@@ -53,63 +52,24 @@ fn usage(stream: var) !void {
     try clap.help(stream, &params);
 }
 
-pub fn main() u8 {
-    var stdio = util.getStdIo();
-    defer stdio.err.flush() catch {};
-
-    var arena = heap.ArenaAllocator.init(heap.page_allocator);
-    defer arena.deinit();
-
-    var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(stdio.err.outStream());
-    const res = main2(
-        &arena.allocator,
-        util.StdIo.In.InStream,
-        util.StdIo.Out.OutStream,
-        stdio.streams(),
-        clap.args.OsIterator,
-        &arg_iter,
-    );
-
-    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
-    return res;
-}
-
 pub fn main2(
     allocator: *mem.Allocator,
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     for (args.positionals()) |file_name, i| {
-        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return errors.readErr(stdio.err, file_name, err);
+        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErrs(stdio.err, file_name, err);
         defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
-            return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, error.FileToSmall });
+            return exit.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, error.FileToSmall });
 
         const header = mem.bytesAsSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = getVersion(&header.gamecode) catch |err| return errors.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, err });
+        const version = getVersion(&header.gamecode) catch |err| return exit.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, err });
         const info_err = getOffsets(data, version, header.gamecode, header.game_title, header.software_version);
-        const info = info_err catch |err| return errors.err(stdio.err, "Failed to get offsets from '{}': {}\n", .{ file_name, err });
-        outputInfo(stdio.out, i, info) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        const info = info_err catch |err| return exit.err(stdio.err, "Failed to get offsets from '{}': {}\n", .{ file_name, err });
+        outputInfo(stdio.out, i, info) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     return 0;

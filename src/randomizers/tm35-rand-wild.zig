@@ -12,16 +12,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -54,27 +51,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
@@ -90,23 +68,24 @@ pub fn main2(
     const simular_total_stats = args.flag("--simular-total-stats");
 
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
     var data = Data{
         .areas = std.StringHashMap(usize).init(allocator),
     };
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(data, seed, simular_total_stats) catch |err| return errors.randErr(stdio.err, err);
+    randomize(data, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.zones.values()) |zone, i| {
         const zone_i = data.zones.at(i).key;
@@ -120,11 +99,11 @@ pub fn main2(
             for (area.pokemons.values()) |*pokemon, j| {
                 const poke_i = area.pokemons.at(j).key;
                 if (pokemon.min_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.max_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.species) |s|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
             }
         }
     }
@@ -449,7 +428,7 @@ test "tm35-rand-wild" {
         \\.zones[3].wild.grass.pokemons[3].species=0
         \\
     ;
-    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.zones[0].wild.grass.pokemons[0].species=2
         \\.zones[0].wild.grass.pokemons[1].species=0
         \\.zones[0].wild.grass.pokemons[2].species=0
@@ -468,7 +447,7 @@ test "tm35-rand-wild" {
         \\.zones[3].wild.grass.pokemons[3].species=7
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
         \\.zones[0].wild.grass.pokemons[0].species=0
         \\.zones[0].wild.grass.pokemons[1].species=0
         \\.zones[0].wild.grass.pokemons[2].species=0

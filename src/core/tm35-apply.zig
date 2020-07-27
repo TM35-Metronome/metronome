@@ -23,8 +23,8 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const bit = util.bit;
-const errors = util.errors;
 const escape = util.escape;
+const exit = util.exit;
 const parse = util.parse;
 
 const lu16 = rom.int.lu16;
@@ -35,8 +35,7 @@ const lu128 = rom.int.lu128;
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -63,27 +62,6 @@ fn usage(stream: var) !void {
     try clap.help(stream, &params);
 }
 
-pub fn main() u8 {
-    var stdio = util.getStdIo();
-    defer stdio.err.flush() catch {};
-
-    var arena = heap.ArenaAllocator.init(heap.page_allocator);
-
-    var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(stdio.err.outStream());
-    const res = main2(
-        &arena.allocator,
-        util.StdIo.In.InStream,
-        util.StdIo.Out.OutStream,
-        stdio.streams(),
-        clap.args.OsIterator,
-        &arg_iter,
-    );
-
-    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
-    return res;
-}
-
 /// TODO: This function actually expects an allocator that owns all the memory allocated, such
 ///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
 ///       or move the Arena into this function?
@@ -92,27 +70,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
         stdio.err.writeAll("No file provided\n") catch {};
@@ -124,19 +83,19 @@ pub fn main2(
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
         const res = fmt.allocPrint(allocator, "{}.modified", .{path.basename(file_name)});
-        break :blk res catch |err| return errors.allocErr(stdio.err);
+        break :blk res catch |err| return exit.allocErr(stdio.err);
     };
 
     var nds_rom: nds.Rom = undefined;
     var game: Game = blk: {
-        const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
+        const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
             break :blk Game{ .gen3 = game };
         } else |err| err;
 
-        file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
+        file.seekTo(0) catch |err| return exit.readErrs(stdio.err, file_name, err);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
             stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
             stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
@@ -164,8 +123,9 @@ pub fn main2(
 
     var line_num: usize = 1;
     var line_buf = std.ArrayList(u8).init(allocator);
+    var stdin = io.bufferedInStream(stdio.in);
 
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| : (line_num += 1) {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         _ = switch (game) {
             .gen3 => |gen3_game| applyGen3(gen3_game, line_num, trimmed),
@@ -180,11 +140,11 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return errors.createErr(stdio.err, out, err);
+    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return exit.createErr(stdio.err, out, err);
     const out_stream = out_file.outStream();
     switch (game) {
-        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return errors.writeErr(stdio.err, out, err),
-        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return errors.writeErr(stdio.err, out, err),
+        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return exit.writeErrs(stdio.err, out, err),
+        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return exit.writeErrs(stdio.err, out, err),
     }
 
     return 0;

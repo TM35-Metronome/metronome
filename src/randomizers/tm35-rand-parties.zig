@@ -13,16 +13,13 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const errors = util.errors;
+const exit = util.exit;
 const parse = util.parse;
 
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-pub const main = util.generateMain(main2);
-
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = blk: {
     @setEvalBranchQuota(100000);
@@ -63,27 +60,8 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var stdin = io.bufferedInStream(stdio.in);
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-    defer args.deinit();
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
             stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
@@ -107,15 +85,16 @@ pub fn main2(
     const simular_total_stats = args.flag("--simular-total-stats");
 
     var data = Data{};
+    var stdin = io.bufferedInStream(stdio.in);
     var line_buf = std.ArrayList(u8).init(allocator);
-    while (util.readLine(&stdin, &line_buf) catch |err| return errors.readErr(stdio.err, "<stdin>", err)) |line| {
+    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
-            error.OutOfMemory => return errors.allocErr(stdio.err),
+            error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
         if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
 
         line_buf.resize(0) catch unreachable;
     }
@@ -127,7 +106,7 @@ pub fn main2(
         fix_moves,
         simular_total_stats,
         types,
-    ) catch |err| return errors.randErr(stdio.err, err);
+    ) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -135,13 +114,13 @@ pub fn main2(
             const member_i = trainer.party.at(j).key;
 
             if (member.species) |s|
-                stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, member_i, s }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, member_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
             if (member.level) |l|
-                stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, member_i, l }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, member_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
 
             for (member.moves.values()) |move, k| {
                 const move_i = member.moves.at(k).key;
-                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, member_i, move_i, move }) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, member_i, move_i, move }) catch |err| return exit.stdoutErr(stdio.err, err);
             }
         }
     }
@@ -544,7 +523,7 @@ test "tm35-rand-parties" {
         H.trainer("2", "2", "3") ++
         H.trainer("3", "3", "4");
 
-    util.testing.testProgram(main2, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=1
@@ -571,7 +550,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--fix-moves" }, test_string, result_prefix ++
         \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=8
@@ -626,9 +605,9 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     ;
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=same" }, test_string, result_prefix ++ same_types_result);
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
         \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=1
@@ -655,7 +634,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--fix-moves", "--types=themed" }, test_string, result_prefix ++
         \\.trainers[0].party[0].species=7
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=8

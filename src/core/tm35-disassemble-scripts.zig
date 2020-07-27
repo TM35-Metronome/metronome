@@ -13,7 +13,7 @@ const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 
-const errors = util.errors;
+const exit = util.exit;
 
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -27,8 +27,7 @@ const BufOutStream = io.BufferedOutStream(fs.File.OutStream.Error);
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
-// TODO: proper versioning
-const program_version = "0.0.0";
+pub const main = util.generateMain("0.0.0", main2, &params, usage);
 
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
@@ -50,52 +49,13 @@ fn usage(stream: var) !void {
     try clap.help(stream, &params);
 }
 
-pub fn main() u8 {
-    var stdio = util.getStdIo();
-    defer stdio.err.flush() catch {};
-
-    var arena = heap.ArenaAllocator.init(heap.page_allocator);
-    defer arena.deinit();
-
-    var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-        return errors.allocErr(stdio.err.outStream());
-    const res = main2(
-        &arena.allocator,
-        util.StdIo.In.InStream,
-        util.StdIo.Out.OutStream,
-        stdio.streams(),
-        clap.args.OsIterator,
-        &arg_iter,
-    );
-
-    stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
-    return res;
-}
-
 pub fn main2(
     allocator: *mem.Allocator,
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    comptime ArgIterator: type,
-    arg_iter: *ArgIterator,
+    args: var,
 ) u8 {
-    var args = Clap.parse(allocator, ArgIterator, arg_iter) catch |err| {
-        stdio.err.print("{}\n", .{err}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
-
-    if (args.flag("--help")) {
-        usage(stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
-    if (args.flag("--version")) {
-        stdio.out.print("{}\n", .{program_version}) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
-        return 0;
-    }
-
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
         stdio.err.writeAll("No file provided\n") catch {};
@@ -103,26 +63,26 @@ pub fn main2(
         return 1;
     };
 
-    const file = fs.cwd().openFile(file_name, .{}) catch |err| return errors.openErr(stdio.err, file_name, err);
+    const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
         defer game.deinit();
-        outputGen3GameScripts(game.*, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+        outputGen3GameScripts(game.*, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
         return 0;
     } else |err| err;
 
-    file.seekTo(0) catch |err| return errors.readErr(stdio.err, file_name, err);
+    file.seekTo(0) catch |err| return exit.readErrs(stdio.err, file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen4GameScripts(game.*, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            outputGen4GameScripts(game.*, allocator, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
             return 0;
         } else |err| err;
 
         const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen5GameScripts(game.*, allocator, stdio.out) catch |err| return errors.writeErr(stdio.err, "<stdout>", err);
+            outputGen5GameScripts(game.*, allocator, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
             return 0;
         } else |err| err;
 

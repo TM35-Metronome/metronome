@@ -13,7 +13,7 @@ const os = std.os;
 pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
 pub const container = @import("container.zig");
-pub const errors = @import("errors.zig");
+pub const exit = @import("exit.zig");
 pub const escape = @import("escape.zig");
 pub const parse = @import("parse.zig");
 pub const testing = @import("testing.zig");
@@ -29,27 +29,48 @@ test "" {
     _ = testing;
 }
 
-pub fn generateMain(comptime main2: var) fn () u8 {
+pub fn generateMain(
+    version: []const u8,
+    comptime main2: var,
+    comptime params: []const clap.Param(clap.Help),
+    comptime usage: var,
+) fn () u8 {
     return struct {
         fn main() u8 {
-            var stdio = getStdIo();
-            defer stdio.err.flush() catch {};
+            var stdio_buf = getStdIo();
+            const stdio = stdio_buf.streams();
+            defer stdio_buf.err.flush() catch {};
 
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             defer arena.deinit();
 
-            var arg_iter = clap.args.OsIterator.init(&arena.allocator) catch
-                return errors.allocErr(stdio.err.outStream());
+            var args = clap.parse(clap.Help, params, &arena.allocator) catch |err| {
+                stdio.err.print("{}\n", .{err}) catch {};
+                usage(stdio.err) catch {};
+                return 1;
+            };
+
+            if (args.flag("--help")) {
+                usage(stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
+                stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+                return 0;
+            }
+
+            if (args.flag("--version")) {
+                stdio.out.print("{}\n", .{version}) catch |err| return exit.stdoutErr(stdio.err, err);
+                stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+                return 0;
+            }
+
             const res = main2(
                 &arena.allocator,
                 StdIo.In.InStream,
                 StdIo.Out.OutStream,
-                stdio.streams(),
-                clap.args.OsIterator,
-                &arg_iter,
+                stdio,
+                args,
             );
 
-            stdio.out.flush() catch |err| return errors.writeErr(stdio.err.outStream(), "<stdout>", err);
+            stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
             return res;
         }
     }.main;
