@@ -95,7 +95,7 @@ pub fn main2(
             break :blk Game{ .gen3 = game };
         } else |err| err;
 
-        file.seekTo(0) catch |err| return exit.readErrs(stdio.err, file_name, err);
+        file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
             stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
             stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
@@ -143,8 +143,8 @@ pub fn main2(
     const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return exit.createErr(stdio.err, out, err);
     const out_stream = out_file.outStream();
     switch (game) {
-        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return exit.writeErrs(stdio.err, out, err),
-        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return exit.writeErrs(stdio.err, out, err),
+        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err),
+        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err),
     }
 
     return 0;

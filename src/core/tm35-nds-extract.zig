@@ -73,7 +73,7 @@ pub fn main2(
 
     var rom_file = cwd.openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
     defer rom_file.close();
-    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return exit.readErrs(stdio.err, file_name, err);
+    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return exit.readErr(stdio.err, file_name, err);
 
     cwd.makePath(out) catch |err| return exit.makePathErr(stdio.err, out, err);
 
@@ -93,16 +93,16 @@ pub fn main2(
     var root_dir = out_dir.openDir("root", .{}) catch |err| return exit.openErr(stdio.err, "root", err);
     defer root_dir.close();
 
-    out_dir.writeFile("arm9", nds_rom.arm9()) catch |err| return exit.writeErrs(stdio.err, "arm9", err);
-    out_dir.writeFile("arm7", nds_rom.arm7()) catch |err| return exit.writeErrs(stdio.err, "arm7", err);
-    out_dir.writeFile("banner", mem.asBytes(nds_rom.banner())) catch |err| return exit.writeErrs(stdio.err, "banner", err);
-    out_dir.writeFile("nitro_footer", nds_rom.nitroFooter()) catch |err| return exit.writeErrs(stdio.err, "nitro_footer", err);
+    out_dir.writeFile("arm9", nds_rom.arm9()) catch |err| return exit.writeErr(stdio.err, "arm9", err);
+    out_dir.writeFile("arm7", nds_rom.arm7()) catch |err| return exit.writeErr(stdio.err, "arm7", err);
+    out_dir.writeFile("banner", mem.asBytes(nds_rom.banner())) catch |err| return exit.writeErr(stdio.err, "banner", err);
+    out_dir.writeFile("nitro_footer", nds_rom.nitroFooter()) catch |err| return exit.writeErr(stdio.err, "nitro_footer", err);
 
     const file_system = nds_rom.fileSystem();
-    writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return exit.writeErrs(stdio.err, "arm9 overlays", err);
-    writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable()) catch |err| return exit.writeErrs(stdio.err, "arm7 overlays", err);
+    writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return exit.writeErr(stdio.err, "arm9 overlays", err);
+    writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable()) catch |err| return exit.writeErr(stdio.err, "arm7 overlays", err);
 
-    writeFs(root_dir, file_system, nds.fs.root) catch |err| return exit.writeErrs(stdio.err, "root file system", err);
+    writeFs(root_dir, file_system, nds.fs.root) catch |err| return exit.writeErr(stdio.err, "root file system", err);
     return 0;
 }
 

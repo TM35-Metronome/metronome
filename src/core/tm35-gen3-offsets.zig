@@ -60,7 +60,7 @@ pub fn main2(
     args: var,
 ) u8 {
     for (args.positionals()) |file_name, i| {
-        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErrs(stdio.err, file_name, err);
+        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErr(stdio.err, file_name, err);
         defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
             return exit.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, error.FileToSmall });

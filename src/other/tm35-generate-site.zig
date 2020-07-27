@@ -75,8 +75,8 @@ pub fn main2(
 
     const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);
     var out_stream = io.bufferedOutStream(out_file.outStream());
-    generate(out_stream.outStream(), obj) catch |err| return exit.writeErrs(stdio.err, out, err);
-    out_stream.flush() catch |err| return exit.writeErrs(stdio.err, out, err);
+    generate(out_stream.outStream(), obj) catch |err| return exit.writeErr(stdio.err, out, err);
+    out_stream.flush() catch |err| return exit.writeErr(stdio.err, out, err);
 
     return 0;
 }

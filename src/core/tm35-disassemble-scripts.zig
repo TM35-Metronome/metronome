@@ -72,7 +72,7 @@ pub fn main2(
         return 0;
     } else |err| err;
 
-    file.seekTo(0) catch |err| return exit.readErrs(stdio.err, file_name, err);
+    file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
     if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
