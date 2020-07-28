@@ -33,13 +33,9 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-wild ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Randomizes wild Pokémon encounters.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nRandomizes wild Pokémon encounters.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

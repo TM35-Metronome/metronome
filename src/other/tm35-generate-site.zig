@@ -35,15 +35,11 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-generate-site ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Generates a html web site for games. This is very useful for getting
-        \\an overview of what is in the game after heavy randomization has been
-        \\apply.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nGenerates a html web site for games. This is very useful " ++
+        "for getting an overview of what is in the game after heavy randomization " ++
+        "has been apply.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

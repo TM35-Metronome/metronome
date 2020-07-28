@@ -22,6 +22,7 @@ const core_exes = [_][]const u8{
     "tm35-apply",
     "tm35-disassemble-scripts",
     "tm35-gen3-offsets",
+    "tm35-identify",
     "tm35-load",
     "tm35-nds-extract",
 };

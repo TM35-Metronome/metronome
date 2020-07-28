@@ -43,6 +43,39 @@ pub const Version = enum {
     moon,
     ultra_sun,
     ultra_moon,
+
+    pub fn humanString(version: Version) []const u8 {
+        return switch (version) {
+            .red => "Red",
+            .blue => "Blue",
+            .yellow => "Yellow",
+            .gold => "Gold",
+            .silver => "Silver",
+            .crystal => "Crystal",
+            .ruby => "Ruby",
+            .sapphire => "Sapphire",
+            .emerald => "Emerald",
+            .fire_red => "Fire Red",
+            .leaf_green => "Leaf Green",
+            .diamond => "Diamond",
+            .pearl => "Pearl",
+            .platinum => "Platinum",
+            .heart_gold => "Heart Gold",
+            .soul_silver => "Soul Silver",
+            .black => "Black",
+            .white => "White",
+            .black2 => "Black 2",
+            .white2 => "White 2",
+            .x => "X",
+            .y => "Y",
+            .omega_ruby => "Omega Ruby",
+            .alpha_sapphire => "Alpha Sapphire",
+            .sun => "Sun",
+            .moon => "Moon",
+            .ultra_sun => "Ultra Sun",
+            .ultra_moon => "Ultra Moon",
+        };
+    }
 };
 
 pub const Stats = extern struct {

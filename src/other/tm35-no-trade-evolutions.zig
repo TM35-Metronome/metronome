@@ -33,22 +33,18 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-no-trade-evolutions ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Replace trade evolutions with non trade versions.
-        \\
-        \\Here is how each trade evolution is replaced:
-        \\* Trade -> Level up 36
-        \\* Trade holding <item> -> Level up holding <item> during daytime
-        \\* Trade with <pokemon> -> Level up with other <pokemon> in party
-        \\
-        \\Certain level up methods might not exist in some game.
-        \\Supported methods are found by looking over all methods used in the game.
-        \\If one method doesn't exist, 'Level up 36' is used as a fallback.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nReplace trade evolutions with non trade versions.\n" ++
+        "\n" ++
+        "Here is how each trade evolution is replaced:\n" ++
+        "* Trade -> Level up 36\n" ++
+        "* Trade holding <item> -> Level up holding <item> during daytime\n" ++
+        "* Trade with <pokemon> -> Level up with other <pokemon> in party\n" ++
+        "\n" ++
+        "Certain level up methods might not exist in some game. " ++
+        "Supported methods are found by looking over all methods used in the game. " ++
+        "If one method doesn't exist, 'Level up 36' is used as a fallback.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

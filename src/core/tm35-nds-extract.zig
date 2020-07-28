@@ -38,13 +38,10 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-nds-extract ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Reads a Nintendo DS rom and extract its file system into a folder.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nReads a Nintendo DS rom and extract its file system " ++
+        "into a folder.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

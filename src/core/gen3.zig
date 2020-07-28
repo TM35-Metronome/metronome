@@ -453,15 +453,27 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
     text: []*Ptr([*:0xff]u8),
 
+    pub fn identify(stream: var) !offsets.Info {
+        const header = try stream.readStruct(gba.Header);
+        try header.validate();
+
+        for (offsets.infos) |info| {
+            if (!mem.eql(u8, &info.game_title, &header.game_title))
+                continue;
+            if (!mem.eql(u8, &info.gamecode, &header.gamecode))
+                continue;
+
+            return info;
+        }
+
+        return error.UnknownGame;
+    }
+
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
         const in_stream = file.inStream();
-
-        const header = try in_stream.readStruct(gba.Header);
-        try header.validate();
-        try file.seekTo(0);
-
-        const info = try getOffsets(&header.game_title, &header.gamecode);
+        const info = try identify(in_stream);
         const size = try file.getEndPos();
+        try file.seekTo(0);
 
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
             return error.InvalidRomSize;
@@ -616,18 +628,5 @@ pub const Game = struct {
         game.allocator.free(game.static_pokemons);
         game.allocator.free(game.pokeball_items);
         game.* = undefined;
-    }
-
-    fn getOffsets(game_title: []const u8, gamecode: []const u8) !offsets.Info {
-        for (offsets.infos) |info| {
-            if (!mem.eql(u8, &info.game_title, game_title))
-                continue;
-            if (!mem.eql(u8, &info.gamecode, gamecode))
-                continue;
-
-            return info;
-        }
-
-        return error.NotGen3Game;
     }
 };

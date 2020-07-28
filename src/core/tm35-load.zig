@@ -37,16 +37,11 @@ const params = [_]Param{
 };
 
 fn usage(stream: var) !void {
-    try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
+    try stream.writeAll("Usage: tm35-load");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Finds all scripts in a generation 3 Pokemon game, disassembles them
-        \\and writes them to stdout.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nLoad data from Pokémon games." ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

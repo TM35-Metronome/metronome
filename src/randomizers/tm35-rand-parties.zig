@@ -36,13 +36,9 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-parties ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Randomizes trainer parties.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nRandomizes trainer parties.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

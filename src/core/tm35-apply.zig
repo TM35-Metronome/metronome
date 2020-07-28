@@ -52,13 +52,9 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-apply ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Applies changes to Pokémon roms.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nApplies changes to Pokémon roms.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

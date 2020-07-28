@@ -35,13 +35,9 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-stats ");
     try clap.usage(stream, &params);
-    try stream.writeAll(
-        \\
-        \\Randomizes Pokémon stats.
-        \\
-        \\Options:
-        \\
-    );
+    try stream.writeAll("\nRandomizes Pokémon stats.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(stream, &params);
 }
 

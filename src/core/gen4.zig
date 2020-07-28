@@ -525,14 +525,28 @@ pub const Game = struct {
     item_descriptions: StringTable,
     type_names: StringTable,
 
+    pub fn identify(stream: var) !offsets.Info {
+        const header = try stream.readStruct(nds.Header);
+        for (offsets.infos) |info| {
+            //if (!mem.eql(u8, info.game_title, game_title))
+            //    continue;
+            if (!mem.eql(u8, &info.gamecode, &header.gamecode))
+                continue;
+
+            return info;
+        }
+
+        return error.UnknownGame;
+    }
+
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
+        const info = try identify(io.fixedBufferStream(nds_rom.data.items).inStream());
+
         try nds_rom.decodeArm9();
-        const header = nds_rom.header();
         const arm9 = nds_rom.arm9();
         const file_system = nds_rom.fileSystem();
         const arm9_overlay_table = nds_rom.arm9OverlayTable();
 
-        const info = try getOffsets(&header.game_title, &header.gamecode);
         const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
@@ -730,20 +744,7 @@ pub const Game = struct {
         };
     }
 
-    fn getOffsets(game_title: []const u8, gamecode: []const u8) !offsets.Info {
-        for (offsets.infos) |info| {
-            //if (!mem.eql(u8, info.game_title, game_title))
-            //    continue;
-            if (!mem.eql(u8, &info.gamecode, gamecode))
-                continue;
-
-            return info;
-        }
-
-        return error.NotGen4Game;
-    }
-
-    pub fn getNarc(file_system: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
+    fn getNarc(file_system: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
         const file = try file_system.openFileData(nds.fs.root, path);
         return try nds.fs.Fs.fromNarc(file);
     }
