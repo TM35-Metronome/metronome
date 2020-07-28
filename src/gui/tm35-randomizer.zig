@@ -368,6 +368,29 @@ pub fn drawOptions(
             _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
             continue;
         }
+        if (mem.eql(u8, value, "FILE")) {
+            if (!nk.button(ctx, arg.toSliceConst()))
+                continue;
+
+            var m_out_path: ?[*:0]u8 = null;
+            switch (c.NFD_SaveDialog("", null, &m_out_path)) {
+                .NFD_ERROR => {
+                    popups.err("Could not open file browser: {s}", .{c.NFD_GetError()});
+                    continue;
+                },
+                .NFD_CANCEL => continue,
+                .NFD_OKAY => blk: {
+                    const out_path = m_out_path.?;
+                    defer std.c.free(out_path);
+
+                    arg.* = util.Path.fromSlice(mem.span(out_path)) catch {
+                        popups.err("File name '{s}' is too long", .{out_path});
+                        continue;
+                    };
+                },
+                else => unreachable,
+            }
+        }
         if (mem.indexOfScalar(u8, value, '|')) |_| {
             const selected_name = arg.toSliceConst();
             const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
@@ -854,7 +877,7 @@ const Settings = struct {
     // Arguments for all commands parameters.
     commands_args: [][]Arg = &[_][]Arg{},
 
-    const Arg = util.StackArrayList(64, u8);
+    const Arg = util.Path;
 
     fn init(allocator: *mem.Allocator, exes: Exes) !Settings {
         const order = try allocator.alloc(usize, exes.commands.len);
