@@ -81,13 +81,11 @@ pub fn main2(
 
     var stdin = io.bufferedInStream(stdio.in);
     var line_buf = std.ArrayList(u8).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
 
     while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch |err| switch (err) {
+        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => true,
         };
@@ -97,7 +95,7 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(data, seed, pref) catch return exit.allocErr(stdio.err);
+    randomize(allocator, data, seed, pref) catch return exit.allocErr(stdio.err);
 
     for (data.pokemons.values()) |*pokemon, i| {
         const pokemon_index = data.pokemons.at(i).key;
@@ -126,11 +124,10 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     const sw = util.parse.Swhash(8);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.strings.allocator;
 
     var p = parse.MutParser{ .str = str };
     switch (m(try p.parse(parse.anyField))) {
@@ -162,7 +159,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
 
             switch (m(try p.parse(parse.anyField))) {
                 c("power") => move.power = try p.parse(parse.usizev),
-                c("type") => move.type = try data.string(try p.parse(parse.strv)),
+                c("type") => move.type = try p.parse(parse.usizev),
                 else => {},
             }
         },
@@ -181,17 +178,18 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     return true;
 }
 
-fn randomize(data: Data, seed: u64, pref: Preference) !void {
+fn randomize(allocator: *mem.Allocator, data: Data, seed: u64, pref: Preference) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.pokemons.values()) |*pokemon, i| {
         const pokemon_index = data.pokemons.at(i).key;
-        try randomizeMachinesLearned(data, pokemon.*, random, pref, data.tms, pokemon.tms, &pokemon.tms_learned);
-        try randomizeMachinesLearned(data, pokemon.*, random, pref, data.hms, pokemon.hms, &pokemon.hms_learned);
+        try randomizeMachinesLearned(allocator, data, pokemon.*, random, pref, data.tms, pokemon.tms, &pokemon.tms_learned);
+        try randomizeMachinesLearned(allocator, data, pokemon.*, random, pref, data.hms, pokemon.hms, &pokemon.hms_learned);
     }
 }
 
 fn randomizeMachinesLearned(
+    allocator: *mem.Allocator,
     data: Data,
     pokemon: Pokemon,
     random: *rand.Random,
@@ -200,7 +198,6 @@ fn randomizeMachinesLearned(
     have: Set,
     learned: *Set,
 ) !void {
-    const allocator = data.strings.allocator;
     for (have.span()) |range| {
         var machine = range.start;
         while (machine <= range.end) : (machine += 1) switch (pref) {
@@ -238,20 +235,10 @@ const Machines = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     pokemons: Pokemons = Pokemons{},
     moves: Moves = Moves{},
     tms: Machines = Machines{},
     hms: Machines = Machines{},
-
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.kv.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.kv.value = d.strings.count() - 1;
-        }
-        return res.kv.value;
-    }
 };
 
 const Pokemon = struct {
