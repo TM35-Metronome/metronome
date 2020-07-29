@@ -332,6 +332,7 @@ pub fn drawOptions(
         const value = param.id.value;
         const param_name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
         const ui_name = toUserfriendly(&tmp_buf, param_name[0..math.min(param_name.len, tmp_buf.len)]);
+        const default_value_index = mem.indexOf(u8, help, "(default: ");
         if (mem.eql(u8, param_name, "help"))
             continue;
         if (mem.eql(u8, param_name, "version"))
@@ -341,8 +342,10 @@ pub fn drawOptions(
             c.nk_layout_row_dynamic(ctx, 0, 1);
 
             c.nkWidgetBounds(ctx, &bounds);
-            if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-                c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+            if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0) {
+                const len = if (default_value_index) |index| index else help.len;
+                c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, len));
+            }
 
             // For flags, we only care about whether it's checked or not. We indicate this
             // by having a slice of len 1 instead of 0.
@@ -359,8 +362,10 @@ pub fn drawOptions(
         c.nk_layout_row_template_end(ctx);
 
         c.nkWidgetBounds(ctx, &bounds);
-        if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-            c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+        if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0) {
+            const len = if (default_value_index) |index| index else help.len;
+            c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, len));
+        }
 
         c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
 
@@ -396,7 +401,7 @@ pub fn drawOptions(
             const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
             if (c.nkComboBeginText(ctx, selected_ui_name.ptr, @intCast(c_int, selected_ui_name.len), &nk.vec2(prompt_width, 500)) != 0) {
                 c.nk_layout_row_dynamic(ctx, 0, 1);
-                if (c.nk_combo_item_label(ctx, "", c.NK_TEXT_LEFT) != 0)
+                if (default_value_index == null and c.nk_combo_item_label(ctx, "", c.NK_TEXT_LEFT) != 0)
                     arg.len = 0;
 
                 var item_it = mem.split(value, "|");
@@ -907,7 +912,7 @@ const Settings = struct {
             .commands_args = commands_args,
         };
 
-        settings.reset();
+        settings.reset(exes);
         return settings;
     }
 
@@ -921,14 +926,23 @@ const Settings = struct {
         allocator.free(settings.checks);
     }
 
-    fn reset(settings: Settings) void {
+    fn reset(settings: Settings, exes: Exes) void {
         mem.set(bool, settings.checks, false);
         for (settings.order) |*o, i|
             o.* = i;
 
         for (settings.commands_args) |*command_args, i| {
-            for (command_args.*) |*arg, j|
+            for (command_args.*) |*arg, j| {
                 arg.* = Arg{};
+
+                const prefix = "(default:";
+                const help = exes.commands[i].params[j].id.msg;
+                const start_with_prefix = mem.indexOf(u8, help, "(default:") orelse continue;
+                const start = start_with_prefix + prefix.len;
+                const len = mem.indexOf(u8, help[start..], ")") orelse continue;
+                const default_value = mem.trim(u8, help[start..][0..len], " ");
+                arg.* = Arg.fromSlice(default_value) catch continue;
+            }
         }
     }
 
@@ -969,7 +983,7 @@ const Settings = struct {
     }
 
     fn load(settings: Settings, exes: Exes, in_stream: var) !void {
-        settings.reset();
+        settings.reset(exes);
 
         const EscapedSplitterArgIterator = struct {
             const Error = io.FixedBufferStream([]u8).WriteError;
