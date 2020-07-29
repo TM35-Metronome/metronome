@@ -44,7 +44,7 @@ pub const Command = packed struct {
     }
 
     const Data = packed union {
-        end: End,
+        end: void,
         return_after_delay: ReturnAfterDelay,
         call_routine: CallRoutine,
         end_function: EndFunction,
@@ -67,7 +67,7 @@ pub const Command = packed struct {
         unknown_17: Unknown_17,
         compare: Compare,
         call_std: CallStd,
-        return_std: ReturnStd,
+        return_std: void,
         jump: Jump,
         @"if": If,
         unknown_21: Unknown_21,
@@ -82,34 +82,34 @@ pub const Command = packed struct {
         set_var2_a: SetVar2A,
         set_var2_b: SetVar2B,
         unknown_2_d: Unknown_2D,
-        lock_all: LockAll,
-        unlock_all: UnlockAll,
-        wait_moment: WaitMoment,
-        wait_button: WaitButton,
+        lock_all: void,
+        unlock_all: void,
+        wait_moment: void,
+        wait_button: void,
         musical_message: MusicalMessage,
         event_grey_message: EventGreyMessage,
-        close_musical_message: CloseMusicalMessage,
-        closed_event_grey_message: ClosedEventGreyMessage,
+        close_musical_message: void,
+        closed_event_grey_message: void,
         bubble_message: BubbleMessage,
-        close_bubble_message: CloseBubbleMessage,
+        close_bubble_message: void,
         show_message_at: ShowMessageAt,
-        close_show_message_at: CloseShowMessageAt,
+        close_show_message_at: void,
         message: Message,
         message2: Message2,
-        close_message_k_p: CloseMessageKP,
-        close_message_k_p2: CloseMessageKP2,
+        close_message_k_p: void,
+        close_message_k_p2: void,
         money_box: MoneyBox,
-        close_money_box: CloseMoneyBox,
-        update_money_box: UpdateMoneyBox,
+        close_money_box: void,
+        update_money_box: void,
         bordered_message: BorderedMessage,
-        close_bordered_message: CloseBorderedMessage,
+        close_bordered_message: void,
         paper_message: PaperMessage,
-        close_paper_message: ClosePaperMessage,
+        close_paper_message: void,
         yes_no: YesNo,
         message3: Message3,
         double_message: DoubleMessage,
         angry_message: AngryMessage,
-        close_angry_message: CloseAngryMessage,
+        close_angry_message: void,
         set_var_hero: SetVarHero,
         set_var_item: SetVarItem,
         unknown_4_e: unknown_4E,
@@ -135,7 +135,7 @@ pub const Command = packed struct {
         set_var_trainer_type2: SetVarTrainerType2,
         set_var_general_word: SetVarGeneralWord,
         apply_movement: ApplyMovement,
-        wait_movement: WaitMovement,
+        wait_movement: void,
         store_hero_position: StoreHeroPosition,
         unknown_67: Unknown_67,
         store_hero_position2: StoreHeroPosition2,
@@ -150,9 +150,9 @@ pub const Command = packed struct {
         unknown_71: Unknown_71,
         unknown_72: Unknown_72,
         unknown_73: Unknown_73,
-        face_player: FacePlayer,
+        face_player: void,
         release: Release,
-        release_all: ReleaseAll,
+        release_all: void,
         lock: Lock,
         unknown_78: Unknown_78,
         unknown_79: Unknown_79,
@@ -162,7 +162,7 @@ pub const Command = packed struct {
         teleport_up_n_p_c: TeleportUpNPC,
         unknown_7_f: Unknown_7F,
         unknown_80: Unknown_80,
-        unknown_81: Unknown_81,
+        unknown_81: void,
         unknown_82: Unknown_82,
         set_var83: SetVar83,
         set_var84: SetVar84,
@@ -172,9 +172,9 @@ pub const Command = packed struct {
         unknown_88: Unknown_88,
         unknown_8_a: Unknown_8A,
         play_trainer_music: PlayTrainerMusic,
-        end_battle: EndBattle,
+        end_battle: void,
         store_battle_result: StoreBattleResult,
-        disable_trainer: DisableTrainer,
+        disable_trainer: void,
         d_var90: DVar90,
         d_var92: DVar92,
         d_var93: DVar93,
@@ -183,22 +183,22 @@ pub const Command = packed struct {
         unknown_96: Unknown_96,
         store_active_trainer_i_d: StoreActiveTrainerID,
         change_music: ChangeMusic,
-        fade_to_default_music: FadeToDefaultMusic,
-        unknown_9_f: Unknown_9F,
+        fade_to_default_music: void,
+        unknown_9_f: void,
         unknown__a2: Unknown_A2,
         unknown__a3: Unknown_A3,
         unknown__a4: Unknown_A4,
         unknown__a5: Unknown_A5,
         play_sound: PlaySound,
-        wait_sound_a7: WaitSoundA7,
-        wait_sound: WaitSound,
+        wait_sound_a7: void,
+        wait_sound: void,
         play_fanfare: PlayFanfare,
-        wait_fanfare: WaitFanfare,
+        wait_fanfare: void,
         play_cry: PlayCry,
-        wait_cry: WaitCry,
+        wait_cry: void,
         set_text_script_message: SetTextScriptMessage,
-        close_multi: CloseMulti,
-        unknown__b1: Unknown_B1,
+        close_multi: void,
+        unknown__b1: void,
         multi2: Multi2,
         fade_screen: FadeScreen,
         reset_screen: ResetScreen,
@@ -214,9 +214,9 @@ pub const Command = packed struct {
         teleport_warp: TeleportWarp,
         fall_warp: FallWarp,
         fast_warp: FastWarp,
-        union_warp: UnionWarp,
+        union_warp: void,
         teleport_warp2: TeleportWarp2,
-        surf_animation: SurfAnimation,
+        surf_animation: void,
         special_animation: SpecialAnimation,
         special_animation2: SpecialAnimation2,
         call_animation: CallAnimation,
@@ -235,9 +235,9 @@ pub const Command = packed struct {
         store_badge_number: StoreBadgeNumber,
         check_money: CheckMoney,
         give_pokemon: GivePokemon,
-        boot_p_c_sound: BootPCSound,
+        boot_p_c_sound: void,
         wild_battle: WildBattle,
-        fade_into_black: FadeIntoBlack,
+        fade_into_black: void,
     };
     pub const Kind = packed enum(u16) {
         end = lu16.init(0x02).value(),
@@ -435,7 +435,6 @@ pub const Command = packed struct {
         wild_battle = lu16.init(0x174).value(),
         fade_into_black = lu16.init(0x1AC).value(),
     };
-    pub const End = packed struct {};
     pub const ReturnAfterDelay = packed struct {
         arg: lu16,
     };
@@ -504,7 +503,6 @@ pub const Command = packed struct {
     pub const CallStd = packed struct {
         function: lu16,
     };
-    pub const ReturnStd = packed struct {};
     pub const Jump = packed struct {
         offset: li32,
     };
@@ -554,10 +552,6 @@ pub const Command = packed struct {
     pub const Unknown_2D = packed struct {
         value: lu16,
     };
-    pub const LockAll = packed struct {};
-    pub const UnlockAll = packed struct {};
-    pub const WaitMoment = packed struct {};
-    pub const WaitButton = packed struct {};
     pub const MusicalMessage = packed struct {
         id: lu16,
     };
@@ -565,20 +559,16 @@ pub const Command = packed struct {
         id: lu16,
         location: u8,
     };
-    pub const CloseMusicalMessage = packed struct {};
-    pub const ClosedEventGreyMessage = packed struct {};
     pub const BubbleMessage = packed struct {
         id: lu16,
         location: u8,
     };
-    pub const CloseBubbleMessage = packed struct {};
     pub const ShowMessageAt = packed struct {
         id: lu16,
         xcoord: lu16,
         ycoord: lu16,
         zcoord: lu16,
     };
-    pub const CloseShowMessageAt = packed struct {};
     pub const Message = packed struct {
         id: lu16,
         npc: lu16,
@@ -591,24 +581,18 @@ pub const Command = packed struct {
         position: lu16,
         type: lu16,
     };
-    pub const CloseMessageKP = packed struct {};
-    pub const CloseMessageKP2 = packed struct {};
     pub const MoneyBox = packed struct {
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const CloseMoneyBox = packed struct {};
-    pub const UpdateMoneyBox = packed struct {};
     pub const BorderedMessage = packed struct {
         id: lu16,
         color: lu16,
     };
-    pub const CloseBorderedMessage = packed struct {};
     pub const PaperMessage = packed struct {
         id: lu16,
         transcoord: lu16,
     };
-    pub const ClosePaperMessage = packed struct {};
     pub const YesNo = packed struct {
         yesno: lu16,
     };
@@ -631,7 +615,6 @@ pub const Command = packed struct {
         unknownbyte: u8,
         position: lu16,
     };
-    pub const CloseAngryMessage = packed struct {};
     pub const SetVarHero = packed struct {
         arg: u8,
     };
@@ -734,7 +717,6 @@ pub const Command = packed struct {
         npc: lu16,
         movementdata: lu32,
     };
-    pub const WaitMovement = packed struct {};
     pub const StoreHeroPosition = packed struct {
         xcoord: lu16,
         ycoord: lu16,
@@ -797,11 +779,9 @@ pub const Command = packed struct {
         arg: lu16,
         arg2: lu16,
     };
-    pub const FacePlayer = packed struct {};
     pub const Release = packed struct {
         npc: lu16,
     };
-    pub const ReleaseAll = packed struct {};
     pub const Lock = packed struct {
         npc: lu16,
     };
@@ -841,7 +821,6 @@ pub const Command = packed struct {
     pub const Unknown_80 = packed struct {
         arg: lu16,
     };
-    pub const Unknown_81 = packed struct {};
     pub const Unknown_82 = packed struct {
         arg: lu16,
         arg2: lu16,
@@ -880,11 +859,9 @@ pub const Command = packed struct {
     pub const PlayTrainerMusic = packed struct {
         songid: lu16,
     };
-    pub const EndBattle = packed struct {};
     pub const StoreBattleResult = packed struct {
         variable: lu16,
     };
-    pub const DisableTrainer = packed struct {};
     pub const DVar90 = packed struct {
         arg: lu16,
         arg2: lu16,
@@ -916,8 +893,6 @@ pub const Command = packed struct {
     pub const ChangeMusic = packed struct {
         songid: lu16,
     };
-    pub const FadeToDefaultMusic = packed struct {};
-    pub const Unknown_9F = packed struct {};
     pub const Unknown_A2 = packed struct {
         sound: lu16,
         arg2: lu16,
@@ -935,24 +910,18 @@ pub const Command = packed struct {
     pub const PlaySound = packed struct {
         id: lu16,
     };
-    pub const WaitSoundA7 = packed struct {};
-    pub const WaitSound = packed struct {};
     pub const PlayFanfare = packed struct {
         id: lu16,
     };
-    pub const WaitFanfare = packed struct {};
     pub const PlayCry = packed struct {
         id: lu16,
         arg2: lu16,
     };
-    pub const WaitCry = packed struct {};
     pub const SetTextScriptMessage = packed struct {
         id: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const CloseMulti = packed struct {};
-    pub const Unknown_B1 = packed struct {};
     pub const Multi2 = packed struct {
         arg: u8,
         arg2: u8,
@@ -1031,7 +1000,6 @@ pub const Command = packed struct {
         ycoord: lu16,
         herofacing: lu16,
     };
-    pub const UnionWarp = packed struct {};
     pub const TeleportWarp2 = packed struct {
         mapid: lu16,
         xcoord: lu16,
@@ -1039,7 +1007,6 @@ pub const Command = packed struct {
         zcoord: lu16,
         herofacing: lu16,
     };
-    pub const SurfAnimation = packed struct {};
     pub const SpecialAnimation = packed struct {
         arg: lu16,
     };
@@ -1104,10 +1071,8 @@ pub const Command = packed struct {
         item: lu16,
         level: lu16,
     };
-    pub const BootPCSound = packed struct {};
     pub const WildBattle = packed struct {
         species: lu16,
         level: u8,
     };
-    pub const FadeIntoBlack = packed struct {};
 };

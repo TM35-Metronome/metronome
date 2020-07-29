@@ -47,16 +47,16 @@ pub const Command = packed struct {
 
     const Data = packed union {
         // Does nothing.
-        nop: nop,
+        nop: void,
 
         // Does nothing.
-        nop1: nop1,
+        nop1: void,
 
         // Terminates script execution.
-        end: end,
+        end: void,
 
         // Jumps back to after the last-executed call statement, and continues script execution from there.
-        @"return": @"return",
+        @"return": void,
 
         // Jumps to destination and continues script execution from there. The location of the calling script is remembered and can be returned to later.
         call: call,
@@ -83,10 +83,10 @@ pub const Command = packed struct {
         callstd_if: callstd_if,
 
         // Executes a script stored in a default RAM location.
-        gotoram: gotoram,
+        gotoram: void,
 
         // Terminates script execution and "resets the script RAM".
-        killscript: killscript,
+        killscript: void,
 
         // Sets some status related to Mystery Event.
         setmysteryeventstatus: setmysteryeventstatus,
@@ -164,7 +164,7 @@ pub const Command = packed struct {
         specialvar: specialvar,
 
         // Blocks script execution until a command or ASM code manually unblocks it. Generally used with specific commands and specials. If this command runs, and a subsequent command or piece of ASM does not unblock state, the script will remain blocked indefinitely (essentially a hang).
-        waitstate: waitstate,
+        waitstate: void,
 
         // Blocks script execution for time (frames? milliseconds?).
         delay: delay,
@@ -182,22 +182,22 @@ pub const Command = packed struct {
         initclock: initclock,
 
         // Runs time based events. In FireRed, this command is a nop.
-        dodailyevents: dodailyevents,
+        dodailyevents: void,
 
         // Sets the values of variables 0x8000, 0x8001, and 0x8002 to the current hour, minute, and second. In FRLG, this command sets those variables to zero.
-        gettime: gettime,
+        gettime: void,
 
         // Plays the specified (sound_number) sound. Only one sound may play at a time, with newer ones interrupting older ones.
         playse: playse,
 
         // Blocks script execution until the currently-playing sound (triggered by playse) finishes playing.
-        waitse: waitse,
+        waitse: void,
 
         // Plays the specified (fanfare_number) fanfare.
         playfanfare: playfanfare,
 
         // Blocks script execution until all currently-playing fanfares finish.
-        waitfanfare: waitfanfare,
+        waitfanfare: void,
 
         // Plays the specified (song_number) song. The byte is apparently supposed to be 0x00.
         playbgm: playbgm,
@@ -206,7 +206,7 @@ pub const Command = packed struct {
         savebgm: savebgm,
 
         // Crossfades the currently-playing song into the map's default song.
-        fadedefaultbgm: fadedefaultbgm,
+        fadedefaultbgm: void,
 
         // Crossfades the currently-playng song into the specified (song_number) song.
         fadenewbgm: fadenewbgm,
@@ -248,7 +248,7 @@ pub const Command = packed struct {
         getplayerxy: getplayerxy,
 
         // Retrieves the number of Pokemon in the player's party, and stores that number in variable 0x800D (LASTRESULT).
-        getpartysize: getpartysize,
+        getpartysize: void,
 
         // Attempts to add quantity of item index to the player's Bag. If the player has enough room, the item will be added and variable 0x800D (LASTRESULT) will be set to 0x0001; otherwise, LASTRESULT is set to 0x0000.
         additem: additem,
@@ -311,20 +311,20 @@ pub const Command = packed struct {
         hideobjectat: hideobjectat,
 
         // If the script was called by an Object, then that Object will turn to face toward the metatile that the player is standing on.
-        faceplayer: faceplayer,
+        faceplayer: void,
         turnobject: turnobject,
 
         // If the Trainer flag for Trainer index is not set, this command does absolutely nothing.
         trainerbattle: trainerbattle,
 
         // Starts a trainer battle using the battle information stored in RAM (usually by trainerbattle, which actually calls this command behind-the-scenes), and blocks script execution until the battle finishes.
-        trainerbattlebegin: trainerbattlebegin,
+        trainerbattlebegin: void,
 
         // Goes to address after the trainerbattle command (called by the battle functions, see battle_setup.c)
-        gotopostbattlescript: gotopostbattlescript,
+        gotopostbattlescript: void,
 
         // Goes to address specified in the trainerbattle command (called by the battle functions, see battle_setup.c)
-        gotobeatenscript: gotobeatenscript,
+        gotobeatenscript: void,
 
         // Compares Flag (trainer + 0x500) to 1. (If the flag is set, then the trainer has been defeated by the player.)
         checktrainerflag: checktrainerflag,
@@ -339,28 +339,28 @@ pub const Command = packed struct {
         setobjectmovementtype: setobjectmovementtype,
 
         // If a standard message box (or its text) is being drawn on-screen, this command blocks script execution until the box and its text have been fully drawn.
-        waitmessage: waitmessage,
+        waitmessage: void,
 
         // Starts displaying a standard message box containing the specified text. If text is a pointer, then the string at that offset will be loaded and used. If text is script bank 0, then the value of script bank 0 will be treated as a pointer to the text. (You can use loadpointer to place a string pointer in a script bank.)
         message: message,
 
         // Closes the current message box.
-        closemessage: closemessage,
+        closemessage: void,
 
         // Ceases movement for all Objects on-screen.
-        lockall: lockall,
+        lockall: void,
 
         // If the script was called by an Object, then that Object's movement will cease.
-        lock: lock,
+        lock: void,
 
         // Resumes normal movement for all Objects on-screen, and closes any standard message boxes that are still open.
-        releaseall: releaseall,
+        releaseall: void,
 
         // If the script was called by an Object, then that Object's movement will resume. This command also closes any standard message boxes that are still open.
-        release: release,
+        release: void,
 
         // Blocks script execution until the player presses any key.
-        waitbuttonpress: waitbuttonpress,
+        waitbuttonpress: void,
 
         // Displays a YES/NO multichoice box at the specified coordinates, and blocks script execution until the user makes a selection. Their selection is stored in variable 0x800D (LASTRESULT); 0x0000 for "NO" or if the user pressed B, and 0x0001 for "YES".
         yesnobox: yesnobox,
@@ -375,7 +375,7 @@ pub const Command = packed struct {
         multichoicegrid: multichoicegrid,
 
         // Nopped in Emerald.
-        drawbox: drawbox,
+        drawbox: void,
 
         // Nopped in Emerald, but still consumes parameters.
         erasebox: erasebox,
@@ -387,7 +387,7 @@ pub const Command = packed struct {
         drawmonpic: drawmonpic,
 
         // Hides all boxes displayed with drawmonpic.
-        erasemonpic: erasemonpic,
+        erasemonpic: void,
 
         // Draws an image of the winner of the contest. In FireRed, this command is a nop. (The argument is discarded.)
         drawcontestwinner: drawcontestwinner,
@@ -446,16 +446,16 @@ pub const Command = packed struct {
         setberrytree: setberrytree,
 
         // This allows you to choose a Pokemon to use in a contest. In FireRed, this command sets the byte at 0x03000EA8 to 0x01.
-        choosecontestmon: choosecontestmon,
+        choosecontestmon: void,
 
         // Starts a contest. In FireRed, this command is a nop.
-        startcontest: startcontest,
+        startcontest: void,
 
         // Shows the results of a contest. In FireRed, this command is a nop.
-        showcontestresults: showcontestresults,
+        showcontestresults: void,
 
         // Starts a contest over a link connection. In FireRed, this command is a nop.
-        contestlinktransfer: contestlinktransfer,
+        contestlinktransfer: void,
 
         // Stores a random integer between 0 and limit in variable 0x800D (LASTRESULT).
         random: random,
@@ -473,7 +473,7 @@ pub const Command = packed struct {
         showmoneybox: showmoneybox,
 
         // Hides the secondary box spawned by showmoney.
-        hidemoneybox: hidemoneybox,
+        hidemoneybox: void,
 
         // Updates the secondary box spawned by showmoney. Consumes but does not use arguments.
         updatemoneybox: updatemoneybox,
@@ -503,7 +503,7 @@ pub const Command = packed struct {
         setrespawn: setrespawn,
 
         // Checks the player's gender. If male, then 0x0000 is stored in variable 0x800D (LASTRESULT). If female, then 0x0001 is stored in LASTRESULT.
-        checkplayergender: checkplayergender,
+        checkplayergender: void,
 
         // Plays the specified (species) Pokemon's cry. You can use waitcry to block script execution until the sound finishes.
         playmoncry: playmoncry,
@@ -512,13 +512,13 @@ pub const Command = packed struct {
         setmetatile: setmetatile,
 
         // Queues a weather change to the default weather for the map.
-        resetweather: resetweather,
+        resetweather: void,
 
         // Queues a weather change to type weather.
         setweather: setweather,
 
         // Executes the weather change queued with resetweather or setweather. The current weather will smoothly fade into the queued weather.
-        doweather: doweather,
+        doweather: void,
 
         // This command manages cases in which maps have tiles that change state when stepped on (specifically, cracked/breakable floors).
         setstepcallback: setstepcallback,
@@ -535,7 +535,7 @@ pub const Command = packed struct {
         closedoor: closedoor,
 
         // Waits for the door animation started with opendoor or closedoor to finish.
-        waitdooranim: waitdooranim,
+        waitdooranim: void,
 
         // Sets the door tile at (x, y) to be open without an animation.
         setdooropen: setdooropen,
@@ -547,7 +547,7 @@ pub const Command = packed struct {
         addelevmenuitem: addelevmenuitem,
 
         // In FireRed and Emerald, this command is a nop.
-        showelevmenu: showelevmenu,
+        showelevmenu: void,
         checkcoins: checkcoins,
         givecoins: givecoins,
         takecoins: takecoins,
@@ -556,7 +556,7 @@ pub const Command = packed struct {
         setwildbattle: setwildbattle,
 
         // Starts a wild battle against the Pokemon generated by setwildbattle. Blocks script execution until the battle finishes.
-        dowildbattle: dowildbattle,
+        dowildbattle: void,
         setvaddress: setvaddress,
         vgoto: vgoto,
         vcall: vcall,
@@ -582,7 +582,7 @@ pub const Command = packed struct {
         setescapewarp: setescapewarp,
 
         // Blocks script execution until cry finishes.
-        waitmoncry: waitmoncry,
+        waitmoncry: void,
 
         // Writes the name of the specified (box) PC box to the specified buffer.
         bufferboxname: bufferboxname,
@@ -594,13 +594,13 @@ pub const Command = packed struct {
         loadhelp: loadhelp,
 
         // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
-        unloadhelp: unloadhelp,
+        unloadhelp: void,
 
         // After using this command, all standard message boxes will use the signpost frame.
-        signmsg: signmsg,
+        signmsg: void,
 
         // Ends the effects of signmsg, returning message box frames to normal.
-        normalmsg: normalmsg,
+        normalmsg: void,
 
         // Compares the value of a hidden variable to a dword.
         comparehiddenvar: comparehiddenvar,
@@ -612,7 +612,7 @@ pub const Command = packed struct {
         checkmonobedience: checkmonobedience,
 
         // Depending on factors I haven't managed to understand yet, this command may cause script execution to jump to the offset specified by the pointer at 0x020375C0.
-        execram: execram,
+        execram: void,
 
         // Sets worldmapflag to 1. This allows the player to Fly to the corresponding map, if that map has a flightspot.
         setworldmapflag: setworldmapflag,
@@ -623,15 +623,15 @@ pub const Command = packed struct {
         // Changes the location where the player caught the Pokemon in the specified slot of their party.
         setmonmetlocation: setmonmetlocation,
         mossdeepgym1: mossdeepgym1,
-        mossdeepgym2: mossdeepgym2,
+        mossdeepgym2: void,
 
         // In FireRed, this command is a nop.
         mossdeepgym3: mossdeepgym3,
-        mossdeepgym4: mossdeepgym4,
+        mossdeepgym4: void,
         warp7: warp7,
-        cmd_d8: cmdD8,
-        cmd_d9: cmdD9,
-        hidebox2: hidebox2,
+        cmd_d8: void,
+        cmd_d9: void,
+        hidebox2: void,
         message3: message3,
         fadescreenswapbuffers: fadescreenswapbuffers,
         buffertrainerclassname: buffertrainerclassname,
@@ -874,10 +874,6 @@ pub const Command = packed struct {
         bufferitemnameplural = 0xe2,
     };
 
-    pub const nop = packed struct {};
-    pub const nop1 = packed struct {};
-    pub const end = packed struct {};
-    pub const @"return" = packed struct {};
     pub const call = packed struct {
         destination: lu32,
     };
@@ -906,8 +902,6 @@ pub const Command = packed struct {
         condition: u8,
         function: u8,
     };
-    pub const gotoram = packed struct {};
-    pub const killscript = packed struct {};
     pub const setmysteryeventstatus = packed struct {
         value: u8,
     };
@@ -1004,7 +998,6 @@ pub const Command = packed struct {
         output: lu16,
         special_function: lu16,
     };
-    pub const waitstate = packed struct {};
     pub const delay = packed struct {
         time: lu16,
     };
@@ -1021,16 +1014,12 @@ pub const Command = packed struct {
         hour: lu16,
         minute: lu16,
     };
-    pub const dodailyevents = packed struct {};
-    pub const gettime = packed struct {};
     pub const playse = packed struct {
         sound_number: lu16,
     };
-    pub const waitse = packed struct {};
     pub const playfanfare = packed struct {
         fanfare_number: lu16,
     };
-    pub const waitfanfare = packed struct {};
     pub const playbgm = packed struct {
         song_number: lu16,
         unknown: u8,
@@ -1038,7 +1027,6 @@ pub const Command = packed struct {
     pub const savebgm = packed struct {
         song_number: lu16,
     };
-    pub const fadedefaultbgm = packed struct {};
     pub const fadenewbgm = packed struct {
         song_number: lu16,
     };
@@ -1103,7 +1091,6 @@ pub const Command = packed struct {
         x: lu16,
         y: lu16,
     };
-    pub const getpartysize = packed struct {};
     pub const additem = packed struct {
         index: lu16,
         quantity: lu16,
@@ -1186,7 +1173,6 @@ pub const Command = packed struct {
         index: lu16,
         map: lu16,
     };
-    pub const faceplayer = packed struct {};
     pub const turnobject = packed struct {
         index: lu16,
         direction: u8,
@@ -1274,9 +1260,6 @@ pub const Command = packed struct {
             },
         },
     };
-    pub const trainerbattlebegin = packed struct {};
-    pub const gotopostbattlescript = packed struct {};
-    pub const gotobeatenscript = packed struct {};
     pub const checktrainerflag = packed struct {
         trainer: lu16,
     };
@@ -1298,16 +1281,9 @@ pub const Command = packed struct {
         word: lu16,
         byte: u8,
     };
-    pub const waitmessage = packed struct {};
     pub const message = packed struct {
         text: gen3.Ptr([*:0xff]u8),
     };
-    pub const closemessage = packed struct {};
-    pub const lockall = packed struct {};
-    pub const lock = packed struct {};
-    pub const releaseall = packed struct {};
-    pub const release = packed struct {};
-    pub const waitbuttonpress = packed struct {};
     pub const yesnobox = packed struct {
         x: u8,
         y: u8,
@@ -1332,7 +1308,6 @@ pub const Command = packed struct {
         per_row: u8,
         b: u8,
     };
-    pub const drawbox = packed struct {};
     pub const erasebox = packed struct {
         byte1: u8,
         byte2: u8,
@@ -1350,7 +1325,6 @@ pub const Command = packed struct {
         x: u8,
         y: u8,
     };
-    pub const erasemonpic = packed struct {};
     pub const drawcontestwinner = packed struct {
         a: u8,
     };
@@ -1428,10 +1402,6 @@ pub const Command = packed struct {
         berry: u8,
         growth_stage: u8,
     };
-    pub const choosecontestmon = packed struct {};
-    pub const startcontest = packed struct {};
-    pub const showcontestresults = packed struct {};
-    pub const contestlinktransfer = packed struct {};
     pub const random = packed struct {
         limit: lu16,
     };
@@ -1452,7 +1422,6 @@ pub const Command = packed struct {
         y: u8,
         check: u8,
     };
-    pub const hidemoneybox = packed struct {};
     pub const updatemoneybox = packed struct {
         x: u8,
         y: u8,
@@ -1489,7 +1458,6 @@ pub const Command = packed struct {
     pub const setrespawn = packed struct {
         heallocation: lu16,
     };
-    pub const checkplayergender = packed struct {};
     pub const playmoncry = packed struct {
         species: lu16,
         effect: lu16,
@@ -1500,11 +1468,9 @@ pub const Command = packed struct {
         metatile_number: lu16,
         tile_attrib: lu16,
     };
-    pub const resetweather = packed struct {};
     pub const setweather = packed struct {
         type: lu16,
     };
-    pub const doweather = packed struct {};
     pub const setstepcallback = packed struct {
         subroutine: u8,
     };
@@ -1540,7 +1506,6 @@ pub const Command = packed struct {
         x: lu16,
         y: lu16,
     };
-    pub const waitdooranim = packed struct {};
     pub const setdooropen = packed struct {
         x: lu16,
         y: lu16,
@@ -1555,7 +1520,6 @@ pub const Command = packed struct {
         c: lu16,
         d: lu16,
     };
-    pub const showelevmenu = packed struct {};
     pub const checkcoins = packed struct {
         out: lu16,
     };
@@ -1570,7 +1534,6 @@ pub const Command = packed struct {
         level: u8,
         item: lu16,
     };
-    pub const dowildbattle = packed struct {};
     pub const setvaddress = packed struct {
         pointer: lu32,
     };
@@ -1619,7 +1582,6 @@ pub const Command = packed struct {
         x: lu16,
         y: lu16,
     };
-    pub const waitmoncry = packed struct {};
     pub const bufferboxname = packed struct {
         out: u8,
         box: lu16,
@@ -1630,9 +1592,6 @@ pub const Command = packed struct {
     pub const loadhelp = packed struct {
         pointer: lu32,
     };
-    pub const unloadhelp = packed struct {};
-    pub const signmsg = packed struct {};
-    pub const normalmsg = packed struct {};
     pub const comparehiddenvar = packed struct {
         a: u8,
         value: lu32,
@@ -1643,7 +1602,6 @@ pub const Command = packed struct {
     pub const checkmonobedience = packed struct {
         slot: lu16,
     };
-    pub const execram = packed struct {};
     pub const setworldmapflag = packed struct {
         worldmapflag: lu16,
     };
@@ -1660,20 +1618,15 @@ pub const Command = packed struct {
     pub const mossdeepgym1 = packed struct {
         unknown: lu16,
     };
-    pub const mossdeepgym2 = packed struct {};
     pub const mossdeepgym3 = packed struct {
         @"var": lu16,
     };
-    pub const mossdeepgym4 = packed struct {};
     pub const warp7 = packed struct {
         map: lu16,
         byte: u8,
         word1: lu16,
         word2: lu16,
     };
-    pub const cmdD8 = packed struct {};
-    pub const cmdD9 = packed struct {};
-    pub const hidebox2 = packed struct {};
     pub const message3 = packed struct {
         pointer: lu32,
     };

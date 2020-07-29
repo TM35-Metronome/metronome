@@ -143,7 +143,7 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
 
                         // Find the field most likly to be this unions tag.
                         const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse
-                            @compileError("Could not find a tag for " ++ struct_field.name);
+                            @compileError("Could not find a tag for " ++ struct_field.name ++ " in " ++ @typeName(T));
                         const tag = @field(value, tag_field);
                         const union_value = @field(value, struct_field.name);
                         const TagEnum = @TypeOf(tag);

@@ -46,18 +46,18 @@ pub const Command = packed struct {
     }
 
     const Data = packed union {
-        nop0: Nop0,
-        nop1: Nop1,
-        end: End,
+        nop0: void,
+        nop1: void,
+        end: void,
         return2: Return2,
         cmd_a: Cmd_a,
         @"if": If,
         if2: If2,
         call_standard: CallStandard,
-        exit_standard: ExitStandard,
+        exit_standard: void,
         jump: Jump,
         call: Call,
-        @"return": Return,
+        @"return": void,
         compare_last_result_jump: CompareLastResultJump,
         compare_last_result_call: CompareLastResultCall,
         set_flag: SetFlag,
@@ -77,39 +77,39 @@ pub const Command = packed struct {
         message3: Message3,
         message4: Message4,
         message5: Message5,
-        cmd_30: Cmd_30,
-        wait_button: WaitButton,
-        cmd_32: Cmd_32,
-        cmd_33: Cmd_33,
-        close_msg_on_key_press: CloseMsgOnKeyPress,
-        freeze_message_box: FreezeMessageBox,
+        cmd_30: void,
+        wait_button: void,
+        cmd_32: void,
+        cmd_33: void,
+        close_msg_on_key_press: void,
+        freeze_message_box: void,
         call_message_box: CallMessageBox,
         color_msg_box: ColorMsgBox,
         type_message_box: TypeMessageBox,
-        no_map_message_box: NoMapMessageBox,
-        call_text_msg_box: CallTextMsgBox,
+        no_map_message_box: void,
+        call_text_msg_box: void,
         store_menu_status: StoreMenuStatus,
-        show_menu: ShowMenu,
+        show_menu: void,
         yes_no_box: YesNoBox,
         multi: Multi,
         multi2: Multi2,
         cmd_42: Cmd_42,
-        close_multi: CloseMulti,
+        close_multi: void,
         multi3: Multi3,
         multi4: Multi4,
         txt_msg_scrp_multi: TxtMsgScrpMulti,
-        close_multi4: CloseMulti4,
+        close_multi4: void,
         play_fanfare: PlayFanfare,
         multi_row: MultiRow,
         play_fanfare2: PlayFanfare2,
         wait_fanfare: WaitFanfare,
         play_cry: PlayCry,
-        wait_cry: WaitCry,
+        wait_cry: void,
         soundfr: Soundfr,
-        cmd_4f: Cmd_4f,
+        cmd_4f: void,
         play_sound: PlaySound,
         stop: Stop,
-        restart: Restart,
+        restart: void,
         cmd_53: Cmd_53,
         switch_music: SwitchMusic,
         store_saying_learned: StoreSayingLearned,
@@ -117,20 +117,20 @@ pub const Command = packed struct {
         cmd_58: Cmd_58,
         check_saying_learned: CheckSayingLearned,
         swith_music2: SwithMusic2,
-        act_microphone: ActMicrophone,
-        deact_microphone: DeactMicrophone,
-        cmd_5d: Cmd_5d,
+        act_microphone: void,
+        deact_microphone: void,
+        cmd_5d: void,
         apply_movement: ApplyMovement,
-        wait_movement: WaitMovement,
-        lock_all: LockAll,
-        release_all: ReleaseAll,
+        wait_movement: void,
+        lock_all: void,
+        release_all: void,
         lock: Lock,
         release: Release,
         add_people: AddPeople,
         remove_people: RemovePeople,
         lock_cam: LockCam,
-        zoom_cam: ZoomCam,
-        face_player: FacePlayer,
+        zoom_cam: void,
+        face_player: void,
         check_sprite_position: CheckSpritePosition,
         check_person_position: CheckPersonPosition,
         continue_follow: ContinueFollow,
@@ -138,11 +138,11 @@ pub const Command = packed struct {
         take_money: TakeMoney,
         check_money: CheckMoney,
         show_money: ShowMoney,
-        hide_money: HideMoney,
-        update_money: UpdateMoney,
+        hide_money: void,
+        update_money: void,
         show_coins: ShowCoins,
-        hide_coins: HideCoins,
-        update_coins: UpdateCoins,
+        hide_coins: void,
+        update_coins: void,
         check_coins: CheckCoins,
         give_coins: GiveCoins,
         take_coins: TakeCoins,
@@ -173,52 +173,52 @@ pub const Command = packed struct {
         check_move: CheckMove,
         check_place_stored: CheckPlaceStored,
         cmd_9b: Cmd_9b,
-        cmd_9c: Cmd_9c,
-        cmd_9d: Cmd_9d,
-        cmd_9e: Cmd_9e,
-        cmd_9f: Cmd_9f,
-        cmd_a0: Cmd_a0,
-        call_end: CallEnd,
-        cmd__a2: Cmd_A2,
-        wfc_: Wfc_,
+        cmd_9c: void,
+        cmd_9d: void,
+        cmd_9e: void,
+        cmd_9f: void,
+        cmd_a0: void,
+        call_end: void,
+        cmd__a2: void,
+        wfc_: void,
         cmd_a4: Cmd_a4,
-        interview: Interview,
+        interview: void,
         dress_pokemon: DressPokemon,
         display_dressed_pokemon: DisplayDressedPokemon,
         display_contest_pokemon: DisplayContestPokemon,
-        open_ball_capsule: OpenBallCapsule,
-        open_sinnoh_maps: OpenSinnohMaps,
+        open_ball_capsule: void,
+        open_sinnoh_maps: void,
         open_pc_function: OpenPcFunction,
-        draw_union: DrawUnion,
-        trainer_case_union: TrainerCaseUnion,
-        trade_union: TradeUnion,
-        record_mixing_union: RecordMixingUnion,
-        end_game: EndGame,
-        hall_fame_anm: HallFameAnm,
+        draw_union: void,
+        trainer_case_union: void,
+        trade_union: void,
+        record_mixing_union: void,
+        end_game: void,
+        hall_fame_anm: void,
         store_wfc_status: StoreWfcStatus,
         start_wfc: StartWfc,
-        choose_starter: ChooseStarter,
-        battle_starter: BattleStarter,
+        choose_starter: void,
+        battle_starter: void,
         battle_id: BattleId,
         set_var_battle: SetVarBattle,
         check_battle_type: CheckBattleType,
         set_var_battle2: SetVarBattle2,
         choose_poke_nick: ChoosePokeNick,
         fade_screen: FadeScreen,
-        reset_screen: ResetScreen,
+        reset_screen: void,
         warp: Warp,
         rock_climb_animation: RockClimbAnimation,
-        surf_animation: SurfAnimation,
+        surf_animation: void,
         waterfall_animation: WaterfallAnimation,
-        flash_animation: FlashAnimation,
-        defog_animation: DefogAnimation,
+        flash_animation: void,
+        defog_animation: void,
         prep_hm_effect: PrepHmEffect,
-        tuxedo: Tuxedo,
+        tuxedo: void,
         check_bike: CheckBike,
         ride_bike: RideBike,
         ride_bike2: RideBike2,
         give_poke_hiro_anm: GivePokeHiroAnm,
-        stop_give_poke_hiro_anm: StopGivePokeHiroAnm,
+        stop_give_poke_hiro_anm: void,
         set_var_hero: SetVarHero,
         set_variable_rival: SetVariableRival,
         set_var_alter: SetVarAlter,
@@ -248,14 +248,14 @@ pub const Command = packed struct {
         trainer_battle_stored2: TrainerBattleStored2,
         check_trainer_status: CheckTrainerStatus,
         store_league_trainer: StoreLeagueTrainer,
-        lost_go_pc: LostGoPc,
+        lost_go_pc: void,
         check_trainer_lost: CheckTrainerLost,
         check_trainer_status2: CheckTrainerStatus2,
         store_poke_party_defeated: StorePokePartyDefeated,
         chs_friend: ChsFriend,
         wire_battle_wait: WireBattleWait,
-        cmd_f6: Cmd_f6,
-        pokecontest: Pokecontest,
+        cmd_f6: void,
+        pokecontest: void,
         start_ovation: StartOvation,
         stop_ovation: StopOvation,
         cmd_fa: Cmd_fa,
@@ -264,8 +264,8 @@ pub const Command = packed struct {
         setvar_other_entry: SetvarOtherEntry,
         cmd_fe: Cmd_fe,
         setvat_hiro_entry: SetvatHiroEntry,
-        cmd_100: Cmd_100,
-        black_flash_effect: BlackFlashEffect,
+        cmd_100: void,
+        black_flash_effect: void,
         setvar_type_contest: SetvarTypeContest,
         setvar_rank_contest: SetvarRankContest,
         cmd_104: Cmd_104,
@@ -282,13 +282,13 @@ pub const Command = packed struct {
         cmd_10f: Cmd_10f,
         cmd_110: Cmd_110,
         flash_contest: FlashContest,
-        end_flash: EndFlash,
-        carpet_anm: CarpetAnm,
-        cmd_114: Cmd_114,
+        end_flash: void,
+        carpet_anm: void,
+        cmd_114: void,
         cmd_115: Cmd_115,
-        show_lnk_cnt_record: ShowLnkCntRecord,
-        cmd_117: Cmd_117,
-        cmd_118: Cmd_118,
+        show_lnk_cnt_record: void,
+        cmd_117: void,
+        cmd_118: void,
         store_pokerus: StorePokerus,
         warp_map_elevator: WarpMapElevator,
         check_floor: CheckFloor,
@@ -300,34 +300,34 @@ pub const Command = packed struct {
         set_var_text_pokedex: SetVarTextPokedex,
         wild_battle: WildBattle,
         starter_battle: StarterBattle,
-        explanation_battle: ExplanationBattle,
-        honey_tree_battle: HoneyTreeBattle,
+        explanation_battle: void,
+        honey_tree_battle: void,
         check_if_honey_slathered: CheckIfHoneySlathered,
-        random_battle: RandomBattle,
-        stop_random_battle: StopRandomBattle,
-        write_autograph: WriteAutograph,
+        random_battle: void,
+        stop_random_battle: void,
+        write_autograph: void,
         store_save_data: StoreSaveData,
         check_save_data: CheckSaveData,
         check_dress: CheckDress,
         check_contest_win: CheckContestWin,
         store_photo_name: StorePhotoName,
-        give_poketch: GivePoketch,
+        give_poketch: void,
         check_ptch_appl: CheckPtchAppl,
         act_pktch_appl: ActPktchAppl,
         store_poketch_app: StorePoketchApp,
         friend_b_t: FriendBT,
-        friend_b_t2: FriendBT2,
+        friend_b_t2: void,
         cmd_138: Cmd_138,
         open_union_function2: OpenUnionFunction2,
-        start_union: StartUnion,
-        link_closed: LinkClosed,
+        start_union: void,
+        link_closed: void,
         set_union_function_id: SetUnionFunctionId,
-        close_union_function: CloseUnionFunction,
-        close_union_function2: CloseUnionFunction2,
+        close_union_function: void,
+        close_union_function2: void,
         set_var_union_message: SetVarUnionMessage,
         store_your_decision_union: StoreYourDecisionUnion,
         store_other_decision_union: StoreOtherDecisionUnion,
-        cmd_142: Cmd_142,
+        cmd_142: void,
         check_other_decision_union: CheckOtherDecisionUnion,
         store_your_decision_union2: StoreYourDecisionUnion2,
         store_other_decision_union2: StoreOtherDecisionUnion2,
@@ -336,42 +336,42 @@ pub const Command = packed struct {
         pokemart1: Pokemart1,
         pokemart2: Pokemart2,
         pokemart3: Pokemart3,
-        defeat_go_pokecenter: DefeatGoPokecenter,
+        defeat_go_pokecenter: void,
         act_bike: ActBike,
         check_gender: CheckGender,
-        heal_pokemon: HealPokemon,
-        deact_wireless: DeactWireless,
-        delete_entry: DeleteEntry,
-        cmd_151: Cmd_151,
+        heal_pokemon: void,
+        deact_wireless: void,
+        delete_entry: void,
+        cmd_151: void,
         underground_id: UndergroundId,
-        union_room: UnionRoom,
-        open_wi_fi_sprite: OpenWiFiSprite,
+        union_room: void,
+        open_wi_fi_sprite: void,
         store_wi_fi_sprite: StoreWiFiSprite,
         act_wi_fi_sprite: ActWiFiSprite,
         cmd_157: Cmd_157,
-        activate_pokedex: ActivatePokedex,
-        give_running_shoes: GiveRunningShoes,
+        activate_pokedex: void,
+        give_running_shoes: void,
         check_badge: CheckBadge,
         enable_badge: EnableBadge,
         disable_badge: DisableBadge,
         check_follow: CheckFollow,
-        start_follow: StartFollow,
-        stop_follow: StopFollow,
-        cmd_164: Cmd_164,
+        start_follow: void,
+        stop_follow: void,
+        cmd_164: void,
         cmd_166: Cmd_166,
         prepare_door_animation: PrepareDoorAnimation,
         wait_action: WaitAction,
         wait_close: WaitClose,
         open_door: OpenDoor,
         close_door: CloseDoor,
-        act_dcare_function: ActDcareFunction,
+        act_dcare_function: void,
         store_p_d_care_num: StorePDCareNum,
-        pastoria_city_function: PastoriaCityFunction,
-        pastoria_city_function2: PastoriaCityFunction2,
-        hearthrome_gym_function: HearthromeGymFunction,
-        hearthrome_gym_function2: HearthromeGymFunction2,
-        canalave_gym_function: CanalaveGymFunction,
-        veilstone_gym_function: VeilstoneGymFunction,
+        pastoria_city_function: void,
+        pastoria_city_function2: void,
+        hearthrome_gym_function: void,
+        hearthrome_gym_function2: void,
+        canalave_gym_function: void,
+        veilstone_gym_function: void,
         sunishore_gym_function: SunishoreGymFunction,
         sunishore_gym_function2: SunishoreGymFunction2,
         check_party_number: CheckPartyNumber,
@@ -388,7 +388,7 @@ pub const Command = packed struct {
         check_deoxis: CheckDeoxis,
         cmd_183: Cmd_183,
         cmd_184: Cmd_184,
-        cmd_185: Cmd_185,
+        cmd_185: void,
         change_ow_position: ChangeOwPosition,
         set_ow_position: SetOwPosition,
         change_ow_movement: ChangeOwMovement,
@@ -396,12 +396,12 @@ pub const Command = packed struct {
         set_tile_passable: SetTilePassable,
         set_tile_locked: SetTileLocked,
         set_ows_follow: SetOwsFollow,
-        show_clock_save: ShowClockSave,
-        hide_clock_save: HideClockSave,
+        show_clock_save: void,
+        hide_clock_save: void,
         cmd_18f: Cmd_18f,
         set_save_data: SetSaveData,
-        chs_pokemenu: ChsPokemenu,
-        chs_pokemenu2: ChsPokemenu2,
+        chs_pokemenu: void,
+        chs_pokemenu2: void,
         store_poke_menu2: StorePokeMenu2,
         chs_poke_contest: ChsPokeContest,
         store_poke_contest: StorePokeContest,
@@ -415,20 +415,20 @@ pub const Command = packed struct {
         check_egg_union: CheckEggUnion,
         underground_function: UndergroundFunction,
         underground_function2: UndergroundFunction2,
-        underground_start: UndergroundStart,
+        underground_start: void,
         take_money_d_care: TakeMoneyDCare,
         take_pokemon_d_care: TakePokemonDCare,
-        act_egg_day_c_man: ActEggDayCMan,
-        deact_egg_day_c_man: DeactEggDayCMan,
+        act_egg_day_c_man: void,
+        deact_egg_day_c_man: void,
         set_var_poke_and_money_d_care: SetVarPokeAndMoneyDCare,
         check_money_d_care: CheckMoneyDCare,
-        egg_animation: EggAnimation,
+        egg_animation: void,
         set_var_poke_and_level_d_care: SetVarPokeAndLevelDCare,
         set_var_poke_chosen_d_care: SetVarPokeChosenDCare,
         give_poke_d_care: GivePokeDCare,
         add_people2: AddPeople2,
         remove_people2: RemovePeople2,
-        mail_box: MailBox,
+        mail_box: void,
         check_mail: CheckMail,
         show_record_list: ShowRecordList,
         check_time: CheckTime,
@@ -445,14 +445,14 @@ pub const Command = packed struct {
         set_variable_pokemon_height: SetVariablePokemonHeight,
         compare_pokemon_height: ComparePokemonHeight,
         check_pokemon_height: CheckPokemonHeight,
-        show_move_info: ShowMoveInfo,
+        show_move_info: void,
         store_poke_delete: StorePokeDelete,
         store_move_delete: StoreMoveDelete,
         check_move_num_delete: CheckMoveNumDelete,
         store_delete_move: StoreDeleteMove,
         check_delete_move: CheckDeleteMove,
         setvar_move_delete: SetvarMoveDelete,
-        cmd_1cc: Cmd_1cc,
+        cmd_1cc: void,
         de_activate_leader: DeActivateLeader,
         hm_functions: HmFunctions,
         flash_duration: FlashDuration,
@@ -465,9 +465,9 @@ pub const Command = packed struct {
         berry_poffin: BerryPoffin,
         set_var_b_tower_chs: SetVarBTowerChs,
         battle_room_result: BattleRoomResult,
-        activate_b_tower: ActivateBTower,
+        activate_b_tower: void,
         store_b_tower_data: StoreBTowerData,
-        close_b_tower: CloseBTower,
+        close_b_tower: void,
         call_b_tower_functions: CallBTowerFunctions,
         random_team_b_tower: RandomTeamBTower,
         store_prize_num_b_tower: StorePrizeNumBTower,
@@ -479,20 +479,20 @@ pub const Command = packed struct {
         random_event: RandomEvent,
         check_sinnoh_pokedex: CheckSinnohPokedex,
         check_national_pokedex: CheckNationalPokedex,
-        show_sinnoh_sheet: ShowSinnohSheet,
-        show_national_sheet: ShowNationalSheet,
-        cmd_1ec: Cmd_1ec,
+        show_sinnoh_sheet: void,
+        show_national_sheet: void,
+        cmd_1ec: void,
         store_trophy_pokemon: StoreTrophyPokemon,
         cmd_1ef: Cmd_1ef,
         cmd_1f0: Cmd_1f0,
         check_act_fossil: CheckActFossil,
-        cmd_1f2: Cmd_1f2,
-        cmd_1f3: Cmd_1f3,
+        cmd_1f2: void,
+        cmd_1f3: void,
         check_item_chosen: CheckItemChosen,
         compare_item_poke_fossil: CompareItemPokeFossil,
         check_pokemon_level: CheckPokemonLevel,
         check_is_pokemon_poisoned: CheckIsPokemonPoisoned,
-        pre_wfc: PreWfc,
+        pre_wfc: void,
         store_furniture: StoreFurniture,
         copy_furniture: CopyFurniture,
         set_b_castle_function_id: SetBCastleFunctionId,
@@ -501,46 +501,46 @@ pub const Command = packed struct {
         check_effect_hm: CheckEffectHm,
         great_marsh_function: GreatMarshFunction,
         battle_poke_colosseum: BattlePokeColosseum,
-        warp_last_elevator: WarpLastElevator,
-        open_geo_net: OpenGeoNet,
-        great_marsh_bynocule: GreatMarshBynocule,
+        warp_last_elevator: void,
+        open_geo_net: void,
+        great_marsh_bynocule: void,
         store_poke_colosseum_lost: StorePokeColosseumLost,
         pokemon_picture: PokemonPicture,
-        hide_picture: HidePicture,
+        hide_picture: void,
         cmd_20a: Cmd_20a,
-        cmd_20b: Cmd_20b,
-        cmd_20c: Cmd_20c,
+        cmd_20b: void,
+        cmd_20c: void,
         setvar_mt_coronet: SetvarMtCoronet,
-        cmd_20e: Cmd_20e,
+        cmd_20e: void,
         check_quic_trine_coordinates: CheckQuicTrineCoordinates,
         setvar_quick_train_coordinates: SetvarQuickTrainCoordinates,
         move_train_anm: MoveTrainAnm,
         store_poke_nature: StorePokeNature,
         check_poke_nature: CheckPokeNature,
         random_hallowes: RandomHallowes,
-        start_amity: StartAmity,
+        start_amity: void,
         cmd_216: Cmd_216,
         cmd_217: Cmd_217,
         chs_r_s_poke: ChsRSPoke,
         set_s_poke: SetSPoke,
         check_s_poke: CheckSPoke,
-        cmd_21b: Cmd_21b,
+        cmd_21b: void,
         act_swarm_poke: ActSwarmPoke,
         cmd_21d: Cmd_21d,
-        cmd_21e: Cmd_21e,
+        cmd_21e: void,
         check_move_remember: CheckMoveRemember,
-        cmd_220: Cmd_220,
+        cmd_220: void,
         store_poke_remember: StorePokeRemember,
-        cmd_222: Cmd_222,
-        store_remember_move: StoreRememberMove,
+        cmd_222: void,
+        store_remember_move: void,
         teach_move: TeachMove,
         check_teach_move: CheckTeachMove,
         set_trade_id: SetTradeId,
         check_pokemon_trade: CheckPokemonTrade,
         trade_chosen_pokemon: TradeChosenPokemon,
-        stop_trade: StopTrade,
-        cmd_22b: Cmd_22b,
-        close_oak_assistant_event: CloseOakAssistantEvent,
+        stop_trade: void,
+        cmd_22b: void,
+        close_oak_assistant_event: void,
         check_nat_pokedex_status: CheckNatPokedexStatus,
         check_ribbon_number: CheckRibbonNumber,
         check_ribbon: CheckRibbon,
@@ -572,28 +572,28 @@ pub const Command = packed struct {
         check_lotto_number: CheckLottoNumber,
         compare_lotto_number: CompareLottoNumber,
         setvar_id_poke_boxes: SetvarIdPokeBoxes,
-        cmd_250: Cmd_250,
+        cmd_250: void,
         check_boxes_number: CheckBoxesNumber,
         stop_great_marsh: StopGreatMarsh,
         check_poke_catching_show: CheckPokeCatchingShow,
-        close_catching_show: CloseCatchingShow,
+        close_catching_show: void,
         check_catching_show_records: CheckCatchingShowRecords,
-        sprt_save: SprtSave,
-        ret_sprt_save: RetSprtSave,
-        elev_lg_animation: ElevLgAnimation,
+        sprt_save: void,
+        ret_sprt_save: void,
+        elev_lg_animation: void,
         check_elev_lg_anm: CheckElevLgAnm,
-        elev_ir_anm: ElevIrAnm,
-        stop_elev_anm: StopElevAnm,
+        elev_ir_anm: void,
+        stop_elev_anm: void,
         check_elev_position: CheckElevPosition,
-        galact_anm: GalactAnm,
-        galact_anm2: GalactAnm2,
+        galact_anm: void,
+        galact_anm2: void,
         main_event: MainEvent,
         check_accessories3: CheckAccessories3,
         act_deoxis_form_change: ActDeoxisFormChange,
         change_form_deoxis: ChangeFormDeoxis,
         check_coombe_event: CheckCoombeEvent,
-        act_contest_map: ActContestMap,
-        cmd_266: Cmd_266,
+        act_contest_map: void,
+        cmd_266: void,
         pokecasino: Pokecasino,
         check_time2: CheckTime2,
         regigigas_anm: RegigigasAnm,
@@ -602,7 +602,7 @@ pub const Command = packed struct {
         check_massage: CheckMassage,
         unown_message_box: UnownMessageBox,
         check_p_catching_show: CheckPCatchingShow,
-        cmd_26f: Cmd_26f,
+        cmd_26f: void,
         shaymin_anm: ShayminAnm,
         thank_name_insert: ThankNameInsert,
         setvar_shaymin: SetvarShaymin,
@@ -613,8 +613,8 @@ pub const Command = packed struct {
         srt_random_num: SrtRandomNum,
         check_poke_level2: CheckPokeLevel2,
         cmd_279: Cmd_279,
-        league_castle_view: LeagueCastleView,
-        cmd_27b: Cmd_27b,
+        league_castle_view: void,
+        cmd_27b: void,
         setvar_amity_pokemon: SetvarAmityPokemon,
         cmd_27d: Cmd_27d,
         check_first_time_v_shop: CheckFirstTimeVShop,
@@ -632,7 +632,7 @@ pub const Command = packed struct {
         check_poffin_case_status: CheckPoffinCaseStatus,
         unk_funct2: UnkFunct2,
         pokemon_party_picture: PokemonPartyPicture,
-        act_learning: ActLearning,
+        act_learning: void,
         set_sound_learning: SetSoundLearning,
         check_first_time_champion: CheckFirstTimeChampion,
         choose_poke_d_care: ChoosePokeDCare,
@@ -640,8 +640,8 @@ pub const Command = packed struct {
         cmd_292: Cmd_292,
         check_master_rank: CheckMasterRank,
         show_battle_points_box: ShowBattlePointsBox,
-        hide_battle_points_box: HideBattlePointsBox,
-        update_battle_points_box: UpdateBattlePointsBox,
+        hide_battle_points_box: void,
+        update_battle_points_box: void,
         take_b_points: TakeBPoints,
         check_b_points: CheckBPoints,
         cmd_29c: Cmd_29c,
@@ -653,42 +653,42 @@ pub const Command = packed struct {
         cmd_2a2: Cmd_2a2,
         store_act_hero_friend_code: StoreActHeroFriendCode,
         store_act_other_friend_code: StoreActOtherFriendCode,
-        choose_trade_pokemon: ChooseTradePokemon,
+        choose_trade_pokemon: void,
         chs_prize_casino: ChsPrizeCasino,
         check_plate: CheckPlate,
         take_coins_casino: TakeCoinsCasino,
         check_coins_casino2: CheckCoinsCasino2,
         compare_phrase_box_input: ComparePhraseBoxInput,
         store_seal_num: StoreSealNum,
-        activate_mystery_gift: ActivateMysteryGift,
+        activate_mystery_gift: void,
         check_follow_battle: CheckFollowBattle,
         cmd_2af: Cmd_2af,
-        cmd_2b0: Cmd_2b0,
-        cmd_2b1: Cmd_2b1,
-        cmd_2b2: Cmd_2b2,
+        cmd_2b0: void,
+        cmd_2b1: void,
+        cmd_2b2: void,
         setvar_seal_random: SetvarSealRandom,
         darkrai_function: DarkraiFunction,
         cmd_2b6: Cmd_2b6,
         store_poke_num_party: StorePokeNumParty,
         store_poke_nickname: StorePokeNickname,
-        close_multi_union: CloseMultiUnion,
+        close_multi_union: void,
         check_battle_union: CheckBattleUnion,
-        cmd_2_b_b: Cmd_2BB,
+        cmd_2_b_b: void,
         check_wild_battle2: CheckWildBattle2,
         wild_battle2: WildBattle,
         store_trainer_card_star: StoreTrainerCardStar,
-        bike_ride: BikeRide,
+        bike_ride: void,
         cmd_2c0: Cmd_2c0,
-        show_save_box: ShowSaveBox,
-        hide_save_box: HideSaveBox,
+        show_save_box: void,
+        hide_save_box: void,
         cmd_2c3: Cmd_2c3,
         show_b_tower_some: ShowBTowerSome,
         delete_saves_b_factory: DeleteSavesBFactory,
-        spin_trade_union: SpinTradeUnion,
+        spin_trade_union: void,
         check_version_game: CheckVersionGame,
         show_b_arcade_recors: ShowBArcadeRecors,
-        eterna_gym_anm: EternaGymAnm,
-        floral_clock_animation: FloralClockAnimation,
+        eterna_gym_anm: void,
+        floral_clock_animation: void,
         check_poke_party2: CheckPokeParty2,
         check_poke_castle: CheckPokeCastle,
         act_team_galactic_events: ActTeamGalacticEvents,
@@ -699,7 +699,7 @@ pub const Command = packed struct {
         cmd_2d3: Cmd_2d3,
         cmd_2d4: Cmd_2d4,
         cmd_2d5: Cmd_2d5,
-        cmd_2d6: Cmd_2d6,
+        cmd_2d6: void,
         cmd_2d7: Cmd_2d7,
         cmd_2d8: Cmd_2d8,
         cmd_2d9: Cmd_2d9,
@@ -711,8 +711,8 @@ pub const Command = packed struct {
         cmd_2df: Cmd_2df,
         cmd_2e0: Cmd_2e0,
         cmd_2e1: Cmd_2e1,
-        cmd_2e2: Cmd_2e2,
-        cmd_2e3: Cmd_2e3,
+        cmd_2e2: void,
+        cmd_2e3: void,
         cmd_2e4: Cmd_2e4,
         cmd_2e5: Cmd_2e5,
         cmd_2e6: Cmd_2e6,
@@ -722,24 +722,24 @@ pub const Command = packed struct {
         cmd_2ea: Cmd_2ea,
         cmd_2eb: Cmd_2eb,
         cmd_2ec: Cmd_2ec,
-        cmd_2ed: Cmd_2ed,
+        cmd_2ed: void,
         cmd_2ee: Cmd_2ee,
-        cmd_2f0: Cmd_2f0,
-        cmd_2f2: Cmd_2f2,
+        cmd_2f0: void,
+        cmd_2f2: void,
         cmd_2f3: Cmd_2f3,
         cmd_2f4: Cmd_2f4,
         cmd_2f5: Cmd_2f5,
         cmd_2f6: Cmd_2f6,
         cmd_2f7: Cmd_2f7,
-        cmd_2f8: Cmd_2f8,
+        cmd_2f8: void,
         cmd_2f9: Cmd_2f9,
         cmd_2fa: Cmd_2fa,
-        cmd_2fb: Cmd_2fb,
+        cmd_2fb: void,
         cmd_2fc: Cmd_2fc,
         cmd_2fd: Cmd_2fd,
         cmd_2fe: Cmd_2fe,
         cmd_2ff: Cmd_2ff,
-        cmd_300: Cmd_300,
+        cmd_300: void,
         cmd_302: Cmd_302,
         cmd_303: Cmd_303,
         cmd_304: Cmd_304,
@@ -747,20 +747,20 @@ pub const Command = packed struct {
         cmd_306: Cmd_306,
         cmd_307: Cmd_307,
         cmd_308: Cmd_308,
-        cmd_309: Cmd_309,
+        cmd_309: void,
         cmd_30a: Cmd_30a,
-        cmd_30b: Cmd_30b,
-        cmd_30c: Cmd_30c,
+        cmd_30b: void,
+        cmd_30c: void,
         cmd_30d: Cmd_30d,
         cmd_30e: Cmd_30e,
         cmd_30f: Cmd_30f,
-        cmd_310: Cmd_310,
+        cmd_310: void,
         cmd_311: Cmd_311,
         cmd_312: Cmd_312,
         cmd_313: Cmd_313,
         cmd_314: Cmd_314,
         cmd_315: Cmd_315,
-        cmd_316: Cmd_316,
+        cmd_316: void,
         cmd_317: Cmd_317,
         wild_battle3: WildBattle,
         cmd_319: Cmd_319,
@@ -769,10 +769,10 @@ pub const Command = packed struct {
         cmd_31c: Cmd_31c,
         cmd_31d: Cmd_31d,
         cmd_31e: Cmd_31e,
-        cmd_31f: Cmd_31f,
-        cmd_320: Cmd_320,
+        cmd_31f: void,
+        cmd_320: void,
         cmd_321: Cmd_321,
-        cmd_322: Cmd_322,
+        cmd_322: void,
         cmd_323: Cmd_323,
         cmd_324: Cmd_324,
         cmd_325: Cmd_325,
@@ -783,19 +783,19 @@ pub const Command = packed struct {
         cmd_32a: Cmd_32a,
         cmd_32b: Cmd_32b,
         cmd_32c: Cmd_32c,
-        cmd_32d: Cmd_32d,
-        cmd_32e: Cmd_32e,
+        cmd_32d: void,
+        cmd_32e: void,
         cmd_32f: Cmd_32f,
-        cmd_330: Cmd_330,
-        cmd_331: Cmd_331,
-        cmd_332: Cmd_332,
+        cmd_330: void,
+        cmd_331: void,
+        cmd_332: void,
         cmd_333: Cmd_333,
         cmd_334: Cmd_334,
         cmd_335: Cmd_335,
         cmd_336: Cmd_336,
         cmd_337: Cmd_337,
-        cmd_338: Cmd_338,
-        cmd_339: Cmd_339,
+        cmd_338: void,
+        cmd_339: void,
         cmd_33a: Cmd_33a,
         cmd_33c: Cmd_33c,
         cmd_33d: Cmd_33d,
@@ -1575,9 +1575,6 @@ pub const Command = packed struct {
         cmd_346 = lu16.init(0x346).valueNative(),
         display_floor = lu16.init(0x347).valueNative(),
     };
-    pub const Nop0 = packed struct {};
-    pub const Nop1 = packed struct {};
-    pub const End = packed struct {};
     pub const Return2 = packed struct {
         a: lu16,
         b: lu16,
@@ -1597,14 +1594,12 @@ pub const Command = packed struct {
     pub const CallStandard = packed struct {
         a: lu16,
     };
-    pub const ExitStandard = packed struct {};
     pub const Jump = packed struct {
         adr: li32,
     };
     pub const Call = packed struct {
         adr: li32,
     };
-    pub const Return = packed struct {};
     pub const CompareLastResultJump = packed struct {
         cond: u8,
         adr: li32,
@@ -1669,12 +1664,6 @@ pub const Command = packed struct {
     pub const Message5 = packed struct {
         nr: u8,
     };
-    pub const Cmd_30 = packed struct {};
-    pub const WaitButton = packed struct {};
-    pub const Cmd_32 = packed struct {};
-    pub const Cmd_33 = packed struct {};
-    pub const CloseMsgOnKeyPress = packed struct {};
-    pub const FreezeMessageBox = packed struct {};
     pub const CallMessageBox = packed struct {
         a: u8,
         b: u8,
@@ -1688,7 +1677,6 @@ pub const Command = packed struct {
     pub const TypeMessageBox = packed struct {
         a: u8,
     };
-    pub const NoMapMessageBox = packed struct {};
     pub const CallTextMsgBox = packed struct {
         a: u8,
         b: lu16,
@@ -1696,7 +1684,6 @@ pub const Command = packed struct {
     pub const StoreMenuStatus = packed struct {
         a: lu16,
     };
-    pub const ShowMenu = packed struct {};
     pub const YesNoBox = packed struct {
         nr: lu16,
     };
@@ -1718,7 +1705,6 @@ pub const Command = packed struct {
         a: u8,
         b: u8,
     };
-    pub const CloseMulti = packed struct {};
     pub const Multi3 = packed struct {
         a: u8,
         b: u8,
@@ -1738,7 +1724,6 @@ pub const Command = packed struct {
         b: lu16,
         c: lu16,
     };
-    pub const CloseMulti4 = packed struct {};
     pub const PlayFanfare = packed struct {
         nr: lu16,
     };
@@ -1755,18 +1740,15 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const WaitCry = packed struct {};
     pub const Soundfr = packed struct {
         a: lu16,
     };
-    pub const Cmd_4f = packed struct {};
     pub const PlaySound = packed struct {
         a: lu16,
     };
     pub const Stop = packed struct {
         a: lu16,
     };
-    pub const Restart = packed struct {};
     pub const Cmd_53 = packed struct {
         a: lu16,
     };
@@ -1789,16 +1771,10 @@ pub const Command = packed struct {
     pub const SwithMusic2 = packed struct {
         a: lu16,
     };
-    pub const ActMicrophone = packed struct {};
-    pub const DeactMicrophone = packed struct {};
-    pub const Cmd_5d = packed struct {};
     pub const ApplyMovement = packed struct {
         a: lu16,
         adr: lu32,
     };
-    pub const WaitMovement = packed struct {};
-    pub const LockAll = packed struct {};
-    pub const ReleaseAll = packed struct {};
     pub const Lock = packed struct {
         a: lu16,
     };
@@ -1815,8 +1791,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const ZoomCam = packed struct {};
-    pub const FacePlayer = packed struct {};
     pub const CheckSpritePosition = packed struct {
         a: lu16,
         b: lu16,
@@ -1845,14 +1819,10 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const HideMoney = packed struct {};
-    pub const UpdateMoney = packed struct {};
     pub const ShowCoins = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const HideCoins = packed struct {};
-    pub const UpdateCoins = packed struct {};
     pub const CheckCoins = packed struct {
         a: lu16,
     };
@@ -1990,18 +1960,9 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_9c = packed struct {};
-    pub const Cmd_9d = packed struct {};
-    pub const Cmd_9e = packed struct {};
-    pub const Cmd_9f = packed struct {};
-    pub const Cmd_a0 = packed struct {};
-    pub const CallEnd = packed struct {};
-    pub const Cmd_A2 = packed struct {};
-    pub const Wfc_ = packed struct {};
     pub const Cmd_a4 = packed struct {
         a: lu16,
     };
-    pub const Interview = packed struct {};
     pub const DressPokemon = packed struct {
         a: lu16,
         b: lu16,
@@ -2015,17 +1976,9 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const OpenBallCapsule = packed struct {};
-    pub const OpenSinnohMaps = packed struct {};
     pub const OpenPcFunction = packed struct {
         a: u8,
     };
-    pub const DrawUnion = packed struct {};
-    pub const TrainerCaseUnion = packed struct {};
-    pub const TradeUnion = packed struct {};
-    pub const RecordMixingUnion = packed struct {};
-    pub const EndGame = packed struct {};
-    pub const HallFameAnm = packed struct {};
     pub const StoreWfcStatus = packed struct {
         a: lu16,
         b: lu16,
@@ -2033,8 +1986,6 @@ pub const Command = packed struct {
     pub const StartWfc = packed struct {
         a: lu16,
     };
-    pub const ChooseStarter = packed struct {};
-    pub const BattleStarter = packed struct {};
     pub const BattleId = packed struct {
         a: lu16,
     };
@@ -2059,7 +2010,6 @@ pub const Command = packed struct {
         c: lu16,
         d: lu16,
     };
-    pub const ResetScreen = packed struct {};
     pub const Warp = packed struct {
         a: lu16,
         b: lu16,
@@ -2076,12 +2026,9 @@ pub const Command = packed struct {
     pub const WaterfallAnimation = packed struct {
         a: lu16,
     };
-    pub const FlashAnimation = packed struct {};
-    pub const DefogAnimation = packed struct {};
     pub const PrepHmEffect = packed struct {
         a: lu16,
     };
-    pub const Tuxedo = packed struct {};
     pub const CheckBike = packed struct {
         a: lu16,
     };
@@ -2094,7 +2041,6 @@ pub const Command = packed struct {
     pub const GivePokeHiroAnm = packed struct {
         a: lu16,
     };
-    pub const StopGivePokeHiroAnm = packed struct {};
     pub const SetVarHero = packed struct {
         a: u8,
     };
@@ -2205,7 +2151,6 @@ pub const Command = packed struct {
     pub const StoreLeagueTrainer = packed struct {
         a: lu16,
     };
-    pub const LostGoPc = packed struct {};
     pub const CheckTrainerLost = packed struct {
         a: lu16,
     };
@@ -2227,8 +2172,6 @@ pub const Command = packed struct {
         c: lu16,
         d: lu16,
     };
-    pub const Cmd_f6 = packed struct {};
-    pub const Pokecontest = packed struct {};
     pub const StartOvation = packed struct {
         a: lu16,
     };
@@ -2260,8 +2203,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_100 = packed struct {};
-    pub const BlackFlashEffect = packed struct {};
     pub const SetvarTypeContest = packed struct {
         a: lu16,
     };
@@ -2315,15 +2256,9 @@ pub const Command = packed struct {
     pub const FlashContest = packed struct {
         a: lu16,
     };
-    pub const EndFlash = packed struct {};
-    pub const CarpetAnm = packed struct {};
-    pub const Cmd_114 = packed struct {};
     pub const Cmd_115 = packed struct {
         a: lu16,
     };
-    pub const ShowLnkCntRecord = packed struct {};
-    pub const Cmd_117 = packed struct {};
-    pub const Cmd_118 = packed struct {};
     pub const StorePokerus = packed struct {
         a: lu16,
     };
@@ -2367,14 +2302,9 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const ExplanationBattle = packed struct {};
-    pub const HoneyTreeBattle = packed struct {};
     pub const CheckIfHoneySlathered = packed struct {
         a: lu16,
     };
-    pub const RandomBattle = packed struct {};
-    pub const StopRandomBattle = packed struct {};
-    pub const WriteAutograph = packed struct {};
     pub const StoreSaveData = packed struct {
         a: lu16,
     };
@@ -2392,7 +2322,6 @@ pub const Command = packed struct {
     pub const StorePhotoName = packed struct {
         a: lu16,
     };
-    pub const GivePoketch = packed struct {};
     pub const CheckPtchAppl = packed struct {
         a: lu16,
     };
@@ -2406,20 +2335,15 @@ pub const Command = packed struct {
     pub const FriendBT = packed struct {
         nr: lu16,
     };
-    pub const FriendBT2 = packed struct {};
     pub const Cmd_138 = packed struct {
         a: lu16,
     };
     pub const OpenUnionFunction2 = packed struct {
         a: lu16,
     };
-    pub const StartUnion = packed struct {};
-    pub const LinkClosed = packed struct {};
     pub const SetUnionFunctionId = packed struct {
         a: lu16,
     };
-    pub const CloseUnionFunction = packed struct {};
-    pub const CloseUnionFunction2 = packed struct {};
     pub const SetVarUnionMessage = packed struct {
         a: lu16,
         b: lu16,
@@ -2430,7 +2354,6 @@ pub const Command = packed struct {
     pub const StoreOtherDecisionUnion = packed struct {
         a: lu16,
     };
-    pub const Cmd_142 = packed struct {};
     pub const CheckOtherDecisionUnion = packed struct {
         a: lu16,
         b: lu16,
@@ -2457,22 +2380,15 @@ pub const Command = packed struct {
     pub const Pokemart3 = packed struct {
         a: lu16,
     };
-    pub const DefeatGoPokecenter = packed struct {};
     pub const ActBike = packed struct {
         a: lu16,
     };
     pub const CheckGender = packed struct {
         a: lu16,
     };
-    pub const HealPokemon = packed struct {};
-    pub const DeactWireless = packed struct {};
-    pub const DeleteEntry = packed struct {};
-    pub const Cmd_151 = packed struct {};
     pub const UndergroundId = packed struct {
         a: lu16,
     };
-    pub const UnionRoom = packed struct {};
-    pub const OpenWiFiSprite = packed struct {};
     pub const StoreWiFiSprite = packed struct {
         a: lu16,
         b: lu16,
@@ -2483,8 +2399,6 @@ pub const Command = packed struct {
     pub const Cmd_157 = packed struct {
         a: lu16,
     };
-    pub const ActivatePokedex = packed struct {};
-    pub const GiveRunningShoes = packed struct {};
     pub const CheckBadge = packed struct {
         a: lu16,
         b: lu16,
@@ -2498,9 +2412,6 @@ pub const Command = packed struct {
     pub const CheckFollow = packed struct {
         a: lu16,
     };
-    pub const StartFollow = packed struct {};
-    pub const StopFollow = packed struct {};
-    pub const Cmd_164 = packed struct {};
     pub const Cmd_166 = packed struct {
         a: lu16,
     };
@@ -2523,16 +2434,9 @@ pub const Command = packed struct {
     pub const CloseDoor = packed struct {
         a: u8,
     };
-    pub const ActDcareFunction = packed struct {};
     pub const StorePDCareNum = packed struct {
         a: lu16,
     };
-    pub const PastoriaCityFunction = packed struct {};
-    pub const PastoriaCityFunction2 = packed struct {};
-    pub const HearthromeGymFunction = packed struct {};
-    pub const HearthromeGymFunction2 = packed struct {};
-    pub const CanalaveGymFunction = packed struct {};
-    pub const VeilstoneGymFunction = packed struct {};
     pub const SunishoreGymFunction = packed struct {
         a: u8,
     };
@@ -2585,7 +2489,6 @@ pub const Command = packed struct {
     pub const Cmd_184 = packed struct {
         a: lu16,
     };
-    pub const Cmd_185 = packed struct {};
     pub const ChangeOwPosition = packed struct {
         a: lu16,
         b: lu16,
@@ -2620,16 +2523,12 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const ShowClockSave = packed struct {};
-    pub const HideClockSave = packed struct {};
     pub const Cmd_18f = packed struct {
         a: lu16,
     };
     pub const SetSaveData = packed struct {
         a: lu16,
     };
-    pub const ChsPokemenu = packed struct {};
-    pub const ChsPokemenu2 = packed struct {};
     pub const StorePokeMenu2 = packed struct {
         a: lu16,
     };
@@ -2677,7 +2576,6 @@ pub const Command = packed struct {
     pub const UndergroundFunction2 = packed struct {
         a: lu16,
     };
-    pub const UndergroundStart = packed struct {};
     pub const TakeMoneyDCare = packed struct {
         a: lu16,
     };
@@ -2685,8 +2583,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const ActEggDayCMan = packed struct {};
-    pub const DeactEggDayCMan = packed struct {};
     pub const SetVarPokeAndMoneyDCare = packed struct {
         a: lu16,
         b: lu16,
@@ -2695,7 +2591,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const EggAnimation = packed struct {};
     pub const SetVarPokeAndLevelDCare = packed struct {
         a: lu16,
         b: lu16,
@@ -2714,7 +2609,6 @@ pub const Command = packed struct {
     pub const RemovePeople2 = packed struct {
         a: lu16,
     };
-    pub const MailBox = packed struct {};
     pub const CheckMail = packed struct {
         a: lu16,
     };
@@ -2776,7 +2670,6 @@ pub const Command = packed struct {
         b: lu16,
         c: lu16,
     };
-    pub const ShowMoveInfo = packed struct {};
     pub const StorePokeDelete = packed struct {
         a: lu16,
     };
@@ -2801,7 +2694,6 @@ pub const Command = packed struct {
         b: lu16,
         c: lu16,
     };
-    pub const Cmd_1cc = packed struct {};
     pub const DeActivateLeader = packed struct {
         a: lu16,
         b: lu16,
@@ -2815,7 +2707,7 @@ pub const Command = packed struct {
             @"2" = 2,
         },
         b: packed union {
-            @"1": packed struct {},
+            @"1": void,
             @"2": packed struct {
                 b: lu16,
             },
@@ -2858,12 +2750,10 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const ActivateBTower = packed struct {};
     pub const StoreBTowerData = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const CloseBTower = packed struct {};
     pub const CallBTowerFunctions = packed struct {
         a: lu16,
         b: lu16,
@@ -2906,9 +2796,6 @@ pub const Command = packed struct {
     pub const CheckNationalPokedex = packed struct {
         a: lu16,
     };
-    pub const ShowSinnohSheet = packed struct {};
-    pub const ShowNationalSheet = packed struct {};
-    pub const Cmd_1ec = packed struct {};
     pub const StoreTrophyPokemon = packed struct {
         a: lu16,
     };
@@ -2921,8 +2808,6 @@ pub const Command = packed struct {
     pub const CheckActFossil = packed struct {
         a: lu16,
     };
-    pub const Cmd_1f2 = packed struct {};
-    pub const Cmd_1f3 = packed struct {};
     pub const CheckItemChosen = packed struct {
         a: lu16,
         b: lu16,
@@ -2940,7 +2825,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const PreWfc = packed struct {};
     pub const StoreFurniture = packed struct {
         a: lu16,
     };
@@ -2973,9 +2857,6 @@ pub const Command = packed struct {
         d: lu16,
         e: lu16,
     };
-    pub const WarpLastElevator = packed struct {};
-    pub const OpenGeoNet = packed struct {};
-    pub const GreatMarshBynocule = packed struct {};
     pub const StorePokeColosseumLost = packed struct {
         a: lu16,
     };
@@ -2983,17 +2864,13 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const HidePicture = packed struct {};
     pub const Cmd_20a = packed struct {
         a: lu16,
     };
-    pub const Cmd_20b = packed struct {};
-    pub const Cmd_20c = packed struct {};
     pub const SetvarMtCoronet = packed struct {
         a: u8,
         b: lu16,
     };
-    pub const Cmd_20e = packed struct {};
     pub const CheckQuicTrineCoordinates = packed struct {
         a: lu16,
         b: lu16,
@@ -3016,7 +2893,6 @@ pub const Command = packed struct {
     pub const RandomHallowes = packed struct {
         a: lu16,
     };
-    pub const StartAmity = packed struct {};
     pub const Cmd_216 = packed struct {
         a: lu16,
     };
@@ -3033,7 +2909,6 @@ pub const Command = packed struct {
     pub const CheckSPoke = packed struct {
         a: lu16,
     };
-    pub const Cmd_21b = packed struct {};
     pub const ActSwarmPoke = packed struct {
         a: u8,
     };
@@ -3071,16 +2946,13 @@ pub const Command = packed struct {
             },
         },
     };
-    pub const Cmd_21e = packed struct {};
     pub const CheckMoveRemember = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_220 = packed struct {};
     pub const StorePokeRemember = packed struct {
         a: lu16,
     };
-    pub const Cmd_222 = packed struct {};
     pub const StoreRememberMove = packed struct {
         a: lu16,
     };
@@ -3100,9 +2972,6 @@ pub const Command = packed struct {
     pub const TradeChosenPokemon = packed struct {
         a: lu16,
     };
-    pub const StopTrade = packed struct {};
-    pub const Cmd_22b = packed struct {};
-    pub const CloseOakAssistantEvent = packed struct {};
     pub const CheckNatPokedexStatus = packed struct {
         a: u8,
         b: lu16,
@@ -3149,7 +3018,7 @@ pub const Command = packed struct {
                 c: lu16,
                 d: lu16,
             },
-            @"2": packed struct {},
+            @"2": void,
             @"3": packed struct {
                 b: lu16,
                 c: lu16,
@@ -3290,7 +3159,6 @@ pub const Command = packed struct {
         a: u8,
         b: lu16,
     };
-    pub const Cmd_250 = packed struct {};
     pub const CheckBoxesNumber = packed struct {
         a: lu16,
     };
@@ -3300,24 +3168,16 @@ pub const Command = packed struct {
     pub const CheckPokeCatchingShow = packed struct {
         a: lu16,
     };
-    pub const CloseCatchingShow = packed struct {};
     pub const CheckCatchingShowRecords = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const SprtSave = packed struct {};
-    pub const RetSprtSave = packed struct {};
-    pub const ElevLgAnimation = packed struct {};
     pub const CheckElevLgAnm = packed struct {
         a: lu16,
     };
-    pub const ElevIrAnm = packed struct {};
-    pub const StopElevAnm = packed struct {};
     pub const CheckElevPosition = packed struct {
         a: lu16,
     };
-    pub const GalactAnm = packed struct {};
-    pub const GalactAnm2 = packed struct {};
     pub const MainEvent = packed struct {
         a: lu16,
     };
@@ -3335,8 +3195,6 @@ pub const Command = packed struct {
     pub const CheckCoombeEvent = packed struct {
         a: lu16,
     };
-    pub const ActContestMap = packed struct {};
-    pub const Cmd_266 = packed struct {};
     pub const Pokecasino = packed struct {
         a: lu16,
     };
@@ -3367,7 +3225,6 @@ pub const Command = packed struct {
     pub const CheckPCatchingShow = packed struct {
         a: lu16,
     };
-    pub const Cmd_26f = packed struct {};
     pub const ShayminAnm = packed struct {
         a: lu16,
         b: u8,
@@ -3404,8 +3261,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const LeagueCastleView = packed struct {};
-    pub const Cmd_27b = packed struct {};
     pub const SetvarAmityPokemon = packed struct {
         a: lu16,
         b: lu16,
@@ -3473,7 +3328,6 @@ pub const Command = packed struct {
     pub const PokemonPartyPicture = packed struct {
         a: lu16,
     };
-    pub const ActLearning = packed struct {};
     pub const SetSoundLearning = packed struct {
         a: lu16,
     };
@@ -3498,8 +3352,6 @@ pub const Command = packed struct {
         a: u8,
         b: u8,
     };
-    pub const HideBattlePointsBox = packed struct {};
-    pub const UpdateBattlePointsBox = packed struct {};
     pub const TakeBPoints = packed struct {
         a: lu16,
     };
@@ -3541,7 +3393,6 @@ pub const Command = packed struct {
     pub const StoreActOtherFriendCode = packed struct {
         a: lu16,
     };
-    pub const ChooseTradePokemon = packed struct {};
     pub const ChsPrizeCasino = packed struct {
         a: lu16,
         b: lu16,
@@ -3568,7 +3419,6 @@ pub const Command = packed struct {
     pub const StoreSealNum = packed struct {
         a: lu16,
     };
-    pub const ActivateMysteryGift = packed struct {};
     pub const CheckFollowBattle = packed struct {
         a: lu16,
         b: lu16,
@@ -3576,9 +3426,6 @@ pub const Command = packed struct {
     pub const Cmd_2af = packed struct {
         a: lu16,
     };
-    pub const Cmd_2b0 = packed struct {};
-    pub const Cmd_2b1 = packed struct {};
-    pub const Cmd_2b2 = packed struct {};
     pub const SetvarSealRandom = packed struct {
         a: u8,
         b: lu16,
@@ -3598,23 +3445,18 @@ pub const Command = packed struct {
     pub const StorePokeNickname = packed struct {
         a: lu16,
     };
-    pub const CloseMultiUnion = packed struct {};
     pub const CheckBattleUnion = packed struct {
         a: lu16,
     };
-    pub const Cmd_2BB = packed struct {};
     pub const CheckWildBattle2 = packed struct {
         a: lu16,
     };
     pub const StoreTrainerCardStar = packed struct {
         a: lu16,
     };
-    pub const BikeRide = packed struct {};
     pub const Cmd_2c0 = packed struct {
         a: lu16,
     };
-    pub const ShowSaveBox = packed struct {};
-    pub const HideSaveBox = packed struct {};
     pub const Cmd_2c3 = packed struct {
         a: u8,
     };
@@ -3625,7 +3467,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const SpinTradeUnion = packed struct {};
     pub const CheckVersionGame = packed struct {
         a: lu16,
     };
@@ -3634,8 +3475,6 @@ pub const Command = packed struct {
         b: lu16,
         c: lu16,
     };
-    pub const EternaGymAnm = packed struct {};
-    pub const FloralClockAnimation = packed struct {};
     pub const CheckPokeParty2 = packed struct {
         a: lu16,
         b: lu16,
@@ -3678,7 +3517,6 @@ pub const Command = packed struct {
     pub const Cmd_2d5 = packed struct {
         a: lu16,
     };
-    pub const Cmd_2d6 = packed struct {};
     pub const Cmd_2d7 = packed struct {
         a: lu16,
     };
@@ -3725,8 +3563,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_2e2 = packed struct {};
-    pub const Cmd_2e3 = packed struct {};
     pub const Cmd_2e4 = packed struct {
         a: lu16,
         b: lu16,
@@ -3767,15 +3603,12 @@ pub const Command = packed struct {
         c: lu16,
         d: lu16,
     };
-    pub const Cmd_2ed = packed struct {};
     pub const Cmd_2ee = packed struct {
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
-    pub const Cmd_2f0 = packed struct {};
-    pub const Cmd_2f2 = packed struct {};
     pub const Cmd_2f3 = packed struct {
         a: u8,
         b: lu16,
@@ -3800,14 +3633,12 @@ pub const Command = packed struct {
     pub const Cmd_2f7 = packed struct {
         a: lu16,
     };
-    pub const Cmd_2f8 = packed struct {};
     pub const Cmd_2f9 = packed struct {
         a: lu16,
     };
     pub const Cmd_2fa = packed struct {
         a: lu16,
     };
-    pub const Cmd_2fb = packed struct {};
     pub const Cmd_2fc = packed struct {
         a: lu16,
     };
@@ -3823,7 +3654,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_300 = packed struct {};
     pub const Cmd_302 = packed struct {
         a: lu16,
         b: lu16,
@@ -3856,12 +3686,9 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_309 = packed struct {};
     pub const Cmd_30a = packed struct {
         a: lu16,
     };
-    pub const Cmd_30b = packed struct {};
-    pub const Cmd_30c = packed struct {};
     pub const Cmd_30d = packed struct {
         a: lu16,
     };
@@ -3872,7 +3699,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_310 = packed struct {};
     pub const Cmd_311 = packed struct {
         a: lu16,
     };
@@ -3888,7 +3714,6 @@ pub const Command = packed struct {
     pub const Cmd_315 = packed struct {
         a: lu16,
     };
-    pub const Cmd_316 = packed struct {};
     pub const Cmd_317 = packed struct {
         a: lu16,
         b: lu16,
@@ -3915,12 +3740,9 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_31f = packed struct {};
-    pub const Cmd_320 = packed struct {};
     pub const Cmd_321 = packed struct {
         a: lu16,
     };
-    pub const Cmd_322 = packed struct {};
     pub const Cmd_323 = packed struct {
         a: lu16,
     };
@@ -3962,15 +3784,10 @@ pub const Command = packed struct {
         c: lu16,
         d: lu16,
     };
-    pub const Cmd_32d = packed struct {};
-    pub const Cmd_32e = packed struct {};
     pub const Cmd_32f = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_330 = packed struct {};
-    pub const Cmd_331 = packed struct {};
-    pub const Cmd_332 = packed struct {};
     pub const Cmd_333 = packed struct {
         a: lu16,
     };
@@ -3989,8 +3806,6 @@ pub const Command = packed struct {
         a: lu16,
         b: lu16,
     };
-    pub const Cmd_338 = packed struct {};
-    pub const Cmd_339 = packed struct {};
     pub const Cmd_33a = packed struct {
         a: u8,
     };
