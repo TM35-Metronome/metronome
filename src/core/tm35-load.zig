@@ -461,19 +461,13 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
     }
 
-    {
-        var i: usize = 0;
-        while (i < game.evolutions.fat.len) : (i += 1) {
-            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen4.Evolution);
-            const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
-            for (evos) |evo, j| {
-                if (evo.method == .unused)
-                    continue;
-                try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-                try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
-                try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
-            }
+    for (game.evolutions) |evos, i| {
+        for (evos.items) |evo, j| {
+            if (evo.method == .unused)
+                continue;
+            try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
+            try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
+            try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
         }
     }
 
@@ -830,19 +824,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
     }
 
-    {
-        var i: usize = 0;
-        while (i < number_of_pokemons) : (i += 1) {
-            const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, i) });
-            const rem = bytes.len % @sizeOf(gen5.Evolution);
-            const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-            for (evos) |evo, j| {
-                if (evo.method == .unused)
-                    continue;
-                try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-                try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
-                try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
-            }
+    for (game.evolutions) |evos, i| {
+        for (evos.items) |evo, j| {
+            if (evo.method == .unused)
+                continue;
+            try stream.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
+            try stream.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param.value() });
+            try stream.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target.value() });
         }
     }
 

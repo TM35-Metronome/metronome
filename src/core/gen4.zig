@@ -65,6 +65,15 @@ pub const Evolution = extern struct {
     }
 };
 
+pub const EvolutionTable = extern struct {
+    items: [7]Evolution,
+    terminator: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 44);
+    }
+};
+
 pub const MoveTutor = extern struct {
     move: lu16,
     cost: u8,
@@ -509,8 +518,8 @@ pub const Game = struct {
     hms: []lu16,
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
+    evolutions: []EvolutionTable,
 
-    evolutions: nds.fs.Fs,
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
     scripts: nds.fs.Fs,
@@ -591,6 +600,7 @@ pub const Game = struct {
             .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
             .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
             .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
+            .evolutions = try (try getNarc(file_system, info.evolutions)).toSlice(0, EvolutionTable),
             .wild_pokemons = blk: {
                 const narc = try getNarc(file_system, info.wild_pokemons);
                 switch (info.version) {
@@ -610,7 +620,6 @@ pub const Game = struct {
             .pokeball_items = commands.pokeball_items,
 
             .parties = try getNarc(file_system, info.parties),
-            .evolutions = try getNarc(file_system, info.evolutions),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
             .scripts = scripts,
             .text = text,

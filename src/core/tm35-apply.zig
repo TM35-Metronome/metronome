@@ -638,10 +638,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                     try parse.anyT(parser.str, &lum, converters);
                 },
                 c("evos") => {
-                    const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, index) });
-                    const rem = bytes.len % @sizeOf(gen4.Evolution);
-                    const evos = mem.bytesAsSlice(gen4.Evolution, bytes[0 .. bytes.len - rem]);
-                    try parse.anyT(parser.str, &evos, converters);
+                    if (game.evolutions.len <= index)
+                        return error.Error;
+                    try parse.anyT(parser.str, &game.evolutions[index].items, converters);
                 },
                 else => return error.NoField,
             }
@@ -919,10 +918,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                     try parse.anyT(parser.str, &lum, converters);
                 },
                 c("evos") => {
-                    const bytes = game.evolutions.fileData(.{ .i = @intCast(u32, index) });
-                    const rem = bytes.len % @sizeOf(gen5.Evolution);
-                    const evos = mem.bytesAsSlice(gen5.Evolution, bytes[0 .. bytes.len - rem]);
-                    try parse.anyT(parser.str, &evos, converters);
+                    if (game.evolutions.len <= index)
+                        return error.Error;
+                    try parse.anyT(parser.str, &game.evolutions[index].items, converters);
                 },
                 else => return error.NoField,
             }
