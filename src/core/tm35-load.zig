@@ -109,7 +109,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         // The party type is infered from the party data.
         // try stream.print(".trainers[{}].party_type={}\n", .{i, trainer.party_type});
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
-        try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music });
+        try stream.print(".trainers[{}].gender={}\n", .{ i, @tagName(trainer.encounter_music.gender) });
+        try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music.music });
         try stream.print(".trainers[{}].trainer_picture={}\n", .{ i, trainer.trainer_picture });
         try stream.print(".trainers[{}].name=", .{i});
         try gen3.encodings.decode(.en_us, &trainer.name, stream);

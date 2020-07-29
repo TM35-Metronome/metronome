@@ -551,7 +551,10 @@ const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = 0,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0,
+        },
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -562,7 +565,10 @@ const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x02,
-        .encounter_music = 0x0b,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x0b,
+        },
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -575,7 +581,10 @@ const em_first_trainers = [_]gen3.Trainer{
 const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = .none,
     .class = 0x41,
-    .encounter_music = 0x80,
+    .encounter_music = .{
+        .gender = .female,
+        .music = 0x00,
+    },
     .trainer_picture = 0x5c,
     .name = undefined,
     .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -588,7 +597,10 @@ const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = 0,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x00,
+        },
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -599,7 +611,10 @@ const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x02,
-        .encounter_music = 0x06,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x06,
+        },
         .trainer_picture = 0x46,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0x16), lu16.init(0x16), lu16.init(0), lu16.init(0) },
@@ -612,7 +627,10 @@ const rs_first_trainers = [_]gen3.Trainer{
 const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = .none,
     .class = 0x21,
-    .encounter_music = 0x0B,
+    .encounter_music = .{
+        .gender = .male,
+        .music = 0x0b,
+    },
     .trainer_picture = 0x06,
     .name = undefined,
     .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -625,7 +643,10 @@ const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = 0,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x00,
+        },
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{
@@ -641,7 +662,10 @@ const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 2,
-        .encounter_music = 6,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x06,
+        },
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{
@@ -660,7 +684,10 @@ const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .both,
         .class = 90,
-        .encounter_music = 0,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x00,
+        },
         .trainer_picture = 125,
         .name = undefined,
         .items = [_]lu16{
@@ -676,7 +703,10 @@ const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x47,
-        .encounter_music = 0,
+        .encounter_music = .{
+            .gender = .male,
+            .music = 0x00,
+        },
         .trainer_picture = 0x60,
         .name = undefined,
         .items = [_]lu16{

@@ -87,6 +87,7 @@ pub const strv = value([]const u8, struct {
 }.func);
 pub const u4v = value(u4, toInt(u4, 10));
 pub const u6v = value(u6, toInt(u6, 10));
+pub const u7v = value(u7, toInt(u7, 10));
 pub const u8v = value(u8, toInt(u8, 10));
 pub const u10v = value(u10, toInt(u10, 10));
 pub const u16v = value(u16, toInt(u16, 10));

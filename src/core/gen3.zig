@@ -66,10 +66,18 @@ pub const BasePokemon = extern struct {
     }
 };
 
+pub const Gender = packed enum(u1) {
+    male = 0,
+    female = 1,
+};
+
 pub const Trainer = extern struct {
     party_type: PartyType,
     class: u8,
-    encounter_music: u8,
+    encounter_music: packed struct {
+        gender: Gender,
+        music: u7,
+    },
     trainer_picture: u8,
     name: [12]u8,
     items: [4]lu16,

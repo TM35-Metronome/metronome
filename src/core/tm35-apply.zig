@@ -228,7 +228,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
 
             switch (m(try parser.parse(parse.anyField))) {
                 c("class") => trainer.class = try parser.parse(parse.u8v),
-                c("encounter_music") => trainer.encounter_music = try parser.parse(parse.u8v),
+                c("gender") => trainer.encounter_music.gender = try parser.parse(comptime parse.enumv(gen3.Gender)),
+                c("encounter_music") => trainer.encounter_music.music = try parser.parse(parse.u7v),
                 c("trainer_picture") => trainer.trainer_picture = try parser.parse(parse.u8v),
                 c("is_double") => trainer.is_double = try parser.parse(parselu32v),
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
