@@ -122,12 +122,12 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             switch (m(try p.parse(parse.anyField))) {
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
-                    c("hp") => pokemon.hp = try p.parse(parse.u8v),
-                    c("attack") => pokemon.attack = try p.parse(parse.u8v),
-                    c("defense") => pokemon.defense = try p.parse(parse.u8v),
-                    c("speed") => pokemon.speed = try p.parse(parse.u8v),
-                    c("sp_attack") => pokemon.sp_attack = try p.parse(parse.u8v),
-                    c("sp_defense") => pokemon.sp_defense = try p.parse(parse.u8v),
+                    c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
+                    c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
+                    c("defense") => pokemon.stats[2] = try p.parse(parse.u8v),
+                    c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
+                    c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
+                    c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
                     else => return true,
                 },
                 // TODO: We're not using type information for anything yet
@@ -188,8 +188,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         break :blk;
                     };
 
-                    var stats: [Pokemon.stats.len]u8 = undefined;
-                    var min = @intCast(i64, sum(u8, pokemon.toBuf(&stats)));
+                    var min = @intCast(i64, sum(u8, &pokemon.stats));
                     var max = min;
 
                     simular.resize(0) catch unreachable;
@@ -201,7 +200,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                             var s = range.start;
                             while (s <= range.end) : (s += 1) {
                                 const p = data.pokemons.get(s).?;
-                                const total = @intCast(i64, sum(u8, p.toBuf(&stats)));
+                                const total = @intCast(i64, sum(u8, &p.stats));
                                 if (min <= total and total <= max)
                                     try simular.append(s);
                             }
@@ -289,45 +288,9 @@ const WildPokemon = struct {
 };
 
 const Pokemon = struct {
-    hp: ?u8 = null,
-    attack: ?u8 = null,
-    defense: ?u8 = null,
-    speed: ?u8 = null,
-    sp_attack: ?u8 = null,
-    sp_defense: ?u8 = null,
+    stats: [6]u8 = [_]u8{0} ** 6,
     catch_rate: usize = 1,
     types: Set = Set{},
-
-    const stats = [_][]const u8{
-        "hp",
-        "attack",
-        "defense",
-        "speed",
-        "sp_attack",
-        "sp_defense",
-    };
-
-    fn toBuf(p: Pokemon, buf: *[stats.len]u8) []u8 {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |stat| {
-                buf[i] = stat;
-                i += 1;
-            }
-        }
-
-        return buf[0..i];
-    }
-
-    fn fromBuf(p: *Pokemon, buf: []u8) void {
-        var i: usize = 0;
-        inline for (stats) |stat_name| {
-            if (@field(p, stat_name)) |*stat| {
-                stat.* = buf[i];
-                i += 1;
-            }
-        }
-    }
 };
 
 test "tm35-rand-wild" {

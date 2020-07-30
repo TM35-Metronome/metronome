@@ -287,6 +287,11 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].hold_effect={}\n", .{ i, item.hold_effect });
         try stream.print(".items[{}].hold_effect_par={}\n", .{ i, item.hold_effect_param });
+        if (item.description.toSliceZ(game.data)) |description| {
+            try stream.print(".items[{}].description=", .{i});
+            try gen3.encodings.decode(.en_us, description, stream);
+            try stream.writeByte('\n');
+        } else |_| {}
         // try stream.print(".items[{}].description={}\n", .{i, item.description});
         try stream.print(".items[{}].importance={}\n", .{ i, item.importance });
         // try stream.print(".items[{}].unknown={}\n", .{i, item.unknown});

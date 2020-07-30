@@ -364,6 +364,11 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
                 c("secondary_id") => item.secondary_id = try parser.parse(parselu32v),
                 c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &item.name),
+                c("description") => {
+                    const desc_small = try item.description.toSliceZ(game.data);
+                    const description = try item.description.toSlice(game.data, desc_small.len + 1);
+                    try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), description);
+                },
                 c("pocket") => switch (game.version) {
                     .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.parse(comptime parse.enumv(gen3.RSEPocket)) },
                     .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.parse(comptime parse.enumv(gen3.FRLGPocket)) },
