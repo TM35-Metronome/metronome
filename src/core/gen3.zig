@@ -10,6 +10,7 @@ const fs = std.fs;
 
 const gba = rom.gba;
 
+const li16 = rom.int.li16;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
@@ -75,8 +76,8 @@ pub const Trainer = extern struct {
     party_type: PartyType,
     class: u8,
     encounter_music: packed struct {
-        gender: Gender,
         music: u7,
+        gender: Gender,
     },
     trainer_picture: u8,
     name: [12]u8,
@@ -249,6 +250,46 @@ pub const LevelUpMove = packed struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
     }
+};
+
+pub const EmeraldPokedexEntry = extern struct {
+    category_name: [12]u8,
+    height: lu16,
+    weight: lu16,
+    description: Ptr([*]u8),
+    unused: lu16,
+    pokemon_scale: lu16,
+    pokemon_offset: li16,
+    trainer_scale: lu16,
+    trainer_offset: li16,
+    padding: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 32);
+    }
+};
+
+pub const RSFrLgPokedexEntry = extern struct {
+    category_name: [12]u8,
+    height: lu16,
+    weight: lu16,
+    description: Ptr([*]u8),
+    unused_description: Ptr([*]u8),
+    unused: lu16,
+    pokemon_scale: lu16,
+    pokemon_offset: li16,
+    trainer_scale: lu16,
+    trainer_offset: li16,
+    padding: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 36);
+    }
+};
+
+pub const Pokedex = union {
+    emerald: []EmeraldPokedexEntry,
+    rsfrlg: []RSFrLgPokedexEntry,
 };
 
 pub const WildPokemon = extern struct {
@@ -450,6 +491,8 @@ pub const Game = struct {
     hms: []lu16,
     tms: []lu16,
     items: []Item,
+    pokedex: Pokedex,
+    species_to_national_dex: []lu16,
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
     pokemon_names: [][11]u8,
@@ -614,6 +657,16 @@ pub const Game = struct {
             .hms = info.hms.slice(gba_rom),
             .tms = info.tms.slice(gba_rom),
             .items = info.items.slice(gba_rom),
+            .pokedex = switch (info.version) {
+                .emerald => .{ .emerald = info.pokedex.emerald.slice(gba_rom) },
+                .ruby,
+                .sapphire,
+                .fire_red,
+                .leaf_green,
+                => .{ .rsfrlg = info.pokedex.rsfrlg.slice(gba_rom) },
+                else => unreachable,
+            },
+            .species_to_national_dex = info.species_to_national_dex.slice(gba_rom),
             .wild_pokemon_headers = info.wild_pokemon_headers.slice(gba_rom),
             .pokemon_names = info.pokemon_names.slice(gba_rom),
             .ability_names = info.ability_names.slice(gba_rom),

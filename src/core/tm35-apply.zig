@@ -27,6 +27,7 @@ const escape = util.escape;
 const exit = util.exit;
 const parse = util.parse;
 
+const li16 = rom.int.li16;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
@@ -169,6 +170,7 @@ pub fn toInt(
     }.func;
 }
 
+pub const parseli16v = parse.value(li16, toInt(i16, .Little));
 pub const parselu16v = parse.value(lu16, toInt(u16, .Little));
 pub const parselu32v = parse.value(lu32, toInt(u32, .Little));
 pub const parselu64v = parse.value(lu64, toInt(u64, .Little));
@@ -375,6 +377,46 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                     else => unreachable,
                 },
                 else => return error.NoField,
+            }
+        },
+        c("pokedex") => {
+            const index = try parser.parse(parse.index);
+            switch (game.version) {
+                .emerald => {
+                    if (index >= game.pokedex.emerald.len)
+                        return error.Error;
+                    const entry = &game.pokedex.emerald[index];
+
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("height") => entry.height = try parser.parse(parselu16v),
+                        c("weight") => entry.weight = try parser.parse(parselu16v),
+                        c("pokemon_scale") => entry.pokemon_scale = try parser.parse(parselu16v),
+                        c("pokemon_offset") => entry.pokemon_offset = try parser.parse(parseli16v),
+                        c("trainer_scale") => entry.trainer_scale = try parser.parse(parselu16v),
+                        c("trainer_offset") => entry.trainer_offset = try parser.parse(parseli16v),
+                        else => return error.NoField,
+                    }
+                },
+                .ruby,
+                .sapphire,
+                .fire_red,
+                .leaf_green,
+                => {
+                    if (index >= game.pokedex.rsfrlg.len)
+                        return error.Error;
+                    const entry = &game.pokedex.rsfrlg[index];
+
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("height") => entry.height = try parser.parse(parselu16v),
+                        c("weight") => entry.weight = try parser.parse(parselu16v),
+                        c("pokemon_scale") => entry.pokemon_scale = try parser.parse(parselu16v),
+                        c("pokemon_offset") => entry.pokemon_offset = try parser.parse(parseli16v),
+                        c("trainer_scale") => entry.trainer_scale = try parser.parse(parselu16v),
+                        c("trainer_offset") => entry.trainer_offset = try parser.parse(parseli16v),
+                        else => return error.NoField,
+                    }
+                },
+                else => unreachable,
             }
         },
         c("abilities") => {

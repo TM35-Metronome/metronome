@@ -74,6 +74,9 @@ pub const EvolutionSection = Section([5]gen3.Evolution);
 pub const LevelUpLearnsetPointerSection = Section(gen3.Ptr([*]gen3.LevelUpMove));
 pub const HmSection = Section(lu16);
 pub const TmSection = Section(lu16);
+pub const SpeciesToNationalDexSection = Section(lu16);
+pub const EmeraldPokedexSection = Section(gen3.EmeraldPokedexEntry);
+pub const RSFrLgPokedexSection = Section(gen3.RSFrLgPokedexEntry);
 pub const ItemSection = Section(gen3.Item);
 pub const WildPokemonHeaderSection = Section(gen3.WildPokemonHeader);
 pub const MapHeaderSection = Section(gen3.MapHeader);
@@ -102,6 +105,11 @@ pub const Info = struct {
     level_up_learnset_pointers: LevelUpLearnsetPointerSection,
     hms: HmSection,
     tms: TmSection,
+    pokedex: union {
+        rsfrlg: RSFrLgPokedexSection,
+        emerald: EmeraldPokedexSection,
+    },
+    species_to_national_dex: SpeciesToNationalDexSection,
     items: ItemSection,
     wild_pokemon_headers: WildPokemonHeaderSection,
     map_headers: MapHeaderSection,
@@ -155,6 +163,16 @@ const emerald_us_info = Info{
     .tms = .{
         .start = 6380436,
         .len = 50,
+    },
+    .pokedex = .{
+        .emerald = .{
+            .start = 5682608,
+            .len = 387,
+        },
+    },
+    .species_to_national_dex = .{
+        .start = 3267714,
+        .len = 411,
     },
     .items = .{
         .start = 5781920,
@@ -234,6 +252,16 @@ pub const fire_us_info = Info{
         .start = 4564484,
         .len = 50,
     },
+    .pokedex = .{
+        .rsfrlg = .{
+            .start = 4516016,
+            .len = 387,
+        },
+    },
+    .species_to_national_dex = .{
+        .start = 2433118,
+        .len = 411,
+    },
     .items = .{
         .start = 4042904,
         .len = 374,
@@ -311,6 +339,16 @@ pub const leaf_us_info = Info{
     .tms = .{
         .start = 4562996,
         .len = 50,
+    },
+    .pokedex = .{
+        .rsfrlg = .{
+            .start = 4514528,
+            .len = 387,
+        },
+    },
+    .species_to_national_dex = .{
+        .start = 2433082,
+        .len = 411,
     },
     .items = .{
         .start = 4042452,
@@ -390,6 +428,16 @@ pub const ruby_us_info = Info{
         .start = 3630364,
         .len = 50,
     },
+    .pokedex = .{
+        .rsfrlg = .{
+            .start = 3872884,
+            .len = 387,
+        },
+    },
+    .species_to_national_dex = .{
+        .start = 2082094,
+        .len = 411,
+    },
     .items = .{
         .start = 3954048,
         .len = 349,
@@ -467,6 +515,16 @@ pub const sapphire_us_info = Info{
     .tms = .{
         .start = 3630252,
         .len = 50,
+    },
+    .pokedex = .{
+        .rsfrlg = .{
+            .start = 3872976,
+            .len = 387,
+        },
+    },
+    .species_to_national_dex = .{
+        .start = 2081982,
+        .len = 411,
     },
     .items = .{
         .start = 3954140,
