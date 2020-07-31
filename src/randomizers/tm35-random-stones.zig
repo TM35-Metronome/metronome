@@ -47,7 +47,7 @@ fn usage(stream: var) !void {
         "\n" ++
         "This command will try to get as many of these stones into the game as possible, " ++
         "but beware, that all stones might not exist. Also beware, that the stones might " ++
-        "have different (but simular) names in cases wherethe game does not support long " ++
+        "have different (but simular) names in cases where the game does not support long " ++
         "item names.\n" ++
         "\n" ++
         "Options:\n");

@@ -303,6 +303,35 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".items[{}].secondary_id={}\n", .{ i, item.secondary_id.value() });
     }
 
+    switch (game.version) {
+        .emerald => for (game.pokedex.emerald) |entry, i| {
+            //try stream.print(".pokedex[{}].category_name={}\n", .{ i, entry.category_name});
+            try stream.print(".pokedex[{}].height={}\n", .{ i, entry.height.value() });
+            try stream.print(".pokedex[{}].weight={}\n", .{ i, entry.weight.value() });
+            //try stream.print(".pokedex[{}].description={}\n", .{ i, entry.description});
+            try stream.print(".pokedex[{}].pokemon_scale={}\n", .{ i, entry.pokemon_scale.value() });
+            try stream.print(".pokedex[{}].pokemon_offset={}\n", .{ i, entry.pokemon_offset.value() });
+            try stream.print(".pokedex[{}].trainer_scale={}\n", .{ i, entry.trainer_scale.value() });
+            try stream.print(".pokedex[{}].trainer_offset={}\n", .{ i, entry.trainer_offset.value() });
+        },
+        .ruby,
+        .sapphire,
+        .fire_red,
+        .leaf_green,
+        => for (game.pokedex.rsfrlg) |entry, i| {
+            //try stream.print(".pokedex[{}].category_name={}\n", .{ i, entry.category_name});
+            try stream.print(".pokedex[{}].height={}\n", .{ i, entry.height.value() });
+            try stream.print(".pokedex[{}].weight={}\n", .{ i, entry.weight.value() });
+            //try stream.print(".pokedex[{}].description={}\n", .{ i, entry.description});
+            //try stream.print(".pokedex[{}].unused_description={}\n", .{ i, entry.unused_description});
+            try stream.print(".pokedex[{}].pokemon_scale={}\n", .{ i, entry.pokemon_scale.value() });
+            try stream.print(".pokedex[{}].pokemon_offset={}\n", .{ i, entry.pokemon_offset.value() });
+            try stream.print(".pokedex[{}].trainer_scale={}\n", .{ i, entry.trainer_scale.value() });
+            try stream.print(".pokedex[{}].trainer_offset={}\n", .{ i, entry.trainer_offset.value() });
+        },
+        else => unreachable,
+    }
+
     for (game.wild_pokemon_headers) |header, i| {
         if (header.land.toPtr(game.data)) |land| {
             const wilds = try land.wild_pokemons.toPtr(game.data);
