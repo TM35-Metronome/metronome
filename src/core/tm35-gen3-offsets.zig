@@ -491,7 +491,7 @@ test "searcher.Searcher.find" {
         a: u16,
         b: u32,
     };
-    const s_array = &[_]S{
+    var s_array = [_]S{
         S{ .a = 0, .b = 1 },
         S{ .a = 2, .b = 3 },
     };
@@ -513,7 +513,7 @@ test "searcher.Searcher.find2" {
         a: u16,
         b: u32,
     };
-    const s_array = &[_]S{
+    var s_array = [_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
@@ -547,7 +547,7 @@ test "searcher.Searcher.find3" {
         a: u16,
         b: u32,
     };
-    const s_array = &[_]S{
+    var s_array = [_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
@@ -580,7 +580,7 @@ test "searcher.Searcher.find4" {
         a: u16,
         b: u32,
     };
-    const s_array = &[_]S{
+    var s_array = [_]S{
         S{ .a = 4, .b = 1 },
         S{ .a = 0, .b = 3 },
         S{ .a = 4, .b = 1 },
@@ -596,23 +596,23 @@ test "searcher.Searcher.find4" {
         &[_][]const u8{"b"},
     });
 
-    const a = &[_]S{
+    const a = [_]S{
         S{ .a = 4, .b = 3 },
         S{ .a = 0, .b = 1 },
     };
-    const b = &[_]S{
+    const b = [_]S{
         S{ .a = 0, .b = 1 },
         S{ .a = 4, .b = 3 },
     };
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..6]),
-        mem.sliceAsBytes(try S1.find4(data, a, b)),
+        mem.sliceAsBytes(try S1.find4(data, &a, &b)),
     );
     testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..5]),
-        mem.sliceAsBytes(try S2.find4(data, a, b)),
+        mem.sliceAsBytes(try S2.find4(data, &a, &b)),
     );
 }
 
