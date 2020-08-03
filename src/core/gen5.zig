@@ -149,21 +149,20 @@ pub const Trainer = extern struct {
     }
 
     pub fn partyMember(trainer: Trainer, party: []u8, i: usize) ?*PartyMemberBase {
-        return switch (trainer.party_type) {
-            .none => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
-            .item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
-            .moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
-            .both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
+        const member_size: usize = switch (trainer.party_type) {
+            .none => @sizeOf(PartyMemberNone),
+            .item => @sizeOf(PartyMemberItem),
+            .moves => @sizeOf(PartyMemberMoves),
+            .both => @sizeOf(PartyMemberBoth),
         };
-    }
 
-    fn partyMemberHelper(trainer: Trainer, party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
+        std.debug.assert(party.len == member_size * trainer.party_size);
         const start = i * member_size;
         const end = start + member_size;
         if (party.len < end)
             return null;
 
-        return &mem.bytesAsSlice(PartyMemberBase, party[start..][0..@sizeOf(PartyMemberBase)])[0];
+        return &mem.bytesAsSlice(PartyMemberBase, party[start..end][0..@sizeOf(PartyMemberBase)])[0];
     }
 };
 
@@ -508,6 +507,12 @@ pub const StringTable = struct {
                     stream.pos = stream.data.len;
                     return n + 2;
                 }
+                if (mem.startsWith(u8, buf[n..], "\n")) {
+                    stream.data[stream.pos] = lu16.init(0xfffe);
+                    stream.pos += 1;
+                    n += 1;
+                    continue;
+                }
 
                 const len = unicode.utf8ByteSequenceLength(buf[n]) catch unreachable;
                 if (buf.len < n + len)
@@ -517,11 +522,7 @@ pub const StringTable = struct {
                 if (stream.data.len <= stream.pos)
                     return error.NoSpaceLeft;
 
-                stream.data[stream.pos] = switch (codepoint) {
-                    '\n' => lu16.init(0xfffe),
-                    else => lu16.init(@intCast(u16, codepoint)),
-                };
-
+                stream.data[stream.pos] = lu16.init(@intCast(u16, codepoint));
                 stream.pos += 1;
                 n += len;
             }
@@ -572,11 +573,13 @@ pub const Game = struct {
     text: nds.fs.Fs,
 
     pokemon_names: StringTable,
+    pokedex_category_names: StringTable,
     trainer_names: StringTable,
     move_names: StringTable,
     move_descriptions: StringTable,
     ability_names: StringTable,
     item_names: StringTable,
+    item_names_on_the_ground: StringTable,
     item_descriptions: StringTable,
     type_names: StringTable,
 
@@ -654,11 +657,13 @@ pub const Game = struct {
             .text = text,
 
             .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
+            .pokedex_category_names = StringTable{ .data = text.fileData(.{ .i = info.pokedex_category_names }) },
             .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
             .move_names = StringTable{ .data = text.fileData(.{ .i = info.move_names }) },
             .move_descriptions = StringTable{ .data = text.fileData(.{ .i = info.move_descriptions }) },
             .ability_names = StringTable{ .data = text.fileData(.{ .i = info.ability_names }) },
             .item_names = StringTable{ .data = text.fileData(.{ .i = info.item_names }) },
+            .item_names_on_the_ground = StringTable{ .data = text.fileData(.{ .i = info.item_names_on_the_ground }) },
             .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
             .type_names = StringTable{ .data = text.fileData(.{ .i = info.type_names }) },
         };

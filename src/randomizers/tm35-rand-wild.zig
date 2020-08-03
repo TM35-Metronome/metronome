@@ -7,6 +7,7 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
@@ -115,12 +116,17 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
+        c("pokedex") => {
+            const index = try p.parse(parse.index);
+            _ = try data.pokedex.put(allocator, index);
+        },
         c("pokemons") => {
             const index = try p.parse(parse.index);
             const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
 
             switch (m(try p.parse(parse.anyField))) {
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
+                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
                     c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
                     c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
@@ -172,7 +178,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
     const random = &rand.DefaultPrng.init(seed).random;
     var simular = std.ArrayList(usize).init(allocator);
 
-    const species = try data.species();
+    const species = try data.pokedexPokemons();
     const species_max = species.count();
 
     for (data.zones.values()) |zone| {
@@ -249,20 +255,20 @@ fn getStringId(map: *std.StringHashMap(usize), str: []const u8) !usize {
 
 const Data = struct {
     areas: std.StringHashMap(usize),
+    pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     zones: Zones = Zones{},
 
-    fn species(d: Data) !Set {
+    fn pokedexPokemons(d: Data) !Set {
         var res = Set{};
         errdefer res.deinit(d.allocator());
 
         for (d.pokemons.values()) |pokemon, i| {
-            // We shouldn't pick Pokemon with 0 catch rate as they tend to be
-            // Pokemon not meant to be used in the standard game.
-            // Pokemons from the film studio in bw2 have 0 catch rate.
-            if (pokemon.catch_rate == 0)
+            const s = d.pokemons.at(i).key;
+            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
                 continue;
-            _ = try res.put(d.allocator(), d.pokemons.at(i).key);
+
+            _ = try res.put(d.allocator(), s);
         }
 
         return res;
@@ -291,10 +297,12 @@ const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
     catch_rate: usize = 1,
     types: Set = Set{},
+    pokedex_entry: usize = math.maxInt(usize),
 };
 
 test "tm35-rand-wild" {
     const result_prefix =
+        \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].stats.hp=10
         \\.pokemons[0].stats.attack=10
         \\.pokemons[0].stats.defense=10
@@ -302,6 +310,7 @@ test "tm35-rand-wild" {
         \\.pokemons[0].stats.sp_attack=10
         \\.pokemons[0].stats.sp_defense=10
         \\.pokemons[0].catch_rate=10
+        \\.pokemons[1].pokedex_entry=1
         \\.pokemons[1].stats.hp=12
         \\.pokemons[1].stats.attack=12
         \\.pokemons[1].stats.defense=12
@@ -309,6 +318,7 @@ test "tm35-rand-wild" {
         \\.pokemons[1].stats.sp_attack=12
         \\.pokemons[1].stats.sp_defense=12
         \\.pokemons[1].catch_rate=10
+        \\.pokemons[2].pokedex_entry=2
         \\.pokemons[2].stats.hp=14
         \\.pokemons[2].stats.attack=14
         \\.pokemons[2].stats.defense=14
@@ -316,6 +326,7 @@ test "tm35-rand-wild" {
         \\.pokemons[2].stats.sp_attack=14
         \\.pokemons[2].stats.sp_defense=14
         \\.pokemons[2].catch_rate=10
+        \\.pokemons[3].pokedex_entry=3
         \\.pokemons[3].stats.hp=16
         \\.pokemons[3].stats.attack=16
         \\.pokemons[3].stats.defense=16
@@ -323,6 +334,7 @@ test "tm35-rand-wild" {
         \\.pokemons[3].stats.sp_attack=16
         \\.pokemons[3].stats.sp_defense=16
         \\.pokemons[3].catch_rate=10
+        \\.pokemons[4].pokedex_entry=4
         \\.pokemons[4].stats.hp=18
         \\.pokemons[4].stats.attack=18
         \\.pokemons[4].stats.defense=18
@@ -330,6 +342,7 @@ test "tm35-rand-wild" {
         \\.pokemons[4].stats.sp_attack=18
         \\.pokemons[4].stats.sp_defense=18
         \\.pokemons[4].catch_rate=10
+        \\.pokemons[5].pokedex_entry=5
         \\.pokemons[5].stats.hp=20
         \\.pokemons[5].stats.attack=20
         \\.pokemons[5].stats.defense=20
@@ -337,6 +350,7 @@ test "tm35-rand-wild" {
         \\.pokemons[5].stats.sp_attack=20
         \\.pokemons[5].stats.sp_defense=20
         \\.pokemons[5].catch_rate=10
+        \\.pokemons[6].pokedex_entry=6
         \\.pokemons[6].stats.hp=22
         \\.pokemons[6].stats.attack=22
         \\.pokemons[6].stats.defense=22
@@ -344,6 +358,7 @@ test "tm35-rand-wild" {
         \\.pokemons[6].stats.sp_attack=22
         \\.pokemons[6].stats.sp_defense=22
         \\.pokemons[6].catch_rate=10
+        \\.pokemons[7].pokedex_entry=7
         \\.pokemons[7].stats.hp=24
         \\.pokemons[7].stats.attack=24
         \\.pokemons[7].stats.defense=24
@@ -351,6 +366,7 @@ test "tm35-rand-wild" {
         \\.pokemons[7].stats.sp_attack=24
         \\.pokemons[7].stats.sp_defense=24
         \\.pokemons[7].catch_rate=10
+        \\.pokemons[8].pokedex_entry=8
         \\.pokemons[8].stats.hp=28
         \\.pokemons[8].stats.attack=28
         \\.pokemons[8].stats.defense=28
@@ -358,6 +374,7 @@ test "tm35-rand-wild" {
         \\.pokemons[8].stats.sp_attack=28
         \\.pokemons[8].stats.sp_defense=28
         \\.pokemons[8].catch_rate=10
+        \\.pokemons[9].pokedex_entry=9
         \\.pokemons[9].stats.hp=28
         \\.pokemons[9].stats.attack=28
         \\.pokemons[9].stats.defense=28
@@ -365,6 +382,16 @@ test "tm35-rand-wild" {
         \\.pokemons[9].stats.sp_attack=28
         \\.pokemons[9].stats.sp_defense=28
         \\.pokemons[9].catch_rate=0
+        \\.pokedex[0].field
+        \\.pokedex[1].field
+        \\.pokedex[2].field
+        \\.pokedex[3].field
+        \\.pokedex[4].field
+        \\.pokedex[5].field
+        \\.pokedex[6].field
+        \\.pokedex[7].field
+        \\.pokedex[8].field
+        \\.pokedex[9].field
         \\
     ;
 

@@ -20,6 +20,7 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
 
 const bit = util.bit;
 const escape = util.escape;
@@ -107,7 +108,6 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
 
     for (game.trainers) |trainer, i| {
         // The party type is infered from the party data.
-        // try stream.print(".trainers[{}].party_type={}\n", .{i, trainer.party_type});
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].gender={}\n", .{ i, @tagName(trainer.encounter_music.gender) });
         try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music.music });
@@ -204,8 +204,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
         try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
         try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 0), @tagName(pokemon.egg_group1) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 1), @tagName(pokemon.egg_group2) });
+        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 0, @tagName(pokemon.egg_group1) });
+        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 1, @tagName(pokemon.egg_group2) });
 
         for (pokemon.abilities) |ability, j| {
             try stream.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
@@ -215,6 +215,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
         try stream.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
     }
+    for (game.species_to_national_dex) |dex_entry, i|
+        try stream.print(".pokemons[{}].pokedex_entry={}\n", .{ i + 1, dex_entry.value() });
 
     for (game.evolutions) |evos, i| {
         for (evos) |evo, j| {
@@ -494,6 +496,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         while (j < game.tms.len + game.hms.len) : (j += 1)
             try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
     }
+    for (game.species_to_national_dex) |dex_entry, i|
+        try stream.print(".pokemons[{}].pokedex_entry={}\n", .{ i + 1, dex_entry.value() });
 
     for (game.evolutions) |evos, i| {
         for (evos.items) |evo, j| {
@@ -506,9 +510,9 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     {
-        var i: usize = 0;
+        var i: u32 = 0;
         while (i < game.level_up_moves.fat.len) : (i += 1) {
-            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+            const bytes = game.level_up_moves.fileData(.{ .i = i });
             const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
                 if (std.meta.eql(move, gen4.LevelUpMove.term))
@@ -519,6 +523,10 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         }
     }
 
+    for (game.pokedex_heights) |height, i|
+        try stream.print(".pokedex[{}].height={}\n", .{ i, height.value() });
+    for (game.pokedex_weights) |weight, i|
+        try stream.print(".pokedex[{}].weight={}\n", .{ i, weight.value() });
     for (game.tms) |tm, i|
         try stream.print(".tms[{}]={}\n", .{ i, tm.value() });
     for (game.hms) |hm, i|
@@ -710,7 +718,9 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".starters[{}]={}\n", .{ i, first.value() });
     }
 
-    for (game.trainers) |trainer, i| {
+    for (game.trainers) |trainer, index| {
+        const i = index + 1;
+        try stream.print(".trainers[{}].party_type={}\n", .{ i, @enumToInt(trainer.party_type) });
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].battle_type={}\n", .{ i, trainer.battle_type });
 
@@ -730,6 +740,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         const party_data = parties.fileData(.{ .i = @intCast(u32, i) });
         var j: usize = 0;
         while (j < trainer.party_size) : (j += 1) {
+            if (index == 0)
+                break;
             const base = trainer.partyMember(party_data, j) orelse continue;
             try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, base.iv });
             try stream.print(".trainers[{}].party[{}].gender={}\n", .{ i, j, base.gender_ability.gender });
@@ -796,17 +808,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         //    try stream.print(".moves[{}].stats_affected_chance[{}]={}\n", .{ i, j, stat_affected_chance });
     }
 
-    // HACK: Pokemon bw2 have these movie pokemons that are not allowed to appear
-    //       in normal trainer battles and wild encounters. The real fix to this problem
-    //       is to expose the pokedex and have commands that pick pokemon pick from
-    //       the pokedex. This requires some effort though, so for now, we just don't
-    //       emit these Pokémons.
     const number_of_pokemons = 649;
 
     {
         var i: u32 = 0;
-        while (i < number_of_pokemons) : (i += 1) {
+        while (i < game.pokemons.fat.len) : (i += 1) {
             const pokemon = try game.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
+            try stream.print(".pokemons[{}].pokedex_entry={}\n", .{ i, i });
             try stream.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
             try stream.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
             try stream.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
@@ -831,8 +839,16 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
             try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
             try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 0), @tagName(pokemon.egg_group1) });
-            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 1), @tagName(pokemon.egg_group2) });
+
+            // HACK: For some reason, a release build segfaults here for Pokémons
+            //       with id above 'number_of_pokemons'. You would think this is
+            //       because of an index out of bounds during @tagName, but
+            //       common.EggGroup is a u4 enum and has a tag for all possible
+            //       values, so it really should not.
+            if (i < number_of_pokemons) {
+                try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 0, @tagName(pokemon.egg_group1) });
+                try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 1, @tagName(pokemon.egg_group2) });
+            }
 
             const abilities = pokemon.abilities;
             for (abilities) |ability, j|
@@ -870,7 +886,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     {
         var i: usize = 0;
-        while (i < number_of_pokemons) : (i += 1) {
+        while (i < game.level_up_moves.fat.len) : (i += 1) {
             const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
             const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
@@ -963,11 +979,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
+    try outputGen5StringTable(stream, "pokedex", "category", game.pokedex_category_names);
     // try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
     try outputGen5StringTable(stream, "moves", "name", game.move_names);
     try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
     try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
     try outputGen5StringTable(stream, "items", "name", game.item_names);
+    //try outputGen5StringTable(stream, "items", "name_on_the_ground", game.item_names_on_the_ground);
     try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
     try outputGen5StringTable(stream, "types", "name", game.type_names);
 

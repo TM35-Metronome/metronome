@@ -506,14 +506,13 @@ pub const Game = struct {
 
     pub fn identify(stream: var) !offsets.Info {
         const header = try stream.readStruct(gba.Header);
-        try header.validate();
-
         for (offsets.infos) |info| {
             if (!mem.eql(u8, &info.game_title, &header.game_title))
                 continue;
             if (!mem.eql(u8, &info.gamecode, &header.gamecode))
                 continue;
 
+            try header.validate();
             return info;
         }
 
