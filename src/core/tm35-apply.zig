@@ -223,9 +223,10 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             game.starters_repeat[index].* = value;
         },
         c("trainers") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.trainers.len)
+            const i = try parser.parse(parse.index);
+            if (i == 0 or i - 1 >= game.trainers.len)
                 return error.Error;
+            const index = i - 1;
             const trainer = &game.trainers[index];
 
             switch (m(try parser.parse(parse.anyField))) {
@@ -327,6 +328,11 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
 
                     const new_name = try parser.parse(parse.strv);
                     try gen3.encodings.encode(.en_us, new_name, &game.pokemon_names[index]);
+                },
+                c("pokedex_entry") => {
+                    if (index == 0 or index - 1 >= game.species_to_national_dex.len)
+                        return error.Error;
+                    game.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
                 },
                 else => return error.NoField,
             }
@@ -620,6 +626,22 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 },
             }
         },
+        c("pokedex") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("height") => {
+                    if (index >= game.pokedex_heights.len)
+                        return error.Error;
+                    game.pokedex_heights[index] = try parser.parse(parselu32v);
+                },
+                c("weight") => {
+                    if (index >= game.pokedex_weights.len)
+                        return error.Error;
+                    game.pokedex_weights[index] = try parser.parse(parselu32v);
+                },
+                else => return error.NoField,
+            }
+        },
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
@@ -688,6 +710,11 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                     if (game.evolutions.len <= index)
                         return error.Error;
                     try parse.anyT(parser.str, &game.evolutions[index].items, converters);
+                },
+                c("pokedex_entry") => {
+                    if (index == 0 or index - 1 >= game.species_to_national_dex.len)
+                        return error.Error;
+                    game.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
                 },
                 else => return error.NoField,
             }
@@ -969,6 +996,11 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                         return error.Error;
                     try parse.anyT(parser.str, &game.evolutions[index].items, converters);
                 },
+                c("pokedex_entry") => {
+                    const entry = try parser.parse(parse.u16v);
+                    if (index != entry)
+                        return error.TryingToChangeReadOnlyField;
+                },
                 else => return error.NoField,
             }
         },
@@ -990,12 +1022,29 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
                 c("description") => try applyGen5String(game.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen5String(game.item_names, index, try parser.parse(parse.strv)),
+                c("name") => {
+                    var buf: [1024]u8 = undefined;
+                    const name = try parser.parse(parse.strv);
+                    const name_on_ground = try fmt.bufPrint(
+                        &buf,
+                        "\xef\x80\x80\xeb\xb4a \xef\x80\x80\xef\xbc\x80\xc3\xbf{}",
+                        .{name},
+                    );
+                    try applyGen5String(game.item_names, index, name);
+                    try applyGen5String(game.item_names_on_the_ground, index, name_on_ground);
+                },
                 else => {
                     if (index >= game.items.len)
                         return error.Error;
                     try parse.anyT(prev, &game.items[index], converters);
                 },
+            }
+        },
+        c("pokedex") => {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
+                c("category") => try applyGen5String(game.pokedex_category_names, index, try parser.parse(parse.strv)),
+                else => return error.Error,
             }
         },
         c("moves") => {

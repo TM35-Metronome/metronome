@@ -129,11 +129,18 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
 
     var p = parse.MutParser{ .str = str };
     switch (m(try p.parse(parse.anyField))) {
+        c("pokedex") => {
+            const index = try p.parse(parse.index);
+            _ = try data.pokedex.put(allocator, index);
+        },
         c("pokemons") => {
             const index = try p.parse(parse.index);
             const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
 
             switch (m(try p.parse(parse.anyField))) {
+                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
+                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
+                c("base_friendship") => pokemon.base_friendship = try p.parse(parse.usizev),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
                     c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
                     c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
@@ -145,30 +152,15 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                 },
                 c("types") => {
                     _ = try p.parse(parse.index);
-                    const t = try p.parse(parse.usizev);
-                    const set = try data.pokemons_by_type.getOrPutValue(allocator, t, Set{});
-                    _ = try set.put(allocator, index);
-                    _ = try pokemon.types.put(allocator, t);
+                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
                 },
                 c("abilities") => {
                     _ = try p.parse(parse.index);
-                    const ability = try p.parse(parse.usizev);
-                    const set = try data.pokemons_by_ability.getOrPutValue(allocator, ability, Set{});
-                    _ = try set.put(allocator, index);
-                    _ = try pokemon.abilities.put(allocator, ability);
+                    _ = try pokemon.abilities.put(allocator, try p.parse(parse.usizev));
                 },
                 c("egg_groups") => {
                     _ = try p.parse(parse.index);
-                    const group = try data.string(try p.parse(parse.strv));
-                    const set = try data.pokemons_by_egg_group.getOrPutValue(allocator, group, Set{});
-                    _ = try set.put(allocator, index);
-                    _ = try pokemon.egg_groups.put(allocator, group);
-                },
-                c("base_friendship") => {
-                    const friendship = try p.parse(parse.usizev);
-                    const set = try data.pokemons_by_base_friendship.getOrPutValue(allocator, friendship, Set{});
-                    _ = try set.put(allocator, index);
-                    pokemon.base_friendship = friendship;
+                    _ = try pokemon.egg_groups.put(allocator, try data.string(try p.parse(parse.strv)));
                 },
                 c("evos") => {
                     const evo_index = try p.parse(parse.index);
@@ -233,16 +225,72 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         pokemon.evos = Evolutions{};
     }
 
-    debug.warn("{}\n", .{stones.count()});
+    const species = try data.pokedexPokemons(allocator);
 
-    // Make a map from total stats to the Pokémons who have them. This couldn't
-    // be done during the parsing of the data as we need all the stats to perform
-    // the sum. It is therefor done here.
+    // Filter pokemons by different things: TODO: Lots of repeated code
     var pokemons_by_stats = PokemonBy{};
-    for (data.pokemons.values()) |pokemon, i| {
-        const id = data.pokemons.at(i).key;
-        const set = try pokemons_by_stats.getOrPutValue(allocator, sum(&pokemon.stats), Set{});
-        _ = try set.put(allocator, id);
+    for (species.span()) |range| {
+        var id: usize = range.start;
+        while (id <= range.end) : (id += 1) {
+            const pokemon = data.pokemons.get(id).?;
+            const set = try pokemons_by_stats.getOrPutValue(allocator, sum(&pokemon.stats), Set{});
+            _ = try set.put(allocator, id);
+        }
+    }
+
+    var pokemons_by_base_friendship = PokemonBy{};
+    for (species.span()) |range| {
+        var id: usize = range.start;
+        while (id <= range.end) : (id += 1) {
+            const pokemon = data.pokemons.get(id).?;
+            const set = try pokemons_by_base_friendship.getOrPutValue(allocator, pokemon.base_friendship, Set{});
+            _ = try set.put(allocator, id);
+        }
+    }
+
+    var pokemons_by_type = PokemonBy{};
+    for (species.span()) |s_range| {
+        var id: usize = s_range.start;
+        while (id <= s_range.end) : (id += 1) {
+            const pokemon = data.pokemons.get(id).?;
+            for (pokemon.types.span()) |t_range| {
+                var t = t_range.start;
+                while (t <= t_range.end) : (t += 1) {
+                    const set = try pokemons_by_type.getOrPutValue(allocator, t, Set{});
+                    _ = try set.put(allocator, id);
+                }
+            }
+        }
+    }
+
+    var pokemons_by_ability = PokemonBy{};
+    for (species.span()) |s_range| {
+        var id: usize = s_range.start;
+        while (id <= s_range.end) : (id += 1) {
+            const pokemon = data.pokemons.get(id).?;
+            for (pokemon.abilities.span()) |a_range| {
+                var ability = a_range.start;
+                while (ability <= a_range.end) : (ability += 1) {
+                    const set = try pokemons_by_ability.getOrPutValue(allocator, ability, Set{});
+                    _ = try set.put(allocator, id);
+                }
+            }
+        }
+    }
+
+    var pokemons_by_egg_group = PokemonBy{};
+    for (species.span()) |s_range| {
+        var id: usize = s_range.start;
+        while (id <= s_range.end) : (id += 1) {
+            const pokemon = data.pokemons.get(id).?;
+            for (pokemon.egg_groups.span()) |g_range| {
+                var group = g_range.start;
+                while (group <= g_range.end) : (group += 1) {
+                    const set = try pokemons_by_egg_group.getOrPutValue(allocator, group, Set{});
+                    _ = try set.put(allocator, id);
+                }
+            }
+        }
     }
 
     // Make sure these indexs line up with the array below
@@ -492,103 +540,105 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
     }
 
     const num_pokemons = data.pokemons.count();
-    for (data.pokemons.values()) |*pokemon, i| {
-        const pokemon_id = data.pokemons.at(i).key;
+    for (species.span()) |s_range| {
+        var pokemon_id: usize = s_range.start;
+        while (pokemon_id <= s_range.end) : (pokemon_id += 1) {
+            const pokemon = data.pokemons.get(pokemon_id).?;
 
-        for (stone_strings) |strings, stone| {
-            if (data.max_evolutions <= stone or stones.count() <= stone)
-                break;
+            for (stone_strings) |strings, stone| {
+                if (data.max_evolutions <= stone or stones.count() <= stone)
+                    break;
 
-            const item_id = stones.at(stone);
-            const pick = switch (stone) {
-                chance_stone => while (num_pokemons > 1) {
-                    const pick = random.intRangeLessThan(usize, 0, num_pokemons);
-                    if (pick != pokemon_id)
-                        break pick;
-                } else pokemon_id,
-
-                superior_stone, poor_stone => blk: {
-                    const total_stats = sum(&pokemon.stats);
-
-                    // Intmaps/sets have sorted keys. We can therefor pick an index
-                    // above or below the current one, to get a set of Pokémons whose
-                    // stats are better or worse than the current one.
-                    const stat_index = pokemons_by_stats.set.index(total_stats).?;
-                    const picked_index = switch (stone) {
-                        superior_stone => random.intRangeLessThan(
-                            usize,
-                            stat_index + @boolToInt(stat_index + 1 < pokemons_by_stats.count()),
-                            pokemons_by_stats.count(),
-                        ),
-                        poor_stone => random.intRangeLessThan(
-                            usize,
-                            0,
-                            (stat_index - @boolToInt(stat_index != 0)) + 1,
-                        ),
-                        else => unreachable,
-                    };
-
-                    const set = pokemons_by_stats.at(picked_index).value;
-                    while (set.count() != 1) {
-                        const pick = set.at(random.intRangeLessThan(usize, 0, set.count()));
+                const item_id = stones.at(stone);
+                const pick = switch (stone) {
+                    chance_stone => while (num_pokemons > 1) {
+                        const pick = random.intRangeLessThan(usize, 0, num_pokemons);
                         if (pick != pokemon_id)
-                            break :blk pick;
-                    }
+                            break pick;
+                    } else pokemon_id,
 
-                    break :blk set.at(0);
-                },
+                    superior_stone, poor_stone => blk: {
+                        const total_stats = sum(&pokemon.stats);
 
-                form_stone, skill_stone, breed_stone => blk: {
-                    const map = switch (stone) {
-                        form_stone => data.pokemons_by_type,
-                        skill_stone => data.pokemons_by_ability,
-                        breed_stone => data.pokemons_by_egg_group,
-                        else => unreachable,
-                    };
-                    const set = switch (stone) {
-                        form_stone => pokemon.types,
-                        skill_stone => pokemon.abilities,
-                        breed_stone => pokemon.egg_groups,
-                        else => unreachable,
-                    };
+                        // Intmaps/sets have sorted keys. We can therefor pick an index
+                        // above or below the current one, to get a set of Pokémons whose
+                        // stats are better or worse than the current one.
+                        const stat_index = pokemons_by_stats.set.index(total_stats).?;
+                        const picked_index = switch (stone) {
+                            superior_stone => random.intRangeLessThan(
+                                usize,
+                                stat_index + @boolToInt(stat_index + 1 < pokemons_by_stats.count()),
+                                pokemons_by_stats.count(),
+                            ),
+                            poor_stone => random.intRangeLessThan(
+                                usize,
+                                0,
+                                (stat_index - @boolToInt(stat_index != 0)) + 1,
+                            ),
+                            else => unreachable,
+                        };
 
-                    const map_count = map.count();
-                    if (map_count == 0)
+                        const set = pokemons_by_stats.at(picked_index).value;
+                        while (set.count() != 1) {
+                            const pick = set.at(random.intRangeLessThan(usize, 0, set.count()));
+                            if (pick != pokemon_id)
+                                break :blk pick;
+                        }
+
+                        break :blk set.at(0);
+                    },
+
+                    form_stone, skill_stone, breed_stone => blk: {
+                        const map = switch (stone) {
+                            form_stone => pokemons_by_type,
+                            skill_stone => pokemons_by_ability,
+                            breed_stone => pokemons_by_egg_group,
+                            else => unreachable,
+                        };
+                        const set = switch (stone) {
+                            form_stone => pokemon.types,
+                            skill_stone => pokemon.abilities,
+                            breed_stone => pokemon.egg_groups,
+                            else => unreachable,
+                        };
+
+                        if (map.count() == 0 or set.count() == 0)
+                            break :blk pokemon_id;
+
+                        const picked_id = set.at(random.intRangeLessThan(usize, 0, set.count()));
+                        const pokemon_set = map.get(picked_id).?;
+                        const pokemons = pokemon_set.count();
+                        while (pokemons != 1) {
+                            const pick = pokemon_set.at(random.intRangeLessThan(usize, 0, pokemons));
+                            if (pick != pokemon_id)
+                                break :blk pick;
+                        }
                         break :blk pokemon_id;
+                    },
 
-                    const picked_id = set.at(random.intRangeLessThan(usize, 0, set.count()));
-                    const pokemon_set = map.get(picked_id).?;
-                    const pokemons = pokemon_set.count();
-                    while (pokemons != 1) {
-                        const pick = pokemon_set.at(random.intRangeLessThan(usize, 0, pokemons));
-                        if (pick != pokemon_id)
-                            break :blk pick;
-                    }
-                    break :blk pokemon_id;
-                },
+                    buddy_stone => blk: {
+                        const map_count = pokemons_by_base_friendship.count();
+                        if (map_count == 0)
+                            break :blk pokemon_id;
 
-                buddy_stone => blk: {
-                    const map_count = data.pokemons_by_base_friendship.count();
-                    if (map_count == 0)
+                        const pokemon_set = pokemons_by_base_friendship.get(pokemon.base_friendship).?;
+                        const pokemons = pokemon_set.count();
+                        while (pokemons != 1) {
+                            const pick = pokemon_set.at(random.intRangeLessThan(usize, 0, pokemons));
+                            if (pick != pokemon_id)
+                                break :blk pick;
+                        }
                         break :blk pokemon_id;
+                    },
+                    else => unreachable,
+                };
 
-                    const pokemon_set = data.pokemons_by_base_friendship.get(pokemon.base_friendship).?;
-                    const pokemons = pokemon_set.count();
-                    while (pokemons != 1) {
-                        const pick = pokemon_set.at(random.intRangeLessThan(usize, 0, pokemons));
-                        if (pick != pokemon_id)
-                            break :blk pick;
-                    }
-                    break :blk pokemon_id;
-                },
-                else => unreachable,
-            };
-
-            _ = try pokemon.evos.put(allocator, stone, Evolution{
-                .method = use_item_method,
-                .item = item_id,
-                .target = pick,
-            });
+                _ = try pokemon.evos.put(allocator, stone, Evolution{
+                    .method = use_item_method,
+                    .item = item_id,
+                    .target = pick,
+                });
+            }
         }
     }
 
@@ -631,14 +681,10 @@ const PokeballItems = util.container.IntMap.Unmanaged(usize, usize);
 const Data = struct {
     strings: std.StringHashMap(usize),
     max_evolutions: usize = 0,
-    stones: Set = Set{},
+    pokedex: Set = Set{},
     items: Items = Items{},
     pokeball_items: PokeballItems = PokeballItems{},
     pokemons: Pokemons = Pokemons{},
-    pokemons_by_ability: PokemonBy = PokemonBy{},
-    pokemons_by_type: PokemonBy = PokemonBy{},
-    pokemons_by_egg_group: PokemonBy = PokemonBy{},
-    pokemons_by_base_friendship: PokemonBy = PokemonBy{},
 
     fn string(d: *Data, str: []const u8) !usize {
         const res = try d.strings.getOrPut(str);
@@ -648,12 +694,29 @@ const Data = struct {
         }
         return res.kv.value;
     }
+
+    fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
+        var res = Set{};
+        errdefer res.deinit(allocator);
+
+        for (d.pokemons.values()) |pokemon, i| {
+            const s = d.pokemons.at(i).key;
+            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
+                continue;
+
+            _ = try res.put(allocator, s);
+        }
+
+        return res;
+    }
 };
 
 const Pokemon = struct {
     evos: Evolutions = Evolutions{},
     stats: [6]u8 = [_]u8{0} ** 6,
     base_friendship: usize = 0,
+    catch_rate: usize = 1,
+    pokedex_entry: usize = math.maxInt(usize),
     abilities: Set = Set{},
     types: Set = Set{},
     egg_groups: Set = Set{},

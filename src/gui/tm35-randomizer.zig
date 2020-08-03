@@ -559,8 +559,7 @@ pub fn drawActions(
             };
         },
         .save_settings => {
-            // TODO: Warn if the user tries to overwrite existing file.
-            const file = fs.cwd().openFile(selected_path.toSliceConst(), .{ .write = true }) catch |err| {
+            const file = fs.cwd().createFile(selected_path.toSliceConst(), .{}) catch |err| {
                 popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
@@ -1037,12 +1036,8 @@ const Settings = struct {
                 .params = command.params,
             };
 
-            // TODO: Better error returned
             while (try streaming_clap.next()) |arg| {
                 const param_i = util.indexOfPtr(clap.Param(clap.Help), command.params, arg.param);
-                if (command_args[param_i].len != 0)
-                    return error.DuplicateParam;
-
                 const command_arg = &command_args[param_i];
 
                 if (arg.value) |value| {

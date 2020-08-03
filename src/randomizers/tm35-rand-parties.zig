@@ -130,12 +130,17 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
+        c("pokedex") => {
+            const index = try p.parse(parse.index);
+            _ = try data.pokedex.put(allocator, index);
+        },
         c("pokemons") => {
             const poke_index = try p.parse(parse.index);
             const pokemon = try data.pokemons.getOrPutValue(allocator, poke_index, Pokemon{});
 
             switch (m(try p.parse(parse.anyField))) {
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
+                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
                     c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
                     c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
@@ -226,8 +231,11 @@ fn randomize(
         break :blk null;
     };
 
-    const species_by_type = try data.speciesByType(allocator);
+    const species = try data.pokedexPokemons(allocator);
+    const species_by_type = try data.speciesByType(allocator, species);
     const all_types_count = species_by_type.count();
+    if (all_types_count == 0)
+        return;
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -357,11 +365,27 @@ const MemberMoves = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 
 const Data = struct {
+    pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     trainers: Trainers = Trainers{},
     moves: Moves = Moves{},
 
-    fn speciesByType(d: Data, allocator: *mem.Allocator) !SpeciesByType {
+    fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
+        var res = Set{};
+        errdefer res.deinit(allocator);
+
+        for (d.pokemons.values()) |pokemon, i| {
+            const s = d.pokemons.at(i).key;
+            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
+                continue;
+
+            _ = try res.put(allocator, s);
+        }
+
+        return res;
+    }
+
+    fn speciesByType(d: Data, allocator: *mem.Allocator, species: Set) !SpeciesByType {
         var res = SpeciesByType{};
         errdefer {
             for (res.values()) |set|
@@ -369,19 +393,17 @@ const Data = struct {
             res.deinit(allocator);
         }
 
-        for (d.pokemons.values()) |pokemon, i| {
-            const s = d.pokemons.at(i).key;
-            // We shouldn't pick Pokemon with 0 catch rate as they tend to be
-            // Pokemon not meant to be used in the standard game.
-            // Pokemons from the film studio in bw2 have 0 catch rate.
-            if (pokemon.catch_rate == 0)
-                continue;
+        for (species.span()) |s_range| {
+            var s = s_range.start;
+            while (s <= s_range.end) : (s += 1) {
+                const pokemon = d.pokemons.get(s).?;
 
-            for (pokemon.types.span()) |range| {
-                var t = range.start;
-                while (t <= range.end) : (t += 1) {
-                    const set = try res.getOrPutValue(allocator, t, Set{});
-                    _ = try set.put(allocator, s);
+                for (pokemon.types.span()) |t_range| {
+                    var t = t_range.start;
+                    while (t <= t_range.end) : (t += 1) {
+                        const set = try res.getOrPutValue(allocator, t, Set{});
+                        _ = try set.put(allocator, s);
+                    }
                 }
             }
         }
@@ -449,6 +471,7 @@ const Pokemon = struct {
     types: Set = Set{},
     lvl_up_moves: LvlUpMoves = LvlUpMoves{},
     catch_rate: usize = 1,
+    pokedex_entry: usize = math.maxInt(usize),
 };
 
 test "tm35-rand-parties" {
@@ -460,7 +483,9 @@ test "tm35-rand-parties" {
             comptime move_: []const u8,
             comptime catch_rate: []const u8,
         ) []const u8 {
-            return ".pokemons[" ++ id ++ "].hp=" ++ stat ++ "\n" ++
+            return ".pokedex[" ++ id ++ "].field=\n" ++
+                ".pokemons[" ++ id ++ "].pokedex_entry=" ++ id ++ "\n" ++
+                ".pokemons[" ++ id ++ "].hp=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].attack=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].defense=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].speed=" ++ stat ++ "\n" ++

@@ -90,11 +90,11 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
+    const species = data.pokedexPokemons(allocator) catch return exit.allocErr(stdio.err);
     const random = &rand.DefaultPrng.init(seed).random;
     const pick_from = blk: {
         var res = Set{};
-        const ranges = data.pokemons.span();
-        for (ranges) |range| {
+        for (species.span()) |range| {
             var pokemon: usize = range.start;
             while (pokemon <= range.end) : (pokemon += 1) {
                 // Only pick lowest evo pokemon if pick_lowest is true
@@ -125,12 +125,17 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
-    const sw = parse.Swhash(8);
+    const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
 
     var p = parse.MutParser{ .str = str };
     switch (m(try p.parse(parse.anyField))) {
+        c("pokedex") => {
+            const index = try p.parse(parse.index);
+            _ = try data.pokedex.put(allocator, index);
+            return true;
+        },
         c("starters") => {
             const starter_index = try p.parse(parse.index);
             _ = try p.parse(parse.usizev);
@@ -139,18 +144,23 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
         },
         c("pokemons") => {
             const evolves_from = try p.parse(parse.index);
-            _ = try data.pokemons.put(allocator, evolves_from);
-            _ = try p.parse(comptime parse.field("evos"));
-            _ = try p.parse(parse.index);
-            _ = try p.parse(comptime parse.field("target"));
+            const pokemon = try data.pokemons.getOrPutValue(allocator, evolves_from, Pokemon{});
+            switch (m(try p.parse(parse.anyField))) {
+                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
+                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
+                c("evos") => {
+                    _ = try p.parse(parse.index);
+                    _ = try p.parse(comptime parse.field("target"));
 
-            const evolves_to = try p.parse(parse.usizev);
-            const from_set = try data.evolves_from.getOrPutValue(allocator, evolves_to, Set{});
-            const to_set = try data.evolves_to.getOrPutValue(allocator, evolves_from, Set{});
-            _ = try data.pokemons.put(allocator, evolves_to);
-            _ = try from_set.put(allocator, evolves_from);
-            _ = try to_set.put(allocator, evolves_to);
-
+                    const evolves_to = try p.parse(parse.usizev);
+                    const from_set = try data.evolves_from.getOrPutValue(allocator, evolves_to, Set{});
+                    const to_set = try data.evolves_to.getOrPutValue(allocator, evolves_from, Set{});
+                    _ = try data.pokemons.getOrPutValue(allocator, evolves_to, Pokemon{});
+                    _ = try from_set.put(allocator, evolves_from);
+                    _ = try to_set.put(allocator, evolves_to);
+                },
+                else => return true,
+            }
             return true;
         },
         else => return true,
@@ -174,23 +184,54 @@ fn countEvos(data: Data, pokemon: usize) usize {
 }
 
 const Set = util.container.IntSet.Unmanaged(usize);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Evolutions = util.container.IntMap.Unmanaged(usize, Set);
 
 const Data = struct {
+    pokedex: Set = Set{},
     starters: Set = Set{},
-    pokemons: Set = Set{},
+    pokemons: Pokemons = Pokemons{},
     evolves_from: Evolutions = Evolutions{},
     evolves_to: Evolutions = Evolutions{},
+
+    fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
+        var res = Set{};
+        errdefer res.deinit(allocator);
+
+        for (d.pokemons.values()) |pokemon, i| {
+            const s = d.pokemons.at(i).key;
+            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
+                continue;
+
+            _ = try res.put(allocator, s);
+        }
+
+        return res;
+    }
+};
+
+const Pokemon = struct {
+    pokedex_entry: usize = math.maxInt(usize),
+    catch_rate: usize = 1,
 };
 
 test "tm35-rand-starters" {
     const result_prefix =
+        \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].evos[0].target=1
+        \\.pokemons[1].pokedex_entry=1
         \\.pokemons[1].evos[0].target=2
-        \\.pokemons[2].hp=10
+        \\.pokemons[2].pokedex_entry=2
+        \\.pokemons[3].pokedex_entry=3
         \\.pokemons[3].evos[0].target=4
-        \\.pokemons[4].hp=10
-        \\.pokemons[5].hp=10
+        \\.pokemons[4].pokedex_entry=4
+        \\.pokemons[5].pokedex_entry=5
+        \\.pokedex[0].field=
+        \\.pokedex[1].field=
+        \\.pokedex[2].field=
+        \\.pokedex[3].field=
+        \\.pokedex[4].field=
+        \\.pokedex[5].field=
         \\
     ;
     const test_string = result_prefix ++

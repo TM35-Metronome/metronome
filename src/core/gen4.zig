@@ -516,15 +516,21 @@ pub const Game = struct {
     items: []Item,
     tms: []lu16,
     hms: []lu16,
-    static_pokemons: []*script.Command,
-    pokeball_items: []PokeballItem,
     evolutions: []EvolutionTable,
 
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
-    scripts: nds.fs.Fs,
-    text: nds.fs.Fs,
 
+    pokedex: nds.fs.Fs,
+    pokedex_heights: []lu32,
+    pokedex_weights: []lu32,
+    species_to_national_dex: []lu16,
+
+    scripts: nds.fs.Fs,
+    static_pokemons: []*script.Command,
+    pokeball_items: []PokeballItem,
+
+    text: nds.fs.Fs,
     pokemon_names: StringTable,
     trainer_names: StringTable,
     move_names: StringTable,
@@ -563,6 +569,7 @@ pub const Game = struct {
 
         const text = try getNarc(file_system, info.text);
         const scripts = try getNarc(file_system, info.scripts);
+        const pokedex = try getNarc(file_system, info.pokedex);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -616,14 +623,20 @@ pub const Game = struct {
             },
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
-            .static_pokemons = commands.static_pokemons,
-            .pokeball_items = commands.pokeball_items,
 
             .parties = try getNarc(file_system, info.parties),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
-            .scripts = scripts,
-            .text = text,
 
+            .pokedex = pokedex,
+            .pokedex_heights = mem.bytesAsSlice(lu32, pokedex.fileData(.{ .i = info.pokedex_heights })),
+            .pokedex_weights = mem.bytesAsSlice(lu32, pokedex.fileData(.{ .i = info.pokedex_weights })),
+            .species_to_national_dex = mem.bytesAsSlice(lu16, pokedex.fileData(.{ .i = info.species_to_national_dex })),
+
+            .scripts = scripts,
+            .static_pokemons = commands.static_pokemons,
+            .pokeball_items = commands.pokeball_items,
+
+            .text = text,
             .pokemon_names = StringTable{ .data = text.fileData(.{ .i = info.pokemon_names }) },
             .trainer_names = StringTable{ .data = text.fileData(.{ .i = info.trainer_names }) },
             .move_names = StringTable{ .data = text.fileData(.{ .i = info.move_names }) },

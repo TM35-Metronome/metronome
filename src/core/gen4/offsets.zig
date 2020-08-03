@@ -27,6 +27,11 @@ pub const Info = struct {
     scripts: []const u8,
     itemdata: []const u8,
 
+    pokedex: []const u8,
+    pokedex_heights: u16,
+    pokedex_weights: u16,
+    species_to_national_dex: u16,
+
     text: []const u8,
     pokemon_names: u16,
     trainer_names: u16,
@@ -63,6 +68,11 @@ const hg_info = Info{
     .scripts = "/a/0/1/2",
     .itemdata = "/a/0/1/7",
 
+    .pokedex = "/a/0/7/4",
+    .pokedex_heights = 0,
+    .pokedex_weights = 1,
+    .species_to_national_dex = 11,
+
     .text = "/a/0/2/7",
     .pokemon_names = 237,
     .trainer_names = 729,
@@ -90,6 +100,11 @@ const ss_info = Info{
     .wild_pokemons = "/a/1/3/6",
     .scripts = hg_info.scripts,
     .itemdata = hg_info.itemdata,
+
+    .pokedex = hg_info.pokedex,
+    .pokedex_heights = hg_info.pokedex_heights,
+    .pokedex_weights = hg_info.pokedex_weights,
+    .species_to_national_dex = hg_info.species_to_national_dex,
 
     .text = hg_info.text,
     .pokemon_names = hg_info.pokemon_names,
@@ -124,6 +139,11 @@ const diamond_info = Info{
     .scripts = "/fielddata/script/scr_seq_release.narc",
     .itemdata = "/itemtool/itemdata/item_data.narc",
 
+    .pokedex = "application/zukanlist/zkn_data/zukan_data.narc",
+    .pokedex_heights = 0,
+    .pokedex_weights = 1,
+    .species_to_national_dex = 11,
+
     .text = "/msgdata/msg.narc",
     .pokemon_names = 362,
     .trainer_names = 559,
@@ -151,6 +171,11 @@ const pearl_info = Info{
     .wild_pokemons = "/fielddata/encountdata/p_enc_data.narc",
     .scripts = diamond_info.scripts,
     .itemdata = diamond_info.itemdata,
+
+    .pokedex = diamond_info.pokedex,
+    .pokedex_heights = diamond_info.pokedex_heights,
+    .pokedex_weights = diamond_info.pokedex_weights,
+    .species_to_national_dex = diamond_info.species_to_national_dex,
 
     .text = diamond_info.text,
     .pokemon_names = diamond_info.pokemon_names,
@@ -184,6 +209,11 @@ const platinum_info = Info{
     .wild_pokemons = "/fielddata/encountdata/pl_enc_data.narc",
     .scripts = "/fielddata/script/scr_seq.narc",
     .itemdata = "/itemtool/itemdata/pl_item_data.narc",
+
+    .pokedex = "application/zukanlist/zkn_data/zukan_data_gira.narc",
+    .pokedex_heights = 0,
+    .pokedex_weights = 1,
+    .species_to_national_dex = 11,
 
     .text = "/msgdata/pl_msg.narc",
     .pokemon_names = 412,
