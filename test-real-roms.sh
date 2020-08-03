@@ -28,11 +28,10 @@ for release in $(printf "false\ntrue\n"); do
         zig-cache/bin/tm35-load "$rom_dest" > "$found"
         diff -q "$expect" "$found"
 
-        # Change all numbers in rom to 1
-        sed -i "s/=[0-9]+$/=1/" "$expect"
-
-        # Change all names in rom to 'a'
-        sed -i "s/\.name=.*$/.name=a/" "$expect"
+        sed -i -E \
+            -e "s/([^y])=([0-9]).*$/\1=\2/" \
+            -e "s/\.name=.*$/.name=a/" \
+            "$expect"
         zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" < "$expect"
         zig-cache/bin/tm35-load "$rom_dest" > "$found"
         diff -q "$expect" "$found"

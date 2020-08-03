@@ -223,10 +223,9 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             game.starters_repeat[index].* = value;
         },
         c("trainers") => {
-            const i = try parser.parse(parse.index);
-            if (i == 0 or i - 1 >= game.trainers.len)
+            const index = try parser.parse(parse.index);
+            if (index >= game.trainers.len)
                 return error.Error;
-            const index = i - 1;
             const trainer = &game.trainers[index];
 
             switch (m(try parser.parse(parse.anyField))) {
@@ -889,9 +888,9 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         c("trainers") => {
             const index = try parser.parse(parse.index);
             const field = try parser.parse(parse.anyField);
-            const trainer_index = @intCast(u32, index);
-            if (trainer_index >= game.trainers.len)
+            if (index == 0 or index - 1 >= game.trainers.len)
                 return error.Error;
+            const trainer_index = @intCast(u32, index - 1);
             const trainer = &game.trainers[trainer_index];
 
             switch (m(field)) {
@@ -907,7 +906,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                     const pfield = try parser.parse(parse.anyField);
                     if (pindex >= trainer.party_size)
                         return error.Error;
-                    const party_file = game.parties.fileData(.{ .i = trainer_index });
+                    const party_file = game.parties.fileData(.{ .i = trainer_index + 1 });
                     const member = trainer.partyMember(party_file, pindex) orelse return error.OutOfBound;
 
                     switch (m(pfield)) {
@@ -1022,17 +1021,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
                 c("description") => try applyGen5String(game.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => {
-                    var buf: [1024]u8 = undefined;
-                    const name = try parser.parse(parse.strv);
-                    const name_on_ground = try fmt.bufPrint(
-                        &buf,
-                        "\xef\x80\x80\xeb\xb4a \xef\x80\x80\xef\xbc\x80\xc3\xbf{}",
-                        .{name},
-                    );
-                    try applyGen5String(game.item_names, index, name);
-                    try applyGen5String(game.item_names_on_the_ground, index, name_on_ground);
-                },
+                c("name") => try applyGen5String(game.item_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.items.len)
                         return error.Error;

@@ -720,7 +720,6 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     for (game.trainers) |trainer, index| {
         const i = index + 1;
-        try stream.print(".trainers[{}].party_type={}\n", .{ i, @enumToInt(trainer.party_type) });
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].battle_type={}\n", .{ i, trainer.battle_type });
 
