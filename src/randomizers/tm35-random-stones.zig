@@ -539,7 +539,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         };
     }
 
-    const num_pokemons = data.pokemons.count();
+    const num_pokemons = species.count();
     for (species.span()) |s_range| {
         var pokemon_id: usize = s_range.start;
         while (pokemon_id <= s_range.end) : (pokemon_id += 1) {
@@ -552,7 +552,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 const item_id = stones.at(stone);
                 const pick = switch (stone) {
                     chance_stone => while (num_pokemons > 1) {
-                        const pick = random.intRangeLessThan(usize, 0, num_pokemons);
+                        const pick = species.at(random.intRangeLessThan(usize, 0, num_pokemons));
                         if (pick != pokemon_id)
                             break pick;
                     } else pokemon_id,

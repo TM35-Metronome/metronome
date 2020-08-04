@@ -984,7 +984,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
     try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
     try outputGen5StringTable(stream, "items", "name", game.item_names);
-    //try outputGen5StringTable(stream, "items", "name_on_the_ground", game.item_names_on_the_ground);
+    //try outputGen5StringTable(stream, "items", "name_on_ground", game.item_names_on_the_ground);
     try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
     try outputGen5StringTable(stream, "types", "name", game.type_names);
 
