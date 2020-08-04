@@ -1021,7 +1021,41 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
                 c("description") => try applyGen5String(game.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen5String(game.item_names, index, try parser.parse(parse.strv)),
+                c("name") => {
+                    const new_name = try parser.parse(parse.strv);
+
+                    // Here, we also applies the item name to the item_names_on_the_ground
+                    // table. The way we do this is to search for the item name in the
+                    // ground string, and if it exists, we replace it and apply this new
+                    // string
+                    if (index < game.item_names.entryCount(0) and index < game.item_names_on_the_ground.entryCount(0)) {
+                        var name_buf: [1024]u8 = undefined;
+                        var ground_buf: [1024]u8 = undefined;
+                        const name_stream = game.item_names.getStringStream(0, index).inStream();
+                        const ground_stream = game.item_names_on_the_ground.getStringStream(0, index).inStream();
+                        const name_len = try name_stream.readAll(&name_buf);
+                        const ground_len = try ground_stream.readAll(&ground_buf);
+                        const name = name_buf[0..name_len];
+                        const ground = ground_buf[0..ground_len];
+                        if (mem.indexOf(u8, ground, name)) |name_index| {
+                            if (name.len >= new_name.len) {
+                                mem.copy(u8, ground[name_index..], new_name);
+                                mem.copy(
+                                    u8,
+                                    ground[name_index + new_name.len ..],
+                                    ground[name_index + name.len ..],
+                                );
+                                try applyGen5String(
+                                    game.item_names_on_the_ground,
+                                    index,
+                                    ground[0 .. ground.len - (name.len - new_name.len)],
+                                );
+                            }
+                        }
+                    }
+
+                    try applyGen5String(game.item_names, index, new_name);
+                },
                 else => {
                     if (index >= game.items.len)
                         return error.Error;

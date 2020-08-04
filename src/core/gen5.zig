@@ -6,6 +6,7 @@ const rom = @import("rom.zig");
 pub const offsets = @import("gen5/offsets.zig");
 pub const script = @import("gen5/script.zig");
 
+const fmt = std.fmt;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
@@ -460,8 +461,13 @@ pub const StringTable = struct {
         pub const ReadError = error{
             Utf8CannotEncodeSurrogateHalf,
             CodepointTooLarge,
+            NoSpaceLeft,
         };
-        pub const WriteError = error{NoSpaceLeft};
+        pub const WriteError = error{
+            NoSpaceLeft,
+            Overflow,
+            InvalidCharacter,
+        };
 
         pub const InStream = io.InStream(*Stream, ReadError, read);
         pub const OutStream = io.OutStream(*Stream, WriteError, write);
@@ -478,7 +484,11 @@ pub const StringTable = struct {
                 };
                 const pair: Pair = switch (decoded) {
                     0xffff => break,
-                    0xfff0...0xfffd => unreachable, // TODO
+                    0x0, 0xf000, 0xfff0...0xfffd => {
+                        n += (try fmt.bufPrint(buf[n..], "\\x{x:0>4}", .{decoded})).len;
+                        stream.pos += 1;
+                        continue;
+                    },
                     0xfffe => .{ .len = 1, .codepoint = '\n' },
                     else => .{
                         .len = unicode.utf8CodepointSequenceLength(decoded) catch unreachable,
@@ -511,6 +521,14 @@ pub const StringTable = struct {
                     stream.data[stream.pos] = lu16.init(0xfffe);
                     stream.pos += 1;
                     n += 1;
+                    continue;
+                }
+                if (mem.startsWith(u8, buf[n..], "\\x")) {
+                    const hex = buf[n + 2 ..][0..4];
+                    const parsed = try fmt.parseUnsigned(u16, hex, 16);
+                    stream.data[stream.pos] = lu16.init(parsed);
+                    stream.pos += 1;
+                    n += 6;
                     continue;
                 }
 
