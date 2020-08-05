@@ -22,10 +22,28 @@ pub const default_escapes = blk: {
     break :blk res;
 };
 
+pub const zig_escapes = comptime blk: {
+    var res: [255][]const u8 = undefined;
+    mem.copy([]const u8, res[0..], &default_escapes);
+    res['\r'] = "\\r";
+    res['\n'] = "\\n";
+    res['\\'] = "\\\\";
+    break :blk res;
+};
+
 pub fn writeEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
     for (buf) |char| {
         try out_stream.writeAll(escapes[char]);
     }
+}
+
+pub fn escape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]const u8) ![]u8 {
+    var res = std.ArrayList(u8).init(allocator);
+    errdefer res.deinit();
+
+    try res.ensureCapacity(buf.len);
+    try writeEscape(res.outStream(), buf, escapes);
+    return res.toOwnedSlice();
 }
 
 test "writeEscaped" {
@@ -49,9 +67,9 @@ fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u
 pub fn writeUnEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
     var index: usize = 0;
     outer: while (index < buf.len) {
-        for (escapes) |escape, c| {
-            if (mem.startsWith(u8, buf[index..], escape)) {
-                index += escape.len;
+        for (escapes) |esc, c| {
+            if (mem.startsWith(u8, buf[index..], esc)) {
+                index += esc.len;
                 try out_stream.writeAll(@as(*const [1]u8, &@intCast(u8, c)));
                 continue :outer;
             }
@@ -60,6 +78,15 @@ pub fn writeUnEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8
         try out_stream.writeAll(buf[index .. index + 1]);
         index += 1;
     }
+}
+
+pub fn unEscape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]const u8) ![]u8 {
+    var res = std.ArrayList(u8).init(allocator);
+    errdefer res.deinit();
+
+    try res.ensureCapacity(buf.len);
+    try writeUnEscaped(res.outStream(), buf, escapes);
+    return res.toOwnedSlice();
 }
 
 test "writeUnEscaped" {
@@ -79,12 +106,12 @@ fn testWriteUnEscaped(escapes: [255][]const u8, str: []const u8, expect: []const
     testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 
-pub fn splitEscaped(buffer: []const u8, escape: []const u8, delimiter: []const u8) EscapedSplitter {
+pub fn splitEscaped(buffer: []const u8, esc: []const u8, delimiter: []const u8) EscapedSplitter {
     std.debug.assert(delimiter.len != 0);
     return EscapedSplitter{
         .index = 0,
         .buffer = buffer,
-        .escape = escape,
+        .escape = esc,
         .delimiter = delimiter,
     };
 }
