@@ -14,6 +14,8 @@ const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
+const Utf8 = util.unicode.Utf8View;
+
 const escape = util.escape;
 const exit = util.exit;
 const parse = util.parse;
@@ -80,7 +82,9 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, hms, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.InvalidUtf8,
+            error.ParseError,
+            => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -106,7 +110,7 @@ pub fn main2(
         stdio.out.print(".items[{}].description=", .{
             data.items.at(i).key,
         }) catch |err| return exit.stdoutErr(stdio.err, err);
-        escape.writeEscaped(stdio.out, item.description, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
+        escape.writeEscaped(stdio.out, item.description.bytes, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
         stdio.out.writeAll("\n") catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
@@ -141,11 +145,14 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
             const move = try data.moves.getOrPutValue(allocator, index, Move{});
 
             switch (m(try p.parse(parse.anyField))) {
-                c("description") => move.description = try escape.unEscape(
-                    allocator,
-                    try p.parse(parse.strv),
-                    escape.zig_escapes,
-                ),
+                c("description") => {
+                    const desc = try escape.unEscape(
+                        allocator,
+                        try p.parse(parse.strv),
+                        escape.zig_escapes,
+                    );
+                    move.description = try Utf8.init(desc);
+                },
 
                 else => {},
             }
@@ -157,14 +164,17 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
 
             switch (m(try p.parse(parse.anyField))) {
                 c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
-                c("name") => item.name = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+                c("name") => {
+                    const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+                    item.name = try Utf8.init(name);
+                },
                 c("description") => {
-                    item.description = try escape.unEscape(
+                    const desc = try escape.unEscape(
                         allocator,
                         try p.parse(parse.strv),
                         escape.zig_escapes,
                     );
-                    return false;
+                    item.description = try Utf8.init(desc);
                 },
                 else => {},
             }
@@ -188,12 +198,19 @@ fn randomize(data: *Data, seed: u64) !void {
     var max_line_len: usize = 0;
     for (data.items.values()) |item| {
         var description = item.description;
-        while (mem.indexOf(u8, description, "\n")) |line_len| {
-            max_line_len = math.max(line_len, max_line_len);
-            description = description[line_len + 1 ..];
+        while (mem.indexOf(u8, description.bytes, "\n")) |index| {
+            const line = Utf8.init(description.bytes[0..index]) catch unreachable;
+            max_line_len = math.max(line.len, max_line_len);
+            description = Utf8.init(description.bytes[index + 1 ..]) catch unreachable;
         }
         max_line_len = math.max(description.len, max_line_len);
     }
+
+    // HACK: The games does not used mono fonts, so actually, using the
+    //       max_line_len to destribute newlines will not actually be totally
+    //       correct. The best I can do here is to just reduce the max_line_len
+    //       by some amount and hope it is enough for all strings.
+    max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
     const tms_hms_pocket = try data.string("tms_hms");
     for (data.items.values()) |*item, i| {
@@ -201,36 +218,35 @@ fn randomize(data: *Data, seed: u64) !void {
         if (item.pocket != tms_hms_pocket)
             continue;
 
-        const is_tm = mem.startsWith(u8, item.name, "TM");
-        const is_hm = mem.startsWith(u8, item.name, "HM");
+        const is_tm = mem.startsWith(u8, item.name.bytes, "TM");
+        const is_hm = mem.startsWith(u8, item.name.bytes, "HM");
         if (is_tm or is_hm) {
-            const number = fmt.parseUnsigned(usize, item.name[2..], 10) catch continue;
+            const number = fmt.parseUnsigned(usize, item.name.bytes[2..], 10) catch continue;
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
             const move = data.moves.get(move_id.*) orelse continue;
-            const new_desc = try util.splitIntoLines(allocator, max_line_len, move.description);
-            const old_len = utf8Len(item.description) catch continue;
-            item.description = utf8Slice(new_desc, old_len) catch continue;
+            const new_desc = try util.unicode.splitIntoLines(allocator, max_line_len, move.description);
+            item.description = new_desc.slice(0, item.description.len);
         }
     }
 }
 
-fn utf8Len(str: []const u8) !usize {
-    var i: usize = 0;
+fn utf8Len(str: Utf8) usize {
     var res: usize = 0;
-    while (i < str.len) : (res += 1) {
-        i += try unicode.utf8ByteSequenceLength(str[i]);
-    }
+    var it = str.iterator();
+    while (it.nextCodepointSlice()) |_| : (res += 1) {}
     return res;
 }
 
-fn utf8Slice(str: []const u8, max_len: usize) ![]const u8 {
-    var i: usize = 0;
-    var u: usize = 0;
-    while (i < str.len and u < max_len) : (u += 1) {
-        i += try unicode.utf8ByteSequenceLength(str[i]);
+fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
+    var codepoints: usize = 0;
+    var it = str.iterator();
+    while (it.nextCodepointSlice()) |_| : (codepoints += 1) {
+        if (codepoints == max_len)
+            break;
     }
-    return str[0..i];
+
+    return Utf8.initUnchecked(str.bytes[0..it.i]);
 }
 
 const Machines = util.container.IntMap.Unmanaged(usize, usize);
@@ -256,12 +272,12 @@ const Data = struct {
 
 const Item = struct {
     pocket: usize = math.maxInt(usize),
-    name: []const u8 = "",
-    description: []const u8 = "",
+    name: Utf8 = Utf8.init("") catch unreachable,
+    description: Utf8 = Utf8.init("") catch unreachable,
 };
 
 const Move = struct {
-    description: []const u8 = "",
+    description: Utf8 = Utf8.init("") catch unreachable,
 };
 
 test "tm35-rand-machines" {

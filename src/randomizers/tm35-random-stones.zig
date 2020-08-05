@@ -18,6 +18,8 @@ const escape = util.escape;
 const exit = util.exit;
 const parse = util.parse;
 
+const Utf8 = util.unicode.Utf8View;
+
 const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
@@ -89,7 +91,9 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, replace_cheap, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError,
+            error.InvalidUtf8,
+            => true,
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -110,11 +114,11 @@ pub fn main2(
     }
     for (data.items.values()) |item, i| {
         const item_id = data.items.at(i).key;
-        if (item.name.len != 0)
-            stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name }) catch |err| return exit.stdoutErr(stdio.err, err);
-        if (item.description.len != 0) {
+        if (item.name.bytes.len != 0)
+            stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name.bytes }) catch |err| return exit.stdoutErr(stdio.err, err);
+        if (item.description.bytes.len != 0) {
             stdio.out.print(".items[{}].description=", .{item_id}) catch |err| return exit.stdoutErr(stdio.err, err);
-            escape.writeEscaped(stdio.out, item.description, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
+            escape.writeEscaped(stdio.out, item.description.bytes, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
             stdio.out.writeAll("\n") catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
@@ -192,12 +196,18 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
             const item = try data.items.getOrPutValue(allocator, index, Item{});
 
             switch (m(try p.parse(parse.anyField))) {
-                c("name") => item.name = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
-                c("description") => item.description = try escape.unEscape(
-                    allocator,
-                    try p.parse(parse.strv),
-                    escape.zig_escapes,
-                ),
+                c("name") => {
+                    const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+                    item.name = try Utf8.init(name);
+                },
+                c("description") => {
+                    const desc = try escape.unEscape(
+                        allocator,
+                        try p.parse(parse.strv),
+                        escape.zig_escapes,
+                    );
+                    item.description = try Utf8.init(desc);
+                },
                 c("price") => {
                     item.price = try p.parse(parse.usizev);
                     return true;
@@ -239,12 +249,19 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
     var max_line_len: usize = 0;
     for (data.items.values()) |item| {
         var description = item.description;
-        while (mem.indexOf(u8, description, "\n")) |line_len| {
-            max_line_len = math.max(line_len, max_line_len);
-            description = description[line_len + 1 ..];
+        while (mem.indexOf(u8, description.bytes, "\n")) |index| {
+            const line = Utf8.init(description.bytes[0..index]) catch unreachable;
+            max_line_len = math.max(line.len, max_line_len);
+            description = Utf8.init(description.bytes[index + 1 ..]) catch unreachable;
         }
         max_line_len = math.max(description.len, max_line_len);
     }
+
+    // HACK: The games does not used mono fonts, so actually, using the
+    //       max_line_len to destribute newlines will not actually be totally
+    //       correct. The best I can do here is to just reduce the max_line_len
+    //       by some amount and hope it is enough for all strings.
+    max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
     const species = try data.pokedexPokemons(allocator);
     const pokemons_by_stats = try filterBy(allocator, species, data.pokemons, statsFilter);
@@ -263,228 +280,228 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
     const breed_stone = 5;
     const buddy_stone = 6;
     const stone_strings = [_]struct {
-        names: []const []const u8,
-        descriptions: []const []const u8,
+        names: []const Utf8,
+        descriptions: []const Utf8,
     }{
         .{
-            .names = &[_][]const u8{
-                "Chance Stone",
-                "Chance Rock",
-                "Luck Rock",
-                "Luck Rck",
-                "C Stone",
-                "C Rock",
-                "C Rck",
+            .names = &[_]Utf8{
+                Utf8.init("Chance Stone") catch unreachable,
+                Utf8.init("Chance Rock") catch unreachable,
+                Utf8.init("Luck Rock") catch unreachable,
+                Utf8.init("Luck Rck") catch unreachable,
+                Utf8.init("C Stone") catch unreachable,
+                Utf8.init("C Rock") catch unreachable,
+                Utf8.init("C Rck") catch unreachable,
             },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon"),
-            },
-        },
-        .{
-            .names = &[_][]const u8{
-                "Superior Stone",
-                "Superior Rock",
-                "Better Stone",
-                "Better Rock",
-                "Good Stone",
-                "Good Rock",
-                "Good Rck",
-                "B Stone",
-                "B Rock",
-                "B Rck",
-            },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better overall stats."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better overall stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon with better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Random better stats"),
-                try util.splitIntoLines(allocator, max_line_len, "Better stats"),
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon") catch unreachable),
             },
         },
         .{
-            .names = &[_][]const u8{
-                "Growth Stone",
-                "Growth Rock",
-                "Rate Stone",
-                "Rate Rock",
-                "G Stone",
-                "G Rock",
-                "G Rck",
+            .names = &[_]Utf8{
+                Utf8.init("Superior Stone") catch unreachable,
+                Utf8.init("Superior Rock") catch unreachable,
+                Utf8.init("Better Stone") catch unreachable,
+                Utf8.init("Better Rock") catch unreachable,
+                Utf8.init("Good Stone") catch unreachable,
+                Utf8.init("Good Rock") catch unreachable,
+                Utf8.init("Good Rck") catch unreachable,
+                Utf8.init("B Stone") catch unreachable,
+                Utf8.init("B Rock") catch unreachable,
+                Utf8.init("B Rck") catch unreachable,
             },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same growth rate."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with same growth rate."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon with same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Random same growth rate"),
-                try util.splitIntoLines(allocator, max_line_len, "Same growth rate"),
-            },
-        },
-        .{
-            .names = &[_][]const u8{
-                "Form Stone",
-                "Form Rock",
-                "Form Rck",
-                "T Stone",
-                "T Rock",
-                "T Rck",
-            },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common type."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same type"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with same type"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with same type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, same type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon same type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random a common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, same type"),
-                try util.splitIntoLines(allocator, max_line_len, "Random same type"),
-                try util.splitIntoLines(allocator, max_line_len, "A common type"),
-                try util.splitIntoLines(allocator, max_line_len, "Same type"),
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better overall stats.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better overall stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon with better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Better stats") catch unreachable),
             },
         },
         .{
-            .names = &[_][]const u8{
-                "Skill Stone",
-                "Skill Rock",
-                "Skill Rck",
-                "S Stone",
-                "S Rock",
-                "S Rck",
+            .names = &[_]Utf8{
+                Utf8.init("Growth Stone") catch unreachable,
+                Utf8.init("Growth Rock") catch unreachable,
+                Utf8.init("Rate Stone") catch unreachable,
+                Utf8.init("Rate Rock") catch unreachable,
+                Utf8.init("G Stone") catch unreachable,
+                Utf8.init("G Rock") catch unreachable,
+                Utf8.init("G Rck") catch unreachable,
             },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common ability."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random a common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Random same ability"),
-                try util.splitIntoLines(allocator, max_line_len, "A common ability"),
-                try util.splitIntoLines(allocator, max_line_len, "Same ability"),
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same growth rate.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with same growth rate.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon with same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same growth rate") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same growth rate") catch unreachable),
             },
         },
         .{
-            .names = &[_][]const u8{
-                "Breed Stone",
-                "Breed Rock",
-                "Egg Stone",
-                "Egg Rock",
-                "Egg Rck",
-                "E Stone",
-                "E Rock",
-                "E Rck",
+            .names = &[_]Utf8{
+                Utf8.init("Form Stone") catch unreachable,
+                Utf8.init("Form Rock") catch unreachable,
+                Utf8.init("Form Rck") catch unreachable,
+                Utf8.init("T Stone") catch unreachable,
+                Utf8.init("T Rock") catch unreachable,
+                Utf8.init("T Rck") catch unreachable,
             },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon in the same egg group."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon in the same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, in same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon in same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, in same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random in same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Random same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "In same egg group"),
-                try util.splitIntoLines(allocator, max_line_len, "Same egg group"),
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with a common type.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random a common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("A common type") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same type") catch unreachable),
             },
         },
         .{
-            .names = &[_][]const u8{
-                "Buddy Stone",
-                "Buddy Rock",
-                "Buddy Rck",
-                "F Stone",
-                "F Rock",
-                "F Rck",
+            .names = &[_]Utf8{
+                Utf8.init("Skill Stone") catch unreachable,
+                Utf8.init("Skill Rock") catch unreachable,
+                Utf8.init("Skill Rck") catch unreachable,
+                Utf8.init("S Stone") catch unreachable,
+                Utf8.init("S Rock") catch unreachable,
+                Utf8.init("S Rck") catch unreachable,
             },
-            .descriptions = &[_][]const u8{
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship."),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with the same base friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with the same base friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same base friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with the same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with the same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with the same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Into random Pokémon with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "To random Pokémon with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon, same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random Pokémon same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random with same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random, same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Random same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "In same friendship"),
-                try util.splitIntoLines(allocator, max_line_len, "Same friendship"),
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with a common ability.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random a common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("A common ability") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same ability") catch unreachable),
+            },
+        },
+        .{
+            .names = &[_]Utf8{
+                Utf8.init("Breed Stone") catch unreachable,
+                Utf8.init("Breed Rock") catch unreachable,
+                Utf8.init("Egg Stone") catch unreachable,
+                Utf8.init("Egg Rock") catch unreachable,
+                Utf8.init("Egg Rck") catch unreachable,
+                Utf8.init("E Stone") catch unreachable,
+                Utf8.init("E Rock") catch unreachable,
+                Utf8.init("E Rck") catch unreachable,
+            },
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon in the same egg group.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon in the same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, in same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon in same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, in same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random in same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("In same egg group") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same egg group") catch unreachable),
+            },
+        },
+        .{
+            .names = &[_]Utf8{
+                Utf8.init("Buddy Stone") catch unreachable,
+                Utf8.init("Buddy Rock") catch unreachable,
+                Utf8.init("Buddy Rck") catch unreachable,
+                Utf8.init("F Stone") catch unreachable,
+                Utf8.init("F Rock") catch unreachable,
+                Utf8.init("F Rck") catch unreachable,
+            },
+            .descriptions = &[_]Utf8{
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with the same base friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with the same base friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same base friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with the same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with the same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with the same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random with same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("In same friendship") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same friendship") catch unreachable),
             },
         },
     };
@@ -499,14 +516,8 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         // are working on. Our best guess will therefor be to use the current
         // items name/desc as the limits and pick something that fits.
         item.* = Item{
-            .name = pickString(
-                utf8Len(item.name) catch item.name.len,
-                strings.names,
-            ),
-            .description = pickString(
-                utf8Len(item.description) catch item.description.len,
-                strings.descriptions,
-            ),
+            .name = pickString(item.name.len, strings.names),
+            .description = pickString(item.description.len, strings.descriptions),
         };
     }
 
@@ -643,33 +654,15 @@ fn sum(buf: []const u8) usize {
     return res;
 }
 
-fn pickString(len: usize, strings: []const []const u8) []const u8 {
+fn pickString(len: usize, strings: []const Utf8) Utf8 {
     var pick = strings[0];
     for (strings) |str| {
         pick = str;
-        if ((utf8Len(str) catch str.len) <= len)
+        if (str.len <= len)
             break;
     }
 
-    return utf8Slice(pick, len) catch pick[0..math.min(len, pick.len)];
-}
-
-fn utf8Len(str: []const u8) !usize {
-    var i: usize = 0;
-    var res: usize = 0;
-    while (i < str.len) : (res += 1) {
-        i += try unicode.utf8ByteSequenceLength(str[i]);
-    }
-    return res;
-}
-
-fn utf8Slice(str: []const u8, max_len: usize) ![]const u8 {
-    var i: usize = 0;
-    var u: usize = 0;
-    while (i < str.len and u < max_len) : (u += 1) {
-        i += try unicode.utf8ByteSequenceLength(str[i]);
-    }
-    return str[0..i];
+    return pick.slice(0, len);
 }
 
 fn filterBy(
@@ -786,8 +779,8 @@ const Pokemon = struct {
 };
 
 const Item = struct {
-    name: []const u8 = "",
-    description: []const u8 = "",
+    name: Utf8 = Utf8.init("") catch unreachable,
+    description: Utf8 = Utf8.init("") catch unreachable,
     price: usize = 0,
 };
 
