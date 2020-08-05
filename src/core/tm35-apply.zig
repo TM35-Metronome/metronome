@@ -1170,19 +1170,10 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
 }
 
 fn applyGen5String(table: gen5.StringTable, index: usize, value: []const u8) !void {
-    const escapes = comptime blk: {
-        var res: [255][]const u8 = undefined;
-        mem.copy([]const u8, res[0..], &escape.default_escapes);
-        res['\r'] = "\\r";
-        res['\n'] = "\\n";
-        res['\\'] = "\\\\";
-        break :blk res;
-    };
-
     if (index >= table.entryCount(0))
         return error.Error;
     var stream = io.bufferedOutStream(table.getStringStream(0, index).outStream());
-    try escape.writeUnEscaped(stream.outStream(), value, escapes);
+    try escape.writeUnEscaped(stream.outStream(), value, escape.zig_escapes);
     try stream.outStream().writeAll("\xff\xff");
     try stream.flush();
 }

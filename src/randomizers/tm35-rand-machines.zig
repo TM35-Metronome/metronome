@@ -12,7 +12,9 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
+const unicode = std.unicode;
 
+const escape = util.escape;
 const exit = util.exit;
 const parse = util.parse;
 
@@ -101,10 +103,11 @@ pub fn main2(
         }) catch |err| return exit.stdoutErr(stdio.err, err);
     }
     for (data.items.values()) |item, i| {
-        stdio.out.print(".items[{}].description={}\n", .{
+        stdio.out.print(".items[{}].description=", .{
             data.items.at(i).key,
-            item.description,
         }) catch |err| return exit.stdoutErr(stdio.err, err);
+        escape.writeEscaped(stdio.out, item.description, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
+        stdio.out.writeAll("\n") catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     return 0;
@@ -138,7 +141,12 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
             const move = try data.moves.getOrPutValue(allocator, index, Move{});
 
             switch (m(try p.parse(parse.anyField))) {
-                c("description") => move.description = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+                c("description") => move.description = try escape.unEscape(
+                    allocator,
+                    try p.parse(parse.strv),
+                    escape.zig_escapes,
+                ),
+
                 else => {},
             }
             return true;
@@ -151,7 +159,11 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
                 c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
                 c("name") => item.name = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
                 c("description") => {
-                    item.description = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+                    item.description = try escape.unEscape(
+                        allocator,
+                        try p.parse(parse.strv),
+                        escape.zig_escapes,
+                    );
                     return false;
                 },
                 else => {},
@@ -164,12 +176,24 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
 }
 
 fn randomize(data: *Data, seed: u64) !void {
+    const allocator = data.strings.allocator;
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.values()) |*tm|
         tm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
     for (data.hms.values()) |*hm|
         hm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
+
+    // Find the maximum length of a line. Used to split descriptions into lines.
+    var max_line_len: usize = 0;
+    for (data.items.values()) |item| {
+        var description = item.description;
+        while (mem.indexOf(u8, description, "\n")) |line_len| {
+            max_line_len = math.max(line_len, max_line_len);
+            description = description[line_len + 1 ..];
+        }
+        max_line_len = math.max(description.len, max_line_len);
+    }
 
     const tms_hms_pocket = try data.string("tms_hms");
     for (data.items.values()) |*item, i| {
@@ -184,11 +208,29 @@ fn randomize(data: *Data, seed: u64) !void {
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
             const move = data.moves.get(move_id.*) orelse continue;
-            // TODO: replace item description with move description when I figure out
-            //       how to best do this
-            //item.description = move.description[0..math.min(move.description.len, item.description.len)];
+            const new_desc = try util.splitIntoLines(allocator, max_line_len, move.description);
+            const old_len = utf8Len(item.description) catch continue;
+            item.description = utf8Slice(new_desc, old_len) catch continue;
         }
     }
+}
+
+fn utf8Len(str: []const u8) !usize {
+    var i: usize = 0;
+    var res: usize = 0;
+    while (i < str.len) : (res += 1) {
+        i += try unicode.utf8ByteSequenceLength(str[i]);
+    }
+    return res;
+}
+
+fn utf8Slice(str: []const u8, max_len: usize) ![]const u8 {
+    var i: usize = 0;
+    var u: usize = 0;
+    while (i < str.len and u < max_len) : (u += 1) {
+        i += try unicode.utf8ByteSequenceLength(str[i]);
+    }
+    return str[0..i];
 }
 
 const Machines = util.container.IntMap.Unmanaged(usize, usize);

@@ -1005,21 +1005,12 @@ fn outputGen5StringTable(
     field_name: []const u8,
     est: gen5.StringTable,
 ) !void {
-    const escapes = comptime blk: {
-        var res: [255][]const u8 = undefined;
-        mem.copy([]const u8, res[0..], &escape.default_escapes);
-        res['\r'] = "\\r";
-        res['\n'] = "\\n";
-        res['\\'] = "\\\\";
-        break :blk res;
-    };
-
     var buf: [1024]u8 = undefined;
     var i: u32 = 0;
     while (i < est.entryCount(0)) : (i += 1) {
         try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
         const len = try est.getStringStream(0, i).inStream().readAll(&buf);
-        try escape.writeEscaped(stream, buf[0..len], escapes);
+        try escape.writeEscaped(stream, buf[0..len], escape.zig_escapes);
         try stream.writeAll("\n");
     }
 }

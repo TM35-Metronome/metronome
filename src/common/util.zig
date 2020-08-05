@@ -136,6 +136,34 @@ test "indexOfPtr" {
     }
 }
 
+/// Given a string of words, this function will split the string into lines where
+/// a maximum of `max_line_len` characters can occure on each line.
+pub fn splitIntoLines(allocator: *mem.Allocator, max_line_len: usize, string: []const u8) ![]u8 {
+    var res = std.ArrayList(u8).init(allocator);
+    errdefer res.deinit();
+
+    // A decent estimate that will most likely ensure that we only do one allocation.
+    try res.ensureCapacity(string.len + (string.len / max_line_len) + 1);
+
+    var curr_line_len: usize = 0;
+    var it = mem.tokenize(string, " \n");
+    while (it.next()) |word| {
+        const next_line_len = word.len + curr_line_len + (1 * @boolToInt(curr_line_len != 0));
+        if (next_line_len > max_line_len) {
+            try res.appendSlice("\n");
+            try res.appendSlice(word);
+            curr_line_len = word.len;
+        } else {
+            if (curr_line_len != 0)
+                try res.appendSlice(" ");
+            try res.appendSlice(word);
+            curr_line_len = next_line_len;
+        }
+    }
+
+    return res.toOwnedSlice();
+}
+
 pub fn StackArrayList(comptime size: usize, comptime T: type) type {
     return struct {
         items: [size]T = undefined,
