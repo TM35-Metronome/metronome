@@ -39,7 +39,7 @@ fn usage(stream: var) !void {
         "requirements of the stone. Here is a list of all stones:\n" ++
         "* Chance Stone: Evolves a Pokémon into random Pokémon.\n" ++
         "* Superior Stone: Evolves a Pokémon into random Pokémon with better overall stats.\n" ++
-        "* Poor Stone: Evolves a Pokémon into random Pokémon with worse overall stats.\n" ++
+        "* Growth Stone: Evolves a Pokémon into random Pokémon with the same growth rate.\n" ++
         "* Form Stone: Evolves a Pokémon into random Pokémon with a common type.\n" ++
         "* Skill Stone: Evolves a Pokémon into random Pokémon with a common ability.\n" ++
         "* Breed Stone: Evolves a Pokémon into random Pokémon in the same egg group.\n" ++
@@ -141,6 +141,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
                 c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
                 c("base_friendship") => pokemon.base_friendship = try p.parse(parse.usizev),
+                c("growth_rate") => pokemon.growth_rate = try data.string(try p.parse(parse.strv)),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
                     c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
                     c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
@@ -225,78 +226,29 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         pokemon.evos = Evolutions{};
     }
 
+    // Find the maximum length of a line. Used to split descriptions into lines.
+    var max_line_len: usize = 0;
+    for (data.items.values()) |item| {
+        var description = item.description;
+        while (mem.indexOf(u8, description, "\\n")) |line_len| {
+            max_line_len = math.max(line_len, max_line_len);
+            description = description[line_len + 2 ..];
+        }
+        max_line_len = math.max(description.len, max_line_len);
+    }
+
     const species = try data.pokedexPokemons(allocator);
-
-    // Filter pokemons by different things: TODO: Lots of repeated code
-    var pokemons_by_stats = PokemonBy{};
-    for (species.span()) |range| {
-        var id: usize = range.start;
-        while (id <= range.end) : (id += 1) {
-            const pokemon = data.pokemons.get(id).?;
-            const set = try pokemons_by_stats.getOrPutValue(allocator, sum(&pokemon.stats), Set{});
-            _ = try set.put(allocator, id);
-        }
-    }
-
-    var pokemons_by_base_friendship = PokemonBy{};
-    for (species.span()) |range| {
-        var id: usize = range.start;
-        while (id <= range.end) : (id += 1) {
-            const pokemon = data.pokemons.get(id).?;
-            const set = try pokemons_by_base_friendship.getOrPutValue(allocator, pokemon.base_friendship, Set{});
-            _ = try set.put(allocator, id);
-        }
-    }
-
-    var pokemons_by_type = PokemonBy{};
-    for (species.span()) |s_range| {
-        var id: usize = s_range.start;
-        while (id <= s_range.end) : (id += 1) {
-            const pokemon = data.pokemons.get(id).?;
-            for (pokemon.types.span()) |t_range| {
-                var t = t_range.start;
-                while (t <= t_range.end) : (t += 1) {
-                    const set = try pokemons_by_type.getOrPutValue(allocator, t, Set{});
-                    _ = try set.put(allocator, id);
-                }
-            }
-        }
-    }
-
-    var pokemons_by_ability = PokemonBy{};
-    for (species.span()) |s_range| {
-        var id: usize = s_range.start;
-        while (id <= s_range.end) : (id += 1) {
-            const pokemon = data.pokemons.get(id).?;
-            for (pokemon.abilities.span()) |a_range| {
-                var ability = a_range.start;
-                while (ability <= a_range.end) : (ability += 1) {
-                    const set = try pokemons_by_ability.getOrPutValue(allocator, ability, Set{});
-                    _ = try set.put(allocator, id);
-                }
-            }
-        }
-    }
-
-    var pokemons_by_egg_group = PokemonBy{};
-    for (species.span()) |s_range| {
-        var id: usize = s_range.start;
-        while (id <= s_range.end) : (id += 1) {
-            const pokemon = data.pokemons.get(id).?;
-            for (pokemon.egg_groups.span()) |g_range| {
-                var group = g_range.start;
-                while (group <= g_range.end) : (group += 1) {
-                    const set = try pokemons_by_egg_group.getOrPutValue(allocator, group, Set{});
-                    _ = try set.put(allocator, id);
-                }
-            }
-        }
-    }
+    const pokemons_by_stats = try filterBy(allocator, species, data.pokemons, statsFilter);
+    const pokemons_by_base_friendship = try filterBy(allocator, species, data.pokemons, friendshipFilter);
+    const pokemons_by_type = try filterBy(allocator, species, data.pokemons, typeFilter);
+    const pokemons_by_ability = try filterBy(allocator, species, data.pokemons, abilityFilter);
+    const pokemons_by_egg_group = try filterBy(allocator, species, data.pokemons, eggGroupFilter);
+    const pokemons_by_growth_rate = try filterBy(allocator, species, data.pokemons, growthRateFilter);
 
     // Make sure these indexs line up with the array below
     const chance_stone = 0;
     const superior_stone = 1;
-    const poor_stone = 2;
+    const growth_stone = 2;
     const form_stone = 3;
     const skill_stone = 4;
     const breed_stone = 5;
@@ -316,16 +268,16 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "C Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon.",
-                "Evolves a Pokémon into random Pokémon",
-                "Evolve a Pokémon into random Pokémon",
-                "Evolves a Pokémon to random Pokémon",
-                "Evolve a Pokémon to random Pokémon",
-                "Evolves to random Pokémon",
-                "Evolve to random Pokémon",
-                "Into random Pokémon",
-                "To random Pokémon",
-                "Random Pokémon",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon"),
             },
         },
         .{
@@ -342,48 +294,52 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "B Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon with better overall stats.",
-                "Evolves a Pokémon into random Pokémon with better overall stats",
-                "Evolves a Pokémon into random Pokémon with better stats",
-                "Evolve a Pokémon into random Pokémon with better stats",
-                "Evolves a Pokémon to random Pokémon with better stats",
-                "Evolve a Pokémon to random Pokémon with better stats",
-                "Evolves to random Pokémon with better stats",
-                "Evolve to random Pokémon with better stats",
-                "Into random Pokémon with better stats",
-                "To random Pokémon with better stats",
-                "Random Pokémon with better stats",
-                "Random Pokémon, better stats",
-                "Random Pokémon better stats",
-                "Random, better stats",
-                "Random better stats",
-                "Better stats",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better overall stats."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better overall stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon with better stats"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, better stats"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon better stats"),
+                try splitIntoLines(allocator, max_line_len, "Random, better stats"),
+                try splitIntoLines(allocator, max_line_len, "Random better stats"),
+                try splitIntoLines(allocator, max_line_len, "Better stats"),
             },
         },
         .{
             .names = &[_][]const u8{
-                "Poor Stone",
-                "Poor Rock",
-                "Bad Rock",
-                "Bad Rck",
+                "Growth Stone",
+                "Growth Rock",
+                "Rate Stone",
+                "Rate Rock",
+                "G Stone",
+                "G Rock",
+                "G Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon with worse overall stats.",
-                "Evolves a Pokémon into random Pokémon with worse overall stats",
-                "Evolves a Pokémon into random Pokémon with worse stats",
-                "Evolve a Pokémon into random Pokémon with worse stats",
-                "Evolves a Pokémon to random Pokémon with worse stats",
-                "Evolve a Pokémon to random Pokémon with worse stats",
-                "Evolves to random Pokémon with worse stats",
-                "Evolve to random Pokémon with worse stats",
-                "Into random Pokémon with worse stats",
-                "To random Pokémon with worse stats",
-                "Random Pokémon with worse stats",
-                "Random Pokémon, worse stats",
-                "Random Pokémon worse stats",
-                "Random, worse stats",
-                "Random worse stats",
-                "Worse stats",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same growth rate."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with same growth rate."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon with same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Random, same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Random same growth rate"),
+                try splitIntoLines(allocator, max_line_len, "Same growth rate"),
             },
         },
         .{
@@ -396,27 +352,27 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "T Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon with a common type.",
-                "Evolves a Pokémon into random Pokémon with a common type",
-                "Evolve a Pokémon into random Pokémon with a common type",
-                "Evolves a Pokémon to random Pokémon with a common type",
-                "Evolve a Pokémon to random Pokémon with a common type",
-                "Evolves to random Pokémon with a common type",
-                "Evolve to random Pokémon with a common type",
-                "Evolve to random Pokémon with same type",
-                "Into random Pokémon with a common type",
-                "Into random Pokémon with same type",
-                "To random Pokémon with same type",
-                "Random Pokémon, a common type",
-                "Random Pokémon a common type",
-                "Random Pokémon, same type",
-                "Random Pokémon same type",
-                "Random, a common type",
-                "Random a common type",
-                "Random, same type",
-                "Random same type",
-                "A common type",
-                "Same type",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common type."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same type"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with a common type"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with same type"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with same type"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, a common type"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon a common type"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, same type"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon same type"),
+                try splitIntoLines(allocator, max_line_len, "Random, a common type"),
+                try splitIntoLines(allocator, max_line_len, "Random a common type"),
+                try splitIntoLines(allocator, max_line_len, "Random, same type"),
+                try splitIntoLines(allocator, max_line_len, "Random same type"),
+                try splitIntoLines(allocator, max_line_len, "A common type"),
+                try splitIntoLines(allocator, max_line_len, "Same type"),
             },
         },
         .{
@@ -429,27 +385,27 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "S Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon with a common ability.",
-                "Evolves a Pokémon into random Pokémon with a common ability",
-                "Evolve a Pokémon into random Pokémon with a common ability",
-                "Evolves a Pokémon to random Pokémon with a common ability",
-                "Evolve a Pokémon to random Pokémon with a common ability",
-                "Evolves to random Pokémon with a common ability",
-                "Evolve to random Pokémon with a common ability",
-                "Evolve to random Pokémon with same ability",
-                "Into random Pokémon with a common ability",
-                "Into random Pokémon with same ability",
-                "To random Pokémon with same ability",
-                "Random Pokémon, a common ability",
-                "Random Pokémon a common ability",
-                "Random Pokémon, same ability",
-                "Random Pokémon same ability",
-                "Random, a common ability",
-                "Random a common ability",
-                "Random, same ability",
-                "Random same ability",
-                "A common ability",
-                "Same ability",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common ability."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same ability"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with same ability"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with same ability"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, same ability"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon same ability"),
+                try splitIntoLines(allocator, max_line_len, "Random, a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Random a common ability"),
+                try splitIntoLines(allocator, max_line_len, "Random, same ability"),
+                try splitIntoLines(allocator, max_line_len, "Random same ability"),
+                try splitIntoLines(allocator, max_line_len, "A common ability"),
+                try splitIntoLines(allocator, max_line_len, "Same ability"),
             },
         },
         .{
@@ -464,27 +420,27 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "E Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon in the same egg group.",
-                "Evolves a Pokémon into random Pokémon in the same egg group",
-                "Evolve a Pokémon into random Pokémon in the same egg group",
-                "Evolves a Pokémon to random Pokémon in the same egg group",
-                "Evolve a Pokémon to random Pokémon in the same egg group",
-                "Evolves to random Pokémon in the same egg group",
-                "Evolve to random Pokémon in the same egg group",
-                "Evolve to random Pokémon with same egg group",
-                "Into random Pokémon in the same egg group",
-                "Into random Pokémon with same egg group",
-                "To random Pokémon with same egg group",
-                "Random Pokémon, in same egg group",
-                "Random Pokémon in same egg group",
-                "Random Pokémon, same egg group",
-                "Random Pokémon same egg group",
-                "Random, in same egg group",
-                "Random in same egg group",
-                "Random, same egg group",
-                "Random same egg group",
-                "In same egg group",
-                "Same egg group",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon in the same egg group."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon into random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon to random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolve a Pokémon to random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon in the same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with same egg group"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, in same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon in same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random, in same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random in same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random, same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Random same egg group"),
+                try splitIntoLines(allocator, max_line_len, "In same egg group"),
+                try splitIntoLines(allocator, max_line_len, "Same egg group"),
             },
         },
         .{
@@ -497,29 +453,29 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 "F Rck",
             },
             .descriptions = &[_][]const u8{
-                "Evolves a Pokémon into random Pokémon with the same base friendship.",
-                "Evolves a Pokémon into random Pokémon with the same base friendship",
-                "Evolves a Pokémon into random Pokémon with the same base friendship",
-                "Evolves a Pokémon into random Pokémon with the same friendship",
-                "Evolves to random Pokémon with the same base friendship",
-                "Evolve to random Pokémon with the same base friendship",
-                "Evolve to random Pokémon with same base friendship",
-                "Evolves to random Pokémon with the same friendship",
-                "Evolve to random Pokémon with the same friendship",
-                "Evolve to random Pokémon with same friendship",
-                "Into random Pokémon with the same friendship",
-                "Into random Pokémon with same friendship",
-                "To random Pokémon with same friendship",
-                "Random Pokémon, with same friendship",
-                "Random Pokémon with same friendship",
-                "Random Pokémon, same friendship",
-                "Random Pokémon same friendship",
-                "Random, with same friendship",
-                "Random with same friendship",
-                "Random, same friendship",
-                "Random same friendship",
-                "In same friendship",
-                "Same friendship",
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship."),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same base friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolves a Pokémon into random Pokémon with the same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with the same base friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with the same base friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same base friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolves to random Pokémon with the same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with the same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Evolve to random Pokémon with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with the same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Into random Pokémon with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "To random Pokémon with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon, same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random Pokémon same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random, with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random with same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random, same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Random same friendship"),
+                try splitIntoLines(allocator, max_line_len, "In same friendship"),
+                try splitIntoLines(allocator, max_line_len, "Same friendship"),
             },
         },
     };
@@ -557,26 +513,18 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                             break pick;
                     } else pokemon_id,
 
-                    superior_stone, poor_stone => blk: {
+                    superior_stone => blk: {
                         const total_stats = sum(&pokemon.stats);
 
                         // Intmaps/sets have sorted keys. We can therefor pick an index
                         // above or below the current one, to get a set of Pokémons whose
                         // stats are better or worse than the current one.
                         const stat_index = pokemons_by_stats.set.index(total_stats).?;
-                        const picked_index = switch (stone) {
-                            superior_stone => random.intRangeLessThan(
-                                usize,
-                                stat_index + @boolToInt(stat_index + 1 < pokemons_by_stats.count()),
-                                pokemons_by_stats.count(),
-                            ),
-                            poor_stone => random.intRangeLessThan(
-                                usize,
-                                0,
-                                (stat_index - @boolToInt(stat_index != 0)) + 1,
-                            ),
-                            else => unreachable,
-                        };
+                        const picked_index = random.intRangeLessThan(
+                            usize,
+                            stat_index + @boolToInt(stat_index + 1 < pokemons_by_stats.count()),
+                            pokemons_by_stats.count(),
+                        );
 
                         const set = pokemons_by_stats.at(picked_index).value;
                         while (set.count() != 1) {
@@ -590,6 +538,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
 
                     form_stone, skill_stone, breed_stone => blk: {
                         const map = switch (stone) {
+                            growth_stone => pokemons_by_growth_rate,
                             form_stone => pokemons_by_type,
                             skill_stone => pokemons_by_ability,
                             breed_stone => pokemons_by_egg_group,
@@ -605,7 +554,17 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                         if (map.count() == 0 or set.count() == 0)
                             break :blk pokemon_id;
 
-                        const picked_id = set.at(random.intRangeLessThan(usize, 0, set.count()));
+                        const picked_id = switch (stone) {
+                            // Assume that ability 0 means that there is no ability, and
+                            // don't pick that.
+                            skill_stone => while (set.count() != 1) {
+                                const pick = set.at(random.intRangeLessThan(usize, 0, set.count()));
+                                if (pick != 0)
+                                    break pick;
+                            } else set.at(0),
+                            form_stone, breed_stone => set.at(random.intRangeLessThan(usize, 0, set.count())),
+                            else => unreachable,
+                        };
                         const pokemon_set = map.get(picked_id).?;
                         const pokemons = pokemon_set.count();
                         while (pokemons != 1) {
@@ -616,12 +575,21 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                         break :blk pokemon_id;
                     },
 
-                    buddy_stone => blk: {
-                        const map_count = pokemons_by_base_friendship.count();
-                        if (map_count == 0)
+                    growth_stone, buddy_stone => blk: {
+                        const map = switch (stone) {
+                            growth_stone => pokemons_by_growth_rate,
+                            buddy_stone => pokemons_by_base_friendship,
+                            else => unreachable,
+                        };
+                        const number = switch (stone) {
+                            growth_stone => pokemon.growth_rate,
+                            buddy_stone => pokemon.base_friendship,
+                            else => unreachable,
+                        };
+                        if (map.count() == 0)
                             break :blk pokemon_id;
 
-                        const pokemon_set = pokemons_by_base_friendship.get(pokemon.base_friendship).?;
+                        const pokemon_set = map.get(number).?;
                         const pokemons = pokemon_set.count();
                         while (pokemons != 1) {
                             const pick = pokemon_set.at(random.intRangeLessThan(usize, 0, pokemons));
@@ -660,6 +628,32 @@ fn sum(buf: []const u8) usize {
     return res;
 }
 
+fn splitIntoLines(allocator: *mem.Allocator, max_line_len: usize, string: []const u8) ![]u8 {
+    var res = std.ArrayList(u8).init(allocator);
+    errdefer res.deinit();
+
+    // A decent estimate that will most likely ensure that we only do one allocation.
+    try res.ensureCapacity(string.len + (string.len / max_line_len) + 1);
+
+    var curr_line_len: usize = 0;
+    var it = mem.split(string, " ");
+    while (it.next()) |word| {
+        const next_line_len = word.len + curr_line_len + (1 * @boolToInt(curr_line_len != 0));
+        if (next_line_len > max_line_len) {
+            try res.appendSlice("\\n");
+            try res.appendSlice(word);
+            curr_line_len = word.len;
+        } else {
+            if (curr_line_len != 0)
+                try res.appendSlice(" ");
+            try res.appendSlice(word);
+            curr_line_len = next_line_len;
+        }
+    }
+
+    return res.toOwnedSlice();
+}
+
 fn pickString(len: usize, strings: []const []const u8) []const u8 {
     var pick = strings[0];
     for (strings) |str| {
@@ -669,6 +663,67 @@ fn pickString(len: usize, strings: []const []const u8) []const u8 {
     }
 
     return pick[0..math.min(len, pick.len)];
+}
+
+fn filterBy(
+    allocator: *mem.Allocator,
+    species: Set,
+    pokemons: Pokemons,
+    filter: fn (Pokemon, []usize) []const usize,
+) !PokemonBy {
+    var buf: [16]usize = undefined;
+    var pokemons_by = PokemonBy{};
+    for (species.span()) |s_range| {
+        var id: usize = s_range.start;
+        while (id <= s_range.end) : (id += 1) {
+            const pokemon = pokemons.get(id).?;
+            for (filter(pokemon.*, &buf)) |key| {
+                const set = try pokemons_by.getOrPutValue(allocator, key, Set{});
+                _ = try set.put(allocator, id);
+            }
+        }
+    }
+    return pokemons_by;
+}
+
+fn statsFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    buf[0] = sum(&pokemon.stats);
+    return buf[0..1];
+}
+
+fn friendshipFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    buf[0] = pokemon.base_friendship;
+    return buf[0..1];
+}
+
+fn growthRateFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    buf[0] = pokemon.growth_rate;
+    return buf[0..1];
+}
+
+fn typeFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    return setFilter("types", pokemon, buf);
+}
+
+fn abilityFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    return setFilter("abilities", pokemon, buf);
+}
+
+fn eggGroupFilter(pokemon: Pokemon, buf: []usize) []const usize {
+    return setFilter("egg_groups", pokemon, buf);
+}
+
+fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []usize) []const usize {
+    var i: usize = 0;
+    for (@field(pokemon, field).span()) |range| {
+        var j = range.start;
+        while (j <= range.end) {
+            buf[i] = j;
+            j += 1;
+            i += 1;
+        }
+    }
+    return buf[0..i];
 }
 
 const Set = util.container.IntSet.Unmanaged(usize);
@@ -714,6 +769,7 @@ const Data = struct {
 const Pokemon = struct {
     evos: Evolutions = Evolutions{},
     stats: [6]u8 = [_]u8{0} ** 6,
+    growth_rate: usize = math.maxInt(usize),
     base_friendship: usize = 0,
     catch_rate: usize = 1,
     pokedex_entry: usize = math.maxInt(usize),

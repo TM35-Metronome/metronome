@@ -7,6 +7,7 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
@@ -69,7 +70,9 @@ pub fn main2(
 
     var stdin = io.bufferedInStream(stdio.in);
     var line_buf = std.ArrayList(u8).init(allocator);
-    var data = Data{};
+    var data = Data{
+        .strings = std.StringHashMap(usize).init(allocator),
+    };
 
     while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
@@ -83,7 +86,7 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(data, seed);
+    randomize(&data, seed) catch return exit.allocErr(stdio.err);
 
     for (data.tms.values()) |tm, i| {
         stdio.out.print(".tms[{}]={}\n", .{
@@ -97,12 +100,18 @@ pub fn main2(
             hm,
         }) catch |err| return exit.stdoutErr(stdio.err, err);
     }
+    for (data.items.values()) |item, i| {
+        stdio.out.print(".items[{}].description={}\n", .{
+            data.items.at(i).key,
+            item.description,
+        }) catch |err| return exit.stdoutErr(stdio.err, err);
+    }
 
     return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8) !bool {
-    const sw = util.parse.Swhash(8);
+    const sw = util.parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
 
@@ -126,29 +135,91 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
         },
         c("moves") => {
             const index = try p.parse(parse.index);
-            _ = try data.moves.put(allocator, index);
+            const move = try data.moves.getOrPutValue(allocator, index, Move{});
+
+            switch (m(try p.parse(parse.anyField))) {
+                c("description") => move.description = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+                else => {},
+            }
+            return true;
+        },
+        c("items") => {
+            const index = try p.parse(parse.index);
+            const item = try data.items.getOrPutValue(allocator, index, Item{});
+
+            switch (m(try p.parse(parse.anyField))) {
+                c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
+                c("name") => item.name = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
+                c("description") => {
+                    item.description = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+                    return false;
+                },
+                else => {},
+            }
+            return true;
         },
         else => return true,
     }
     return true;
 }
 
-fn randomize(data: Data, seed: u64) void {
+fn randomize(data: *Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.values()) |*tm|
-        tm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count()));
+        tm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
     for (data.hms.values()) |*hm|
-        hm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count()));
+        hm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
+
+    const tms_hms_pocket = try data.string("tms_hms");
+    for (data.items.values()) |*item, i| {
+        const id = data.items.at(i).key;
+        if (item.pocket != tms_hms_pocket)
+            continue;
+
+        const is_tm = mem.startsWith(u8, item.name, "TM");
+        const is_hm = mem.startsWith(u8, item.name, "HM");
+        if (is_tm or is_hm) {
+            const number = fmt.parseUnsigned(usize, item.name[2..], 10) catch continue;
+            const machines = if (is_tm) data.tms else data.hms;
+            const move_id = machines.get(number - 1) orelse continue;
+            const move = data.moves.get(move_id.*) orelse continue;
+            // TODO: replace item description with move description when I figure out
+            //       how to best do this
+            //item.description = move.description[0..math.min(move.description.len, item.description.len)];
+        }
+    }
 }
 
 const Machines = util.container.IntMap.Unmanaged(usize, usize);
-const Moves = util.container.IntSet.Unmanaged(usize);
+const Moves = util.container.IntMap.Unmanaged(usize, Move);
+const Items = util.container.IntMap.Unmanaged(usize, Item);
 
 const Data = struct {
+    strings: std.StringHashMap(usize),
+    items: Items = Items{},
     moves: Moves = Moves{},
     tms: Machines = Machines{},
     hms: Machines = Machines{},
+
+    fn string(d: *Data, str: []const u8) !usize {
+        const res = try d.strings.getOrPut(str);
+        if (!res.found_existing) {
+            res.kv.key = try mem.dupe(d.strings.allocator, u8, str);
+            res.kv.value = d.strings.count() - 1;
+        }
+        return res.kv.value;
+    }
+};
+
+const Item = struct {
+    pocket: usize = math.maxInt(usize),
+    name: []const u8 = "",
+    description: []const u8 = "",
+};
+
+const Move = struct {
+    description: []const u8 = "",
 };
 
 test "tm35-rand-machines" {
