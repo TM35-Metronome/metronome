@@ -143,9 +143,10 @@ pub const PartyMemberBase = extern struct {
 
 pub const PartyMemberNone = extern struct {
     base: PartyMemberBase,
+    pad: lu16,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 6);
+        std.debug.assert(@sizeOf(@This()) == 8);
     }
 };
 
