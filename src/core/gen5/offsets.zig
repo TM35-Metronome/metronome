@@ -11,6 +11,8 @@ pub const Info = struct {
     version: common.Version,
 
     starters: [3][]const NarcOffset,
+    instant_text_patch: []const common.Patch,
+
     scripts: []const u8,
     pokemons: []const u8,
     evolutions: []const u8,
@@ -63,6 +65,11 @@ const black2_info = Info{
             NarcOffset{ .file = 854, .offset = 0x5EC },
         },
     },
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x01e544, .replacement = "\xc0\x46\xc0\x46" },
+        .{ .offset = 0x01e5fc, .replacement = "\xc5\xd1" },
+    },
+
     .scripts = "/a/0/5/6",
     .pokemons = "/a/0/1/6",
     .evolutions = "/a/0/1/9",
@@ -92,6 +99,11 @@ const white2_info = Info{
     .version = .white2,
 
     .starters = black2_info.starters,
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x01e570, .replacement = "\xc0\x46\xc0\x46" },
+        .{ .offset = 0x01e628, .replacement = "\xc5\xd1" },
+    },
+
     .scripts = black2_info.scripts,
     .pokemons = black2_info.pokemons,
     .evolutions = black2_info.evolutions,
@@ -146,6 +158,11 @@ const black_info = Info{
             NarcOffset{ .file = 304, .offset = 0x1D9 },
         },
     },
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x018fc0, .replacement = "\xc0\x46\xc0\x46" },
+        .{ .offset = 0x019078, .replacement = "\xc5\xd1" },
+    },
+
     .scripts = "/a/0/5/7",
     .pokemons = black2_info.pokemons,
     .evolutions = black2_info.evolutions,
@@ -175,6 +192,11 @@ const white_info = Info{
     .version = .white,
 
     .starters = black_info.starters,
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x018fdc, .replacement = "\xc0\x46\xc0\x46" },
+        .{ .offset = 0x019094, .replacement = "\xc5\xd1" },
+    },
+
     .scripts = black_info.scripts,
     .pokemons = black_info.pokemons,
     .evolutions = black_info.evolutions,

@@ -483,6 +483,7 @@ pub const Game = struct {
 
     starters: [3]*lu16,
     starters_repeat: [3]*lu16,
+    text_delays: []u8,
     trainers: []Trainer,
     moves: []Move,
     machine_learnsets: []lu64,
@@ -648,6 +649,7 @@ pub const Game = struct {
                 info.starters_repeat[1].ptr(gba_rom),
                 info.starters_repeat[2].ptr(gba_rom),
             },
+            .text_delays = info.text_delays.slice(gba_rom),
             .trainers = info.trainers.slice(gba_rom),
             .moves = info.moves.slice(gba_rom),
             .machine_learnsets = info.machine_learnsets.slice(gba_rom),

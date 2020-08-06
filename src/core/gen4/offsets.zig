@@ -16,7 +16,9 @@ pub const Info = struct {
     version: common.Version,
 
     starters: StarterLocation,
+    instant_text_patch: []const common.Patch,
     hm_tm_prefix: []const u8,
+
     pokemons: []const u8,
     level_up_moves: []const u8,
     moves: []const u8,
@@ -57,7 +59,15 @@ const hg_info = Info{
     .version = .heart_gold,
 
     .starters = StarterLocation{ .arm9 = 0x00108514 },
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x002346, .replacement = "\x00\x21" },
+        .{ .offset = 0x0202ee, .replacement = "\x0c\x1c\x18\x48" },
+        .{ .offset = 0x02031e, .replacement = "\x10\xbd\x2d\x3c\xe5\xe7" },
+        .{ .offset = 0x02032e, .replacement = "\xdf\xd0" },
+        .{ .offset = 0x02033a, .replacement = "\xf1\xe7" },
+    },
     .hm_tm_prefix = "\x1E\x00\x32\x00",
+
     .pokemons = "/a/0/0/2",
     .level_up_moves = "/a/0/3/3",
     .moves = "/a/0/1/1",
@@ -90,7 +100,9 @@ const ss_info = Info{
     .version = .soul_silver,
 
     .starters = hg_info.starters,
+    .instant_text_patch = hg_info.instant_text_patch,
     .hm_tm_prefix = hg_info.hm_tm_prefix,
+
     .pokemons = hg_info.pokemons,
     .level_up_moves = hg_info.level_up_moves,
     .moves = hg_info.moves,
@@ -128,7 +140,9 @@ const diamond_info = Info{
             .file = 64,
         },
     },
+    .instant_text_patch = &[_]common.Patch{},
     .hm_tm_prefix = "\xD1\x00\xD2\x00\xD3\x00\xD4\x00",
+
     .pokemons = "/poketool/personal/personal.narc",
     .level_up_moves = "/poketool/personal/wotbl.narc",
     .moves = "/poketool/waza/waza_tbl.narc",
@@ -161,7 +175,9 @@ const pearl_info = Info{
     .version = .pearl,
 
     .starters = diamond_info.starters,
+    .instant_text_patch = diamond_info.instant_text_patch,
     .hm_tm_prefix = diamond_info.hm_tm_prefix,
+
     .pokemons = "/poketool/personal_pearl/personal.narc",
     .level_up_moves = diamond_info.level_up_moves,
     .moves = diamond_info.moves,
@@ -199,7 +215,15 @@ const platinum_info = Info{
             .file = 78,
         },
     },
+    .instant_text_patch = &[_]common.Patch{
+        .{ .offset = 0x0023fc, .replacement = "\x00\x21" },
+        .{ .offset = 0x01d97e, .replacement = "\x0c\x1c\x18\x48" },
+        .{ .offset = 0x01d9ae, .replacement = "\x10\xbd\x2d\x3c\xe5\xe7" },
+        .{ .offset = 0x01d9be, .replacement = "\xdf\xd0" },
+        .{ .offset = 0x01d9ca, .replacement = "\xf1\xe7" },
+    },
     .hm_tm_prefix = diamond_info.hm_tm_prefix,
+
     .pokemons = "/poketool/personal/pl_personal.narc",
     .level_up_moves = diamond_info.level_up_moves,
     .moves = "/poketool/waza/pl_waza_tbl.narc",

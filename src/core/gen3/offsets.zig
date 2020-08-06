@@ -84,6 +84,7 @@ pub const PokemonNameSection = Section([11]u8);
 pub const AbilityNameSection = Section([13]u8);
 pub const MoveNameSection = Section([13]u8);
 pub const TypeNameSection = Section([7]u8);
+pub const TextDelaySection = Section(u8);
 
 pub const Info = struct {
     game_title: [12]u8,
@@ -91,6 +92,7 @@ pub const Info = struct {
     version: common.Version,
     software_version: u8,
 
+    text_delays: TextDelaySection,
     starters: [3]StarterOffset,
 
     // In some games, the starters are repeated in multible places.
@@ -132,6 +134,11 @@ const emerald_us_info = Info{
     .gamecode = "BPEE".*,
     .version = .emerald,
     .software_version = 0,
+
+    .text_delays = .{
+        .start = 6353044,
+        .len = 3,
+    },
     .trainers = .{
         .start = 3211312,
         .len = 855,
@@ -220,6 +227,11 @@ pub const fire_us_info = Info{
     .gamecode = "BPRE".*,
     .version = .fire_red,
     .software_version = 1,
+
+    .text_delays = .{
+        .start = 4322456,
+        .len = 3,
+    },
     .trainers = .{
         .start = 2353976,
         .len = 743,
@@ -308,6 +320,11 @@ pub const leaf_us_info = Info{
     .gamecode = "BPGE".*,
     .version = .leaf_green,
     .software_version = 1,
+
+    .text_delays = .{
+        .start = 4322004,
+        .len = 3,
+    },
     .trainers = .{
         .start = 2353940,
         .len = 743,
@@ -396,6 +413,11 @@ pub const ruby_us_info = Info{
     .gamecode = "AXVE".*,
     .version = .ruby,
     .software_version = 1,
+
+    .text_delays = .{
+        .start = 1993712,
+        .len = 3,
+    },
     .trainers = .{
         .start = 2032916,
         .len = 337,
@@ -484,6 +506,11 @@ pub const sapphire_us_info = Info{
     .gamecode = "AXPE".*,
     .version = .sapphire,
     .software_version = 1,
+
+    .text_delays = .{
+        .start = 1993600,
+        .len = 3,
+    },
     .trainers = .{
         .start = 2032804,
         .len = 337,
