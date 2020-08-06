@@ -340,6 +340,19 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         else => unreachable,
     }
 
+    for (game.map_headers) |header, i| {
+        try stream.print(".map[{}].music={}\n", .{ i, header.music.value() });
+        try stream.print(".map[{}].cave={}\n", .{ i, header.cave });
+        try stream.print(".map[{}].weather={}\n", .{ i, header.weather });
+        try stream.print(".map[{}].type={}\n", .{ i, header.map_type });
+        try stream.print(".map[{}].escape_rope={}\n", .{ i, header.escape_rope });
+        try stream.print(".map[{}].battle_scene={}\n", .{ i, header.map_battle_scene });
+        try stream.print(".map[{}].allow_cycling={}\n", .{ i, header.flags.allow_cycling });
+        try stream.print(".map[{}].allow_escaping={}\n", .{ i, header.flags.allow_escaping });
+        try stream.print(".map[{}].allow_running={}\n", .{ i, header.flags.allow_running });
+        try stream.print(".map[{}].show_map_name={}\n", .{ i, header.flags.show_map_name });
+    }
+
     for (game.wild_pokemon_headers) |header, i| {
         if (header.land.toPtr(game.data)) |land| {
             const wilds = try land.wild_pokemons.toPtr(game.data);
@@ -380,11 +393,11 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
 }
 
 fn outputGen3Area(stream: var, i: usize, name: []const u8, rate: u8, wilds: []const gen3.WildPokemon) !void {
-    try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", .{ i, name, rate });
+    try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, name, rate });
     for (wilds) |pokemon, j| {
-        try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ i, name, j, pokemon.min_level });
-        try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ i, name, j, pokemon.max_level });
-        try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, name, j, pokemon.species.value() });
+        try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, name, j, pokemon.min_level });
+        try stream.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, name, j, pokemon.max_level });
+        try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, name, j, pokemon.species.value() });
     }
 }
 
@@ -584,11 +597,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         .pearl,
         .platinum,
         => for (game.wild_pokemons.dppt) |wild_mons, i| {
-            try stream.print(".zones[{}].wild.grass.encounter_rate={}\n", .{ i, wild_mons.grass_rate.value() });
+            try stream.print(".wild_pokemons[{}].grass.encounter_rate={}\n", .{ i, wild_mons.grass_rate.value() });
             for (wild_mons.grass) |grass, j| {
-                try stream.print(".zones[{}].wild.grass.pokemons[{}].min_level={}\n", .{ i, j, grass.level });
-                try stream.print(".zones[{}].wild.grass.pokemons[{}].max_level={}\n", .{ i, j, grass.level });
-                try stream.print(".zones[{}].wild.grass.pokemons[{}].species={}\n", .{ i, j, grass.species.value() });
+                try stream.print(".wild_pokemons[{}].grass.pokemons[{}].min_level={}\n", .{ i, j, grass.level });
+                try stream.print(".wild_pokemons[{}].grass.pokemons[{}].max_level={}\n", .{ i, j, grass.level });
+                try stream.print(".wild_pokemons[{}].grass.pokemons[{}].species={}\n", .{ i, j, grass.species.value() });
             }
 
             // TODO: Get rid of inline for in favor of a function to call
@@ -601,7 +614,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 "gba_replace",
             }) |area_name| {
                 for (@field(wild_mons, area_name)) |replacement, k| {
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, k, replacement.species.value() });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, replacement.species.value() });
                 }
             }
 
@@ -613,11 +626,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 "good_rod",
                 "super_rod",
             }) |area_name| {
-                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", .{ i, area_name, @field(wild_mons, area_name).rate.value() });
+                try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, @field(wild_mons, area_name).rate.value() });
                 for (@field(wild_mons, area_name).mons) |sea, k| {
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species.value() });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species.value() });
                 }
             }
         },
@@ -631,11 +644,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 "grass_day",
                 "grass_night",
             }) |area_name| {
-                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", .{ i, area_name, wild_mons.grass_rate });
+                try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.grass_rate });
                 for (@field(wild_mons, area_name)) |species, j| {
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, j, species.value() });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, j, species.value() });
                 }
             }
 
@@ -647,11 +660,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
                 "good_rod",
                 "super_rod",
             }) |area_name, j| {
-                try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", .{ i, area_name, wild_mons.sea_rates[j] });
+                try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.sea_rates[j] });
                 for (@field(wild_mons, area_name)) |sea, k| {
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
-                    try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species.value() });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
+                    try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species.value() });
                 }
             }
 
@@ -951,6 +964,14 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
     }
 
+    for (game.map_headers) |map_header, i| {
+        //inline for (@typeInfo(gen5.MapHeader).Struct.fields) |field| {
+        //    try stream.print(".map[{}].{}={}\n", .{ i, field.name, @field(map_header, field.name) });
+        //}
+
+        //try outputGen5String(stream, "map", i, "name", map_header.name_index, game.map_names);
+    }
+
     for (game.wild_pokemons.fat) |_, i| {
         const wild_mons = try game.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
         // TODO: Get rid of inline for in favor of a function to call
@@ -963,13 +984,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             "fishing",
             "ripple_fishing",
         }) |area_name, j| {
-            try stream.print(".zones[{}].wild.{}.encounter_rate={}\n", .{ i, area_name, wild_mons.rates[j] });
+            try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.rates[j] });
             const area = @field(wild_mons, area_name);
             for (area) |wild, k| {
-                try stream.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ i, area_name, k, wild.species.species() });
-                try stream.print(".zones[{}].wild.{}.pokemons[{}].form={}\n", .{ i, area_name, k, wild.species.form() });
-                try stream.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, wild.min_level });
-                try stream.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, wild.max_level });
+                try stream.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, wild.species.species() });
+                try stream.print(".wild_pokemons[{}].{}.pokemons[{}].form={}\n", .{ i, area_name, k, wild.species.form() });
+                try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, wild.min_level });
+                try stream.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, wild.max_level });
             }
         }
     }
@@ -995,6 +1016,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     //try outputGen5StringTable(stream, "items", "name_on_ground", game.item_names_on_the_ground);
     try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
     try outputGen5StringTable(stream, "types", "name", game.type_names);
+    //try outputGen5StringTable(stream, "map", "name", game.map_names);
 
     // This snippet of code can be uncommented to output all strings in gen5 games.
     // This is useful when looking for new strings to expose.
@@ -1013,14 +1035,24 @@ fn outputGen5StringTable(
     field_name: []const u8,
     est: gen5.StringTable,
 ) !void {
-    var buf: [1024]u8 = undefined;
     var i: u32 = 0;
-    while (i < est.entryCount(0)) : (i += 1) {
-        try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
-        const len = try est.getStringStream(0, i).inStream().readAll(&buf);
-        try escape.writeEscaped(stream, buf[0..len], escape.zig_escapes);
-        try stream.writeAll("\n");
-    }
+    while (i < est.entryCount(0)) : (i += 1)
+        try outputGen5String(stream, array_name, i, field_name, i, est);
+}
+
+fn outputGen5String(
+    stream: var,
+    array_name: []const u8,
+    i: usize,
+    field_name: []const u8,
+    string_i: usize,
+    est: gen5.StringTable,
+) !void {
+    var buf: [1024]u8 = undefined;
+    try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
+    const len = try est.getStringStream(0, string_i).inStream().readAll(&buf);
+    try escape.writeEscaped(stream, buf[0..len], escape.zig_escapes);
+    try stream.writeAll("\n");
 }
 
 test "" {

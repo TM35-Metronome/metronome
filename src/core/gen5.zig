@@ -388,6 +388,146 @@ pub const Item = packed struct {
     }
 };
 
+// All comments on fields are based on research done on Route 19 in b2
+pub const MapHeader = extern struct {
+    // Something related to the map itself. Setting this to 5
+    // made it so the player stood in a blue void.
+    unknown00: u8,
+
+    // Setting to 0,5,255 had seemingly no effect
+    unknown01: u8,
+
+    // Setting to 5 removed the snow on the route, even though it was
+    // winter. Seemed like the fall map
+    unknown02: u8,
+
+    // Setting to 5 removed the snow on the route, even though it was
+    // winter. Seemed like the summer map
+    unknown03: u8,
+
+    // Something related to the map itself. Setting this to 5
+    // made it so the player stood in a blue void.
+    unknown04: u8,
+
+    // Setting to 0,5,255: "An error has occurred. Please turn off the power."
+    unknown05: u8,
+
+    // Setting to 5: No effect it seems
+    // Setting to 255: Freeze when talking to sign,npcs
+    // Seems to be an index to the script of the map
+    unknown06: lu16,
+
+    // Setting to 0,5: No effect it seems
+    unknown08: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown09: u8,
+
+    // Setting to 0: No text on sign, npc says "it seems you can't use it yet."
+    // Setting to 255: "An error has occurred. Please turn off the power."
+    // Seems related to text or something
+    unknown0a: lu16,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown0c: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown0d: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown0e: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown0f: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown10: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown11: u8,
+    music: lu16,
+    wild_pokemons: lu16,
+
+    // Seems to be related to signs somehow
+    unknown16: lu16,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown18: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown19: u8,
+    name_index: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown1b: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown1c: u8,
+    camera_angle: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown1e: u8,
+    battle_background: u8,
+
+    // Setting to 0: No effect it seems
+    // Something related to the map itself. Setting this to 255
+    // gave a blue void.
+    unknown20: u8,
+
+    // Setting to 0: No effect it seems
+    // Setting to 5,255: "An error has occurred. Please turn off the power."
+    unknown21: u8,
+
+    // Setting to 0: No effect it seems
+    // Setting to 5: No effect it seems
+    // Setting to 255: After loading, "An error has occurred. Please turn off the power."
+    unknown22: u8,
+
+    // Setting to 0: No effect it seems
+    // Setting to 5,255: After moving "An error has occurred. Please turn off the power."
+    unknown23: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown24: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown25: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown26: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown27: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown28: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown29: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2a: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2b: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2c: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2d: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2e: u8,
+
+    // Setting to 0,5,255: No effect it seems
+    unknown2f: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 48);
+    }
+};
+
 const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
@@ -585,6 +725,7 @@ pub const Game = struct {
     static_pokemons: []*script.Command,
     pokeball_items: []PokeballItem,
     evolutions: []EvolutionTable,
+    map_headers: []MapHeader,
 
     wild_pokemons: nds.fs.Fs,
     pokemons: nds.fs.Fs,
@@ -603,6 +744,7 @@ pub const Game = struct {
     item_names_on_the_ground: StringTable,
     item_descriptions: StringTable,
     type_names: StringTable,
+    map_names: StringTable,
 
     pub fn identify(stream: var) !offsets.Info {
         const header = try stream.readStruct(nds.Header);
@@ -630,6 +772,7 @@ pub const Game = struct {
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tm_len]);
 
+        const map_file = try getNarc(file_system, info.map_file);
         const text = try getNarc(file_system, info.text);
         const scripts = try getNarc(file_system, info.scripts);
         const commands = try findScriptCommands(info.version, scripts, allocator);
@@ -637,6 +780,8 @@ pub const Game = struct {
             allocator.free(commands.static_pokemons);
             allocator.free(commands.pokeball_items);
         }
+
+        const map_header_bytes = map_file.fileData(.{ .i = info.map_headers });
 
         return Game{
             .version = info.version,
@@ -667,6 +812,7 @@ pub const Game = struct {
             .trainers = try (try getNarc(file_system, info.trainers)).toSlice(1, Trainer),
             .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
             .evolutions = try (try getNarc(file_system, info.evolutions)).toSlice(0, EvolutionTable),
+            .map_headers = mem.bytesAsSlice(MapHeader, map_header_bytes[0..]),
             .tms1 = hm_tms[0..92],
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
@@ -690,6 +836,7 @@ pub const Game = struct {
             .item_names_on_the_ground = StringTable{ .data = text.fileData(.{ .i = info.item_names_on_the_ground }) },
             .item_descriptions = StringTable{ .data = text.fileData(.{ .i = info.item_descriptions }) },
             .type_names = StringTable{ .data = text.fileData(.{ .i = info.type_names }) },
+            .map_names = StringTable{ .data = text.fileData(.{ .i = info.map_names }) },
         };
     }
 

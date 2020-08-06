@@ -193,7 +193,7 @@ fn getOffsets(
         &[_][]const u8{"fishing"},
     });
     const MapHeaders = Searcher(gen3.MapHeader, &[_][]const []const u8{
-        &[_][]const u8{"map_data"},
+        &[_][]const u8{"map_layout"},
         &[_][]const u8{"map_events"},
         &[_][]const u8{"map_scripts"},
         &[_][]const u8{"map_connections"},
@@ -424,13 +424,10 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
 
 fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8, a: T, b: T) bool {
     const info = @typeInfo(T);
+    if (ignored_fields.len == 0)
+        return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b));
+
     switch (info) {
-        .Pointer => |ptr| switch (ptr.size) {
-            .Slice => {
-                return a.ptr == b.ptr and a.len == b.len;
-            },
-            else => return a == b,
-        },
         .Array => {
             if (a.len != b.len)
                 return false;
@@ -496,7 +493,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return matches(first_field.field_type, ignored_fields, @field(a, first_field.name), @field(b, first_field.name));
         },
-        else => return a == b,
+        else => return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b)),
     }
 }
 
@@ -1876,7 +1873,7 @@ const frlg_last_wild_mon_headers = [_]gen3.WildPokemonHeader{
 const em_first_map_headers = [_]gen3.MapHeader{
 // Petalburg City
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1888,14 +1885,20 @@ gen3.MapHeader{
     .map_type = 2,
     .pad = undefined,
     .escape_rope = 0,
-    .flags = 0b00001101,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = true,
+        .allow_escaping = false,
+        .allow_running = true,
+        .show_map_name = true,
+        .unused = 0,
+    },
     .map_battle_scene = 0,
 }};
 
 const em_last_map_headers = [_]gen3.MapHeader{
 // Route 124 - Diving Treasure Hunters House
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1907,14 +1910,20 @@ gen3.MapHeader{
     .map_type = 8,
     .pad = undefined,
     .escape_rope = 0,
-    .flags = 0b00000000,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = false,
+        .allow_escaping = false,
+        .allow_running = false,
+        .show_map_name = false,
+        .unused = 0,
+    },
     .map_battle_scene = 0,
 }};
 
 const rs_first_map_headers = [_]gen3.MapHeader{
 // Petalburg City
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1926,14 +1935,20 @@ gen3.MapHeader{
     .map_type = 2,
     .pad = undefined,
     .escape_rope = 0,
-    .flags = 0b00000001,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = true,
+        .allow_escaping = false,
+        .allow_running = false,
+        .show_map_name = false,
+        .unused = 0,
+    },
     .map_battle_scene = 0,
 }};
 
 const rs_last_map_headers = [_]gen3.MapHeader{
 // Route 124 - Diving Treasure Hunters House
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1945,14 +1960,20 @@ gen3.MapHeader{
     .map_type = 8,
     .pad = undefined,
     .escape_rope = 0,
-    .flags = 0b00000000,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = false,
+        .allow_escaping = false,
+        .allow_running = false,
+        .show_map_name = false,
+        .unused = 0,
+    },
     .map_battle_scene = 0,
 }};
 
 const frlg_first_map_headers = [_]gen3.MapHeader{
 // ???
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1964,14 +1985,20 @@ gen3.MapHeader{
     .map_type = 0x8,
     .pad = undefined,
     .escape_rope = 0x0,
-    .flags = 0x0,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = false,
+        .allow_escaping = false,
+        .allow_running = false,
+        .show_map_name = false,
+        .unused = 0,
+    },
     .map_battle_scene = 0x8,
 }};
 
 const frlg_last_map_headers = [_]gen3.MapHeader{
 // ???
 gen3.MapHeader{
-    .map_data = undefined,
+    .map_layout = undefined,
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
@@ -1983,7 +2010,13 @@ gen3.MapHeader{
     .map_type = 0x8,
     .pad = undefined,
     .escape_rope = 0x0,
-    .flags = 0x0,
+    .flags = gen3.MapHeader.Flags{
+        .allow_cycling = false,
+        .allow_escaping = false,
+        .allow_running = false,
+        .show_map_name = false,
+        .unused = 0,
+    },
     .map_battle_scene = 0x0,
 }};
 

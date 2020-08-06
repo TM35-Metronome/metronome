@@ -11,6 +11,7 @@ const fs = std.fs;
 const gba = rom.gba;
 
 const li16 = rom.int.li16;
+const li32 = rom.int.li32;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
@@ -348,7 +349,7 @@ pub const Evolution = extern struct {
 };
 
 pub const MapHeader = extern struct {
-    map_data: Ptr(*c_void),
+    map_layout: Ptr(*MapLayout),
     map_events: Ptr(*MapEvents),
     map_scripts: Ptr([*]MapScript),
     map_connections: Ptr(*c_void),
@@ -360,11 +361,51 @@ pub const MapHeader = extern struct {
     map_type: u8,
     pad: u8,
     escape_rope: u8,
-    flags: u8,
+    flags: Flags,
     map_battle_scene: u8,
+
+    pub const Flags = packed struct {
+        allow_cycling: bool,
+        allow_escaping: bool,
+        allow_running: bool,
+        show_map_name: bool,
+        unused: u4,
+
+        comptime {
+            std.debug.assert(@sizeOf(@This()) == 1);
+        }
+    };
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 28);
+    }
+};
+
+pub const MapLayout = extern struct {
+    width: li32,
+    height: li32,
+    border: Ptr(*lu16),
+    map: Ptr(*lu16),
+    primary_tileset: Ptr(*Tileset),
+    secondary_tileset: Ptr(*Tileset),
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 24);
+    }
+};
+
+pub const Tileset = extern struct {
+    is_compressed: u8,
+    is_secondary: u8,
+    padding: [2]u8,
+    tiles: Ptr(*c_void),
+    palettes: Ptr(*c_void),
+    metatiles: Ptr(*lu16),
+    metatiles_attributes: Ptr(*[512]lu16),
+    callback: Ptr(*c_void),
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 24);
     }
 };
 

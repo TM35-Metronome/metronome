@@ -450,9 +450,28 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 else => return error.Error,
             }
         },
-        c("zones") => {
+        c("map") => {
             const index = try parser.parse(parse.index);
-            try parser.parse(comptime parse.field("wild"));
+            if (index >= game.map_headers.len)
+                return error.Error;
+
+            const header = &game.map_headers[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("music") => header.music = try parser.parse(parselu16v),
+                c("cave") => header.cave = try parser.parse(parse.u8v),
+                c("weather") => header.weather = try parser.parse(parse.u8v),
+                c("type") => header.map_type = try parser.parse(parse.u8v),
+                c("escape_rope") => header.escape_rope = try parser.parse(parse.u8v),
+                c("battle_scene") => header.map_battle_scene = try parser.parse(parse.u8v),
+                c("allow_cycling") => header.flags.allow_cycling = try parser.parse(parse.boolv),
+                c("allow_escaping") => header.flags.allow_escaping = try parser.parse(parse.boolv),
+                c("allow_running") => header.flags.allow_running = try parser.parse(parse.boolv),
+                c("show_map_name") => header.flags.show_map_name = try parser.parse(parse.boolv),
+                else => return error.NoField,
+            }
+        },
+        c("wild_pokemons") => {
+            const index = try parser.parse(parse.index);
             if (index >= game.wild_pokemon_headers.len)
                 return error.Error;
 
@@ -730,10 +749,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("tms") => try parse.anyT(parser.str, &game.tms, converters),
         c("hms") => try parse.anyT(parser.str, &game.hms, converters),
-        c("zones") => {
+        c("wild_pokemons") => {
             const wild_pokemons = game.wild_pokemons;
             const index = try parser.parse(parse.index);
-            try parser.parse(comptime parse.field("wild"));
 
             switch (game.version) {
                 .diamond,
@@ -1085,17 +1103,12 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             }
         },
         c("moves") => {
-            const index = try parser.parse(parse.index);
             const prev = parser.str;
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
+            const index = try parser.parse(parse.index);
+            switch (m(try parser.parse(parse.anyField))) {
                 c("description") => try applyGen5String(game.move_descriptions, index, try parser.parse(parse.strv)),
                 c("name") => try applyGen5String(game.move_names, index, try parser.parse(parse.strv)),
-                else => {
-                    if (index >= game.moves.len)
-                        return error.Error;
-                    try parse.anyT(prev, &game.moves[index], converters);
-                },
+                else => try parse.anyT(prev, &game.moves, converters),
             }
         },
         c("abilities") => {
@@ -1112,7 +1125,15 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 else => return error.Error,
             }
         },
-        c("zones") => {
+        //c("map") => {
+        //const prev = parser.str;
+        //const index = try parser.parse(parse.index);
+        //switch (m(try parser.parse(parse.anyField))) {
+        //c("name") => {},
+        //else => try parse.anyT(prev, &game.map_headers, converters),
+        //}
+        //},
+        c("wild_pokemons") => {
             const H = struct {
                 fn applyArea(par: *parse.MutParser, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
                     switch (m(try par.parse(parse.anyField))) {
@@ -1138,7 +1159,6 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             };
 
             const index = @intCast(u32, try parser.parse(parse.index));
-            try parser.parse(comptime parse.field("wild"));
 
             if (index >= game.wild_pokemons.fat.len)
                 return error.Error;
