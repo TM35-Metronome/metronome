@@ -23,6 +23,9 @@ pub const Info = struct {
     wild_pokemons: []const u8,
     itemdata: []const u8,
 
+    map_file: []const u8,
+    map_headers: u16,
+
     text: []const u8,
     pokemon_names: u16,
     pokedex_category_names: u16,
@@ -34,6 +37,7 @@ pub const Info = struct {
     item_names_on_the_ground: u16,
     item_descriptions: u16,
     type_names: u16,
+    map_names: u16,
 };
 
 pub const infos = [_]Info{
@@ -80,6 +84,9 @@ const black2_info = Info{
     .wild_pokemons = "/a/1/2/7",
     .itemdata = "/a/0/2/4",
 
+    .map_file = "a/0/1/2",
+    .map_headers = 0,
+
     .text = "a/0/0/2",
     .pokemon_names = 90,
     .pokedex_category_names = 464,
@@ -91,6 +98,7 @@ const black2_info = Info{
     .item_names_on_the_ground = 481,
     .item_descriptions = 63,
     .type_names = 489,
+    .map_names = 109,
 };
 
 const white2_info = Info{
@@ -114,6 +122,9 @@ const white2_info = Info{
     .wild_pokemons = black2_info.wild_pokemons,
     .itemdata = black2_info.itemdata,
 
+    .map_file = black2_info.map_file,
+    .map_headers = black2_info.map_headers,
+
     .text = black2_info.text,
     .pokemon_names = black2_info.pokemon_names,
     .pokedex_category_names = black2_info.pokedex_category_names,
@@ -125,6 +136,7 @@ const white2_info = Info{
     .item_names_on_the_ground = black2_info.item_names_on_the_ground,
     .item_descriptions = black2_info.item_descriptions,
     .type_names = black2_info.type_names,
+    .map_names = black2_info.map_names,
 };
 
 const black_info = Info{
@@ -173,6 +185,9 @@ const black_info = Info{
     .wild_pokemons = "/a/1/2/6",
     .itemdata = black2_info.itemdata,
 
+    .map_file = black2_info.map_file,
+    .map_headers = black2_info.map_headers,
+
     .text = black2_info.text,
     .pokemon_names = 70,
     .pokedex_category_names = 260,
@@ -184,6 +199,7 @@ const black_info = Info{
     .item_names_on_the_ground = 279,
     .item_descriptions = 53,
     .type_names = 287,
+    .map_names = 89,
 };
 
 const white_info = Info{
@@ -207,6 +223,9 @@ const white_info = Info{
     .wild_pokemons = black_info.wild_pokemons,
     .itemdata = black_info.itemdata,
 
+    .map_file = black_info.map_file,
+    .map_headers = black_info.map_headers,
+
     .text = black_info.text,
     .pokemon_names = black_info.pokemon_names,
     .pokedex_category_names = black_info.pokedex_category_names,
@@ -218,6 +237,7 @@ const white_info = Info{
     .item_names_on_the_ground = black_info.item_names_on_the_ground,
     .item_descriptions = black_info.item_descriptions,
     .type_names = black_info.type_names,
+    .map_names = black_info.map_names,
 };
 
 pub const tm_count = 95;

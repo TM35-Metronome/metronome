@@ -84,8 +84,8 @@ pub fn main2(
 
     randomize(data, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
 
-    for (data.zones.values()) |zone, i| {
-        const zone_i = data.zones.at(i).key;
+    for (data.wild_pokemons.values()) |zone, i| {
+        const zone_i = data.wild_pokemons.at(i).key;
 
         var area_iter = data.strings.iterator();
         while (area_iter.next()) |area_kv| {
@@ -96,11 +96,11 @@ pub fn main2(
             for (area.pokemons.values()) |*pokemon, j| {
                 const poke_i = area.pokemons.at(j).key;
                 if (pokemon.min_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.max_level) |l|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.species) |s|
-                    stdio.out.print(".zones[{}].wild.{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
             }
         }
     }
@@ -144,10 +144,9 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 else => return true,
             }
         },
-        c("zones") => {
+        c("wild_pokemons") => {
             const zone_index = try p.parse(parse.index);
-            const zone = try data.zones.getOrPutValue(allocator, zone_index, Zone{});
-            try p.parse(comptime parse.field("wild"));
+            const zone = try data.wild_pokemons.getOrPutValue(allocator, zone_index, Zone{});
             const area_name = try p.parse(parse.anyField);
 
             const area_id = try data.string(area_name);
@@ -181,7 +180,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
     const species = try data.pokedexPokemons();
     const species_max = species.count();
 
-    for (data.zones.values()) |zone| {
+    for (data.wild_pokemons.values()) |zone| {
         for (zone.wild_areas.values()) |area| {
             for (area.pokemons.values()) |*wild_pokemon| {
                 const old_species = wild_pokemon.species orelse continue;
@@ -248,7 +247,7 @@ const Data = struct {
     strings: std.StringHashMap(usize),
     pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
-    zones: Zones = Zones{},
+    wild_pokemons: Zones = Zones{},
 
     fn string(d: *Data, str: []const u8) !usize {
         const res = try d.strings.getOrPut(str);
@@ -396,60 +395,60 @@ test "tm35-rand-wild" {
     ;
 
     const test_string = result_prefix ++
-        \\.zones[0].wild.grass.pokemons[0].species=0
-        \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=0
-        \\.zones[0].wild.grass.pokemons[3].species=0
-        \\.zones[1].wild.grass.pokemons[0].species=0
-        \\.zones[1].wild.grass.pokemons[1].species=0
-        \\.zones[1].wild.grass.pokemons[2].species=0
-        \\.zones[1].wild.grass.pokemons[3].species=0
-        \\.zones[2].wild.grass.pokemons[0].species=0
-        \\.zones[2].wild.grass.pokemons[1].species=0
-        \\.zones[2].wild.grass.pokemons[2].species=0
-        \\.zones[2].wild.grass.pokemons[3].species=0
-        \\.zones[3].wild.grass.pokemons[0].species=0
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=0
-        \\.zones[3].wild.grass.pokemons[3].species=0
+        \\.wild_pokemons[0].grass.pokemons[0].species=0
+        \\.wild_pokemons[0].grass.pokemons[1].species=0
+        \\.wild_pokemons[0].grass.pokemons[2].species=0
+        \\.wild_pokemons[0].grass.pokemons[3].species=0
+        \\.wild_pokemons[1].grass.pokemons[0].species=0
+        \\.wild_pokemons[1].grass.pokemons[1].species=0
+        \\.wild_pokemons[1].grass.pokemons[2].species=0
+        \\.wild_pokemons[1].grass.pokemons[3].species=0
+        \\.wild_pokemons[2].grass.pokemons[0].species=0
+        \\.wild_pokemons[2].grass.pokemons[1].species=0
+        \\.wild_pokemons[2].grass.pokemons[2].species=0
+        \\.wild_pokemons[2].grass.pokemons[3].species=0
+        \\.wild_pokemons[3].grass.pokemons[0].species=0
+        \\.wild_pokemons[3].grass.pokemons[1].species=0
+        \\.wild_pokemons[3].grass.pokemons[2].species=0
+        \\.wild_pokemons[3].grass.pokemons[3].species=0
         \\
     ;
     util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.zones[0].wild.grass.pokemons[0].species=2
-        \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=0
-        \\.zones[0].wild.grass.pokemons[3].species=2
-        \\.zones[1].wild.grass.pokemons[0].species=3
-        \\.zones[1].wild.grass.pokemons[1].species=7
-        \\.zones[1].wild.grass.pokemons[2].species=1
-        \\.zones[1].wild.grass.pokemons[3].species=6
-        \\.zones[2].wild.grass.pokemons[0].species=6
-        \\.zones[2].wild.grass.pokemons[1].species=6
-        \\.zones[2].wild.grass.pokemons[2].species=8
-        \\.zones[2].wild.grass.pokemons[3].species=8
-        \\.zones[3].wild.grass.pokemons[0].species=0
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=4
-        \\.zones[3].wild.grass.pokemons[3].species=7
+        \\.wild_pokemons[0].grass.pokemons[0].species=2
+        \\.wild_pokemons[0].grass.pokemons[1].species=0
+        \\.wild_pokemons[0].grass.pokemons[2].species=0
+        \\.wild_pokemons[0].grass.pokemons[3].species=2
+        \\.wild_pokemons[1].grass.pokemons[0].species=3
+        \\.wild_pokemons[1].grass.pokemons[1].species=7
+        \\.wild_pokemons[1].grass.pokemons[2].species=1
+        \\.wild_pokemons[1].grass.pokemons[3].species=6
+        \\.wild_pokemons[2].grass.pokemons[0].species=6
+        \\.wild_pokemons[2].grass.pokemons[1].species=6
+        \\.wild_pokemons[2].grass.pokemons[2].species=8
+        \\.wild_pokemons[2].grass.pokemons[3].species=8
+        \\.wild_pokemons[3].grass.pokemons[0].species=0
+        \\.wild_pokemons[3].grass.pokemons[1].species=0
+        \\.wild_pokemons[3].grass.pokemons[2].species=4
+        \\.wild_pokemons[3].grass.pokemons[3].species=7
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
-        \\.zones[0].wild.grass.pokemons[0].species=0
-        \\.zones[0].wild.grass.pokemons[1].species=0
-        \\.zones[0].wild.grass.pokemons[2].species=0
-        \\.zones[0].wild.grass.pokemons[3].species=0
-        \\.zones[1].wild.grass.pokemons[0].species=0
-        \\.zones[1].wild.grass.pokemons[1].species=1
-        \\.zones[1].wild.grass.pokemons[2].species=0
-        \\.zones[1].wild.grass.pokemons[3].species=0
-        \\.zones[2].wild.grass.pokemons[0].species=0
-        \\.zones[2].wild.grass.pokemons[1].species=0
-        \\.zones[2].wild.grass.pokemons[2].species=1
-        \\.zones[2].wild.grass.pokemons[3].species=1
-        \\.zones[3].wild.grass.pokemons[0].species=0
-        \\.zones[3].wild.grass.pokemons[1].species=0
-        \\.zones[3].wild.grass.pokemons[2].species=0
-        \\.zones[3].wild.grass.pokemons[3].species=1
+        \\.wild_pokemons[0].grass.pokemons[0].species=0
+        \\.wild_pokemons[0].grass.pokemons[1].species=0
+        \\.wild_pokemons[0].grass.pokemons[2].species=0
+        \\.wild_pokemons[0].grass.pokemons[3].species=0
+        \\.wild_pokemons[1].grass.pokemons[0].species=0
+        \\.wild_pokemons[1].grass.pokemons[1].species=1
+        \\.wild_pokemons[1].grass.pokemons[2].species=0
+        \\.wild_pokemons[1].grass.pokemons[3].species=0
+        \\.wild_pokemons[2].grass.pokemons[0].species=0
+        \\.wild_pokemons[2].grass.pokemons[1].species=0
+        \\.wild_pokemons[2].grass.pokemons[2].species=1
+        \\.wild_pokemons[2].grass.pokemons[3].species=1
+        \\.wild_pokemons[3].grass.pokemons[0].species=0
+        \\.wild_pokemons[3].grass.pokemons[1].species=0
+        \\.wild_pokemons[3].grass.pokemons[2].species=0
+        \\.wild_pokemons[3].grass.pokemons[3].species=1
         \\
     );
 }

@@ -398,6 +398,37 @@ pub const Item = packed struct {
     }
 };
 
+pub const MapHeader = extern struct {
+    unknown00: u8,
+    unknown01: u8,
+    unknown02: u8,
+    unknown03: u8,
+    unknown04: u8,
+    unknown05: u8,
+    unknown06: u8,
+    unknown07: u8,
+    unknown08: u8,
+    unknown09: u8,
+    unknown0a: u8,
+    unknown0b: u8,
+    unknown0c: u8,
+    unknown0d: u8,
+    unknown0e: u8,
+    unknown0f: u8,
+    unknown10: u8,
+    unknown11: u8,
+    unknown12: u8,
+    unknown13: u8,
+    unknown14: u8,
+    unknown15: u8,
+    unknown16: u8,
+    unknown17: u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 24);
+    }
+};
+
 const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
