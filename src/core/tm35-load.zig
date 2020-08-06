@@ -175,7 +175,10 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".moves[{}].side_effect_chance={}\n", .{ i, move.side_effect_chance });
         try stream.print(".moves[{}].target={}\n", .{ i, move.target });
         try stream.print(".moves[{}].priority={}\n", .{ i, move.priority });
-        try stream.print(".moves[{}].flags={}\n", .{ i, move.flags.value() });
+        try stream.print(".moves[{}].flags0={}\n", .{ i, move.flags0 });
+        try stream.print(".moves[{}].flags1={}\n", .{ i, move.flags1 });
+        try stream.print(".moves[{}].flags2={}\n", .{ i, move.flags2 });
+        try stream.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
     }
 
     for (game.pokemons) |pokemon, i| {

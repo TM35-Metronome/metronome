@@ -815,7 +815,10 @@ const first_moves = [_]gen3.Move{
         .side_effect_chance = 0,
         .target = 0,
         .priority = 0,
-        .flags = lu32.init(0),
+        .flags0 = 0,
+        .flags1 = 0,
+        .flags2 = 0,
+        .category = .physical,
     },
     // Pound
     gen3.Move{
@@ -827,7 +830,10 @@ const first_moves = [_]gen3.Move{
         .side_effect_chance = 0,
         .target = 0,
         .priority = 0,
-        .flags = lu32.init(0x33),
+        .flags0 = 0x33,
+        .flags1 = 0,
+        .flags2 = 0,
+        .category = .physical,
     },
 };
 
@@ -842,7 +848,10 @@ gen3.Move{
     .side_effect_chance = 100,
     .target = 0,
     .priority = 0,
-    .flags = lu32.init(0x32),
+    .flags0 = 0x32,
+    .flags1 = 0,
+    .flags2 = 0,
+    .category = .physical,
 }};
 
 const first_machine_learnsets = [_]lu64{

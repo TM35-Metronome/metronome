@@ -188,7 +188,13 @@ pub const Move = extern struct {
     side_effect_chance: u8,
     target: u8,
     priority: u8,
-    flags: lu32,
+    flags0: u8,
+    flags1: u8,
+    flags2: u8,
+
+    // The last byte is normally unused, but there exists patches
+    // to make this last byte define the moves category (phys/spec/status).
+    category: common.MoveCategory,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 12);
