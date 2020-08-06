@@ -572,6 +572,9 @@ pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
 
+    instant_text_patch: []const common.Patch,
+
+    arm9: []u8,
     starters: [3][]*lu16,
     moves: []Move,
     trainers: []Trainer,
@@ -638,6 +641,9 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
+            .instant_text_patch = info.instant_text_patch,
+
+            .arm9 = arm9,
             .starters = blk: {
                 var res: [3][]*lu16 = undefined;
                 var filled: usize = 0;

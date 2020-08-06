@@ -77,6 +77,8 @@ fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
     try stream.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
     try stream.print(".game[{}].software_version={}\n", .{ i, info.software_version });
+    try stream.print(".game[{}].text_delays.start={}\n", .{ i, info.text_delays.start });
+    try stream.print(".game[{}].text_delays.len={}\n", .{ i, info.text_delays.len });
     try stream.print(".game[{}].trainers.start={}\n", .{ i, info.trainers.start });
     try stream.print(".game[{}].trainers.len={}\n", .{ i, info.trainers.len });
     try stream.print(".game[{}].moves.start={}\n", .{ i, info.moves.start });
@@ -205,6 +207,17 @@ fn getOffsets(
     const TypeNames = Searcher([7]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
 
+    const text_delay = switch (version) {
+        .emerald,
+        .fire_red,
+        .leaf_green,
+        => (try Strings.find2(data, "\x00\x08\x04\x01\x00"))[1..4],
+        .ruby,
+        .sapphire,
+        => (try Strings.find2(data, "\x00\x06\x03\x01"))[1..4],
+        else => unreachable,
+    };
+
     const trainers = switch (version) {
         .emerald => try Trainers.find4(data, &em_first_trainers, &em_last_trainers),
         .ruby,
@@ -319,6 +332,7 @@ fn getOffsets(
 
         .starters = undefined,
         .starters_repeat = undefined,
+        .text_delays = offsets.TextDelaySection.init(data, text_delay),
         .trainers = offsets.TrainerSection.init(data, trainers),
         .moves = offsets.MoveSection.init(data, moves),
         .machine_learnsets = offsets.MachineLearnsetSection.init(data, machine_learnset),

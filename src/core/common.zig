@@ -8,6 +8,16 @@ const testing = std.testing;
 
 const lu16 = rom.int.lu16;
 
+pub const Patch = struct {
+    offset: usize,
+    replacement: []const u8,
+};
+
+pub fn patch(memory: []u8, patchs: []const Patch) void {
+    for (patchs) |p|
+        mem.copy(u8, memory[p.offset..], p.replacement);
+}
+
 pub const Version = enum {
     red,
     blue,

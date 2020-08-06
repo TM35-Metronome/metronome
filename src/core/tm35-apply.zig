@@ -222,6 +222,12 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
             game.starters[index].* = value;
             game.starters_repeat[index].* = value;
         },
+        c("text_delays") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.text_delays.len)
+                return error.Error;
+            game.text_delays[index] = try parser.parse(parse.u8v);
+        },
         c("trainers") => {
             const index = try parser.parse(parse.index);
             if (index >= game.trainers.len)
@@ -543,6 +549,10 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const value = try parser.parse(parse.strv);
             if (!mem.eql(u8, value, &header.gamecode))
                 return error.GameCodeDontMatch;
+        },
+        c("instant_text") => {
+            if (try parser.parse(parse.boolv))
+                common.patch(game.arm9, game.instant_text_patch);
         },
         c("starters") => {
             const index = try parser.parse(parse.index);
@@ -876,6 +886,10 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const value = try parser.parse(parse.strv);
             if (!mem.eql(u8, value, &header.gamecode))
                 return error.GameCodeDontMatch;
+        },
+        c("instant_text") => {
+            if (try parser.parse(parse.boolv))
+                common.patch(game.arm9, game.instant_text_patch);
         },
         c("starters") => {
             const index = try parser.parse(parse.index);

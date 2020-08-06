@@ -505,6 +505,9 @@ pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
 
+    instant_text_patch: []const common.Patch,
+
+    arm9: []u8,
     starters: [3]*lu16,
     pokemons: []BasePokemon,
     moves: []Move,
@@ -579,7 +582,9 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
+            .instant_text_patch = info.instant_text_patch,
 
+            .arm9 = arm9,
             .starters = switch (info.starters) {
                 .arm9 => |offset| blk: {
                     if (arm9.len < offset + offsets.starters_len)

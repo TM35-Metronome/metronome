@@ -128,7 +128,10 @@ pub const ident: Parser([]const u8) = manyRange(1, math.maxInt(usize), oneOf(.{
 pub const MutParser = struct {
     str: []const u8,
 
-    pub fn parse(p: *MutParser, comptime parser: var) !ParserResult(@TypeOf(parser)) {
+    pub fn parse(p: *MutParser, comptime parser: var) !blk: {
+        @setEvalBranchQuota(100000);
+        break :blk ParserResult(@TypeOf(parser));
+    } {
         const v = parser(p.str) orelse return error.ParseError;
         p.str = v.rest;
         return v.value;

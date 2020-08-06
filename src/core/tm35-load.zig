@@ -106,6 +106,9 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".starters[{}]={}\n", .{ i, starter.value() });
     }
 
+    for (game.text_delays) |delay, i|
+        try stream.print(".text_delays[{}]={}\n", .{ i, delay });
+
     for (game.trainers) |trainer, i| {
         // The party type is infered from the party data.
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
@@ -389,6 +392,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
     try stream.print(".game_title={}\n", .{header.game_title[0..null_index]});
     try stream.print(".gamecode={}\n", .{header.gamecode});
+    try stream.print(".instant_text=false\n", .{});
 
     for (game.starters) |starter, i| {
         try stream.print(".starters[{}]={}\n", .{ i, starter.value() });
@@ -707,6 +711,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
     try stream.print(".game_title={}\n", .{header.game_title[0..null_index]});
     try stream.print(".gamecode={}\n", .{header.gamecode});
+    try stream.print(".instant_text=false\n", .{});
 
     for (game.starters) |starter_ptrs, i| {
         const first = starter_ptrs[0];
