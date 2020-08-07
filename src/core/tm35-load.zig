@@ -965,11 +965,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.map_headers) |map_header, i| {
-        //inline for (@typeInfo(gen5.MapHeader).Struct.fields) |field| {
-        //    try stream.print(".map[{}].{}={}\n", .{ i, field.name, @field(map_header, field.name) });
-        //}
-
-        //try outputGen5String(stream, "map", i, "name", map_header.name_index, game.map_names);
+        try stream.print(".map[{}].music={}\n", .{ i, map_header.music.value() });
+        try stream.print(".map[{}].battle_scene={}\n", .{ i, map_header.battle_scene });
     }
 
     for (game.wild_pokemons.fat) |_, i| {

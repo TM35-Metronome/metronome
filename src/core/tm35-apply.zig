@@ -1125,14 +1125,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 else => return error.Error,
             }
         },
-        //c("map") => {
-        //const prev = parser.str;
-        //const index = try parser.parse(parse.index);
-        //switch (m(try parser.parse(parse.anyField))) {
-        //c("name") => {},
-        //else => try parse.anyT(prev, &game.map_headers, converters),
-        //}
-        //},
+        c("map") => try parse.anyT(parser.str, &game.map_headers, converters),
         c("wild_pokemons") => {
             const H = struct {
                 fn applyArea(par: *parse.MutParser, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
