@@ -26,7 +26,7 @@ const params = blk: {
     break :blk [_]Param{
         clap.parseParam("-h, --help                        Display this help text and exit.                                                               ") catch unreachable,
         clap.parseParam("-f, --fix-moves                   Fix party member moves (will pick the best level up moves the pokemon can learn for its level).") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>                  The seed to use for random numbers. A random seed will be picked if this is not specified.     ") catch unreachable,
+        clap.parseParam("-s, --seed <INT>                  The seed to use for random numbers. A random seed will be picked if this is not specified.     ") catch unreachable,
         clap.parseParam("-i, --simular-total-stats         Replaced party members should have simular total stats.                                        ") catch unreachable,
         clap.parseParam("-t, --types <random|same|themed>  Which types each trainer should use. (default: random)                                         ") catch unreachable,
         clap.parseParam("-v, --version                     Output version information and exit.                                                           ") catch unreachable,

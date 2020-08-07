@@ -369,8 +369,12 @@ pub fn drawOptions(
 
         c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
 
-        if (mem.eql(u8, value, "NUM")) {
+        if (mem.eql(u8, value, "INT")) {
             _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_decimal);
+            continue;
+        }
+        if (mem.eql(u8, value, "FLOAT")) {
+            _ = c.nk_edit_string(ctx, c.NK_EDIT_SIMPLE, &arg.items, @ptrCast(*c_int, &arg.len), arg.items.len, c.nk_filter_float);
             continue;
         }
         if (mem.eql(u8, value, "FILE")) {
@@ -1088,6 +1092,7 @@ const default_commands = //
     "tm35-rand-wild" ++ extension ++ "\n" ++
     "tm35-random-stones" ++ extension ++ "\n" ++
     "tm35-no-trade-evolutions" ++ extension ++ "\n" ++
+    "tm35-misc" ++ extension ++ "\n" ++
     "tm35-generate-site" ++ extension ++ "\n";
 
 const Exes = struct {
@@ -1184,9 +1189,11 @@ const Exes = struct {
             command_file_name,
         }).toSliceConst();
 
-        if (cwd.openFile(command_path, .{})) |file| {
-            return file;
-        } else |_| {
+        // TODO: When we want to enable plugin support, readd this
+        //if (cwd.openFile(command_path, .{})) |file| {
+        //    return file;
+        //} else |_|
+        {
             const dirname = fs.path.dirname(command_path) orelse ".";
             try cwd.makePath(dirname);
             try cwd.writeFile(command_path, default_commands);

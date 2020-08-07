@@ -26,7 +26,7 @@ const params = blk: {
     break :blk [_]Param{
         clap.parseParam("-f, --follow-evos       Evolution will use the none evolved form as a base for its own stats.                     ") catch unreachable,
         clap.parseParam("-h, --help              Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>        The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-s, --seed <INT>        The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
         clap.parseParam("-t, --same-total-stats  Pokémons will have the same total stats after randomization.                              ") catch unreachable,
         clap.parseParam("-v, --version           Output version information and exit.                                                      ") catch unreachable,
     };

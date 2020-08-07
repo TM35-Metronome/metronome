@@ -25,7 +25,7 @@ const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
         clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
         clap.parseParam("-t, --simular-total-stats  Replaced wild Pokémons should have simular total stats.                                   ") catch unreachable,
         clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
     };
