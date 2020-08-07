@@ -25,7 +25,7 @@ const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
         clap.parseParam("-h, --help                                                               Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <NUM>                                                         The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-s, --seed <INT>                                                         The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
         clap.parseParam("-m, --method <random|same-stats|simular-stats|legendary-with-legendary>  The method used to pick the new static Pokémon. (default: random)                         ") catch unreachable,
         clap.parseParam("-t, --types <random|same>                                                Which type each static pokemon should be. (default: random)                               ") catch unreachable,
         clap.parseParam("-v, --version                                                            Output version information and exit.                                                      ") catch unreachable,
@@ -166,7 +166,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         },
         c("static_pokemons") => {
             const index = try p.parse(parse.index);
-            _ = try p.parse(comptime parse.field("species"));
+            try p.parse(comptime parse.field("species"));
             _ = try data.static_mons.put(allocator, index, try p.parse(parse.usizev));
             return false;
         },

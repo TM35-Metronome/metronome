@@ -168,7 +168,7 @@ const Evolution = struct {
     method: ?[]const u8 = null,
 };
 
-test "tm35-rand-static" {
+test "tm35-no-trade-evolutions" {
     const H = struct {
         fn evo(
             comptime id: []const u8,
