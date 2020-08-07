@@ -417,7 +417,7 @@ pub const MapHeader = extern struct {
     // Seems to be an index to the script of the map
     unknown06: lu16,
 
-    // Setting to 0,5: No effect it seems
+    // Setting to 0,5,255: No effect it seems
     unknown08: u8,
 
     // Setting to 0,5,255: No effect it seems
@@ -467,7 +467,7 @@ pub const MapHeader = extern struct {
 
     // Setting to 0,5,255: No effect it seems
     unknown1e: u8,
-    battle_background: u8,
+    battle_scene: u8,
 
     // Setting to 0: No effect it seems
     // Something related to the map itself. Setting this to 255
