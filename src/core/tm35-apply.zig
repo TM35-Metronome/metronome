@@ -1088,6 +1088,14 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
 
                     try applyGen5String(game.item_names, index, new_name);
                 },
+                c("price") => {
+                    if (index >= game.items.len)
+                        return error.Error;
+                    const item = &game.items[index];
+                    const parsed_price = try parser.parse(parse.u32v);
+                    const new_price = try math.cast(u16, parsed_price / 10);
+                    item.price = lu16.init(new_price);
+                },
                 else => {
                     if (index >= game.items.len)
                         return error.Error;

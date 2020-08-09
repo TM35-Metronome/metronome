@@ -69,7 +69,9 @@ pub fn main2(
 
     var line_buf = std.ArrayList(u8).init(allocator);
     var stdin = io.bufferedInStream(stdio.in);
-    var data = Data{};
+    var data = Data{
+        .strings = std.StringHashMap(usize).init(allocator),
+    };
 
     while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
@@ -83,7 +85,7 @@ pub fn main2(
         line_buf.resize(0) catch unreachable;
     }
 
-    randomize(allocator, data, seed, include_tms_hms, include_key_items) catch |err| return exit.randErr(stdio.err, err);
+    randomize(allocator, &data, seed, include_tms_hms, include_key_items) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.pokeballs.values()) |ball, i| {
         const key = data.pokeballs.at(i).key;
@@ -109,8 +111,12 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
         c("items") => {
             const index = try p.parse(parse.index);
             const item = try data.items.getOrPutValue(allocator, index, Item{});
-            try p.parse(comptime parse.field("pocket"));
-            item.pocket = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+            switch (m(try p.parse(parse.anyField))) {
+                c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
+                else => return true,
+            }
+
+            return true;
         },
         else => return true,
     }
@@ -120,7 +126,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
 
 fn randomize(
     allocator: *mem.Allocator,
-    data: Data,
+    data: *Data,
     seed: u64,
     include_tms_hms: bool,
     include_key_items: bool,
@@ -128,14 +134,14 @@ fn randomize(
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    var pocket_blacklist_buffer: [2][]const u8 = undefined;
+    var pocket_blacklist_buffer: [2]usize = undefined;
     const pocket_blacklist = blk: {
-        var list = std.ArrayList([]const u8).fromOwnedSlice(std.testing.failing_allocator, &pocket_blacklist_buffer);
+        var list = std.ArrayList(usize).fromOwnedSlice(std.testing.failing_allocator, &pocket_blacklist_buffer);
         list.resize(0) catch unreachable;
         if (!include_tms_hms)
-            list.append("tms_hms") catch unreachable;
+            list.append(try data.string("tms_hms")) catch unreachable;
         if (!include_key_items)
-            list.append("key_items") catch unreachable;
+            list.append(try data.string("key_items")) catch unreachable;
         break :blk list.items;
     };
 
@@ -145,9 +151,8 @@ fn randomize(
     outer: for (data.pokeballs.values()) |*ball, i| {
         const key = data.pokeballs.at(i).key;
         const item = data.items.get(key) orelse continue;
-        const pocket = item.pocket orelse continue;
         for (pocket_blacklist) |blacklisted_pocket| {
-            if (mem.eql(u8, pocket, blacklisted_pocket))
+            if (item.pocket == blacklisted_pocket)
                 continue :outer;
         }
 
@@ -160,17 +165,32 @@ const Pokeballs = util.container.IntMap.Unmanaged(usize, usize);
 const Items = util.container.IntMap.Unmanaged(usize, Item);
 
 const Data = struct {
+    strings: std.StringHashMap(usize),
     pokeballs: Pokeballs = Pokeballs{},
     items: Items = Items{},
 
-    fn getItems(d: Data, allocator: *mem.Allocator, pocket_blacklist: []const []const u8) !Set {
+    fn string(d: *Data, str: []const u8) !usize {
+        const res = try d.strings.getOrPut(str);
+        if (!res.found_existing) {
+            res.kv.key = try mem.dupe(d.strings.allocator, u8, str);
+            res.kv.value = d.strings.count() - 1;
+        }
+        return res.kv.value;
+    }
+
+    fn getItems(d: *Data, allocator: *mem.Allocator, pocket_blacklist: []const usize) !Set {
         var res = Set{};
         errdefer res.deinit(allocator);
 
+        const items_pocket = try d.string("items");
+
         outer: for (d.items.values()) |item, i| {
-            const pocket = item.pocket orelse continue;
             for (pocket_blacklist) |blacklisted_pocket| {
-                if (mem.eql(u8, pocket, blacklisted_pocket))
+                if (item.pocket == blacklisted_pocket)
+                    continue :outer;
+                // Assume that items in the 'items' pocket with price 0 is
+                // none useful or invalid items.
+                if (item.price == 0 and item.pocket == items_pocket)
                     continue :outer;
             }
 
@@ -182,7 +202,8 @@ const Data = struct {
 };
 
 const Item = struct {
-    pocket: ?[]const u8 = null,
+    pocket: usize = math.maxInt(usize),
+    price: usize = 1,
 };
 
 test "tm35-rand-pokeball-items" {

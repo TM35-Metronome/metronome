@@ -57,11 +57,12 @@ pub fn main2(
 
     var line_buf = std.ArrayList(u8).init(allocator);
     var stdin = io.bufferedInStream(stdio.in);
+    var strings = std.StringHashMap(void).init(allocator);
     var obj = Object{ .fields = Fields.init(allocator) };
 
     while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&obj, str) catch |err| switch (err) {
+        const print_line = parseLine(&obj, &strings, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
         stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -77,9 +78,8 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(obj: *Object, str: []const u8) !void {
+fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !void {
     const allocator = obj.fields.allocator;
-    var strings = std.StringHashMap(void).init(allocator);
     var curr = obj;
     var p = parse.MutParser{ .str = str };
     while (true) {
@@ -183,8 +183,33 @@ fn generate(stream: var, root: Object) !void {
         try stream.writeAll("</table>\n");
     }
 
-    if (root.fields.getValue("pokemons")) |pokemons| {
+    const m_pokemons = root.fields.getValue("pokemons");
+    const m_pokedex = root.fields.getValue("pokedex");
+    if (m_pokemons != null and m_pokedex != null) {
+        const pokemons = m_pokemons.?;
+        const pokedex = m_pokedex.?;
+        try stream.writeAll("<h1>Pokedex</h1>\n");
+        try stream.writeAll("<table>\n");
+        for (pokedex.indexs.values()) |dex, di| {
+            const dex_num = pokemons.indexs.at(di).key;
+
+            const species = for (pokemons.indexs.values()) |pokemon, pi| {
+                const species = pokemons.indexs.at(pi).key;
+                const dex_entry_str = pokemon.getFieldValue("pokedex_entry") orelse continue;
+                const dex_entry = fmt.parseInt(usize, dex_entry_str, 10) catch continue;
+                if (dex_entry == dex_num)
+                    break species;
+            } else continue;
+
+            const pokemon_name = humanize(root.getArrayFieldValue("pokemons", species, "name") orelse unknown);
+            try stream.print("<tr><td><a href=\"#pokemon_{}\">#{} {}</a></td></tr>\n", .{ species, dex_num, pokemon_name });
+        }
+        try stream.writeAll("</table>\n");
+    }
+
+    if (m_pokemons) |pokemons| {
         try stream.writeAll("<h1>Pokemons</h1>\n");
+
         for (pokemons.indexs.values()) |pokemon, pi| {
             const species = pokemons.indexs.at(pi).key;
             const pokemon_name = humanize(pokemon.getFieldValue("name") orelse unknown);
@@ -270,7 +295,7 @@ fn generate(stream: var, root: Object) !void {
             try stream.writeAll("</table>\n");
 
             if (pokemon.fields.getValue("evos")) |evos| {
-                try stream.writeAll("<h3>Evolutions</h3>\n");
+                try stream.writeAll("<details><summary><b>Evolutions</b></summary>\n");
                 try stream.writeAll("<table>\n");
                 try stream.writeAll("<tr><th>Evolution</th><th>Method</th></tr>\n");
                 for (evos.indexs.values()) |evo| {
@@ -343,11 +368,11 @@ fn generate(stream: var, root: Object) !void {
                     }
                     try stream.writeAll("</td></tr>\n");
                 }
-                try stream.writeAll("</table>\n");
+                try stream.writeAll("</table></details>\n");
             }
 
             if (pokemon.fields.getValue("stats")) |stats| {
-                try stream.writeAll("<h3>Stats</h3>\n");
+                try stream.writeAll("<details><summary><b>Stats</b></summary>\n");
                 try stream.writeAll("<table class=\"pokemon_stat_table\">\n");
 
                 var total_stats: usize = 0;
@@ -361,11 +386,11 @@ fn generate(stream: var, root: Object) !void {
 
                 const percent = @floatToInt(usize, (@intToFloat(f64, total_stats) / 1000) * 100);
                 try stream.print("<tr><td>Total:</td><td><div class=\"pokemon_stat pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
-                try stream.writeAll("</table>\n");
+                try stream.writeAll("</table></details>\n");
             }
 
             if (pokemon.fields.getValue("ev_yield")) |stats| {
-                try stream.writeAll("<h3>Ev Yield</h3>\n");
+                try stream.writeAll("<details><summary><b>Ev Yield</b></summary>\n");
                 try stream.writeAll("<table>\n");
 
                 var total_stats: usize = 0;
@@ -377,14 +402,14 @@ fn generate(stream: var, root: Object) !void {
                 }
 
                 try stream.print("<tr><td>Total:</td><td>{}</td></tr>\n", .{total_stats});
-                try stream.writeAll("</table>\n");
+                try stream.writeAll("</table></details>\n");
             }
 
             const m_tms = pokemon.fields.getValue("tms");
             const m_hms = pokemon.fields.getValue("hms");
             const m_moves = pokemon.fields.getValue("moves");
             if (m_tms != null or m_hms != null or m_moves != null)
-                try stream.writeAll("<h3>Learnset</h3>\n");
+                try stream.writeAll("<details><summary><b>Learnset</b></summary>\n");
 
             if (m_moves) |moves| {
                 try stream.writeAll("<table>\n");
@@ -414,6 +439,8 @@ fn generate(stream: var, root: Object) !void {
             }
             if (m_tms != null or m_hms != null)
                 try stream.writeAll("</table>\n");
+            if (m_tms != null or m_hms != null or m_moves != null)
+                try stream.writeAll("</details>\n");
         }
     }
 

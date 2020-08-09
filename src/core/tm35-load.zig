@@ -291,8 +291,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".items[{}].name=", .{i});
         try gen3.encodings.decode(.en_us, &item.name, stream);
         try stream.writeByte('\n');
-        try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
+        try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
         try stream.print(".items[{}].hold_effect={}\n", .{ i, item.hold_effect });
         try stream.print(".items[{}].hold_effect_par={}\n", .{ i, item.hold_effect_param });
         if (item.description.toSliceZ(game.data)) |description| {
@@ -553,9 +553,6 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
 
     for (game.items) |item, i| {
-        var pocket = item.pocket;
-        var i_2 = i;
-
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect }); // TODO: Is this the same as gen3 hold_effect?
         try stream.print(".items[{}].gain={}\n", .{ i, item.gain });
@@ -926,7 +923,9 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
 
     for (game.items) |item, i| {
-        try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
+        // Price in gen5 is actually price * 10. I imagine they where trying to avoid
+        // having price be more than a u16
+        try stream.print(".items[{}].price={}\n", .{ i, @as(u32, item.price.value()) * 10 });
         try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect }); // TODO: Is this the same as gen3 hold_effect?
         try stream.print(".items[{}].gain={}\n", .{ i, item.gain });
         try stream.print(".items[{}].berry={}\n", .{ i, item.berry });
