@@ -232,7 +232,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
 
             const command = mem.bytesAsSlice(Command, buf[0..])[0];
             const command_len = try packedLength(command);
-            if (decoder.bytes.len < command_len)
+            if (decoder.bytes.len - decoder.i < command_len)
                 return error.InvalidCommand;
 
             decoder.i += command_len;

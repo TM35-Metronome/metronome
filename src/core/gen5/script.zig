@@ -44,12 +44,14 @@ pub const Command = packed struct {
     }
 
     const Data = packed union {
+        nop1: void,
+        nop2: void,
         end: void,
-        return_after_delay: ReturnAfterDelay,
+        return_after_delay: Arg1(lu16),
         call_routine: CallRoutine,
-        end_function: EndFunction,
-        logic06: Logic06,
-        logic07: Logic07,
+        end_function: Arg1(lu16),
+        logic06: Arg1(lu16),
+        logic07: Arg1(lu16),
         compare_to: CompareTo,
         store_var: StoreVar,
         clear_var: ClearVar,
@@ -144,8 +146,8 @@ pub const Command = packed struct {
         add_n_p_c: AddNPC,
         remove_n_p_c: RemoveNPC,
         set_o_w_position: SetOWPosition,
-        unknown_6_e: Unknown_6E,
-        unknown_6_f: Unknown_6F,
+        unknown_6_e: Arg1(lu16),
+        unknown_6_f: Arg1(lu16),
         unknown_70: Unknown_70,
         unknown_71: Unknown_71,
         unknown_72: Unknown_72,
@@ -161,7 +163,7 @@ pub const Command = packed struct {
         unknown_7_d: Unknown_7D,
         teleport_up_n_p_c: TeleportUpNPC,
         unknown_7_f: Unknown_7F,
-        unknown_80: Unknown_80,
+        unknown_80: Arg1(lu16),
         unknown_81: void,
         unknown_82: Unknown_82,
         set_var83: SetVar83,
@@ -174,6 +176,10 @@ pub const Command = packed struct {
         play_trainer_music: PlayTrainerMusic,
         end_battle: void,
         store_battle_result: StoreBattleResult,
+        unknown_179: void,
+        unknown_17a: void,
+        unknown_17b: Arg1(lu16),
+        unknown_17c: Arg1(lu16),
         disable_trainer: void,
         d_var90: DVar90,
         d_var92: DVar92,
@@ -186,8 +192,8 @@ pub const Command = packed struct {
         fade_to_default_music: void,
         unknown_9_f: void,
         unknown__a2: Unknown_A2,
-        unknown__a3: Unknown_A3,
-        unknown__a4: Unknown_A4,
+        unknown__a3: Arg1(lu16),
+        unknown__a4: Arg1(lu16),
         unknown__a5: Unknown_A5,
         play_sound: PlaySound,
         wait_sound_a7: void,
@@ -209,7 +215,7 @@ pub const Command = packed struct {
         store_item_count: StoreItemCount,
         unknown__b_a: Unknown_BA,
         unknown__b_b: Unknown_BB,
-        unknown__b_c: Unknown_BC,
+        unknown__b_c: Arg1(lu16),
         warp: Warp,
         teleport_warp: TeleportWarp,
         fall_warp: FallWarp,
@@ -217,18 +223,18 @@ pub const Command = packed struct {
         union_warp: void,
         teleport_warp2: TeleportWarp2,
         surf_animation: void,
-        special_animation: SpecialAnimation,
+        special_animation: Arg1(lu16),
         special_animation2: SpecialAnimation2,
         call_animation: CallAnimation,
         store_random_number: StoreRandomNumber,
-        store_var_item: StoreVarItem,
-        store_var__c_d: StoreVar_CD,
-        store_var__c_e: StoreVar_CE,
-        store_var__c_f: StoreVar_CF,
+        store_var_item: Arg1(lu16),
+        store_var__c_d: Arg1(lu16),
+        store_var__c_e: Arg1(lu16),
+        store_var__c_f: Arg1(lu16),
         store_date: StoreDate,
         store__d1: Store_D1,
-        store__d2: Store_D2,
-        store__d3: Store_D3,
+        store__d2: Arg1(lu16),
+        store__d3: Arg1(lu16),
         store_birth_day: StoreBirthDay,
         store_badge: StoreBadge,
         set_badge: SetBadge,
@@ -236,10 +242,16 @@ pub const Command = packed struct {
         check_money: CheckMoney,
         give_pokemon: GivePokemon,
         boot_p_c_sound: void,
+        unknown_136: Arg1(lu16),
         wild_battle: WildBattle,
+        wild_battle_store_result: WildBattleStoreResult,
         fade_into_black: void,
+        unknown_1b7: Arg1(lu16),
+        unknown_1b8: Arg1(lu16),
     };
     pub const Kind = packed enum(u16) {
+        nop1 = lu16.init(0x00).value(),
+        nop2 = lu16.init(0x01).value(),
         end = lu16.init(0x02).value(),
         return_after_delay = lu16.init(0x03).value(),
         call_routine = lu16.init(0x04).value(),
@@ -432,23 +444,23 @@ pub const Command = packed struct {
         check_money = lu16.init(0xFB).value(),
         give_pokemon = lu16.init(0x10C).value(),
         boot_p_c_sound = lu16.init(0x130).value(),
+        unknown_136 = lu16.init(0x136).value(),
         wild_battle = lu16.init(0x174).value(),
+        wild_battle_store_result = lu16.init(0x178).value(),
+        unknown_179 = lu16.init(0x179).value(),
+        unknown_17a = lu16.init(0x17a).value(),
+        unknown_17b = lu16.init(0x17b).value(),
+        unknown_17c = lu16.init(0x17c).value(),
         fade_into_black = lu16.init(0x1AC).value(),
+        unknown_1b7 = lu16.init(0x1b7).value(),
+        unknown_1b8 = lu16.init(0x1b8).value(),
     };
-    pub const ReturnAfterDelay = packed struct {
-        arg: lu16,
-    };
+
+    pub fn Arg1(comptime T: type) type {
+        return packed struct { arg: T };
+    }
     pub const CallRoutine = packed struct {
         arg: li32,
-    };
-    pub const EndFunction = packed struct {
-        arg: lu16,
-    };
-    pub const Logic06 = packed struct {
-        arg: lu16,
-    };
-    pub const Logic07 = packed struct {
-        arg: lu16,
     };
     pub const CompareTo = packed struct {
         value: lu16,
@@ -751,12 +763,6 @@ pub const Command = packed struct {
         zcoord: lu16,
         direction: lu16,
     };
-    pub const Unknown_6E = packed struct {
-        arg: lu16,
-    };
-    pub const Unknown_6F = packed struct {
-        arg: lu16,
-    };
     pub const Unknown_70 = packed struct {
         arg: lu16,
         arg2: lu16,
@@ -817,9 +823,6 @@ pub const Command = packed struct {
     pub const Unknown_7F = packed struct {
         arg: lu16,
         arg2: lu16,
-    };
-    pub const Unknown_80 = packed struct {
-        arg: lu16,
     };
     pub const Unknown_82 = packed struct {
         arg: lu16,
@@ -897,12 +900,6 @@ pub const Command = packed struct {
         sound: lu16,
         arg2: lu16,
     };
-    pub const Unknown_A3 = packed struct {
-        arg: lu16,
-    };
-    pub const Unknown_A4 = packed struct {
-        arg: lu16,
-    };
     pub const Unknown_A5 = packed struct {
         arg: lu16,
         arg2: lu16,
@@ -974,9 +971,6 @@ pub const Command = packed struct {
         arg: lu16,
         arg2: lu16,
     };
-    pub const Unknown_BC = packed struct {
-        arg: lu16,
-    };
     pub const Warp = packed struct {
         mapid: lu16,
         xcoord: lu16,
@@ -1007,9 +1001,6 @@ pub const Command = packed struct {
         zcoord: lu16,
         herofacing: lu16,
     };
-    pub const SpecialAnimation = packed struct {
-        arg: lu16,
-    };
     pub const SpecialAnimation2 = packed struct {
         arg: lu16,
         arg2: lu16,
@@ -1022,18 +1013,6 @@ pub const Command = packed struct {
         arg: lu16,
         arg2: lu16,
     };
-    pub const StoreVarItem = packed struct {
-        arg: lu16,
-    };
-    pub const StoreVar_CD = packed struct {
-        arg: lu16,
-    };
-    pub const StoreVar_CE = packed struct {
-        arg: lu16,
-    };
-    pub const StoreVar_CF = packed struct {
-        arg: lu16,
-    };
     pub const StoreDate = packed struct {
         month: lu16,
         date: lu16,
@@ -1041,12 +1020,6 @@ pub const Command = packed struct {
     pub const Store_D1 = packed struct {
         arg: lu16,
         arg2: lu16,
-    };
-    pub const Store_D2 = packed struct {
-        arg: lu16,
-    };
-    pub const Store_D3 = packed struct {
-        arg: lu16,
     };
     pub const StoreBirthDay = packed struct {
         month: lu16,
@@ -1074,5 +1047,10 @@ pub const Command = packed struct {
     pub const WildBattle = packed struct {
         species: lu16,
         level: u8,
+    };
+    pub const WildBattleStoreResult = packed struct {
+        species: lu16,
+        level: lu16,
+        variable: lu16,
     };
 };

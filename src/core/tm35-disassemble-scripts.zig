@@ -11,6 +11,7 @@ const script = @import("script.zig");
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 
 const exit = util.exit;
@@ -171,25 +172,17 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
-                    .jump => {
-                        const off = command.data().jump.adr.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
-                    },
-                    .compare_last_result_jump => {
-                        const off = command.data().compare_last_result_jump.adr.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
-                    },
-                    .call => {
-                        const off = command.data().call.adr.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
-                    },
-                    .compare_last_result_call => {
-                        const off = command.data().compare_last_result_call.adr.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
+                    .jump, .compare_last_result_jump, .call, .compare_last_result_call => {
+                        const off = switch (command.tag) {
+                            .compare_last_result_call => command.data().compare_last_result_call.adr.value(),
+                            .call => command.data().call.adr.value(),
+                            .jump => command.data().jump.adr.value(),
+                            .compare_last_result_jump => command.data().compare_last_result_jump.adr.value(),
+                            else => unreachable,
+                        };
+                        const location = off + @intCast(isize, decoder.i);
+                        if (mem.indexOfScalar(isize, offsets.items, location) == null)
+                            try offsets.append(location);
                     },
                     else => {},
                 }
@@ -228,21 +221,25 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
                 .i = @intCast(usize, offset),
             };
             while (decoder.next() catch {
-                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{ decoder.bytes[decoder.i], decoder.i });
+                const rest = decoder.bytes[decoder.i..];
+                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{
+                    rest[0..math.min(rest.len, 2)],
+                    decoder.i,
+                });
                 continue;
             }) |command| {
                 try printCommand(stream, command.*, decoder);
 
                 switch (command.tag) {
-                    .jump => {
-                        const off = command.data().jump.offset.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
-                    },
-                    .@"if" => {
-                        const off = command.data().@"if".offset.value();
-                        if (off >= 0)
-                            try offsets.append(off + @intCast(isize, decoder.i));
+                    .jump, .@"if" => {
+                        const off = switch (command.tag) {
+                            .jump => command.data().jump.offset.value(),
+                            .@"if" => command.data().@"if".offset.value(),
+                            else => unreachable,
+                        };
+                        const location = off + @intCast(isize, decoder.i);
+                        if (mem.indexOfScalar(isize, offsets.items, location) == null)
+                            try offsets.append(location);
                     },
                     else => {},
                 }
