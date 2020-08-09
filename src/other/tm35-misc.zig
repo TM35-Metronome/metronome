@@ -111,17 +111,7 @@ pub fn main2(
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(stdio.out, opt, str) catch |err| switch (err) {
             error.ParseError => true,
-            error.WouldBlock,
-            error.Unexpected,
-            error.OperationAborted,
-            error.SystemResources,
-            error.BrokenPipe,
-            error.AccessDenied,
-            error.NoSpaceLeft,
-            error.InputOutput,
-            error.FileTooBig,
-            error.DiskQuota,
-            => return exit.stdoutErr(stdio.err, err),
+            else => return exit.stdoutErr(stdio.err, err),
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -130,14 +120,6 @@ pub fn main2(
     }
 
     return 0;
-}
-
-fn isErr(v: var) bool {
-    return if (v) |_| false else |_| true;
-}
-
-fn getErr(v: var) anyerror {
-    return if (v) |_| unreachable else |err| err;
 }
 
 const Options = struct {
@@ -243,4 +225,59 @@ fn parseLine(out: var, opt: Options, str: []const u8) !bool {
     return true;
 }
 
-test "tm35-misc" {}
+test "tm35-misc" {
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=everywhere"},
+        \\.map[0].allow_cycling=false
+        \\.map[0].allow_cycling=true
+        \\
+    ,
+        \\.map[0].allow_cycling=true
+        \\.map[0].allow_cycling=true
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=nowhere"},
+        \\.map[0].allow_cycling=false
+        \\.map[0].allow_cycling=true
+        \\
+    ,
+        \\.map[0].allow_cycling=false
+        \\.map[0].allow_cycling=false
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=unchanged"},
+        \\.map[0].allow_cycling=false
+        \\.map[0].allow_cycling=true
+        \\
+    ,
+        \\.map[0].allow_cycling=false
+        \\.map[0].allow_cycling=true
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=everywhere"},
+        \\.map[0].allow_running=false
+        \\.map[0].allow_running=true
+        \\
+    ,
+        \\.map[0].allow_running=true
+        \\.map[0].allow_running=true
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=nowhere"},
+        \\.map[0].allow_running=false
+        \\.map[0].allow_running=true
+        \\
+    ,
+        \\.map[0].allow_running=false
+        \\.map[0].allow_running=false
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=unchanged"},
+        \\.map[0].allow_running=false
+        \\.map[0].allow_running=true
+        \\
+    ,
+        \\.map[0].allow_running=false
+        \\.map[0].allow_running=true
+        \\
+    );
+}
