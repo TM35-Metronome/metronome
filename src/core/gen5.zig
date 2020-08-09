@@ -853,14 +853,6 @@ pub const Game = struct {
     };
 
     fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
-        if (version == .black or version == .white) {
-            // We don't support decoding scripts for hg/ss yet.
-            return ScriptCommands{
-                .static_pokemons = &[_]*script.Command{},
-                .pokeball_items = &[_]PokeballItem{},
-            };
-        }
-
         var static_pokemons = std.ArrayList(*script.Command).init(allocator);
         errdefer static_pokemons.deinit();
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
@@ -908,7 +900,7 @@ pub const Game = struct {
 
                     switch (command.tag) {
                         // TODO: We're not finding any given items yet
-                        .wild_battle => try static_pokemons.append(command),
+                        .wild_battle, .wild_battle_store_result => try static_pokemons.append(command),
 
                         // In scripts, field items are two set_var_eq_val commands
                         // followed by a jump to the code that gives this item:
@@ -926,15 +918,15 @@ pub const Game = struct {
                             },
                             else => {},
                         },
-                        .jump => {
-                            const off = command.data().jump.offset.value();
-                            if (off >= 0)
-                                try script_offsets.append(off + @intCast(isize, decoder.i));
-                        },
-                        .@"if" => {
-                            const off = command.data().@"if".offset.value();
-                            if (off >= 0)
-                                try script_offsets.append(off + @intCast(isize, decoder.i));
+                        .jump, .@"if" => {
+                            const off = switch (command.tag) {
+                                .jump => command.data().jump.offset.value(),
+                                .@"if" => command.data().@"if".offset.value(),
+                                else => unreachable,
+                            };
+                            const location = off + @intCast(isize, decoder.i);
+                            if (mem.indexOfScalar(isize, script_offsets.items, location) == null)
+                                try script_offsets.append(location);
                         },
                         else => {},
                     }

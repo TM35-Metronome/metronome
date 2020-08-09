@@ -1180,12 +1180,21 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const index = try parser.parse(parse.index);
             if (index >= game.static_pokemons.len)
                 return error.Error;
-            const static_mon = game.static_pokemons[index].data();
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => static_mon.wild_battle.species = try parser.parse(parselu16v),
-                c("level") => static_mon.wild_battle.level = try parser.parse(parse.u8v),
-                else => return error.NoField,
+            const static_mon = game.static_pokemons[index];
+            const data = static_mon.data();
+            switch (static_mon.tag) {
+                .wild_battle => switch (m(try parser.parse(parse.anyField))) {
+                    c("species") => data.wild_battle.species = try parser.parse(parselu16v),
+                    c("level") => data.wild_battle.level = try parser.parse(parse.u8v),
+                    else => return error.NoField,
+                },
+                .wild_battle_store_result => switch (m(try parser.parse(parse.anyField))) {
+                    c("species") => data.wild_battle_store_result.species = try parser.parse(parselu16v),
+                    c("level") => data.wild_battle_store_result.level = try parser.parse(parselu16v),
+                    else => return error.NoField,
+                },
+                else => unreachable,
             }
         },
         c("pokeball_items") => {
