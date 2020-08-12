@@ -35,8 +35,8 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-starters ");
     try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes static Pokémons. Only works properly " ++
-        "for all gen3 games, dppt and b2w2.\n" ++
+    try stream.writeAll("\nRandomizes static Pokémons. Doesn't work for " ++
+        "hg and ss yet.\n" ++
         "\n" ++
         "Options:\n");
     try clap.help(stream, &params);
