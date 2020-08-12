@@ -429,6 +429,11 @@ pub const MapHeader = extern struct {
     }
 };
 
+const StaticPokemon = struct {
+    species: *lu16,
+    level: *lu16,
+};
+
 const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
@@ -561,7 +566,7 @@ pub const Game = struct {
     species_to_national_dex: []lu16,
 
     scripts: nds.fs.Fs,
-    static_pokemons: []*script.Command,
+    static_pokemons: []StaticPokemon,
     pokeball_items: []PokeballItem,
 
     text: nds.fs.Fs,
@@ -690,7 +695,7 @@ pub const Game = struct {
     }
 
     const ScriptCommands = struct {
-        static_pokemons: []*script.Command,
+        static_pokemons: []StaticPokemon,
         pokeball_items: []PokeballItem,
     };
 
@@ -698,12 +703,12 @@ pub const Game = struct {
         if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
-                .static_pokemons = &[_]*script.Command{},
+                .static_pokemons = &[_]StaticPokemon{},
                 .pokeball_items = &[_]PokeballItem{},
             };
         }
 
-        var static_pokemons = std.ArrayList(*script.Command).init(allocator);
+        var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
         errdefer pokeball_items.deinit();
@@ -749,10 +754,18 @@ pub const Game = struct {
                     defer var_8008 = var_8008_tmp;
 
                     switch (command.tag) {
-                        .wild_battle,
-                        .wild_battle2,
-                        .wild_battle3,
-                        => try static_pokemons.append(command),
+                        .wild_battle => try static_pokemons.append(.{
+                            .species = &command.data().wild_battle.species,
+                            .level = &command.data().wild_battle.level,
+                        }),
+                        .wild_battle2 => try static_pokemons.append(.{
+                            .species = &command.data().wild_battle2.species,
+                            .level = &command.data().wild_battle2.level,
+                        }),
+                        .wild_battle3 => try static_pokemons.append(.{
+                            .species = &command.data().wild_battle3.species,
+                            .level = &command.data().wild_battle3.level,
+                        }),
 
                         // In scripts, field items are two SetVar commands
                         // followed by a jump to the code that gives this item:

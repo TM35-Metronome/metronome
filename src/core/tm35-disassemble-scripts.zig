@@ -157,16 +157,20 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
             const offset = offsets.items[offset_i];
             try stream.print("script[{}]@0x{x}:\n", .{ script_i, offset });
             if (@intCast(isize, script_data.len) < offset)
-                return error.Error;
+                continue;
             if (offset < 0)
-                return error.Error;
+                continue;
 
             var decoder = gen4.script.CommandDecoder{
                 .bytes = script_data,
                 .i = @intCast(usize, offset),
             };
             while (decoder.next() catch {
-                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{ decoder.bytes[decoder.i], decoder.i });
+                const rest = decoder.bytes[decoder.i..];
+                try stream.print("\tUnknown(0x{x})\t@0x{x}\n", .{
+                    rest[0..math.min(rest.len, 2)],
+                    decoder.i,
+                });
                 continue;
             }) |command| {
                 try printCommand(stream, command.*, decoder);
@@ -265,6 +269,9 @@ fn printCommandHelper(stream: var, value: var) !void {
         .Void => {},
         .Int => |i| try stream.print("{}", .{value}),
         .Enum => |e| try stream.print("{}", .{@tagName(value)}),
+        .Array => for (value) |v| {
+            try printCommandHelper(stream, v);
+        },
         .Struct => |s| {
             // lu16 and lu16 are seen as structs, but really they should be treated
             // the same as int values.
