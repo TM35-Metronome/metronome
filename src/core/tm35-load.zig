@@ -110,7 +110,6 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".text_delays[{}]={}\n", .{ i, delay });
 
     for (game.trainers) |trainer, i| {
-        // The party type is infered from the party data.
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].gender={}\n", .{ i, @tagName(trainer.encounter_music.gender) });
         try stream.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music.music });
@@ -126,41 +125,35 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".trainers[{}].is_double={}\n", .{ i, trainer.is_double.value() });
         try stream.print(".trainers[{}].ai={}\n", .{ i, trainer.ai.value() });
 
+        try stream.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
+        try stream.print(".trainers[{}].party_size={}\n", .{ i, trainer.partyLen() });
         switch (trainer.party_type) {
-            .none => {
-                for (try trainer.party.none.toSlice(game.data)) |member, j| {
-                    try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
-                    try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
-                    try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+            .none => for (try trainer.party.none.toSlice(game.data)) |member, j| {
+                try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
+                try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
+                try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+            },
+            .item => for (try trainer.party.item.toSlice(game.data)) |member, j| {
+                try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
+                try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
+                try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+                try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
+            },
+            .moves => for (try trainer.party.moves.toSlice(game.data)) |member, j| {
+                try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
+                try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
+                try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+                for (member.moves) |move, k| {
+                    try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
                 }
             },
-            .item => {
-                for (try trainer.party.item.toSlice(game.data)) |member, j| {
-                    try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
-                    try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
-                    try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
-                    try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
-                }
-            },
-            .moves => {
-                for (try trainer.party.moves.toSlice(game.data)) |member, j| {
-                    try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
-                    try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
-                    try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
-                    for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
-                    }
-                }
-            },
-            .both => {
-                for (try trainer.party.both.toSlice(game.data)) |member, j| {
-                    try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
-                    try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
-                    try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
-                    try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
-                    for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
-                    }
+            .both => for (try trainer.party.both.toSlice(game.data)) |member, j| {
+                try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv.value() });
+                try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
+                try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+                try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
+                for (member.moves) |move, k| {
+                    try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
                 }
             },
         }

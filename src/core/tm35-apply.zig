@@ -125,7 +125,7 @@ pub fn main2(
     while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         _ = switch (game) {
-            .gen3 => |gen3_game| applyGen3(gen3_game, line_num, trimmed),
+            .gen3 => |*gen3_game| applyGen3(gen3_game, line_num, trimmed),
             .gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
             .gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
         } catch |err| {
@@ -196,7 +196,7 @@ pub const converters = .{
     toInt(u64, .Little),
 };
 
-fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
+fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
     var parser = parse.MutParser{ .str = str };
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {
@@ -234,7 +234,8 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 return error.Error;
             const trainer = &game.trainers[index];
 
-            switch (m(try parser.parse(parse.anyField))) {
+            const field = try parser.parse(parse.anyField);
+            switch (m(field)) {
                 c("class") => trainer.class = try parser.parse(parse.u8v),
                 c("gender") => trainer.encounter_music.gender = try parser.parse(comptime parse.enumv(gen3.Gender)),
                 c("encounter_music") => trainer.encounter_music.music = try parser.parse(parse.u7v),
@@ -243,6 +244,84 @@ fn applyGen3(game: gen3.Game, line: usize, str: []const u8) !void {
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
                 c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &trainer.name),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party_size"), c("party_type") => {
+                    const is_len = c("party_size") == m(field);
+
+                    const old_member_size = trainer.party_type.memberSize();
+                    const old_type = trainer.party_type;
+                    const old_len = trainer.partyLen();
+                    const old_size = old_member_size * old_len;
+
+                    var new_len: u32 = undefined;
+                    var new_type: gen3.PartyType = undefined;
+                    const new_size = if (is_len) blk: {
+                        new_len = try parser.parse(parse.u32v);
+                        break :blk new_len * old_member_size;
+                    } else blk: {
+                        new_type = try parser.parse(comptime parse.enumv(gen3.PartyType));
+                        break :blk old_len * new_type.memberSize();
+                    };
+
+                    if (new_size > old_size) {
+                        const Ptr = gen3.Ptr([*]gen3.PartyMemberNone);
+                        const old_bytes = try trainer.partyBytes(game.data);
+                        const new_bytes = game.requestFreeBytes(new_size);
+                        mem.set(u8, new_bytes, 0x0);
+                        mem.copy(u8, new_bytes, old_bytes);
+                        mem.set(u8, old_bytes, 0xff);
+                        trainer.party.none.inner.ptr = try Ptr.init(new_bytes.ptr, game.data);
+                    }
+                    if (is_len) {
+                        trainer.party.none.inner.len = lu32.init(new_len);
+                    } else {
+                        // A lot of boilerplat code for changing the party type correctly.
+                        // We copy out the old party, and then write it back in. This
+                        // ensures that as much data from the old party is preserved
+                        // without overriding things during copy.
+                        var old_copy = [_]gen3.PartyMemberBoth{.{}} ** 6;
+                        switch (trainer.party_type) {
+                            .none => for (try trainer.party.none.toSlice(game.data)) |member, j| {
+                                old_copy[j].base = member.base;
+                            },
+                            .item => for (try trainer.party.item.toSlice(game.data)) |member, j| {
+                                old_copy[j].base = member.base;
+                                old_copy[j].item = member.item;
+                            },
+                            .moves => for (try trainer.party.moves.toSlice(game.data)) |member, j| {
+                                old_copy[j].base = member.base;
+                                old_copy[j].moves = member.moves;
+                            },
+                            .both => mem.copy(
+                                gen3.PartyMemberBoth,
+                                &old_copy,
+                                try trainer.party.both.toSlice(game.data),
+                            ),
+                        }
+
+                        trainer.party_type = new_type;
+                        switch (trainer.party_type) {
+                            .none => for (try trainer.party.none.toSlice(game.data)) |*member, j| {
+                                member.base = old_copy[j].base;
+                            },
+                            .item => for (try trainer.party.item.toSlice(game.data)) |*member, j| {
+                                member.base = old_copy[j].base;
+                                member.item = old_copy[j].item;
+                            },
+                            .moves => for (try trainer.party.moves.toSlice(game.data)) |*member, j| {
+                                member.base = old_copy[j].base;
+                                member.moves = old_copy[j].moves;
+                            },
+                            .both => mem.copy(
+                                gen3.PartyMemberBoth,
+                                try trainer.party.both.toSlice(game.data),
+                                old_copy[0..old_len],
+                            ),
+                        }
+                    }
+
+                    const old_bytes = try trainer.partyBytes(game.data);
+                    mem.set(u8, old_bytes[new_size..], 0xff);
+                },
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
                     if (pindex >= trainer.partyLen())
