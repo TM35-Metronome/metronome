@@ -29,7 +29,7 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
     }
 }.isEnd);
 
-// These commands are only valid in black2/white2
+// https://pastebin.com/QPrYmFwY
 pub const Command = packed struct {
     tag: Kind,
     _data: Data,
@@ -1046,7 +1046,7 @@ pub const Command = packed struct {
     };
     pub const WildBattle = packed struct {
         species: lu16,
-        level: u8,
+        level: lu16,
     };
     pub const WildBattleStoreResult = packed struct {
         species: lu16,

@@ -528,6 +528,11 @@ pub const MapHeader = extern struct {
     }
 };
 
+const StaticPokemon = struct {
+    species: *lu16,
+    level: *lu16,
+};
+
 const PokeballItem = struct {
     item: *lu16,
     amount: *lu16,
@@ -722,18 +727,19 @@ pub const Game = struct {
     tms1: []lu16,
     hms: []lu16,
     tms2: []lu16,
-    static_pokemons: []*script.Command,
-    pokeball_items: []PokeballItem,
     evolutions: []EvolutionTable,
     map_headers: []MapHeader,
 
     wild_pokemons: nds.fs.Fs,
     pokemons: nds.fs.Fs,
-    scripts: nds.fs.Fs,
     level_up_moves: nds.fs.Fs,
     parties: nds.fs.Fs,
-    text: nds.fs.Fs,
 
+    scripts: nds.fs.Fs,
+    static_pokemons: []StaticPokemon,
+    pokeball_items: []PokeballItem,
+
+    text: nds.fs.Fs,
     pokemon_names: StringTable,
     pokedex_category_names: StringTable,
     trainer_names: StringTable,
@@ -848,12 +854,12 @@ pub const Game = struct {
     }
 
     const ScriptCommands = struct {
-        static_pokemons: []*script.Command,
+        static_pokemons: []StaticPokemon,
         pokeball_items: []PokeballItem,
     };
 
     fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
-        var static_pokemons = std.ArrayList(*script.Command).init(allocator);
+        var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
         errdefer pokeball_items.deinit();
@@ -899,8 +905,14 @@ pub const Game = struct {
                     defer var_800C = var_800C_tmp;
 
                     switch (command.tag) {
-                        // TODO: We're not finding any given items yet
-                        .wild_battle, .wild_battle_store_result => try static_pokemons.append(command),
+                        .wild_battle => try static_pokemons.append(.{
+                            .species = &command.data().wild_battle.species,
+                            .level = &command.data().wild_battle.level,
+                        }),
+                        .wild_battle_store_result => try static_pokemons.append(.{
+                            .species = &command.data().wild_battle_store_result.species,
+                            .level = &command.data().wild_battle_store_result.level,
+                        }),
 
                         // In scripts, field items are two set_var_eq_val commands
                         // followed by a jump to the code that gives this item:
