@@ -91,7 +91,16 @@ pub const Trainer = extern struct {
         std.debug.assert(@sizeOf(@This()) == 40);
     }
 
-    pub fn partyAt(trainer: *Trainer, index: usize, data: []u8) !*PartyMemberBase {
+    pub fn partyBytes(trainer: Trainer, data: []u8) ![]u8 {
+        return switch (trainer.party_type) {
+            .none => mem.sliceAsBytes(try trainer.party.none.toSlice(data)),
+            .item => mem.sliceAsBytes(try trainer.party.item.toSlice(data)),
+            .moves => mem.sliceAsBytes(try trainer.party.moves.toSlice(data)),
+            .both => mem.sliceAsBytes(try trainer.party.both.toSlice(data)),
+        };
+    }
+
+    pub fn partyAt(trainer: Trainer, index: usize, data: []u8) !*PartyMemberBase {
         return switch (trainer.party_type) {
             .none => &(try trainer.party.none.toSlice(data))[index].base,
             .item => &(try trainer.party.item.toSlice(data))[index].base,
@@ -115,6 +124,15 @@ pub const PartyType = packed enum(u8) {
     item = 0b10,
     moves = 0b01,
     both = 0b11,
+
+    pub fn memberSize(party_type: PartyType) usize {
+        return switch (party_type) {
+            .none => @sizeOf(PartyMemberNone),
+            .item => @sizeOf(PartyMemberItem),
+            .moves => @sizeOf(PartyMemberMoves),
+            .both => @sizeOf(PartyMemberBoth),
+        };
+    }
 };
 
 pub const Party = packed union {
@@ -129,9 +147,9 @@ pub const Party = packed union {
 };
 
 pub const PartyMemberBase = extern struct {
-    iv: lu16,
-    level: lu16,
-    species: lu16,
+    iv: lu16 = lu16.init(0),
+    level: lu16 = lu16.init(0),
+    species: lu16 = lu16.init(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 6);
@@ -143,8 +161,8 @@ pub const PartyMemberBase = extern struct {
 };
 
 pub const PartyMemberNone = extern struct {
-    base: PartyMemberBase,
-    pad: lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    pad: lu16 = lu16.init(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -152,8 +170,8 @@ pub const PartyMemberNone = extern struct {
 };
 
 pub const PartyMemberItem = extern struct {
-    base: PartyMemberBase,
-    item: lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    item: lu16 = lu16.init(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -161,9 +179,9 @@ pub const PartyMemberItem = extern struct {
 };
 
 pub const PartyMemberMoves = extern struct {
-    base: PartyMemberBase,
-    pad: lu16,
-    moves: [4]lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    pad: lu16 = lu16.init(0),
+    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
@@ -171,9 +189,9 @@ pub const PartyMemberMoves = extern struct {
 };
 
 pub const PartyMemberBoth = extern struct {
-    base: PartyMemberBase,
-    item: lu16,
-    moves: [4]lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    item: lu16 = lu16.init(0),
+    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
@@ -523,6 +541,8 @@ const PokeballItem = struct {
 pub const Game = struct {
     allocator: *mem.Allocator,
     version: common.Version,
+
+    free_offset: usize,
     data: []u8,
 
     // All these fields point into data
@@ -577,10 +597,19 @@ pub const Game = struct {
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
             return error.InvalidRomSize;
 
-        const gba_rom = try allocator.alloc(u8, size);
+        const gba_rom = try allocator.alloc(u8, 1024 * 1024 * 32);
         errdefer allocator.free(gba_rom);
+        mem.set(u8, gba_rom, 0xff);
 
-        try in_stream.readNoEof(gba_rom);
+        _ = try in_stream.readAll(gba_rom);
+
+        var free_offset: usize = 0;
+        for (gba_rom) |b, i| {
+            if (b != 0xff) {
+                // Free offset will be point to the last 0xff + 1
+                free_offset = i + 2;
+            }
+        }
 
         const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
@@ -684,6 +713,7 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
+            .free_offset = free_offset,
             .data = gba_rom,
             .header = @ptrCast(*gba.Header, &gba_rom[0]),
             .starters = [_]*lu16{
@@ -731,6 +761,13 @@ pub const Game = struct {
     pub fn writeToStream(game: Game, out_stream: var) !void {
         try game.header.validate();
         try out_stream.writeAll(game.data);
+    }
+
+    pub fn requestFreeBytes(game: *Game, size: usize) []u8 {
+        game.free_offset = mem.alignForward(game.free_offset, 4);
+        const res = game.data[game.free_offset..][0..size];
+        game.free_offset += size;
+        return res;
     }
 
     pub fn deinit(game: *Game) void {
