@@ -542,7 +542,7 @@ pub const Game = struct {
     allocator: *mem.Allocator,
     version: common.Version,
 
-    free_offset: usize,
+    free_space_search_pointer: usize = 0,
     data: []u8,
 
     // All these fields point into data
@@ -602,14 +602,6 @@ pub const Game = struct {
         mem.set(u8, gba_rom, 0xff);
 
         _ = try in_stream.readAll(gba_rom);
-
-        var free_offset: usize = 0;
-        for (gba_rom) |b, i| {
-            if (b != 0xff) {
-                // Free offset will be point to the last 0xff + 1
-                free_offset = i + 2;
-            }
-        }
 
         const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
@@ -713,7 +705,6 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
-            .free_offset = free_offset,
             .data = gba_rom,
             .header = @ptrCast(*gba.Header, &gba_rom[0]),
             .starters = [_]*lu16{
@@ -764,10 +755,27 @@ pub const Game = struct {
     }
 
     pub fn requestFreeBytes(game: *Game, size: usize) []u8 {
-        game.free_offset = mem.alignForward(game.free_offset, 4);
-        const res = game.data[game.free_offset..][0..size];
-        game.free_offset += size;
-        return res;
+        var off = game.free_space_search_pointer;
+        search_loop: while (mem.indexOfScalar(u8, game.data[off..], 0xff)) |index| {
+            // We don't want to give out a strings terminating 0xff
+            // so we start from index+1 to skip it.
+            const start = mem.alignForward(index + off + 1, 4);
+            if (game.data.len - start < size)
+                unreachable; // TODO: Error handling
+
+            const res = game.data[start..][0..size];
+            for (res) |b| {
+                if (b != 0xff) {
+                    off = start;
+                    continue :search_loop;
+                }
+            }
+
+            game.free_space_search_pointer = start + size;
+            return res;
+        }
+
+        unreachable; // TODO: Error handling
     }
 
     pub fn deinit(game: *Game) void {
