@@ -113,6 +113,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
             const item = try data.items.getOrPutValue(allocator, index, Item{});
             switch (m(try p.parse(parse.anyField))) {
                 c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
+                c("price") => item.price = try p.parse(parse.usizev),
                 else => return true,
             }
 
