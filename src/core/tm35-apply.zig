@@ -141,7 +141,14 @@ pub fn main2(
     const out_stream = out_file.outStream();
     switch (game) {
         .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err),
-        .gen4, .gen5 => nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err),
+        .gen4 => |gen4_game| {
+            gen4_game.apply() catch return exit.allocErr(stdio.err);
+            nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err);
+        },
+        .gen5 => |gen5_game| {
+            gen5_game.apply() catch return exit.allocErr(stdio.err);
+            nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err);
+        },
     }
 
     return 0;

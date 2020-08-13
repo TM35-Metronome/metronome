@@ -30,7 +30,7 @@ for release in $(printf "false\ntrue\n"); do
         diff -q "$expect" "$found"
 
         sed -i -E \
-            -e "/party_size/b ;/pokedex_entry/b; s/=([0-9])$/=1/; s/=([0-9])[0-9].*$/=\10/" \
+            -e "/party_size/b ;/pokedex_entry/b; s/=([0-9])[0-9].*$/=\10/" \
             -e "s/\.name=.*$/.name=a/" \
             -e "s/\.instant_text=.*/.instant_text=true/" \
             -e "s/\.text_delays\[([0-9]*)\]=.*/.text_delays[\1]=0/" \

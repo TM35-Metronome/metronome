@@ -141,29 +141,22 @@ pub const Rom = struct {
         );
     }
 
-    /// Decodes the arm9 section of the rom in place. This function might not do anything
-    /// if the section is already decoded.
-    pub fn decodeArm9(rom: *Rom) !void {
+    /// Decodes the arm9 section and returns it to the caller. The caller
+    /// owns the memory.
+    pub fn getDecodedArm9(rom: Rom, allocator: *mem.Allocator) ![]u8 {
         const h = rom.header();
         const arm9_bytes = rom.arm9();
-        const footer = rom.nitroFooter();
 
-        // TODO: Would be cool if we could ask for the decoded length, and
-        //       then preallocate that section directly in the roms bytes.
-        //       We could then just pass a buffer to blz.decode, and it would
-        //       decode into that buffer. Should be possible.
-        const decoded = blz.decode(arm9_bytes, rom.data.allocator) catch |err| switch (err) {
+        return blz.decode(arm9_bytes, allocator) catch |err| switch (err) {
             error.WrongDecodedLength,
             error.Overflow,
             error.BadLength,
             error.BadHeaderLength,
             error.BadHeader,
-            => return, // Assume bad encoded format means that arm9 wasn't encoded.
+            // Assume bad encoded format means that arm9 wasn't encoded.
+            => return mem.dupe(allocator, u8, arm9_bytes),
             else => |e| return e,
         };
-        defer rom.data.allocator.free(decoded);
-
-        try rom.replaceSection(arm9_bytes, decoded);
     }
 
     pub fn replaceSection(rom: *Rom, old: []const u8, new: []const u8) !void {
@@ -196,6 +189,20 @@ pub const Rom = struct {
             rom.data.items[old_end..old_len],
         );
         mem.copy(u8, rom.data.items[old_start..], new);
+
+        // Update header after resize
+        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+        h.total_used_rom_size = lu32.init(@intCast(u32, rom.data.items.len));
+        h.device_capacity = blk: {
+            // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
+            const size = h.total_used_rom_size.value();
+            var device_cap: u6 = 0;
+            while (@shlExact(@as(u64, 128000), device_cap) < size) : (device_cap += 1) {}
+
+            break :blk device_cap;
+        };
+
+        h.header_checksum = lu16.init(h.calcChecksum());
     }
 
     /// A generic structure for pointing to memory in the nds rom. The memory
@@ -203,9 +210,7 @@ pub const Rom = struct {
     /// structure does NOT point to the memory that these `start/X` pairs
     /// refer to, but to the pairs them self. The reason for this is
     /// so that we can modify this `start/X` indexes as we move sections
-    /// around the rom during a resize. Section also have properties that
-    /// define restrictions on what these indexes are actually allowed to
-    /// point too.
+    /// around the rom during a resize.
     const Section = struct {
         start_index: u32,
         other_index: u32,
