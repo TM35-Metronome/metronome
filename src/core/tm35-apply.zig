@@ -640,7 +640,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {
             const value = try parser.parse(comptime parse.enumv(common.Version));
-            if (value != game.version)
+            if (value != game.info.version)
                 return error.VersionDontMatch;
         },
         c("game_title") => {
@@ -657,7 +657,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("instant_text") => {
             if (try parser.parse(parse.boolv))
-                common.patch(game.arm9, game.instant_text_patch);
+                common.patch(game.arm9, game.info.instant_text_patch);
         },
         c("starters") => {
             const index = try parser.parse(parse.index);
@@ -677,35 +677,24 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("battle_type2") => trainer.battle_type2 = try parser.parse(parse.u8v),
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
+                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen4.PartyType)),
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
+                    if (index >= game.trainer_parties.len)
+                        return error.Error;
                     if (pindex >= trainer.party_size)
                         return error.Error;
-                    const party_file = game.parties.fileData(.{ .i = @intCast(u32, index) });
-                    const member = trainer.partyMember(game.version, party_file, pindex) orelse return error.OutOfBound;
 
+                    const member = &game.trainer_parties[index][pindex];
                     switch (m(try parser.parse(parse.anyField))) {
-                        c("iv") => member.iv = try parser.parse(parse.u8v),
-                        c("gender") => member.gender_ability.gender = try parser.parse(parse.u4v),
-                        c("ability") => member.gender_ability.ability = try parser.parse(parse.u4v),
-                        c("level") => member.level = try parser.parse(parselu16v),
-                        c("species") => member.species = try parser.parse(parselu16v),
-                        c("item") => switch (trainer.party_type) {
-                            .item => member.toParent(gen4.PartyMemberItem).item = try parser.parse(parselu16v),
-                            .both => member.toParent(gen4.PartyMemberBoth).item = try parser.parse(parselu16v),
-                            else => return error.NoField,
-                        },
-                        c("moves") => switch (trainer.party_type) {
-                            .moves => {
-                                const move_member = member.toParent(gen4.PartyMemberMoves);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            .both => {
-                                const move_member = member.toParent(gen4.PartyMemberBoth);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            else => return error.NoField,
-                        },
+                        c("iv") => member.base.iv = try parser.parse(parse.u8v),
+                        c("gender") => member.base.gender_ability.gender = try parser.parse(parse.u4v),
+                        c("ability") => member.base.gender_ability.ability = try parser.parse(parse.u4v),
+                        c("level") => member.base.level = try parser.parse(parselu16v),
+                        c("species") => member.base.species = try parser.parse(parselu16v),
+                        c("item") => member.item = try parser.parse(parselu16v),
+                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
                         else => return error.NoField,
                     }
                 },
@@ -839,7 +828,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const wild_pokemons = game.wild_pokemons;
             const index = try parser.parse(parse.index);
 
-            switch (game.version) {
+            switch (game.info.version) {
                 .diamond,
                 .pearl,
                 .platinum,

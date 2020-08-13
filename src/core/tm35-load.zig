@@ -395,7 +395,7 @@ fn outputGen3Area(stream: var, i: usize, name: []const u8, rate: u8, wilds: []co
 }
 
 fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
-    try stream.print(".version={}\n", .{@tagName(game.version)});
+    try stream.print(".version={}\n", .{@tagName(game.info.version)});
 
     const header = nds_rom.header();
     const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
@@ -408,6 +408,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     }
 
     for (game.trainers) |trainer, i| {
+        try stream.print(".trainers[{}].party_size={}\n", .{ i, trainer.party_size });
+        try stream.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try stream.print(".trainers[{}].battle_type={}\n", .{ i, trainer.battle_type });
         try stream.print(".trainers[{}].battle_type2={}\n", .{ i, trainer.battle_type2 });
@@ -417,39 +419,19 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             try stream.print(".trainers[{}].items[{}]={}\n", .{ i, j, item.value() });
         }
 
-        const parties = game.parties;
-        if (parties.fat.len <= i)
+        const parties = game.trainer_parties;
+        if (parties.len <= i)
             continue;
 
-        const party_data = parties.fileData(.{ .i = @intCast(u32, i) });
-        var j: usize = 0;
-        while (j < trainer.party_size) : (j += 1) {
-            const base = trainer.partyMember(game.version, party_data, i) orelse continue;
-            try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, base.iv });
-            try stream.print(".trainers[{}].party[{}].gender={}\n", .{ i, j, base.gender_ability.gender });
-            try stream.print(".trainers[{}].party[{}].ability={}\n", .{ i, j, base.gender_ability.ability });
-            try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, base.level.value() });
-            try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, base.species.value() });
-
-            switch (trainer.party_type) {
-                .none => {},
-                .item => {
-                    const member = base.toParent(gen4.PartyMemberItem);
-                    try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
-                },
-                .moves => {
-                    const member = base.toParent(gen4.PartyMemberMoves);
-                    for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
-                    }
-                },
-                .both => {
-                    const member = base.toParent(gen4.PartyMemberBoth);
-                    try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
-                    for (member.moves) |move, k| {
-                        try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
-                    }
-                },
+        for (parties[i][0..trainer.party_size]) |member, j| {
+            try stream.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
+            try stream.print(".trainers[{}].party[{}].gender={}\n", .{ i, j, member.base.gender_ability.gender });
+            try stream.print(".trainers[{}].party[{}].ability={}\n", .{ i, j, member.base.gender_ability.ability });
+            try stream.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level.value() });
+            try stream.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species.value() });
+            try stream.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item.value() });
+            for (member.moves) |move, k| {
+                try stream.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move.value() });
             }
         }
     }
@@ -582,7 +564,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
     }
 
-    switch (game.version) {
+    switch (game.info.version) {
         .diamond,
         .pearl,
         .platinum,

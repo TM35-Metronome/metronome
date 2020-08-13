@@ -14,6 +14,7 @@ const os = std.os;
 const lu16 = int.lu16;
 const lu32 = int.lu32;
 
+pub const formats = @import("nds/formats.zig");
 pub const fs = @import("nds/fs.zig");
 
 pub const Banner = @import("nds/banner.zig").Banner;
@@ -31,8 +32,11 @@ pub const Range = extern struct {
     start: lu32,
     end: lu32,
 
-    pub fn init(start: u32, end: u32) Range {
-        return .{ .start = lu32.init(start), .end = lu32.init(end) };
+    pub fn init(start: usize, end: usize) Range {
+        return .{
+            .start = lu32.init(@intCast(u32, start)),
+            .end = lu32.init(@intCast(u32, end)),
+        };
     }
 
     pub fn len(r: Range) u32 {

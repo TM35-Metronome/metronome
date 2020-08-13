@@ -21,6 +21,9 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu128 = rom.int.lu128;
 
+const formats = nds.formats;
+const fs = nds.fs;
+
 pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]u8,
@@ -92,18 +95,18 @@ pub const PartyType = packed enum(u8) {
 };
 
 pub const PartyMemberBase = extern struct {
-    iv: u8,
-    gender_ability: GenderAbilityPair, // 4 msb are gender, 4 lsb are ability
-    level: lu16,
-    species: lu16,
+    iv: u8 = 0,
+    gender_ability: GenderAbilityPair = GenderAbilityPair{},
+    level: lu16 = lu16.init(0),
+    species: lu16 = lu16.init(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 6);
     }
 
     pub const GenderAbilityPair = packed struct {
-        gender: u4,
-        ability: u4,
+        gender: u4 = 0,
+        ability: u4 = 0,
     };
 
     pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
@@ -112,7 +115,7 @@ pub const PartyMemberBase = extern struct {
 };
 
 pub const PartyMemberNone = extern struct {
-    base: PartyMemberBase,
+    base: PartyMemberBase = PartyMemberBase{},
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 6);
@@ -120,8 +123,8 @@ pub const PartyMemberNone = extern struct {
 };
 
 pub const PartyMemberItem = extern struct {
-    base: PartyMemberBase,
-    item: lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    item: lu16 = lu16.init(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -129,8 +132,8 @@ pub const PartyMemberItem = extern struct {
 };
 
 pub const PartyMemberMoves = extern struct {
-    base: PartyMemberBase,
-    moves: [4]lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 14);
@@ -138,9 +141,9 @@ pub const PartyMemberMoves = extern struct {
 };
 
 pub const PartyMemberBoth = extern struct {
-    base: PartyMemberBase,
-    item: lu16,
-    moves: [4]lu16,
+    base: PartyMemberBase = PartyMemberBase{},
+    item: lu16 = lu16.init(0),
+    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
@@ -538,14 +541,18 @@ pub const StringTable = struct {
 };
 
 pub const Game = struct {
-    version: common.Version,
+    info: offsets.Info,
     allocator: *mem.Allocator,
 
     rom: *nds.Rom,
 
-    instant_text_patch: []const common.Patch,
-
+    // These fields are owned by the game and will be applied to
+    // the rom oppon calling `apply`.
     arm9: []u8,
+    trainer_parties: [][6]PartyMemberBoth,
+
+    // The fields below are pointers into the nds rom and will
+    // be invalidated oppon calling `apply`.
     starters: [3]*lu16,
     pokemons: []BasePokemon,
     moves: []Move,
@@ -560,7 +567,7 @@ pub const Game = struct {
     evolutions: []EvolutionTable,
 
     level_up_moves: nds.fs.Fs,
-    parties: nds.fs.Fs,
+    //parties: nds.fs.Fs,
 
     pokedex: nds.fs.Fs,
     pokedex_heights: []lu32,
@@ -616,14 +623,41 @@ pub const Game = struct {
             allocator.free(commands.pokeball_items);
         }
 
+        const trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer);
+        const trainer_parties_narc = try getNarc(file_system, info.parties);
+        const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
+        mem.set([6]PartyMemberBoth, trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
+
+        for (trainer_parties) |*party, i| {
+            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
+            const party_size = if (i < trainers.len) trainers[i].party_size else 0;
+
+            var j: usize = 0;
+            while (j < party_size) : (j += 1) {
+                const base = trainers[i].partyMember(info.version, party_data, j) orelse break;
+                party[j].base = base.*;
+
+                switch (trainers[i].party_type) {
+                    .none => {},
+                    .item => party[j].item = base.toParent(PartyMemberItem).item,
+                    .moves => party[j].moves = base.toParent(PartyMemberMoves).moves,
+                    .both => {
+                        const member = base.toParent(PartyMemberBoth);
+                        party[j].item = member.item;
+                        party[j].moves = member.moves;
+                    },
+                }
+            }
+        }
+
         return Game{
-            .version = info.version,
+            .info = info,
             .allocator = allocator,
             .rom = nds_rom,
 
-            .instant_text_patch = info.instant_text_patch,
-
             .arm9 = arm9,
+            .trainer_parties = trainer_parties,
+
             .starters = switch (info.starters) {
                 .arm9 => |offset| blk: {
                     if (arm9.len < offset + offsets.starters_len)
@@ -649,7 +683,7 @@ pub const Game = struct {
             },
             .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(0, BasePokemon),
             .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
-            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
+            .trainers = trainers,
             .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
             .evolutions = try (try getNarc(file_system, info.evolutions)).toSlice(0, EvolutionTable),
             .wild_pokemons = blk: {
@@ -668,7 +702,6 @@ pub const Game = struct {
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
 
-            .parties = try getNarc(file_system, info.parties),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
 
             .pokedex = pokedex,
@@ -694,6 +727,62 @@ pub const Game = struct {
 
     pub fn apply(game: Game) !void {
         try game.rom.replaceSection(game.rom.arm9(), game.arm9);
+        try game.applyTrainerParties();
+    }
+
+    fn applyTrainerParties(game: Game) !void {
+        const file_system = game.rom.fileSystem();
+        const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
+        const trainers = try (try getNarc(file_system, game.info.trainers)).toSlice(0, Trainer);
+        const trainer_parties = game.trainer_parties;
+
+        var builder = try fs.SimpleNarcBuilder.init(
+            game.allocator,
+            trainer_parties.len,
+            @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) * trainer_parties.len,
+        );
+        defer builder.data.deinit();
+
+        const fat = builder.fat();
+        const stream = builder.data.outStream();
+        const files_offset = builder.data.items.len;
+        for (trainer_parties) |party, i| {
+            const party_size = if (i < trainers.len) trainers[i].party_size else 0;
+            const start = builder.data.items.len - files_offset;
+            defer fat[i] = nds.Range.init(start, builder.data.items.len - files_offset);
+
+            for (party[0..party_size]) |member| {
+                switch (trainers[i].party_type) {
+                    .none => stream.writeAll(&mem.toBytes(PartyMemberNone{
+                        .base = member.base,
+                    })) catch unreachable,
+                    .item => stream.writeAll(&mem.toBytes(PartyMemberItem{
+                        .base = member.base,
+                        .item = member.item,
+                    })) catch unreachable,
+                    .moves => stream.writeAll(&mem.toBytes(PartyMemberMoves{
+                        .base = member.base,
+                        .moves = member.moves,
+                    })) catch unreachable,
+                    .both => stream.writeAll(&mem.toBytes(member)) catch unreachable,
+                }
+                // Write padding
+                switch (game.info.version) {
+                    .diamond, .pearl => {},
+
+                    .platinum,
+                    .heart_gold,
+                    .soul_silver,
+                    => stream.writeAll("\x00\x00") catch unreachable,
+
+                    else => unreachable,
+                }
+            }
+        }
+
+        const res = builder.finish();
+        defer game.allocator.free(res);
+        try game.rom.replaceSection(trainer_parties_narc, res);
     }
 
     pub fn deinit(game: Game) void {
