@@ -541,6 +541,8 @@ pub const Game = struct {
     version: common.Version,
     allocator: *mem.Allocator,
 
+    rom: *nds.Rom,
+
     instant_text_patch: []const common.Patch,
 
     arm9: []u8,
@@ -596,8 +598,7 @@ pub const Game = struct {
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         const info = try identify(io.fixedBufferStream(nds_rom.data.items).inStream());
 
-        try nds_rom.decodeArm9();
-        const arm9 = nds_rom.arm9();
+        const arm9 = try nds_rom.getDecodedArm9(allocator);
         const file_system = nds_rom.fileSystem();
         const arm9_overlay_table = nds_rom.arm9OverlayTable();
 
@@ -618,6 +619,8 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
+            .rom = nds_rom,
+
             .instant_text_patch = info.instant_text_patch,
 
             .arm9 = arm9,
@@ -689,7 +692,12 @@ pub const Game = struct {
         };
     }
 
+    pub fn apply(game: Game) !void {
+        try game.rom.replaceSection(game.rom.arm9(), game.arm9);
+    }
+
     pub fn deinit(game: Game) void {
+        game.allocator.free(game.arm9);
         game.allocator.free(game.static_pokemons);
         game.allocator.free(game.pokeball_items);
     }
