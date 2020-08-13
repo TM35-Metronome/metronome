@@ -265,7 +265,7 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
                     if (new_size > old_size) {
                         const Ptr = gen3.Ptr([*]gen3.PartyMemberNone);
                         const old_bytes = try trainer.partyBytes(game.data);
-                        const new_bytes = game.requestFreeBytes(new_size);
+                        const new_bytes = try game.requestFreeBytes(new_size);
                         mem.set(u8, new_bytes, 0x0);
                         mem.copy(u8, new_bytes, old_bytes);
                         mem.set(u8, old_bytes, 0xff);

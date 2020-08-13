@@ -542,7 +542,7 @@ pub const Game = struct {
     allocator: *mem.Allocator,
     version: common.Version,
 
-    free_space_search_pointer: usize = 0,
+    free_offset: usize,
     data: []u8,
 
     // All these fields point into data
@@ -599,9 +599,9 @@ pub const Game = struct {
 
         const gba_rom = try allocator.alloc(u8, 1024 * 1024 * 32);
         errdefer allocator.free(gba_rom);
-        mem.set(u8, gba_rom, 0xff);
 
-        _ = try in_stream.readAll(gba_rom);
+        const free_offset = try in_stream.readAll(gba_rom);
+        mem.set(u8, gba_rom[free_offset..], 0xff);
 
         const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
@@ -705,6 +705,7 @@ pub const Game = struct {
         return Game{
             .version = info.version,
             .allocator = allocator,
+            .free_offset = free_offset,
             .data = gba_rom,
             .header = @ptrCast(*gba.Header, &gba_rom[0]),
             .starters = [_]*lu16{
@@ -754,28 +755,35 @@ pub const Game = struct {
         try out_stream.writeAll(game.data);
     }
 
-    pub fn requestFreeBytes(game: *Game, size: usize) []u8 {
-        var off = game.free_space_search_pointer;
-        search_loop: while (mem.indexOfScalar(u8, game.data[off..], 0xff)) |index| {
-            // We don't want to give out a strings terminating 0xff
-            // so we start from index+1 to skip it.
-            const start = mem.alignForward(index + off + 1, 4);
-            if (game.data.len - start < size)
-                unreachable; // TODO: Error handling
+    pub fn requestFreeBytes(game: *Game, size: usize) ![]u8 {
+        const Range = struct { start: usize, end: usize };
 
-            const res = game.data[start..][0..size];
-            for (res) |b| {
-                if (b != 0xff) {
-                    off = start;
-                    continue :search_loop;
+        for ([_]Range{
+            .{ .start = game.free_offset, .end = game.data.len },
+            .{ .start = 0, .end = game.free_offset },
+        }) |range| {
+            var i = mem.alignForward(range.start, 4);
+            outer: while (i + size <= range.end) : (i += 4) {
+                // We ensure that the byte before our start byte is
+                // also 0xff. This is because we want to ensure that
+                // data that is terminated with 0xff does not get
+                // its terminator given away as free space.
+                const prev_byte = if (i == 0) 0xff else game.data[i - 1];
+                if (prev_byte != 0xff)
+                    continue :outer;
+
+                const res = game.data[i..][0..size];
+                for (res) |b| {
+                    if (b != 0xff)
+                        continue :outer;
                 }
-            }
 
-            game.free_space_search_pointer = start + size;
-            return res;
+                game.free_offset = i + size;
+                return res;
+            }
         }
 
-        unreachable; // TODO: Error handling
+        return error.NoFreeSpaceAvailable;
     }
 
     pub fn deinit(game: *Game) void {
