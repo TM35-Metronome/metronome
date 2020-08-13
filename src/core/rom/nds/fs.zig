@@ -238,6 +238,92 @@ pub const FntMainEntry = packed struct {
     parent_id: lu16,
 };
 
+pub const SimpleNarcBuilder = struct {
+    data: std.ArrayList(u8),
+
+    pub fn init(
+        allocator: *mem.Allocator,
+        file_count: usize,
+        expected_content_size: usize,
+    ) !SimpleNarcBuilder {
+        var narc = std.ArrayList(u8).init(allocator);
+        errdefer narc.deinit();
+        try narc.ensureCapacity(
+            @sizeOf(formats.Header) +
+                @sizeOf(formats.FatChunk) +
+                @sizeOf(nds.Range) * file_count +
+                @sizeOf(formats.Chunk) * 2 +
+                expected_content_size,
+        );
+
+        const stream = narc.outStream();
+        stream.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
+        stream.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
+        stream.writeByteNTimes(0, file_count * @sizeOf(nds.Range)) catch unreachable;
+        stream.writeAll(&mem.toBytes(formats.Chunk{
+            .name = formats.Chunk.names.fnt.*,
+            .size = lu32.init(@sizeOf(formats.Chunk) + @sizeOf(FntMainEntry)),
+        })) catch unreachable;
+        stream.writeAll(&mem.toBytes(FntMainEntry{
+            .offset_to_subtable = lu32.init(0),
+            .first_file_handle = lu16.init(0),
+            .parent_id = lu16.init(1),
+        })) catch unreachable;
+        stream.writeAll(&mem.toBytes(formats.Chunk{
+            .name = formats.Chunk.names.file_data.*,
+            .size = lu32.init(0),
+        })) catch unreachable;
+
+        return SimpleNarcBuilder{ .data = narc };
+    }
+
+    pub fn fat(builder: SimpleNarcBuilder) []nds.Range {
+        const res = builder.data.items;
+        const off = @sizeOf(formats.Header);
+        const fat_header = mem.bytesAsValue(
+            formats.FatChunk,
+            res[off..][0..@sizeOf(formats.FatChunk)],
+        );
+
+        const size = fat_header.header.size.value();
+        return mem.bytesAsSlice(
+            nds.Range,
+            res[off..][0..size][@sizeOf(formats.FatChunk)..],
+        );
+    }
+
+    pub fn finish(builder: *SimpleNarcBuilder) []u8 {
+        const res = builder.data.toOwnedSlice();
+        var off: usize = 0;
+        const header = mem.bytesAsValue(
+            formats.Header,
+            res[0..@sizeOf(formats.Header)],
+        );
+
+        off += @sizeOf(formats.Header);
+        const fat_header = mem.bytesAsValue(
+            formats.FatChunk,
+            res[off..][0..@sizeOf(formats.FatChunk)],
+        );
+
+        off += fat_header.header.size.value();
+        const fnt_header = mem.bytesAsValue(
+            formats.Chunk,
+            res[off..][0..@sizeOf(formats.Chunk)],
+        );
+
+        off += fnt_header.size.value();
+        const file_header = mem.bytesAsValue(
+            formats.Chunk,
+            res[off..][0..@sizeOf(formats.Chunk)],
+        );
+
+        header.file_size = lu32.init(@intCast(u32, res.len));
+        file_header.size = lu32.init(@intCast(u32, res.len - off));
+        return res;
+    }
+};
+
 pub const Builder = struct {
     fnt_main: std.ArrayList(FntMainEntry),
     fnt_sub: std.ArrayList(u8),

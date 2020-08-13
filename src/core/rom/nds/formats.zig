@@ -1,4 +1,5 @@
 const int = @import("../int.zig");
+const nds = @import("../nds.zig");
 
 const lu16 = int.lu16;
 const lu32 = int.lu32;
@@ -38,5 +39,18 @@ pub const Chunk = extern struct {
 pub const FatChunk = extern struct {
     header: Chunk,
     file_count: lu16,
-    reserved: lu16,
+    reserved: lu16 = lu16.init(0),
+
+    pub fn init(file_count: u16) FatChunk {
+        return .{
+            .header = .{
+                .name = Chunk.names.fat.*,
+                .size = lu32.init(@intCast(
+                    u32,
+                    @sizeOf(FatChunk) + @sizeOf(nds.Range) * file_count,
+                )),
+            },
+            .file_count = lu16.init(file_count),
+        };
+    }
 };
