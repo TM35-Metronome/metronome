@@ -965,7 +965,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {
             const value = try parser.parse(comptime parse.enumv(common.Version));
-            if (value != game.version)
+            if (value != game.info.version)
                 return error.VersionDontMatch;
         },
         c("game_title") => {
@@ -982,7 +982,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         },
         c("instant_text") => {
             if (try parser.parse(parse.boolv))
-                common.patch(game.arm9, game.instant_text_patch);
+                common.patch(game.arm9, game.info.instant_text_patch);
         },
         c("starters") => {
             const index = try parser.parse(parse.index);
@@ -994,13 +994,11 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         },
         c("trainers") => {
             const index = try parser.parse(parse.index);
-            const field = try parser.parse(parse.anyField);
             if (index == 0 or index - 1 >= game.trainers.len)
                 return error.Error;
-            const trainer_index = @intCast(u32, index - 1);
-            const trainer = &game.trainers[trainer_index];
 
-            switch (m(field)) {
+            const trainer = &game.trainers[index - 1];
+            switch (m(try parser.parse(parse.anyField))) {
                 c("class") => trainer.class = try parser.parse(parse.u8v),
                 c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
@@ -1008,44 +1006,29 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("cash") => trainer.cash = try parser.parse(parse.u8v),
                 c("post_battle_item") => trainer.post_battle_item = try parser.parse(parselu16v),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
+                c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
+                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen5.PartyType)),
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
-                    const pfield = try parser.parse(parse.anyField);
+                    if (index >= game.trainer_parties.len)
+                        return error.Error;
                     if (pindex >= trainer.party_size)
                         return error.Error;
-                    const party_file = game.parties.fileData(.{ .i = trainer_index + 1 });
-                    const member = trainer.partyMember(party_file, pindex) orelse return error.OutOfBound;
 
-                    switch (m(pfield)) {
-                        c("iv") => member.iv = try parser.parse(parse.u8v),
-                        c("gender") => member.gender_ability.gender = try parser.parse(parse.u4v),
-                        c("ability") => member.gender_ability.ability = try parser.parse(parse.u4v),
-                        c("level") => member.level = try parser.parse(parse.u8v),
-                        c("species") => member.species = try parser.parse(parselu16v),
-                        c("form") => member.form = try parser.parse(parselu16v),
-                        c("item") => {
-                            const item = try parser.parse(parselu16v);
-                            switch (trainer.party_type) {
-                                .item => member.toParent(gen5.PartyMemberItem).item = item,
-                                .both => member.toParent(gen5.PartyMemberBoth).item = item,
-                                else => return error.NoField,
-                            }
-                        },
-                        c("moves") => switch (trainer.party_type) {
-                            .moves => {
-                                const move_member = member.toParent(gen5.PartyMemberMoves);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            .both => {
-                                const move_member = member.toParent(gen5.PartyMemberBoth);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            else => return error.NoField,
-                        },
-                        else => return error.Error,
+                    const member = &game.trainer_parties[index][pindex];
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("iv") => member.base.iv = try parser.parse(parse.u8v),
+                        c("gender") => member.base.gender_ability.gender = try parser.parse(parse.u4v),
+                        c("ability") => member.base.gender_ability.ability = try parser.parse(parse.u4v),
+                        c("level") => member.base.level = try parser.parse(parse.u8v),
+                        c("species") => member.base.species = try parser.parse(parselu16v),
+                        c("form") => member.base.form = try parser.parse(parselu16v),
+                        c("item") => member.item = try parser.parse(parselu16v),
+                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
+                        else => return error.NoField,
                     }
                 },
-                else => return error.Error,
+                else => return error.NoField,
             }
         },
         c("pokemons") => {

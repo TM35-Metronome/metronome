@@ -21,9 +21,6 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu128 = rom.int.lu128;
 
-const formats = nds.formats;
-const fs = nds.fs;
-
 pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]u8,
@@ -736,7 +733,7 @@ pub const Game = struct {
         const trainers = try (try getNarc(file_system, game.info.trainers)).toSlice(0, Trainer);
         const trainer_parties = game.trainer_parties;
 
-        var builder = try fs.SimpleNarcBuilder.init(
+        var builder = try nds.fs.SimpleNarcBuilder.init(
             game.allocator,
             trainer_parties.len,
             @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) * trainer_parties.len,
