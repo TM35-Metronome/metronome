@@ -456,8 +456,8 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
             switch (m(try parser.parse(parse.anyField))) {
                 c("id") => item.id = try parser.parse(parselu16v),
                 c("price") => item.price = try parser.parse(parselu16v),
-                c("hold_effect") => item.hold_effect = try parser.parse(parse.u8v),
-                c("hold_effect_par") => item.hold_effect_param = try parser.parse(parse.u8v),
+                c("hold_effect") => item.battle_effect = try parser.parse(parse.u8v),
+                c("hold_effect_par") => item.battle_effect_param = try parser.parse(parse.u8v),
                 c("importance") => item.importance = try parser.parse(parse.u8v),
                 c("type") => item.@"type" = try parser.parse(parse.u8v),
                 c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
