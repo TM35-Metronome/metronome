@@ -286,8 +286,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.writeByte('\n');
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
-        try stream.print(".items[{}].hold_effect={}\n", .{ i, item.hold_effect });
-        try stream.print(".items[{}].hold_effect_par={}\n", .{ i, item.hold_effect_param });
+        try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
+        try stream.print(".items[{}].battle_effect_par={}\n", .{ i, item.battle_effect_param });
         if (item.description.toSliceZ(game.data)) |description| {
             try stream.print(".items[{}].description=", .{i});
             try gen3.encodings.decode(.en_us, description, stream);
@@ -529,7 +529,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
     for (game.items) |item, i| {
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
-        try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect }); // TODO: Is this the same as gen3 hold_effect?
+        try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
         try stream.print(".items[{}].gain={}\n", .{ i, item.gain });
         try stream.print(".items[{}].berry={}\n", .{ i, item.berry });
         try stream.print(".items[{}].fling_effect={}\n", .{ i, item.fling_effect });
@@ -880,7 +880,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         // Price in gen5 is actually price * 10. I imagine they where trying to avoid
         // having price be more than a u16
         try stream.print(".items[{}].price={}\n", .{ i, @as(u32, item.price.value()) * 10 });
-        try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect }); // TODO: Is this the same as gen3 hold_effect?
+        try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
         try stream.print(".items[{}].gain={}\n", .{ i, item.gain });
         try stream.print(".items[{}].berry={}\n", .{ i, item.berry });
         try stream.print(".items[{}].fling_effect={}\n", .{ i, item.fling_effect });
