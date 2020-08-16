@@ -35,7 +35,7 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-starters ");
     try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes static Pokémons. Doesn't work for " ++
+    try stream.writeAll("\nRandomizes static, given and grotto Pokémons. Doesn't work for " ++
         "hg and ss yet.\n" ++
         "\n" ++
         "Options:\n");
@@ -170,6 +170,12 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             _ = try data.static_mons.put(allocator, index, try p.parse(parse.usizev));
             return false;
         },
+        c("given_pokemons") => {
+            const index = try p.parse(parse.index);
+            try p.parse(comptime parse.field("species"));
+            _ = try data.given_mons.put(allocator, index, try p.parse(parse.usizev));
+            return false;
+        },
         else => return true,
     }
 
@@ -182,216 +188,222 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
     const random = &random_adapt.random;
 
     const species = try data.species();
-    switch (method) {
-        .random => switch (_type) {
-            .random => {
-                const max = species.count();
-                if (max == 0)
-                    return;
 
-                for (data.static_mons.values()) |*static|
-                    static.* = species.at(random.intRangeLessThan(usize, 0, max));
-            },
-            .same => {
-                const by_type = try data.speciesByType(&species);
-                for (data.static_mons.values()) |*static| {
-                    const pokemon = data.pokemons.get(static.*).?;
-                    const type_max = pokemon.types.count();
-                    if (type_max == 0)
-                        continue;
+    for ([_]StaticMons{
+        data.static_mons,
+        data.given_mons,
+    }) |static_mons| {
+        switch (method) {
+            .random => switch (_type) {
+                .random => {
+                    const max = species.count();
+                    if (max == 0)
+                        return;
 
-                    const t = pokemon.types.at(random.intRangeLessThan(usize, 0, type_max));
-                    const pokemons = by_type.get(t).?;
-                    const max = pokemons.count();
-                    static.* = pokemons.at(random.intRangeLessThan(usize, 0, max));
-                }
-            },
-        },
-        .@"same-stats", .@"simular-stats" => {
-            const by_type = switch (_type) {
-                // When we do random, we should never actually touch the 'by_type'
-                // table, so let's just avoid doing the work of constructing it :)
-                .random => undefined,
-                .same => try data.speciesByType(&species),
-            };
-
-            var simular = std.ArrayList(usize).init(allocator);
-            for (data.static_mons.values()) |*static| {
-                defer simular.resize(0) catch unreachable;
-
-                // If the static Pokémon does not exist in the data
-                // we received, then there is no way for us to compare
-                // its stats with other Pokémons. The only thing we can
-                // assume is that the Pokémon it currently is
-                // is simular/same as itself.
-                const prev_pokemon = data.pokemons.get(static.*) orelse continue;
-
-                var min = @intCast(i64, sum(u8, &prev_pokemon.stats));
-                var max = min;
-
-                // For same-stats, we can just make this loop run once, which will
-                // make the simular list only contain pokemons with the same stats.
-                const condition = if (method == .@"simular-stats") @as(usize, 25) else @as(usize, 1);
-                while (simular.items.len < condition) : ({
-                    min -= 5;
-                    max += 5;
-                }) {
-                    switch (_type) {
-                        .random => for (species.span()) |range| {
-                            var s = range.start;
-                            while (s <= range.end) : (s += 1) {
-                                const pokemon = data.pokemons.get(s).?;
-
-                                const total = @intCast(i64, sum(u8, &pokemon.stats));
-                                if (min <= total and total <= max)
-                                    try simular.append(s);
-                            }
-                        },
-                        .same => {
-                            // If this Pokémon has no type (for some reason), then we
-                            // cannot pick a pokemon of the same type. The only thing
-                            // we can assume is that the Pokémon is the same type
-                            // as it self, and therefor just use that as the simular
-                            // Pokémon.
-                            const type_max = prev_pokemon.types.count();
-                            if (type_max == 0) {
-                                try simular.append(static.*);
-                                break;
-                            }
-                            for (prev_pokemon.types.span()) |range| {
-                                var t = range.start;
-                                while (t <= range.end) : (t += 1) {
-                                    const pokemons_of_type = by_type.get(t).?;
-                                    for (pokemons_of_type.span()) |range2| {
-                                        var s = range2.start;
-                                        while (s <= range2.end) : (s += 1) {
-                                            const pokemon = data.pokemons.get(s).?;
-
-                                            const total = @intCast(i64, sum(u8, &pokemon.stats));
-                                            if (min <= total and total <= max)
-                                                try simular.append(s);
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    }
-                }
-
-                const pick_from = simular.items;
-                static.* = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
-            }
-        },
-        .@"legendary-with-legendary" => {
-            // There is no way to specify in game that a Pokemon is a legendary.
-            // There are therefor two methods we can use to pick legendaries
-            // 1. Have a table of Pokemons which are legendaries.
-            //    - This does not work with roms that have been hacked
-            //      in a way that changes which Pokemons should be considered
-            //      legendary
-            // 2. Find legendaries by looking at their stats, evolution line
-            //    and other patterns common for legendaries
-            //
-            // I have chosen the latter method.
-
-            // First, lets give each Pokemon a "legendary rating" which
-            // is a measure as to how many "legendary" criteria this
-            // Pokemon fits into. This rating can be negative.
-            const slow = if (data.strings.get("slow")) |kv| kv.value else math.maxInt(usize);
-            const medium_slow = if (data.strings.get("medium_slow")) |kv| kv.value else math.maxInt(usize);
-            const undiscovered = if (data.strings.get("undiscovered")) |kv| kv.value else math.maxInt(usize);
-
-            var ratings = util.container.IntMap.Unmanaged(usize, isize){};
-            for (species.span()) |range| {
-                var _species = range.start;
-                while (_species <= range.end) : (_species += 1) {
-                    const pokemon = data.pokemons.get(_species).?;
-                    const rating = try ratings.getOrPutValue(allocator, _species, 0);
-
-                    // Legendaries are generally in the "slow" to "medium_slow"
-                    // growth rating
-                    if (pokemon.growth_rate) |growth_rate|
-                        rating.* += @as(isize, @boolToInt(growth_rate == slow or
-                            growth_rate == medium_slow));
-
-                    // They generally have a catch rate of 45 or less
-                    if (pokemon.catch_rate) |catch_rate|
-                        rating.* += @as(isize, @boolToInt(catch_rate <= 45));
-
-                    // They tend to not have a gender (255 in gender_ratio means
-                    // genderless).
-                    if (pokemon.gender_ratio) |gender_ratio|
-                        rating.* += @as(isize, @boolToInt(gender_ratio == 255));
-
-                    // Most are part of the "undiscovered" egg group
-                    if (pokemon.egg_group) |egg_group|
-                        rating.* += @as(isize, @boolToInt(egg_group == undiscovered));
-
-                    // And they don't evolve from anything. Subtract
-                    // score from this Pokemons evolutions.
-                    for (pokemon.evos.span()) |range2| {
-                        var evo = range2.start;
-                        while (evo <= range2.end) : (evo += 1) {
-                            const evo_rating = try ratings.getOrPutValue(allocator, evo, 0);
-                            evo_rating.* -= 10;
-                            rating.* -= 10;
-                        }
-                    }
-                }
-            }
-
-            const rating_to_be_legendary = blk: {
-                var res: isize = 0;
-                for (ratings.values()) |rating|
-                    res = math.max(res, rating);
-
-                // Not all legendaries match all criteria.
-                break :blk res - 1;
-            };
-
-            var legendaries = Set{};
-            var rest = Set{};
-            for (ratings.values()) |rating, i| {
-                const s = ratings.at(i).key;
-                if (rating >= rating_to_be_legendary) {
-                    _ = try legendaries.put(allocator, s);
-                } else {
-                    _ = try rest.put(allocator, s);
-                }
-            }
-
-            const legendaries_by_type = switch (_type) {
-                .random => undefined,
-                .same => try data.speciesByType(&legendaries),
-            };
-            const rest_by_type = switch (_type) {
-                .random => undefined,
-                .same => try data.speciesByType(&rest),
-            };
-
-            for (data.static_mons.values()) |*static| {
-                const pokemon = data.pokemons.get(static.*) orelse continue;
-                const rating = (ratings.get(static.*) orelse continue).*;
-                const pick_from = switch (_type) {
-                    .random => if (rating >= rating_to_be_legendary) legendaries else rest,
-                    .same => blk: {
+                    for (static_mons.values()) |*static|
+                        static.* = species.at(random.intRangeLessThan(usize, 0, max));
+                },
+                .same => {
+                    const by_type = try data.speciesByType(&species);
+                    for (static_mons.values()) |*static| {
+                        const pokemon = data.pokemons.get(static.*).?;
                         const type_max = pokemon.types.count();
                         if (type_max == 0)
                             continue;
 
-                        const types = pokemon.types;
-                        const picked_type = types.at(random.intRangeLessThan(usize, 0, type_max));
-                        const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
-                        break :blk (pick_from_by_type.get(picked_type) orelse continue).*;
-                    },
+                        const t = pokemon.types.at(random.intRangeLessThan(usize, 0, type_max));
+                        const pokemons = by_type.get(t).?;
+                        const max = pokemons.count();
+                        static.* = pokemons.at(random.intRangeLessThan(usize, 0, max));
+                    }
+                },
+            },
+            .@"same-stats", .@"simular-stats" => {
+                const by_type = switch (_type) {
+                    // When we do random, we should never actually touch the 'by_type'
+                    // table, so let's just avoid doing the work of constructing it :)
+                    .random => undefined,
+                    .same => try data.speciesByType(&species),
                 };
 
-                const max = pick_from.count();
-                if (max == 0)
-                    continue;
-                static.* = pick_from.at(random.intRangeLessThan(usize, 0, max));
-            }
-        },
+                var simular = std.ArrayList(usize).init(allocator);
+                for (static_mons.values()) |*static| {
+                    defer simular.resize(0) catch unreachable;
+
+                    // If the static Pokémon does not exist in the data
+                    // we received, then there is no way for us to compare
+                    // its stats with other Pokémons. The only thing we can
+                    // assume is that the Pokémon it currently is
+                    // is simular/same as itself.
+                    const prev_pokemon = data.pokemons.get(static.*) orelse continue;
+
+                    var min = @intCast(i64, sum(u8, &prev_pokemon.stats));
+                    var max = min;
+
+                    // For same-stats, we can just make this loop run once, which will
+                    // make the simular list only contain pokemons with the same stats.
+                    const condition = if (method == .@"simular-stats") @as(usize, 25) else @as(usize, 1);
+                    while (simular.items.len < condition) : ({
+                        min -= 5;
+                        max += 5;
+                    }) {
+                        switch (_type) {
+                            .random => for (species.span()) |range| {
+                                var s = range.start;
+                                while (s <= range.end) : (s += 1) {
+                                    const pokemon = data.pokemons.get(s).?;
+
+                                    const total = @intCast(i64, sum(u8, &pokemon.stats));
+                                    if (min <= total and total <= max)
+                                        try simular.append(s);
+                                }
+                            },
+                            .same => {
+                                // If this Pokémon has no type (for some reason), then we
+                                // cannot pick a pokemon of the same type. The only thing
+                                // we can assume is that the Pokémon is the same type
+                                // as it self, and therefor just use that as the simular
+                                // Pokémon.
+                                const type_max = prev_pokemon.types.count();
+                                if (type_max == 0) {
+                                    try simular.append(static.*);
+                                    break;
+                                }
+                                for (prev_pokemon.types.span()) |range| {
+                                    var t = range.start;
+                                    while (t <= range.end) : (t += 1) {
+                                        const pokemons_of_type = by_type.get(t).?;
+                                        for (pokemons_of_type.span()) |range2| {
+                                            var s = range2.start;
+                                            while (s <= range2.end) : (s += 1) {
+                                                const pokemon = data.pokemons.get(s).?;
+
+                                                const total = @intCast(i64, sum(u8, &pokemon.stats));
+                                                if (min <= total and total <= max)
+                                                    try simular.append(s);
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+
+                    const pick_from = simular.items;
+                    static.* = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+                }
+            },
+            .@"legendary-with-legendary" => {
+                // There is no way to specify in game that a Pokemon is a legendary.
+                // There are therefor two methods we can use to pick legendaries
+                // 1. Have a table of Pokemons which are legendaries.
+                //    - This does not work with roms that have been hacked
+                //      in a way that changes which Pokemons should be considered
+                //      legendary
+                // 2. Find legendaries by looking at their stats, evolution line
+                //    and other patterns common for legendaries
+                //
+                // I have chosen the latter method.
+
+                // First, lets give each Pokemon a "legendary rating" which
+                // is a measure as to how many "legendary" criteria this
+                // Pokemon fits into. This rating can be negative.
+                const slow = if (data.strings.get("slow")) |kv| kv.value else math.maxInt(usize);
+                const medium_slow = if (data.strings.get("medium_slow")) |kv| kv.value else math.maxInt(usize);
+                const undiscovered = if (data.strings.get("undiscovered")) |kv| kv.value else math.maxInt(usize);
+
+                var ratings = util.container.IntMap.Unmanaged(usize, isize){};
+                for (species.span()) |range| {
+                    var _species = range.start;
+                    while (_species <= range.end) : (_species += 1) {
+                        const pokemon = data.pokemons.get(_species).?;
+                        const rating = try ratings.getOrPutValue(allocator, _species, 0);
+
+                        // Legendaries are generally in the "slow" to "medium_slow"
+                        // growth rating
+                        if (pokemon.growth_rate) |growth_rate|
+                            rating.* += @as(isize, @boolToInt(growth_rate == slow or
+                                growth_rate == medium_slow));
+
+                        // They generally have a catch rate of 45 or less
+                        if (pokemon.catch_rate) |catch_rate|
+                            rating.* += @as(isize, @boolToInt(catch_rate <= 45));
+
+                        // They tend to not have a gender (255 in gender_ratio means
+                        // genderless).
+                        if (pokemon.gender_ratio) |gender_ratio|
+                            rating.* += @as(isize, @boolToInt(gender_ratio == 255));
+
+                        // Most are part of the "undiscovered" egg group
+                        if (pokemon.egg_group) |egg_group|
+                            rating.* += @as(isize, @boolToInt(egg_group == undiscovered));
+
+                        // And they don't evolve from anything. Subtract
+                        // score from this Pokemons evolutions.
+                        for (pokemon.evos.span()) |range2| {
+                            var evo = range2.start;
+                            while (evo <= range2.end) : (evo += 1) {
+                                const evo_rating = try ratings.getOrPutValue(allocator, evo, 0);
+                                evo_rating.* -= 10;
+                                rating.* -= 10;
+                            }
+                        }
+                    }
+                }
+
+                const rating_to_be_legendary = blk: {
+                    var res: isize = 0;
+                    for (ratings.values()) |rating|
+                        res = math.max(res, rating);
+
+                    // Not all legendaries match all criteria.
+                    break :blk res - 1;
+                };
+
+                var legendaries = Set{};
+                var rest = Set{};
+                for (ratings.values()) |rating, i| {
+                    const s = ratings.at(i).key;
+                    if (rating >= rating_to_be_legendary) {
+                        _ = try legendaries.put(allocator, s);
+                    } else {
+                        _ = try rest.put(allocator, s);
+                    }
+                }
+
+                const legendaries_by_type = switch (_type) {
+                    .random => undefined,
+                    .same => try data.speciesByType(&legendaries),
+                };
+                const rest_by_type = switch (_type) {
+                    .random => undefined,
+                    .same => try data.speciesByType(&rest),
+                };
+
+                for (static_mons.values()) |*static| {
+                    const pokemon = data.pokemons.get(static.*) orelse continue;
+                    const rating = (ratings.get(static.*) orelse continue).*;
+                    const pick_from = switch (_type) {
+                        .random => if (rating >= rating_to_be_legendary) legendaries else rest,
+                        .same => blk: {
+                            const type_max = pokemon.types.count();
+                            if (type_max == 0)
+                                continue;
+
+                            const types = pokemon.types;
+                            const picked_type = types.at(random.intRangeLessThan(usize, 0, type_max));
+                            const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
+                            break :blk (pick_from_by_type.get(picked_type) orelse continue).*;
+                        },
+                    };
+
+                    const max = pick_from.count();
+                    if (max == 0)
+                        continue;
+                    static.* = pick_from.at(random.intRangeLessThan(usize, 0, max));
+                }
+            },
+        }
     }
 }
 
@@ -420,6 +432,7 @@ const Data = struct {
     strings: std.StringHashMap(usize),
     pokemons: Pokemons = Pokemons{},
     static_mons: StaticMons = StaticMons{},
+    given_mons: StaticMons = StaticMons{},
 
     fn string(d: *Data, str: []const u8) !usize {
         const res = try d.strings.getOrPut(str);

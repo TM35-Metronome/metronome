@@ -1938,8 +1938,8 @@ pub const Command = packed struct {
         b: lu16,
     };
     pub const GivePokemon = packed struct {
-        pkmn: lu16,
-        lvl: lu16,
+        species: lu16,
+        level: lu16,
         item: lu16,
         res: lu16,
     };

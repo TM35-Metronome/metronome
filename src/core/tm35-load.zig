@@ -287,7 +287,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].id={}\n", .{ i, item.id.value() });
         try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
-        try stream.print(".items[{}].battle_effect_par={}\n", .{ i, item.battle_effect_param });
+        try stream.print(".items[{}].battle_effect_p={}\n", .{ i, item.battle_effect_param });
         if (item.description.toSliceZ(game.data)) |description| {
             try stream.print(".items[{}].description=", .{i});
             try gen3.encodings.decode(.en_us, description, stream);
@@ -366,10 +366,13 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 
     for (game.static_pokemons) |static_mon, i| {
-        const data = static_mon.data();
-        try stream.print(".static_pokemons[{}].species={}\n", .{ i, data.setwildbattle.species.value() });
-        try stream.print(".static_pokemons[{}].level={}\n", .{ i, data.setwildbattle.level });
-        try stream.print(".static_pokemons[{}].item={}\n", .{ i, data.setwildbattle.item.value() });
+        try stream.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species.value() });
+        try stream.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.* });
+    }
+
+    for (game.given_pokemons) |given_mon, i| {
+        try stream.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species.value() });
+        try stream.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.* });
     }
 
     for (game.pokeball_items) |given_item, i| {
@@ -649,6 +652,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     for (game.static_pokemons) |static_mon, i| {
         try stream.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species.value() });
         try stream.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.value() });
+    }
+
+    for (game.given_pokemons) |given_mon, i| {
+        try stream.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species.value() });
+        try stream.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.value() });
     }
 
     for (game.pokeball_items) |given_item, i| {
@@ -948,6 +956,11 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     for (game.static_pokemons) |static_mon, i| {
         try stream.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species.value() });
         try stream.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.value() });
+    }
+
+    for (game.given_pokemons) |given_mon, i| {
+        try stream.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species.value() });
+        try stream.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.value() });
     }
 
     for (game.pokeball_items) |given_item, i| {

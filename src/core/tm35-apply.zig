@@ -456,8 +456,8 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
             switch (m(try parser.parse(parse.anyField))) {
                 c("id") => item.id = try parser.parse(parselu16v),
                 c("price") => item.price = try parser.parse(parselu16v),
-                c("hold_effect") => item.battle_effect = try parser.parse(parse.u8v),
-                c("hold_effect_par") => item.battle_effect_param = try parser.parse(parse.u8v),
+                c("battle_effect") => item.battle_effect = try parser.parse(parse.u8v),
+                c("battle_effect_p") => item.battle_effect_param = try parser.parse(parse.u8v),
                 c("importance") => item.importance = try parser.parse(parse.u8v),
                 c("type") => item.@"type" = try parser.parse(parse.u8v),
                 c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
@@ -590,12 +590,23 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
             const index = try parser.parse(parse.index);
             if (index >= game.static_pokemons.len)
                 return error.Error;
-            const static_mon = game.static_pokemons[index].data();
 
+            const static_mon = game.static_pokemons[index];
             switch (m(try parser.parse(parse.anyField))) {
-                c("species") => static_mon.setwildbattle.species = try parser.parse(parselu16v),
-                c("level") => static_mon.setwildbattle.level = try parser.parse(parse.u8v),
-                c("item") => static_mon.setwildbattle.item = try parser.parse(parselu16v),
+                c("species") => static_mon.species.* = try parser.parse(parselu16v),
+                c("level") => static_mon.level.* = try parser.parse(parse.u8v),
+                else => return error.NoField,
+            }
+        },
+        c("given_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.given_pokemons.len)
+                return error.Error;
+
+            const given_mon = game.given_pokemons[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => given_mon.species.* = try parser.parse(parselu16v),
+                c("level") => given_mon.level.* = try parser.parse(parse.u8v),
                 else => return error.NoField,
             }
         },
@@ -893,6 +904,18 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             switch (m(try parser.parse(parse.anyField))) {
                 c("species") => static_mon.species.* = try parser.parse(parselu16v),
                 c("level") => static_mon.level.* = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        c("given_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.given_pokemons.len)
+                return error.Error;
+
+            const given_mon = game.given_pokemons[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => given_mon.species.* = try parser.parse(parselu16v),
+                c("level") => given_mon.level.* = try parser.parse(parselu16v),
                 else => return error.NoField,
             }
         },
@@ -1243,6 +1266,18 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             switch (m(try parser.parse(parse.anyField))) {
                 c("species") => static_mon.species.* = try parser.parse(parselu16v),
                 c("level") => static_mon.level.* = try parser.parse(parselu16v),
+                else => return error.NoField,
+            }
+        },
+        c("given_pokemons") => {
+            const index = try parser.parse(parse.index);
+            if (index >= game.given_pokemons.len)
+                return error.Error;
+
+            const given_mon = game.given_pokemons[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("species") => given_mon.species.* = try parser.parse(parselu16v),
+                c("level") => given_mon.level.* = try parser.parse(parselu16v),
                 else => return error.NoField,
             }
         },

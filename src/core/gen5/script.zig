@@ -1040,7 +1040,7 @@ pub const Command = packed struct {
         value: lu16,
     };
     pub const GivePokemon = packed struct {
-        id: lu16,
+        species: lu16,
         item: lu16,
         level: lu16,
     };

@@ -738,6 +738,7 @@ pub const Game = struct {
 
     scripts: nds.fs.Fs,
     static_pokemons: []StaticPokemon,
+    given_pokemons: []StaticPokemon,
     pokeball_items: []PokeballItem,
 
     text: nds.fs.Fs,
@@ -784,6 +785,7 @@ pub const Game = struct {
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
+            allocator.free(commands.given_pokemons);
             allocator.free(commands.pokeball_items);
         }
 
@@ -852,6 +854,7 @@ pub const Game = struct {
             .hms = hm_tms[92..98],
             .tms2 = hm_tms[98..],
             .static_pokemons = commands.static_pokemons,
+            .given_pokemons = commands.given_pokemons,
             .pokeball_items = commands.pokeball_items,
 
             .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
@@ -928,17 +931,21 @@ pub const Game = struct {
             game.allocator.free(starter_ptrs);
         game.allocator.free(game.arm9);
         game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
     }
 
     const ScriptCommands = struct {
         static_pokemons: []StaticPokemon,
+        given_pokemons: []StaticPokemon,
         pokeball_items: []PokeballItem,
     };
 
     fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
         var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
+        var given_pokemons = std.ArrayList(StaticPokemon).init(allocator);
+        errdefer given_pokemons.deinit();
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
         errdefer pokeball_items.deinit();
 
@@ -991,6 +998,10 @@ pub const Game = struct {
                             .species = &command.data().wild_battle_store_result.species,
                             .level = &command.data().wild_battle_store_result.level,
                         }),
+                        .give_pokemon => try given_pokemons.append(.{
+                            .species = &command.data().give_pokemon.species,
+                            .level = &command.data().give_pokemon.level,
+                        }),
 
                         // In scripts, field items are two set_var_eq_val commands
                         // followed by a jump to the code that gives this item:
@@ -1026,6 +1037,7 @@ pub const Game = struct {
 
         return ScriptCommands{
             .static_pokemons = static_pokemons.toOwnedSlice(),
+            .given_pokemons = given_pokemons.toOwnedSlice(),
             .pokeball_items = pokeball_items.toOwnedSlice(),
         };
     }

@@ -573,6 +573,7 @@ pub const Game = struct {
 
     scripts: nds.fs.Fs,
     static_pokemons: []StaticPokemon,
+    given_pokemons: []StaticPokemon,
     pokeball_items: []PokeballItem,
 
     text: nds.fs.Fs,
@@ -617,6 +618,7 @@ pub const Game = struct {
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
+            allocator.free(commands.given_pokemons);
             allocator.free(commands.pokeball_items);
         }
 
@@ -708,6 +710,7 @@ pub const Game = struct {
 
             .scripts = scripts,
             .static_pokemons = commands.static_pokemons,
+            .given_pokemons = commands.given_pokemons,
             .pokeball_items = commands.pokeball_items,
 
             .text = text,
@@ -785,11 +788,13 @@ pub const Game = struct {
     pub fn deinit(game: Game) void {
         game.allocator.free(game.arm9);
         game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
     }
 
     const ScriptCommands = struct {
         static_pokemons: []StaticPokemon,
+        given_pokemons: []StaticPokemon,
         pokeball_items: []PokeballItem,
     };
 
@@ -798,12 +803,15 @@ pub const Game = struct {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
                 .static_pokemons = &[_]StaticPokemon{},
+                .given_pokemons = &[_]StaticPokemon{},
                 .pokeball_items = &[_]PokeballItem{},
             };
         }
 
         var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
+        var given_pokemons = std.ArrayList(StaticPokemon).init(allocator);
+        errdefer given_pokemons.deinit();
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
         errdefer pokeball_items.deinit();
 
@@ -860,6 +868,10 @@ pub const Game = struct {
                             .species = &command.data().wild_battle3.species,
                             .level = &command.data().wild_battle3.level,
                         }),
+                        .give_pokemon => try given_pokemons.append(.{
+                            .species = &command.data().give_pokemon.species,
+                            .level = &command.data().give_pokemon.level,
+                        }),
 
                         // In scripts, field items are two SetVar commands
                         // followed by a jump to the code that gives this item:
@@ -897,6 +909,7 @@ pub const Game = struct {
 
         return ScriptCommands{
             .static_pokemons = static_pokemons.toOwnedSlice(),
+            .given_pokemons = given_pokemons.toOwnedSlice(),
             .pokeball_items = pokeball_items.toOwnedSlice(),
         };
     }
