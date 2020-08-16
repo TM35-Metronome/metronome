@@ -19,7 +19,7 @@ pub fn testProgram(
     var out_buf: [1024 * 10]u8 = undefined;
     var err_buf: [1024]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&alloc_buf);
-    var stdin = io.fixedBufferStream(in);
+    var stdin = io.bufferedInStream(io.fixedBufferStream(in).inStream());
     var stdout = io.fixedBufferStream(&out_buf);
     var stderr = io.fixedBufferStream(&err_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
@@ -27,8 +27,8 @@ pub fn testProgram(
     const clap_args = Clap.parse(&fba.allocator, clap.args.SliceIterator, &arg_iter) catch unreachable;
 
     const StdIo = util.CustomStdIoStreams(
-        std.io.FixedBufferStream([]const u8).InStream,
-        std.io.FixedBufferStream([]u8).OutStream,
+        io.BufferedInStream(4096, std.io.FixedBufferStream([]const u8).InStream).InStream,
+        io.FixedBufferStream([]u8).OutStream,
     );
 
     const res = main(

@@ -55,19 +55,14 @@ pub fn main2(
 ) u8 {
     const out = args.option("--output") orelse "site.html";
 
-    var line_buf = std.ArrayList(u8).init(allocator);
-    var stdin = io.bufferedInStream(stdio.in);
     var strings = std.StringHashMap(void).init(allocator);
     var obj = Object{ .fields = Fields.init(allocator) };
-
-    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&obj, &strings, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
         stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
-
-        line_buf.resize(0) catch unreachable;
     }
 
     const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);

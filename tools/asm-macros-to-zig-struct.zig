@@ -67,8 +67,7 @@ pub fn main() !void {
     var commands = std.ArrayList(Command).init(a);
     var state: State = .Start;
 
-    var line_buf = std.ArrayList(u8).init(a);
-    next_line: while (try util.readLine(&stdio_buf.in, &line_buf)) |line| {
+    next_line: while (try util.readLine(&stdio_buf.in)) |line| {
         const trimmed = mem.trim(u8, line, " \r\n");
         errdefer debug.warn("{}\n", .{trimmed});
         if (trimmed.len == 0)

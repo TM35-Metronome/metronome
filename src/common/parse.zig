@@ -101,15 +101,7 @@ pub fn enumv(comptime Enum: type) Parser(Enum) {
 }
 
 pub fn field(comptime str: []const u8) Parser(void) {
-    return convert(
-        void,
-        struct {
-            fn match(s: []const u8) ?void {
-                return if (mem.eql(u8, s, str)) {} else null;
-            }
-        }.match,
-        comptime combine(.{ char('.'), ident }),
-    );
+    return string("." ++ str);
 }
 
 pub fn value(comptime T: type, comptime conv: fn ([]const u8) ?T) Parser(T) {

@@ -5,33 +5,49 @@ const testing = std.testing;
 
 /// This is a special case readLine implementation for BufferedInStreams.
 /// This function looks directly into the buffer that BufferedInStream manages
-/// to find lines. I'm assuming this is a lot faster as this is directly walking
-/// over a buffer instead of indirectly calling readByte one at a time.
+/// to find lines. This function returns slices into the BufferedInStream and
+/// can therefor only read lines as long as the buffers size. For all programs
+/// in this project, this shouldn't really be a problem as lines are relativly
+/// small (at least a lot smaller than 4096, which is bufinstreams default).
 ///
-/// TODO: Ever since zig 0.6.0, the InStream api became static (aka functions
-///       are not called using dynamic dispatch). Therefor, readUntilDelimitorArrayList
-///       might be a lot faster. Do benchmarks to check that this function is
-///       still needed.
-pub fn readLine(buf_in_stream: var, buffer: *std.ArrayList(u8)) !?[]u8 {
-    const start = buffer.items.len;
+/// NOTE: using `readUntilDelimitorArrayList` over this function results in
+///       tm35-rand-parties to be around 2x slower. This function is therefor
+///       still better to use until zigs std gets a better `readUntilDelimitor`
+///       implementation. Replacement code bellow:
+///```
+///buf_in_stream.inStream().readUntilDelimiterArrayList(buffer, '\n', std.math.maxInt(usize)) catch |err| switch (err) {
+///    error.StreamTooLong => unreachable,
+///    error.EndOfStream => {
+///        if (buffer.items.len != 0)
+///            return buffer.items;
+///        return null;
+///    },
+///    else => |err2| return err2,
+///};
+///return buffer.items;
+///```
+pub fn readLine(buf_in_stream: var) !?[]u8 {
+    const fifo = &buf_in_stream.fifo;
 
     while (true) {
-        const buf = buf_in_stream.fifo.readableSlice(0);
+        const buf = fifo.readableSliceMut(0);
         if (mem.indexOfScalar(u8, buf, '\n')) |index| {
-            const line = buf[0..index];
-            try buffer.appendSlice(line);
-            buf_in_stream.fifo.discard(line.len + 1);
-
-            return buffer.items[start..];
+            defer fifo.head += index + 1;
+            defer fifo.count -= index + 1;
+            return buf[0..index];
         }
 
-        try buffer.appendSlice(buf);
-        const num = try buf_in_stream.unbuffered_in_stream.readAll(&buf_in_stream.fifo.buf);
-        buf_in_stream.fifo.head = 0;
-        buf_in_stream.fifo.count = num;
+        mem.copyBackwards(u8, fifo.buf[0..], buf);
+        fifo.head = 0;
+
+        const num = try buf_in_stream.unbuffered_in_stream.readAll(fifo.writableSlice(0));
+        fifo.count += num;
+
         if (num == 0) {
-            if (start != buffer.items.len)
-                return buffer.items[start..];
+            if (fifo.count != 0) {
+                defer fifo.count = 0;
+                return fifo.readableSliceMut(0);
+            }
 
             return null;
         }
@@ -53,12 +69,10 @@ test "readLine" {
 fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     var fbs = std.io.fixedBufferStream(str);
     var bis = std.io.bufferedInStream(fbs.inStream());
-    var buffer = std.ArrayList(u8).init(testing.allocator);
-    defer buffer.deinit();
 
     for (lines) |expected_line| {
-        const actual_line = (try readLine(&bis, &buffer)).?;
+        const actual_line = (try readLine(&bis)).?;
         testing.expectEqualSlices(u8, expected_line, actual_line);
     }
-    testing.expectEqual(@as(?[]u8, null), try readLine(&bis, &buffer));
+    testing.expectEqual(@as(?[]u8, null), try readLine(&bis));
 }

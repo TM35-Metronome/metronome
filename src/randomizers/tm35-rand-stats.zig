@@ -66,11 +66,8 @@ pub fn main2(
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
-    var line_buf = std.ArrayList(u8).init(allocator);
-    var stdin = io.bufferedInStream(stdio.in);
     var pokemons = Pokemons{};
-
-    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &pokemons, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
@@ -78,8 +75,6 @@ pub fn main2(
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
-
-        line_buf.resize(0) catch unreachable;
     }
 
     randomize(pokemons, seed, same_total_stats, follow_evos);

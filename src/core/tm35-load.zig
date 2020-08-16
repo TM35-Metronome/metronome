@@ -542,7 +542,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".items[{}].pocket={}\n", .{ i, @tagName(item.pocket) });
         try stream.print(".items[{}].type={}\n", .{ i, item.type });
         try stream.print(".items[{}].category={}\n", .{ i, item.category });
-        try stream.print(".items[{}].category2={}\n", .{ i, item.category2.value() });
+        //try stream.print(".items[{}].category2={}\n", .{ i, item.category2.value() });
         try stream.print(".items[{}].index={}\n", .{ i, item.index });
         //try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
         //try stream.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
@@ -898,8 +898,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".items[{}].pocket={}\n", .{ i, @tagName(item.pocket) });
         try stream.print(".items[{}].type={}\n", .{ i, item.type });
         try stream.print(".items[{}].category={}\n", .{ i, item.category });
-        try stream.print(".items[{}].category2={}\n", .{ i, item.category2.value() });
-        try stream.print(".items[{}].category3={}\n", .{ i, item.category3 });
+        //try stream.print(".items[{}].category2={}\n", .{ i, item.category2.value() });
+        //try stream.print(".items[{}].category3={}\n", .{ i, item.category3 });
         try stream.print(".items[{}].index={}\n", .{ i, item.index });
         try stream.print(".items[{}].anti_index={}\n", .{ i, item.anti_index });
         //try stream.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
