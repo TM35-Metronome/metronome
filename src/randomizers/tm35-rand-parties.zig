@@ -31,7 +31,7 @@ const params = blk: {
         clap.parseParam("-M, --party-size-max <INT>                                                The maximum size each trainers party is allowed to be. (default: 6)") catch unreachable,
         clap.parseParam("-p, --party-size-pick-method <unchanged|minimum|random>                   The method used to pick the trainer party size. (default: unchanged)") catch unreachable,
         clap.parseParam("-s, --seed <INT>                                                          The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-S, --simular-total-stats                                                 Replaced party members should have simular total stats.") catch unreachable,
+        clap.parseParam("-S, --stats <random|simular|follow_level>                                 The total stats the picked pokemon should have. (default: random)") catch unreachable,
         clap.parseParam("-t, --types <random|same|themed>                                          Which types each trainer should use. (default: random)") catch unreachable,
         clap.parseParam("-v, --version                                                             Output version information and exit.") catch unreachable,
     };
@@ -67,6 +67,12 @@ const TypesOption = enum {
     themed,
 };
 
+const StatsOption = enum {
+    random,
+    simular,
+    follow_level,
+};
+
 const PartySizeMethod = enum {
     unchanged,
     minimum,
@@ -100,9 +106,9 @@ pub fn main2(
     const party_size_max_arg = args.option("--party-size-max") orelse "6";
     const party_size_method_arg = args.option("--party-size-pick-method") orelse "unchanged";
     const party_size_min_arg = args.option("--party-size-min") orelse "1";
+    const stats_arg = args.option("--stats") orelse "random";
     const types_arg = args.option("--types") orelse "random";
 
-    const simular_total_stats = args.flag("--simular-total-stats");
     const party_size_min = fmt.parseUnsigned(usize, party_size_min_arg, 10);
     const party_size_max = fmt.parseUnsigned(usize, party_size_max_arg, 10);
     const types = std.meta.stringToEnum(TypesOption, types_arg) orelse {
@@ -111,12 +117,17 @@ pub fn main2(
         return 1;
     };
     const items = std.meta.stringToEnum(ItemOption, items_arg) orelse {
-        stdio.err.print("--items does not support '{}'\n", .{party_size_method_arg}) catch {};
+        stdio.err.print("--items does not support '{}'\n", .{items_arg}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
     const moves = std.meta.stringToEnum(MoveOption, moves_arg) orelse {
-        stdio.err.print("--moves does not support '{}'\n", .{party_size_method_arg}) catch {};
+        stdio.err.print("--moves does not support '{}'\n", .{moves_arg}) catch {};
+        usage(stdio.err) catch {};
+        return 1;
+    };
+    const stats = std.meta.stringToEnum(StatsOption, stats_arg) orelse {
+        stdio.err.print("--stats does not support '{}'\n", .{stats_arg}) catch {};
         usage(stdio.err) catch {};
         return 1;
     };
@@ -155,10 +166,10 @@ pub fn main2(
 
     randomize(allocator, &data, .{
         .seed = seed,
-        .simular_total_stats = simular_total_stats,
         .types = types,
         .items = items,
         .moves = moves,
+        .stats = stats,
         .party_size_method = party_size_method,
         .party_size_min = party_size_min catch unreachable,
         .party_size_max = party_size_max catch unreachable,
@@ -305,10 +316,10 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
 
 const Options = struct {
     seed: u64,
-    simular_total_stats: bool,
     types: TypesOption,
     items: ItemOption,
     moves: MoveOption,
+    stats: StatsOption,
     party_size_method: PartySizeMethod,
     party_size_min: usize,
     party_size_max: usize,
@@ -329,6 +340,21 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
     const all_types_count = species_by_type.count();
     if (all_types_count == 0)
         return;
+
+    var min_stats: usize = 0;
+    var max_stats: usize = 0;
+    for (species.span()) |range| {
+        var s = range.start;
+        while (s <= range.end) : (s += 1) {
+            const pokemon = data.pokemons.get(s) orelse continue;
+            const stats = sum(u8, &pokemon.stats);
+            min_stats = math.min(min_stats, stats);
+            max_stats = math.max(max_stats, stats);
+        }
+    }
+
+    const stats_diff = max_stats - min_stats;
+    const stats_per_level = @intToFloat(f64, stats_diff) / 100;
 
     for (data.trainers.values()) |*trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -408,35 +434,48 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
 
             const pick_from = species_by_type.get(new_type).?;
             const pick_max = pick_from.count();
-            member.species = if (opt.simular_total_stats) blk: {
-                // If we don't know what the old Pokemon was, then we can't do similar_total_stats.
-                // We therefor just pick a random pokemon and continue.
-                const m_pokemon = if (old_species) |s| data.pokemons.get(s) else null;
-                const total_stats = if (m_pokemon) |p| sum(u8, &p.stats) else average_stats orelse {
-                    break :blk pick_from.at(random.intRangeLessThan(usize, 0, pick_max));
-                };
+            member.species = switch (opt.stats) {
+                .simular, .follow_level => blk: {
+                    const total_stats = switch (opt.stats) {
+                        .simular => blk2: {
+                            // If we don't know what the old Pokemon was, then we can't do similar_total_stats.
+                            // We therefor just pick a random pokemon and continue.
+                            const m_pokemon = if (old_species) |s| data.pokemons.get(s) else null;
+                            break :blk2 if (m_pokemon) |p| sum(u8, &p.stats) else average_stats orelse {
+                                break :blk pick_from.at(random.intRangeLessThan(usize, 0, pick_max));
+                            };
+                        },
+                        .follow_level => blk2: {
+                            const level = member.level orelse average_level;
+                            const stats = stats_per_level * @intToFloat(f64, level);
+                            break :blk2 min_stats + @floatToInt(usize, stats);
+                        },
+                        .random => unreachable,
+                    };
 
-                var min = @intCast(i64, total_stats);
-                var max = min;
+                    var min = @intCast(i64, total_stats);
+                    var max = min;
 
-                simular.resize(0) catch unreachable;
-                while (simular.items.len < 25) : ({
-                    min -= 5;
-                    max += 5;
-                }) {
-                    for (pick_from.span()) |range| {
-                        var s = range.start;
-                        while (s <= range.end) : (s += 1) {
-                            const p = data.pokemons.get(s).?;
-                            const total = @intCast(i64, sum(u8, &p.stats));
-                            if (min <= total and total <= max)
-                                try simular.append(s);
+                    simular.resize(0) catch unreachable;
+                    while (simular.items.len < 25) : ({
+                        min -= 5;
+                        max += 5;
+                    }) {
+                        for (pick_from.span()) |range| {
+                            var s = range.start;
+                            while (s <= range.end) : (s += 1) {
+                                const p = data.pokemons.get(s).?;
+                                const total = @intCast(i64, sum(u8, &p.stats));
+                                if (min <= total and total <= max)
+                                    try simular.append(s);
+                            }
                         }
                     }
-                }
 
-                break :blk simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
-            } else pick_from.at(random.intRangeLessThan(usize, 0, pick_max));
+                    break :blk simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
+                },
+                .random => pick_from.at(random.intRangeLessThan(usize, 0, pick_max)),
+            };
 
             member.item = switch (opt.items) {
                 .none => null,
