@@ -119,10 +119,7 @@ pub fn main2(
     };
 
     var line_num: usize = 1;
-    var line_buf = std.ArrayList(u8).init(allocator);
-    var stdin = io.bufferedInStream(stdio.in);
-
-    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
+    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         _ = switch (game) {
             .gen3 => |*gen3_game| applyGen3(gen3_game, line_num, trimmed),
@@ -134,7 +131,6 @@ pub fn main2(
             if (abort_on_first_warning)
                 return 1;
         };
-        line_buf.resize(0) catch unreachable;
     }
 
     const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return exit.createErr(stdio.err, out, err);

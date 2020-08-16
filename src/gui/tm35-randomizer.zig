@@ -1018,9 +1018,8 @@ const Settings = struct {
         var buf: [1024 * 2]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
         var buf_in_stream = io.bufferedInStream(in_stream);
-        var buffer = std.ArrayList(u8).init(&fba.allocator);
 
-        while (try util.readLine(&buf_in_stream, &buffer)) |line| {
+        while (try util.readLine(&buf_in_stream)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
@@ -1050,8 +1049,6 @@ const Settings = struct {
                     command_arg.len = 1;
                 }
             }
-
-            buffer.shrink(0);
         }
 
         for (exes.commands) |_, i| {
@@ -1152,10 +1149,7 @@ const Exes = struct {
         defer freeCommands(allocator, res.items);
 
         var buf_stream = io.bufferedInStream(command_file.inStream());
-        var buffer = std.ArrayList(u8).init(allocator);
-        defer buffer.deinit();
-
-        while (try util.readLine(&buf_stream, &buffer)) |line| {
+        while (try util.readLine(&buf_stream)) |line| {
             if (fs.path.isAbsolute(line)) {
                 const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
                 try res.append(command);

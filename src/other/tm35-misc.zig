@@ -104,10 +104,7 @@ pub fn main2(
         .wild_scale = wild_scale catch unreachable,
         .static_scale = static_scale catch unreachable,
     };
-
-    var line_buf = std.ArrayList(u8).init(allocator);
-    var stdin = io.bufferedInStream(stdio.in);
-    while (util.readLine(&stdin, &line_buf) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(stdio.out, opt, str) catch |err| switch (err) {
             error.ParseError => true,
@@ -115,8 +112,6 @@ pub fn main2(
         };
         if (print_line)
             stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
-
-        line_buf.resize(0) catch unreachable;
     }
 
     return 0;
