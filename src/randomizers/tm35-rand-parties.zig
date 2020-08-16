@@ -287,7 +287,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
         c("items") => {
             const index = try p.parse(parse.index);
             switch (m(try p.parse(parse.anyField))) {
-                c("held_effect") => {
+                c("battle_effect") => {
                     const effect = try p.parse(parse.usizev);
                     if (effect != 0)
                         _ = try data.held_items.put(allocator, index);
@@ -755,7 +755,7 @@ test "tm35-rand-parties" {
             comptime id: []const u8,
             comptime effect: []const u8,
         ) []const u8 {
-            return ".items[" ++ id ++ "].held_effect=" ++ effect ++ "\n";
+            return ".items[" ++ id ++ "].battle_effect=" ++ effect ++ "\n";
         }
     };
 
