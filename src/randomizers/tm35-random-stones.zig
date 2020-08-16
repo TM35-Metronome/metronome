@@ -42,7 +42,7 @@ fn usage(stream: var) !void {
         "These stones evolve a Pokémon to a random new Pokémon that upholds the " ++
         "requirements of the stone. Here is a list of all stones:\n" ++
         "* Chance Stone: Evolves a Pokémon into random Pokémon.\n" ++
-        "* Superior Stone: Evolves a Pokémon into random Pokémon with better overall stats.\n" ++
+        "* Stat Stone: Evolves a Pokémon into random Pokémon with the same total stats.\n" ++
         "* Growth Stone: Evolves a Pokémon into random Pokémon with the same growth rate.\n" ++
         "* Form Stone: Evolves a Pokémon into random Pokémon with a common type.\n" ++
         "* Skill Stone: Evolves a Pokémon into random Pokémon with a common ability.\n" ++
@@ -273,7 +273,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
 
     // Make sure these indexs line up with the array below
     const chance_stone = 0;
-    const superior_stone = 1;
+    const stat_stone = 1;
     const growth_stone = 2;
     const form_stone = 3;
     const skill_stone = 4;
@@ -308,34 +308,31 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         },
         .{
             .names = &[_]Utf8{
-                Utf8.init("Superior Stone") catch unreachable,
-                Utf8.init("Superior Rock") catch unreachable,
-                Utf8.init("Better Stone") catch unreachable,
-                Utf8.init("Better Rock") catch unreachable,
-                Utf8.init("Good Stone") catch unreachable,
-                Utf8.init("Good Rock") catch unreachable,
-                Utf8.init("Good Rck") catch unreachable,
-                Utf8.init("B Stone") catch unreachable,
-                Utf8.init("B Rock") catch unreachable,
-                Utf8.init("B Rck") catch unreachable,
+                Utf8.init("Stat Stone") catch unreachable,
+                Utf8.init("Stat Rock") catch unreachable,
+                Utf8.init("St Stone") catch unreachable,
+                Utf8.init("St Rock") catch unreachable,
+                Utf8.init("St Rck") catch unreachable,
             },
             .descriptions = &[_]Utf8{
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better overall stats.") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better overall stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon with better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random better stats") catch unreachable),
-                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Better stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same total stats.") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with the same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon into random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon into random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves a Pokémon to random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve a Pokémon to random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolves to random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Evolve to random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Into random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("To random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon with same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon, same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random Pokémon same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random, same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Random same stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same total stats") catch unreachable),
+                try util.unicode.splitIntoLines(allocator, max_line_len, Utf8.init("Same stats") catch unreachable),
             },
         },
         .{
@@ -539,29 +536,6 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                             break pick;
                     } else pokemon_id,
 
-                    superior_stone => blk: {
-                        const total_stats = sum(&pokemon.stats);
-
-                        // Intmaps/sets have sorted keys. We can therefor pick an index
-                        // above or below the current one, to get a set of Pokémons whose
-                        // stats are better or worse than the current one.
-                        const stat_index = pokemons_by_stats.set.index(total_stats).?;
-                        const picked_index = random.intRangeLessThan(
-                            usize,
-                            stat_index + @boolToInt(stat_index + 1 < pokemons_by_stats.count()),
-                            pokemons_by_stats.count(),
-                        );
-
-                        const set = pokemons_by_stats.at(picked_index).value;
-                        while (set.count() != 1) {
-                            const pick = set.at(random.intRangeLessThan(usize, 0, set.count()));
-                            if (pick != pokemon_id)
-                                break :blk pick;
-                        }
-
-                        break :blk set.at(0);
-                    },
-
                     form_stone, skill_stone, breed_stone => blk: {
                         const map = switch (stone) {
                             growth_stone => pokemons_by_growth_rate,
@@ -601,13 +575,15 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                         break :blk pokemon_id;
                     },
 
-                    growth_stone, buddy_stone => blk: {
+                    stat_stone, growth_stone, buddy_stone => blk: {
                         const map = switch (stone) {
+                            stat_stone => pokemons_by_stats,
                             growth_stone => pokemons_by_growth_rate,
                             buddy_stone => pokemons_by_base_friendship,
                             else => unreachable,
                         };
                         const number = switch (stone) {
+                            stat_stone => sum(&pokemon.stats),
                             growth_stone => pokemon.growth_rate,
                             buddy_stone => pokemon.base_friendship,
                             else => unreachable,
