@@ -133,6 +133,11 @@ pub fn main2(
         };
     }
 
+    // One some filesystems it is a lot slower to override a file rather than
+    // just writing a new one. We therefor try to delete the file when replacing
+    // to have consistent performance
+    if (replace)
+        fs.cwd().deleteFile(out) catch {};
     const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return exit.createErr(stdio.err, out, err);
     const out_stream = out_file.outStream();
     switch (game) {

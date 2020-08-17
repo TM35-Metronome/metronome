@@ -721,7 +721,7 @@ fn headerHeight(ctx: *const nk.Context) f32 {
 fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const term = switch (std.Target.current.os.tag) {
         .linux => blk: {
-            const sh = try std.ChildProcess.init(&[_][]const u8{"sh"}, exes.allocator);
+            const sh = try std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, exes.allocator);
             defer sh.deinit();
 
             sh.stdin_behavior = .Pipe;
