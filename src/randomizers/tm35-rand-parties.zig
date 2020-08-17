@@ -341,7 +341,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
     if (all_types_count == 0)
         return;
 
-    var min_stats: usize = 0;
+    var min_stats: usize = math.maxInt(usize);
     var max_stats: usize = 0;
     for (species.span()) |range| {
         var s = range.start;
@@ -352,9 +352,6 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
             max_stats = math.max(max_stats, stats);
         }
     }
-
-    const stats_diff = max_stats - min_stats;
-    const stats_per_level = @intToFloat(f64, stats_diff) / 100;
 
     for (data.trainers.values()) |*trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -447,8 +444,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                         },
                         .follow_level => blk2: {
                             const level = member.level orelse average_level;
-                            const stats = stats_per_level * @intToFloat(f64, level);
-                            break :blk2 min_stats + @floatToInt(usize, stats);
+                            break :blk2 levelScaling(min_stats, max_stats, level);
                         },
                         .random => unreachable,
                     };
@@ -549,6 +545,22 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
             }
         }
     }
+}
+
+fn levelScaling(min: usize, max: usize, level: usize) usize {
+    const fmin = @intToFloat(f64, min);
+    const fmax = @intToFloat(f64, max);
+    const diff = fmax - fmin;
+    const x = @intToFloat(f64, level);
+
+    // Function adapted from -0.0001 * x^2 + 0.02 * x
+    // This functions grows fast at the start, getting 75%
+    // to max stats at level 50.
+    const a = -0.0001 * diff;
+    const b = 0.02 * diff;
+    const xp2 = math.pow(f64, x, 2);
+    const res = a * xp2 + b * x + fmin;
+    return @floatToInt(usize, res);
 }
 
 fn SumReturn(comptime T: type) type {
