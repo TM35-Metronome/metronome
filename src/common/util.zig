@@ -43,9 +43,10 @@ pub fn generateMain(
             const stdio = stdio_buf.streams();
             defer stdio_buf.err.flush() catch {};
 
+            // No need to deinit arena. The program will exit when this function
+            // ends and all the memory will be freed by the os. This saves a bit
+            // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
-            defer arena.deinit();
-
             var args = clap.parse(clap.Help, params, &arena.allocator) catch |err| {
                 stdio.err.print("{}\n", .{err}) catch {};
                 usage(stdio.err) catch {};
