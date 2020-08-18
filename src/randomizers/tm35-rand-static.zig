@@ -35,7 +35,7 @@ const params = blk: {
 fn usage(stream: var) !void {
     try stream.writeAll("Usage: tm35-rand-starters ");
     try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes static, given and grotto Pokémons. Doesn't work for " ++
+    try stream.writeAll("\nRandomizes static, given and hollow Pokémons. Doesn't work for " ++
         "hg and ss yet.\n" ++
         "\n" ++
         "Options:\n");
@@ -109,6 +109,30 @@ pub fn main2(
         const static_i = data.static_mons.at(i).key;
         stdio.out.print(".static_pokemons[{}].species={}\n", .{ static_i, static }) catch |err| return exit.stdoutErr(stdio.err, err);
     }
+    for (data.hidden_hollows.values()) |hollow, i| {
+        const hi = data.hidden_hollows.at(i).key;
+        for (hollow.values()) |version, j| {
+            const vi = version.at(j).key;
+            for (version.values()) |group, k| {
+                const gi = version.at(k).key;
+                for (group.values()) |pokemon, g| {
+                    const pi = version.at(g).key;
+                    if (pokemon.species_index) |si| {
+                        stdio.out.print(
+                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].species={}\n",
+                            .{ hi, vi, gi, pi, data.hollow_mons.get(si).?.* },
+                        ) catch |err| return exit.stdoutErr(stdio.err, err);
+                    }
+                    if (pokemon.form) |_| {
+                        stdio.out.print(
+                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].form=0\n",
+                            .{ hi, vi, gi, pi },
+                        ) catch |err| return exit.stdoutErr(stdio.err, err);
+                    }
+                }
+            }
+        }
+    }
     return 0;
 }
 
@@ -171,6 +195,33 @@ fn parseLine(data: *Data, str: []const u8) !bool {
             _ = try data.given_mons.put(allocator, index, try p.parse(parse.usizev));
             return false;
         },
+        c("hidden_hollows") => {
+            const hindex = try p.parse(parse.index);
+            const versions = try data.hidden_hollows.getOrPutValue(allocator, hindex, HollowVersions{});
+
+            try p.parse(comptime parse.field("versions"));
+            const vindex = try p.parse(parse.index);
+            const groups = try versions.getOrPutValue(allocator, vindex, HollowGroups{});
+
+            try p.parse(comptime parse.field("groups"));
+            const gindex = try p.parse(parse.index);
+            const pokemons = try groups.getOrPutValue(allocator, gindex, HollowPokemons{});
+
+            try p.parse(comptime parse.field("pokemons"));
+            const pindex = try p.parse(parse.index);
+            const pokemon = try pokemons.getOrPutValue(allocator, pindex, HollowMon{});
+
+            switch (m(try p.parse(parse.anyField))) {
+                c("species") => {
+                    const index = data.hollow_mons.count();
+                    _ = try data.hollow_mons.put(allocator, index, try p.parse(parse.usizev));
+                    pokemon.species_index = index;
+                },
+                c("form") => pokemon.form = try p.parse(parse.usizev),
+                else => return true,
+            }
+            return false;
+        },
         else => return true,
     }
 
@@ -187,6 +238,7 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
     for ([_]StaticMons{
         data.static_mons,
         data.given_mons,
+        data.hollow_mons,
     }) |static_mons| {
         switch (method) {
             .random => switch (_type) {
@@ -423,11 +475,18 @@ const SpeciesByType = util.container.IntMap.Unmanaged(usize, Set);
 const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const StaticMons = util.container.IntMap.Unmanaged(usize, usize);
 
+const HollowPokemons = util.container.IntMap.Unmanaged(usize, HollowMon);
+const HollowGroups = util.container.IntMap.Unmanaged(usize, HollowPokemons);
+const HollowVersions = util.container.IntMap.Unmanaged(usize, HollowGroups);
+const HiddenHollows = util.container.IntMap.Unmanaged(usize, HollowVersions);
+
 const Data = struct {
     strings: std.StringHashMap(usize),
     pokemons: Pokemons = Pokemons{},
     static_mons: StaticMons = StaticMons{},
     given_mons: StaticMons = StaticMons{},
+    hollow_mons: StaticMons = StaticMons{},
+    hidden_hollows: HiddenHollows = HiddenHollows{},
 
     fn string(d: *Data, str: []const u8) !usize {
         const res = try d.strings.getOrPut(str);
@@ -487,6 +546,11 @@ const Data = struct {
     fn allocator(d: Data) *mem.Allocator {
         return d.strings.allocator;
     }
+};
+
+const HollowMon = struct {
+    species_index: ?usize = null,
+    form: ?usize = null,
 };
 
 const Pokemon = struct {

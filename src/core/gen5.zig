@@ -525,6 +525,27 @@ pub const MapHeader = extern struct {
     }
 };
 
+const HiddenHollow = extern struct {
+    pokemons: [2][4]HollowPokemons,
+    items: [6]lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 220);
+    }
+};
+
+const HollowPokemons = extern struct {
+    species: [4]lu16,
+    unknown: [4]lu16,
+    genders: [4]u8,
+    forms: [4]u8,
+    pad: [2]u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 26);
+    }
+};
+
 const StaticPokemon = struct {
     species: *lu16,
     level: *lu16,
@@ -731,6 +752,7 @@ pub const Game = struct {
     tms2: []lu16,
     evolutions: []EvolutionTable,
     map_headers: []MapHeader,
+    hidden_hollows: ?[]HiddenHollow,
 
     wild_pokemons: nds.fs.Fs,
     pokemons: nds.fs.Fs,
@@ -860,6 +882,7 @@ pub const Game = struct {
             .wild_pokemons = try getNarc(file_system, info.wild_pokemons),
             .pokemons = try getNarc(file_system, info.pokemons),
             .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .hidden_hollows = if (info.hidden_hollows) |h| try (try getNarc(file_system, h)).toSlice(0, HiddenHollow) else null,
             .scripts = scripts,
             .text = text,
 

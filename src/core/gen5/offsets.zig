@@ -22,6 +22,7 @@ pub const Info = struct {
     parties: []const u8,
     wild_pokemons: []const u8,
     itemdata: []const u8,
+    hidden_hollows: ?[]const u8,
 
     map_file: []const u8,
     map_headers: u16,
@@ -83,6 +84,7 @@ const black2_info = Info{
     .parties = "/a/0/9/2",
     .wild_pokemons = "/a/1/2/7",
     .itemdata = "/a/0/2/4",
+    .hidden_hollows = "/a/2/7/3",
 
     .map_file = "a/0/1/2",
     .map_headers = 0,
@@ -121,6 +123,7 @@ const white2_info = Info{
     .parties = black2_info.parties,
     .wild_pokemons = black2_info.wild_pokemons,
     .itemdata = black2_info.itemdata,
+    .hidden_hollows = black2_info.hidden_hollows,
 
     .map_file = black2_info.map_file,
     .map_headers = black2_info.map_headers,
@@ -184,6 +187,7 @@ const black_info = Info{
     .parties = "/a/0/9/3",
     .wild_pokemons = "/a/1/2/6",
     .itemdata = black2_info.itemdata,
+    .hidden_hollows = null,
 
     .map_file = black2_info.map_file,
     .map_headers = black2_info.map_headers,
@@ -222,6 +226,7 @@ const white_info = Info{
     .parties = black_info.parties,
     .wild_pokemons = black_info.wild_pokemons,
     .itemdata = black_info.itemdata,
+    .hidden_hollows = black_info.hidden_hollows,
 
     .map_file = black_info.map_file,
     .map_headers = black_info.map_headers,

@@ -968,6 +968,32 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 
+    if (game.hidden_hollows) |hidden_hollows| {
+        for (hidden_hollows) |hollow, i| {
+            for (hollow.pokemons) |version, j| {
+                for (version) |group, k| {
+                    for (group.species) |_, g| {
+                        try stream.print(
+                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].species={}\n",
+                            .{ i, j, k, g, group.species[g].value() },
+                        );
+                        try stream.print(
+                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].gender={}\n",
+                            .{ i, j, k, g, group.genders[g] },
+                        );
+                        try stream.print(
+                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].form={}\n",
+                            .{ i, j, k, g, group.forms[g] },
+                        );
+                    }
+                }
+            }
+            for (hollow.items) |item, j| {
+                try stream.print(".hidden_hollows[{}].items[{}]={}\n", .{ i, j, item.value() });
+            }
+        }
+    }
+
     try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
     try outputGen5StringTable(stream, "pokedex", "category", game.pokedex_category_names);
     // try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);

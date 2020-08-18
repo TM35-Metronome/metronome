@@ -1294,6 +1294,43 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 else => return error.NoField,
             }
         },
+        c("hidden_hollows") => if (game.hidden_hollows) |hollows| {
+            const index = try parser.parse(parse.index);
+            if (index >= hollows.len)
+                return error.Error;
+
+            const hollow = &hollows[index];
+            switch (m(try parser.parse(parse.anyField))) {
+                c("versions") => {
+                    const vindex = try parser.parse(parse.index);
+                    if (vindex >= hollow.pokemons.len)
+                        return error.Error;
+
+                    const version = &hollow.pokemons[vindex];
+                    try parser.parse(comptime parse.field("groups"));
+                    const gindex = try parser.parse(parse.index);
+                    if (gindex >= version.len)
+                        return error.Error;
+
+                    const group = &version[gindex];
+                    try parser.parse(comptime parse.field("pokemons"));
+                    const pindex = try parser.parse(parse.index);
+                    if (pindex >= group.species.len)
+                        return error.Error;
+
+                    switch (m(try parser.parse(parse.anyField))) {
+                        c("species") => try parse.anyT(parser.str, &group.species[pindex], converters),
+                        c("gender") => try parse.anyT(parser.str, &group.genders[pindex], converters),
+                        c("form") => try parse.anyT(parser.str, &group.forms[pindex], converters),
+                        else => return error.NoField,
+                    }
+                },
+                c("items") => try parse.anyT(parser.str, &hollow.items, converters),
+                else => return error.NoField,
+            }
+        } else {
+            return error.NoField;
+        },
         else => return error.NoField,
     }
 }
