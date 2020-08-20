@@ -144,6 +144,10 @@ fn parseLine(data: *Data, str: []const u8) !bool {
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
+        c("pokedex") => {
+            const index = try p.parse(parse.index);
+            _ = try data.pokedex.put(allocator, index);
+        },
         c("pokemons") => {
             const index = try p.parse(parse.index);
             const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
@@ -168,6 +172,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 },
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
                 c("gender_ratio") => pokemon.gender_ratio = try p.parse(parse.usizev),
+                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
                 c("egg_groups") => {
                     // TODO: Should we save both egg groups?
                     if ((try p.parse(parse.index)) == 0) {
@@ -233,7 +238,7 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    const species = try data.species();
+    const species = try data.pokedexPokemons();
 
     for ([_]StaticMons{
         data.static_mons,
@@ -368,22 +373,18 @@ fn randomize(data: Data, seed: u64, method: Method, _type: Type) !void {
 
                         // Legendaries are generally in the "slow" to "medium_slow"
                         // growth rating
-                        if (pokemon.growth_rate) |growth_rate|
-                            rating.* += @as(isize, @boolToInt(growth_rate == slow or
-                                growth_rate == medium_slow));
+                        rating.* += @as(isize, @boolToInt(pokemon.growth_rate == slow or
+                            pokemon.growth_rate == medium_slow));
 
                         // They generally have a catch rate of 45 or less
-                        if (pokemon.catch_rate) |catch_rate|
-                            rating.* += @as(isize, @boolToInt(catch_rate <= 45));
+                        rating.* += @as(isize, @boolToInt(pokemon.catch_rate <= 45));
 
                         // They tend to not have a gender (255 in gender_ratio means
                         // genderless).
-                        if (pokemon.gender_ratio) |gender_ratio|
-                            rating.* += @as(isize, @boolToInt(gender_ratio == 255));
+                        rating.* += @as(isize, @boolToInt(pokemon.gender_ratio == 255));
 
                         // Most are part of the "undiscovered" egg group
-                        if (pokemon.egg_group) |egg_group|
-                            rating.* += @as(isize, @boolToInt(egg_group == undiscovered));
+                        rating.* += @as(isize, @boolToInt(pokemon.egg_group == undiscovered));
 
                         // And they don't evolve from anything. Subtract
                         // score from this Pokemons evolutions.
@@ -482,6 +483,7 @@ const HiddenHollows = util.container.IntMap.Unmanaged(usize, HollowVersions);
 
 const Data = struct {
     strings: std.StringHashMap(usize),
+    pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     static_mons: StaticMons = StaticMons{},
     given_mons: StaticMons = StaticMons{},
@@ -497,18 +499,16 @@ const Data = struct {
         return res.kv.value;
     }
 
-    fn species(d: Data) !Set {
-        const a = d.allocator();
+    fn pokedexPokemons(d: Data) !Set {
         var res = Set{};
-        errdefer res.deinit(a);
+        errdefer res.deinit(d.allocator());
 
         for (d.pokemons.values()) |pokemon, i| {
-            // We shouldn't pick Pokemon with 0 catch rate as they tend to be
-            // Pokemon not meant to be used in the standard game.
-            // Pokemons from the film studio in bw2 have 0 catch rate.
-            if ((pokemon.catch_rate orelse 1) == 0)
+            const s = d.pokemons.at(i).key;
+            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
                 continue;
-            _ = try res.put(a, d.pokemons.at(i).key);
+
+            _ = try res.put(d.allocator(), s);
         }
 
         return res;
@@ -527,9 +527,6 @@ const Data = struct {
             var s = range.start;
             while (s <= range.end) : (s += 1) {
                 const pokemon = d.pokemons.get(s) orelse continue;
-                if ((pokemon.catch_rate orelse 1) == 0)
-                    continue;
-
                 for (pokemon.types.span()) |range2| {
                     var t = range2.start;
                     while (t <= range2.end) : (t += 1) {
@@ -555,10 +552,11 @@ const HollowMon = struct {
 
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
-    growth_rate: ?usize = null,
-    catch_rate: ?usize = null,
-    gender_ratio: ?usize = null,
-    egg_group: ?usize = null,
+    pokedex_entry: usize = math.maxInt(usize),
+    catch_rate: usize = 1,
+    growth_rate: usize = math.maxInt(usize),
+    gender_ratio: usize = math.maxInt(usize),
+    egg_group: usize = math.maxInt(usize),
     types: Set = Set{},
     evos: Set = Set{},
 };
@@ -576,7 +574,9 @@ test "tm35-rand-static" {
             comptime egg_groups: []const u8,
             comptime evo: ?[]const u8,
         ) []const u8 {
-            return ".pokemons[" ++ id ++ "].stats.hp=" ++ stat ++ "\n" ++
+            return ".pokedex[" ++ id ++ "].field=" ++ id ++ "\n" ++
+                ".pokemons[" ++ id ++ "].pokedex_entry=" ++ id ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.hp=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].stats.attack=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].stats.defense=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].stats.speed=" ++ stat ++ "\n" ++
