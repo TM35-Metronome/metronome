@@ -691,7 +691,7 @@ fn outputGen4StringTable(
     field_name: []const u8,
     est: gen4.StringTable,
 ) !void {
-    var i: u32 = 0;
+    var i: u32 = 10;
     while (i < est.count()) : (i += 1) {
         try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
         try gen4.encodings.decode(est.getStringStream(i).inStream(), stream);
@@ -996,7 +996,6 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
     try outputGen5StringTable(stream, "pokedex", "category", game.pokedex_category_names);
-    // try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
     try outputGen5StringTable(stream, "moves", "name", game.move_names);
     try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
     try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
@@ -1005,6 +1004,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
     try outputGen5StringTable(stream, "types", "name", game.type_names);
     //try outputGen5StringTable(stream, "map", "name", game.map_names);
+    try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
 
     // This snippet of code can be uncommented to output all strings in gen5 games.
     // This is useful when looking for new strings to expose.

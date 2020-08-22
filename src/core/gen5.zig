@@ -619,6 +619,8 @@ pub const StringTable = struct {
         data: []lu16,
         key: u16,
         pos: usize = 0,
+        bits: u5 = 0,
+        container: u32 = 0,
 
         pub const ReadError = error{
             Utf8CannotEncodeSurrogateHalf,
@@ -635,36 +637,65 @@ pub const StringTable = struct {
         pub const OutStream = io.OutStream(*Stream, WriteError, write);
 
         pub fn read(stream: *Stream, buf: []u8) ReadError!usize {
+            const first = stream.data[0].value() ^ stream.keyForI(0);
+            const compressed = first == 0xF100;
+            if (compressed)
+                stream.pos = math.max(stream.pos, 1);
+
             const rest = stream.data[stream.pos..];
             var n: usize = 0;
             for (rest) |c, i| {
                 const decoded = c.value() ^ stream.keyForI(stream.pos);
+                if (compressed) {
+                    stream.container |= @as(u32, decoded) << stream.bits;
+                    stream.bits += 16;
+                    stream.pos += 1;
 
-                const Pair = struct {
-                    len: usize,
-                    codepoint: u21,
-                };
-                const pair: Pair = switch (decoded) {
-                    0xffff => break,
-                    0x0, 0xf000, 0xfff0...0xfffd => {
-                        n += (try fmt.bufPrint(buf[n..], "\\x{x:0>4}", .{decoded})).len;
-                        stream.pos += 1;
-                        continue;
-                    },
-                    0xfffe => .{ .len = 1, .codepoint = '\n' },
-                    else => .{
-                        .len = unicode.utf8CodepointSequenceLength(decoded) catch unreachable,
-                        .codepoint = decoded,
-                    },
-                };
+                    while (stream.bits >= 9) : (stream.bits -= 9) {
+                        const char = @intCast(u16, stream.container & 0x1FF);
+                        if (char == 0x1Ff)
+                            break;
 
-                if (buf.len < n + pair.len)
-                    break;
-                n += try unicode.utf8Encode(pair.codepoint, buf[n..]);
-                stream.pos += 1;
+                        const len = try output(buf[n..], char);
+                        n += len;
+                        if (len == 0)
+                            return n;
+
+                        stream.container >>= 9;
+                    }
+                } else {
+                    const len = try output(buf[n..], decoded);
+                    n += len;
+                    if (len == 0)
+                        break;
+
+                    stream.pos += 1;
+                }
             }
 
             return n;
+        }
+
+        fn output(buf: []u8, char: u16) !usize {
+            const Pair = struct {
+                len: usize,
+                codepoint: u21,
+            };
+            const pair: Pair = switch (char) {
+                0xffff => return 0,
+                0x0, 0xf000, 0xfff0...0xfffd => {
+                    return (try fmt.bufPrint(buf, "\\x{x:0>4}", .{char})).len;
+                },
+                0xfffe => .{ .len = 1, .codepoint = '\n' },
+                else => .{
+                    .len = unicode.utf8CodepointSequenceLength(char) catch unreachable,
+                    .codepoint = char,
+                },
+            };
+
+            if (buf.len < pair.len)
+                return 0;
+            return try unicode.utf8Encode(pair.codepoint, buf);
         }
 
         pub fn write(stream: *Stream, buf: []const u8) WriteError!usize {
