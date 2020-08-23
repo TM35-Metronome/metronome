@@ -345,12 +345,12 @@ pub const Rom = struct {
         return res;
     }
 
-    pub fn writeToFile(rom: Rom, file: std.fs.File) !void {
+    pub fn writeToStream(rom: Rom, stream: var) !void {
         // The contract here is that once you have an `nds.Rom`, it should
         // always be a valid rom, so we just assert that this is true here
         // for sanity.
         rom.header().validate() catch unreachable;
-        try file.writeAll(rom.data.items);
+        try stream.writeAll(rom.data.items);
     }
 
     pub fn deinit(rom: Rom) void {

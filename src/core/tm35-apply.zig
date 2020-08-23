@@ -136,21 +136,25 @@ pub fn main2(
     // One some filesystems it is a lot slower to override a file rather than
     // just writing a new one. We therefor try to delete the file when replacing
     // to have consistent performance
-    if (replace)
-        fs.cwd().deleteFile(out) catch {};
-    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace }) catch |err| return exit.createErr(stdio.err, out, err);
+    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace, .truncate = false }) catch |err| return exit.createErr(stdio.err, out, err);
     const out_stream = out_file.outStream();
-    switch (game) {
-        .gen3 => |gen3_game| gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err),
-        .gen4 => |gen4_game| {
+    const file_len = switch (game) {
+        .gen3 => |gen3_game| blk: {
+            gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            break :blk gen3_game.data.len;
+        },
+        .gen4 => |gen4_game| blk: {
             gen4_game.apply() catch return exit.allocErr(stdio.err);
-            nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err);
+            nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            break :blk nds_rom.data.items.len;
         },
-        .gen5 => |gen5_game| {
+        .gen5 => |gen5_game| blk: {
             gen5_game.apply() catch return exit.allocErr(stdio.err);
-            nds_rom.writeToFile(out_file) catch |err| return exit.writeErr(stdio.err, out, err);
+            nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            break :blk nds_rom.data.items.len;
         },
-    }
+    };
+    out_file.setEndPos(file_len) catch |err| return exit.writeErr(stdio.err, out, err);
 
     return 0;
 }
