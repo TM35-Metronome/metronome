@@ -40,7 +40,7 @@ pub fn readLine(buf_in_stream: var) !?[]u8 {
         mem.copyBackwards(u8, fifo.buf[0..], buf);
         fifo.head = 0;
 
-        const num = try buf_in_stream.unbuffered_in_stream.readAll(fifo.writableSlice(0));
+        const num = try buf_in_stream.unbuffered_in_stream.read(fifo.writableSlice(0));
         fifo.count += num;
 
         if (num == 0) {

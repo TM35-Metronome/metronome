@@ -164,6 +164,8 @@ pub const Rom = struct {
     }
 
     pub fn replaceSection(rom: *Rom, old: []const u8, new: []const u8) !void {
+        var timer = std.time.Timer.start() catch unreachable;
+
         const old_slice = Slice.fromSlice(rom.data.items, old);
         const old_start = old_slice.start.value();
         const old_end = old_slice.end();
@@ -187,11 +189,13 @@ pub const Rom = struct {
             ));
         }
 
-        mem.copyBackwards(
-            u8,
-            rom.data.items[old_end + extra_bytes .. new_len],
-            rom.data.items[old_end..old_len],
-        );
+        if (extra_bytes != 0) {
+            mem.copyBackwards(
+                u8,
+                rom.data.items[old_end + extra_bytes .. new_len],
+                rom.data.items[old_end..old_len],
+            );
+        }
         mem.copy(u8, rom.data.items[old_start..], new);
 
         // Update header after resize

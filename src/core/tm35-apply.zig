@@ -41,11 +41,13 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.") catch unreachable,
-        clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
-        clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
-        clap.parseParam("-r, --replace                 Replace output file if it already exists.    ") catch unreachable,
-        clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
+        clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.                                                         ") catch unreachable,
+        clap.parseParam("-h, --help                    Display this help text and exit.                                                                      ") catch unreachable,
+        clap.parseParam("-n, --no-output               Don't output the file.                                                                                ") catch unreachable,
+        clap.parseParam("-o, --output <FILE>           Override destination path.                                                                            ") catch unreachable,
+        clap.parseParam("-p, --patch <none|live|full>  Output patch data to stdout when not 'none'. 'live' = patch after each line. 'full' = patch when done.") catch unreachable,
+        clap.parseParam("-r, --replace                 Replace output file if it already exists.                                                             ") catch unreachable,
+        clap.parseParam("-v, --version                 Output version information and exit.                                                                  ") catch unreachable,
         Param{ .takes_value = true },
     };
 };
@@ -58,6 +60,12 @@ fn usage(stream: var) !void {
         "Options:\n");
     try clap.help(stream, &params);
 }
+
+const PatchOption = enum {
+    none,
+    live,
+    full,
+};
 
 /// TODO: This function actually expects an allocator that owns all the memory allocated, such
 ///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
@@ -76,6 +84,14 @@ pub fn main2(
         return 1;
     };
 
+    const patch_arg = args.option("--patch") orelse "none";
+    const patch = std.meta.stringToEnum(PatchOption, patch_arg) orelse {
+        stdio.err.print("--patch does not support '{}'\n", .{patch_arg}) catch {};
+        usage(stdio.err) catch {};
+        return 1;
+    };
+
+    const no_output = args.flag("--no-output");
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
@@ -83,12 +99,19 @@ pub fn main2(
         break :blk res catch |err| return exit.allocErr(stdio.err);
     };
 
+    // When --patch is passed, we store a copy of the games old state, so that we
+    // can generate binary patches between old and new versions.
+    var old_bytes = std.ArrayList(u8).init(allocator);
+    defer old_bytes.deinit();
+
     var nds_rom: nds.Rom = undefined;
     var game: Game = blk: {
         const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
+            if (patch != .none)
+                old_bytes.appendSlice(game.data) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen3 = game };
         } else |err| err;
 
@@ -100,10 +123,14 @@ pub fn main2(
         };
 
         const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
+            if (patch != .none)
+                old_bytes.appendSlice(nds_rom.data.items) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen4 = game };
         } else |err| err;
 
         const gen5_error = if (gen5.Game.fromRom(allocator, &nds_rom)) |game| {
+            if (patch != .none)
+                old_bytes.appendSlice(nds_rom.data.items) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
@@ -120,22 +147,70 @@ pub fn main2(
 
     var line_num: usize = 1;
     while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
+        var timer = std.time.Timer.start() catch unreachable;
         const trimmed = mem.trimRight(u8, line, "\r\n");
-        _ = switch (game) {
-            .gen3 => |*gen3_game| applyGen3(gen3_game, line_num, trimmed),
-            .gen4 => |gen4_game| applyGen4(nds_rom, gen4_game, line_num, trimmed),
-            .gen5 => |gen5_game| applyGen5(nds_rom, gen5_game, line_num, trimmed),
+        const new_bytes = switch (game) {
+            .gen3 => |*gen3_game| blk: {
+                applyGen3(gen3_game, line_num, trimmed) catch |err| break :blk err;
+                break :blk gen3_game.data;
+            },
+            .gen4 => |*gen4_game| blk: {
+                applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
+                if (patch == .live)
+                    gen4_game.apply() catch return exit.allocErr(stdio.err);
+                break :blk nds_rom.data.items;
+            },
+            .gen5 => |*gen5_game| blk: {
+                applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
+                if (patch == .live)
+                    gen5_game.apply() catch return exit.allocErr(stdio.err);
+                break :blk nds_rom.data.items;
+            },
         } catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};
             if (abort_on_first_warning)
                 return 1;
+            continue;
         };
+
+        if (patch == .live) {
+            var it = common.PatchIterator{
+                .old = old_bytes.items,
+                .new = new_bytes,
+            };
+            while (it.next()) |p| {
+                stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
+                    catch |err| return exit.stdoutErr(stdio.err, err);
+
+                old_bytes.resize(math.max(
+                    old_bytes.items.len,
+                    p.offset + p.replacement.len,
+                )) catch return exit.allocErr(stdio.err);
+                common.patch(old_bytes.items, &[_]common.Patch{p});
+            }
+            stdio.out.context.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+        }
     }
 
-    // One some filesystems it is a lot slower to override a file rather than
-    // just writing a new one. We therefor try to delete the file when replacing
-    // to have consistent performance
+    if (patch == .full) {
+        var it = common.PatchIterator{
+            .old = old_bytes.items,
+            .new = switch (game) {
+                .gen3 => |gen3_game| gen3_game.data,
+                .gen4 => nds_rom.data.items,
+                .gen5 => nds_rom.data.items,
+            },
+        };
+        while (it.next()) |p| {
+            stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
+                catch |err| return exit.stdoutErr(stdio.err, err);
+        }
+    }
+
+    if (no_output)
+        return 0;
+
     const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace, .truncate = false }) catch |err| return exit.createErr(stdio.err, out, err);
     const out_stream = out_file.outStream();
     const file_len = switch (game) {
@@ -143,12 +218,12 @@ pub fn main2(
             gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk gen3_game.data.len;
         },
-        .gen4 => |gen4_game| blk: {
+        .gen4 => |*gen4_game| blk: {
             gen4_game.apply() catch return exit.allocErr(stdio.err);
             nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk nds_rom.data.items.len;
         },
-        .gen5 => |gen5_game| blk: {
+        .gen5 => |*gen5_game| blk: {
             gen5_game.apply() catch return exit.allocErr(stdio.err);
             nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk nds_rom.data.items.len;

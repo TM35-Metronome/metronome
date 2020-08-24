@@ -238,25 +238,21 @@ pub const FntMainEntry = packed struct {
     parent_id: lu16,
 };
 
+pub fn narcSize(file_count: usize, data_size: usize) usize {
+    return @sizeOf(formats.Header) +
+        @sizeOf(formats.FatChunk) +
+        @sizeOf(nds.Range) * file_count +
+        @sizeOf(formats.Chunk) * 2 +
+        @sizeOf(FntMainEntry) +
+        data_size;
+}
+
 pub const SimpleNarcBuilder = struct {
-    data: std.ArrayList(u8),
+    stream: io.FixedBufferStream([]u8),
 
-    pub fn init(
-        allocator: *mem.Allocator,
-        file_count: usize,
-        expected_content_size: usize,
-    ) !SimpleNarcBuilder {
-        var narc = std.ArrayList(u8).init(allocator);
-        errdefer narc.deinit();
-        try narc.ensureCapacity(
-            @sizeOf(formats.Header) +
-                @sizeOf(formats.FatChunk) +
-                @sizeOf(nds.Range) * file_count +
-                @sizeOf(formats.Chunk) * 2 +
-                expected_content_size,
-        );
-
-        const stream = narc.outStream();
+    pub fn init(buf: []u8, file_count: usize) SimpleNarcBuilder {
+        var fba = io.fixedBufferStream(buf);
+        const stream = fba.outStream();
         stream.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
         stream.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
         stream.writeByteNTimes(0, file_count * @sizeOf(nds.Range)) catch unreachable;
@@ -274,11 +270,11 @@ pub const SimpleNarcBuilder = struct {
             .size = lu32.init(0),
         })) catch unreachable;
 
-        return SimpleNarcBuilder{ .data = narc };
+        return SimpleNarcBuilder{ .stream = fba };
     }
 
     pub fn fat(builder: SimpleNarcBuilder) []nds.Range {
-        const res = builder.data.items;
+        const res = builder.stream.buffer;
         const off = @sizeOf(formats.Header);
         const fat_header = mem.bytesAsValue(
             formats.FatChunk,
@@ -293,7 +289,7 @@ pub const SimpleNarcBuilder = struct {
     }
 
     pub fn finish(builder: *SimpleNarcBuilder) []u8 {
-        const res = builder.data.toOwnedSlice();
+        const res = builder.stream.buffer;
         var off: usize = 0;
         const header = mem.bytesAsValue(
             formats.Header,

@@ -602,25 +602,8 @@ pub const Game = struct {
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         const info = try identify(io.fixedBufferStream(nds_rom.data.items).inStream());
-
         const arm9 = try nds_rom.getDecodedArm9(allocator);
         const file_system = nds_rom.fileSystem();
-        const arm9_overlay_table = nds_rom.arm9OverlayTable();
-
-        const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
-        const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
-        const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
-        const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
-
-        const text = try getNarc(file_system, info.text);
-        const scripts = try getNarc(file_system, info.scripts);
-        const pokedex = try getNarc(file_system, info.pokedex);
-        const commands = try findScriptCommands(info.version, scripts, allocator);
-        errdefer {
-            allocator.free(commands.static_pokemons);
-            allocator.free(commands.given_pokemons);
-            allocator.free(commands.pokeball_items);
-        }
 
         const trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer);
         const trainer_parties_narc = try getNarc(file_system, info.parties);
@@ -649,13 +632,41 @@ pub const Game = struct {
             }
         }
 
+        return fromRomEx(allocator, nds_rom, info, arm9, trainer_parties);
+    }
+
+    pub fn fromRomEx(
+        allocator: *mem.Allocator,
+        nds_rom: *nds.Rom,
+        info: offsets.Info,
+        arm9: []u8,
+        parties: [][6]PartyMemberBoth,
+    ) !Game {
+        const file_system = nds_rom.fileSystem();
+        const arm9_overlay_table = nds_rom.arm9OverlayTable();
+
+        const hm_tm_prefix_index = mem.indexOf(u8, arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
+        const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
+        const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
+        const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
+
+        const text = try getNarc(file_system, info.text);
+        const scripts = try getNarc(file_system, info.scripts);
+        const pokedex = try getNarc(file_system, info.pokedex);
+        const commands = try findScriptCommands(info.version, scripts, allocator);
+        errdefer {
+            allocator.free(commands.static_pokemons);
+            allocator.free(commands.given_pokemons);
+            allocator.free(commands.pokeball_items);
+        }
+
         return Game{
             .info = info,
             .allocator = allocator,
             .rom = nds_rom,
 
             .arm9 = arm9,
-            .trainer_parties = trainer_parties,
+            .trainer_parties = parties,
 
             .starters = switch (info.starters) {
                 .arm9 => |offset| blk: {
@@ -682,7 +693,7 @@ pub const Game = struct {
             },
             .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(0, BasePokemon),
             .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
-            .trainers = trainers,
+            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
             .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
             .evolutions = try (try getNarc(file_system, info.evolutions)).toSlice(0, EvolutionTable),
             .wild_pokemons = blk: {
@@ -725,31 +736,53 @@ pub const Game = struct {
         };
     }
 
-    pub fn apply(game: Game) !void {
+    pub fn apply(game: *Game) !void {
         try game.rom.replaceSection(game.rom.arm9(), game.arm9);
         try game.applyTrainerParties();
+
+        game.allocator.free(game.static_pokemons);
+        game.allocator.free(game.given_pokemons);
+        game.allocator.free(game.pokeball_items);
+
+        game.* = try fromRomEx(
+            game.allocator,
+            game.rom,
+            game.info,
+            game.arm9,
+            game.trainer_parties,
+        );
     }
 
     fn applyTrainerParties(game: Game) !void {
+        const allocator = game.allocator;
         const file_system = game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
         const trainers = try (try getNarc(file_system, game.info.trainers)).toSlice(0, Trainer);
         const trainer_parties = game.trainer_parties;
 
-        var builder = try nds.fs.SimpleNarcBuilder.init(
-            game.allocator,
-            trainer_parties.len,
-            @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) * trainer_parties.len,
-        );
-        defer builder.data.deinit();
+        const content_size = @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) *
+            trainer_parties.len;
+        const size = nds.fs.narcSize(trainer_parties.len, content_size);
 
+        const buf = if (trainer_parties_narc.len < size)
+            try allocator.alloc(u8, size)
+        else
+            trainer_parties_narc;
+        defer if (buf.ptr != trainer_parties_narc.ptr)
+            allocator.free(buf);
+
+        var builder = nds.fs.SimpleNarcBuilder.init(
+            buf,
+            trainer_parties.len,
+        );
         const fat = builder.fat();
-        const stream = builder.data.outStream();
-        const files_offset = builder.data.items.len;
+        const stream = builder.stream.outStream();
+        const files_offset = builder.stream.pos;
+
         for (trainer_parties) |party, i| {
             const party_size = if (i < trainers.len) trainers[i].party_size else 0;
-            const start = builder.data.items.len - files_offset;
-            defer fat[i] = nds.Range.init(start, builder.data.items.len - files_offset);
+            const start = builder.stream.pos - files_offset;
+            defer fat[i] = nds.Range.init(start, builder.stream.pos - files_offset);
 
             for (party[0..party_size]) |member| {
                 switch (trainers[i].party_type) {
@@ -778,11 +811,17 @@ pub const Game = struct {
                     else => unreachable,
                 }
             }
+
+            const len = (builder.stream.pos - files_offset) - start;
+            stream.writeByteNTimes(
+                0,
+                @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) - len,
+            ) catch unreachable;
         }
 
         const res = builder.finish();
-        defer game.allocator.free(res);
-        try game.rom.replaceSection(trainer_parties_narc, res);
+        if (buf.ptr != trainer_parties_narc.ptr)
+            try game.rom.replaceSection(trainer_parties_narc, res);
     }
 
     pub fn deinit(game: Game) void {

@@ -3,6 +3,7 @@ const rom = @import("rom.zig");
 const std = @import("std");
 
 const debug = std.debug;
+const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
 
@@ -17,6 +18,43 @@ pub fn patch(memory: []u8, patchs: []const Patch) void {
     for (patchs) |p|
         mem.copy(u8, memory[p.offset..], p.replacement);
 }
+
+pub const PatchIterator = struct {
+    old: []const u8,
+    new: []const u8,
+    i: usize = 0,
+
+    pub fn next(it: *PatchIterator) ?Patch {
+        const end_it = math.min(it.old.len, it.new.len);
+
+        const chunk_size = @sizeOf(u256);
+        while (it.i + chunk_size <= end_it) : (it.i += chunk_size) {
+            const new_chunk = @ptrCast(*align(1) const u256, it.new[it.i..][0..chunk_size]).*;
+            const old_chunk = @ptrCast(*align(1) const u256, it.old[it.i..][0..chunk_size]).*;
+            if (new_chunk != old_chunk)
+                break;
+        }
+
+        while (it.i < end_it) : (it.i += 1) {
+            if (it.new[it.i] != it.old[it.i])
+                break;
+        }
+
+        const start = it.i;
+        while (it.i < end_it) : (it.i += 1) {
+            if (it.new[it.i] == it.old[it.i])
+                break;
+        }
+
+        const end = if (it.i == it.old.len) it.new.len else it.i;
+        if (start == end)
+            return null;
+        return Patch{
+            .offset = start,
+            .replacement = it.new[start..end],
+        };
+    }
+};
 
 pub const Version = enum {
     red,
