@@ -176,6 +176,11 @@ pub const Fs = struct {
 
         return Fs.fromFnt(fnt, fat, data[fbs.pos..]);
     }
+
+    pub fn getNarc(fs: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
+        const file = try fs.openFileData(nds.fs.root, path);
+        return try nds.fs.Fs.fromNarc(file);
+    }
 };
 
 pub const Iterator = struct {
@@ -255,7 +260,7 @@ pub const SimpleNarcBuilder = struct {
         const stream = fba.outStream();
         stream.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
         stream.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
-        stream.writeByteNTimes(0, file_count * @sizeOf(nds.Range)) catch unreachable;
+        fba.pos += file_count * @sizeOf(nds.Range);
         stream.writeAll(&mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.fnt.*,
             .size = lu32.init(@sizeOf(formats.Chunk) + @sizeOf(FntMainEntry)),

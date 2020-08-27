@@ -196,8 +196,8 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
 }
 
 fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
-    for (game.scripts.fat) |fat, script_i| {
-        const script_data = game.scripts.fileData(.{ .i = @intCast(u32, script_i) });
+    for (game.ptrs.scripts.fat) |_, script_i| {
+        const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();
