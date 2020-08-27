@@ -77,6 +77,7 @@ pub fn main2(
             return 0;
         } else |err| err;
 
+        _ = gen5.Game.fromRom(allocator, nds_rom) catch unreachable;
         const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
             outputGen5Data(nds_rom.*, game.*, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -708,7 +709,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     try stream.print(".gamecode={}\n", .{header.gamecode});
     try stream.print(".instant_text=false\n", .{});
 
-    for (game.starters) |starter_ptrs, i| {
+    for (game.ptrs.starters) |starter_ptrs, i| {
         const first = starter_ptrs[0];
         for (starter_ptrs[1..]) |starter| {
             if (first.value() != starter.value())
@@ -718,7 +719,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".starters[{}]={}\n", .{ i, first.value() });
     }
 
-    for (game.trainers) |trainer, index| {
+    for (game.ptrs.trainers) |trainer, index| {
         const i = index + 1;
         try stream.print(".trainers[{}].party_size={}\n", .{ i, trainer.party_size });
         try stream.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
@@ -734,7 +735,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".trainers[{}].cash={}\n", .{ i, trainer.cash });
         try stream.print(".trainers[{}].post_battle_item={}\n", .{ i, trainer.post_battle_item.value() });
 
-        const parties = game.trainer_parties;
+        const parties = game.owned.trainer_parties;
         if (parties.len <= i)
             continue;
 
@@ -752,7 +753,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
     }
 
-    for (game.moves) |move, i| {
+    for (game.ptrs.moves) |move, i| {
         try stream.print(".moves[{}].type={}\n", .{ i, move.@"type" });
         try stream.print(".moves[{}].effect_category={}\n", .{ i, move.effect_category });
         try stream.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
@@ -791,8 +792,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     {
         var i: u32 = 0;
-        while (i < game.pokemons.fat.len) : (i += 1) {
-            const pokemon = try game.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
+        while (i < game.ptrs.pokemons.fat.len) : (i += 1) {
+            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
             try stream.print(".pokemons[{}].pokedex_entry={}\n", .{ i, i });
             try stream.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
             try stream.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
@@ -846,14 +847,14 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
             const machine_learnset = pokemon.machine_learnset.value();
             var j: usize = 0;
-            while (j < game.tms1.len + game.tms2.len) : (j += 1)
+            while (j < game.ptrs.tms1.len + game.ptrs.tms2.len) : (j += 1)
                 try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-            while (j < game.tms1.len + game.tms2.len + game.hms.len) : (j += 1)
-                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - (game.tms1.len + game.tms2.len), bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+            while (j < game.ptrs.tms1.len + game.ptrs.tms2.len + game.ptrs.hms.len) : (j += 1)
+                try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - (game.ptrs.tms1.len + game.ptrs.tms2.len), bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
         }
     }
 
-    for (game.evolutions) |evos, i| {
+    for (game.ptrs.evolutions) |evos, i| {
         for (evos.items) |evo, j| {
             if (evo.method == .unused)
                 continue;
@@ -865,8 +866,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 
     {
         var i: usize = 0;
-        while (i < game.level_up_moves.fat.len) : (i += 1) {
-            const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+        while (i < game.ptrs.level_up_moves.fat.len) : (i += 1) {
+            const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
             const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
                 if (std.meta.eql(move, gen5.LevelUpMove.term))
@@ -877,14 +878,14 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
     }
 
-    for (game.tms1) |tm, i|
+    for (game.ptrs.tms1) |tm, i|
         try stream.print(".tms[{}]={}\n", .{ i, tm.value() });
-    for (game.tms2) |tm, i|
-        try stream.print(".tms[{}]={}\n", .{ i + game.tms1.len, tm.value() });
-    for (game.hms) |hm, i|
+    for (game.ptrs.tms2) |tm, i|
+        try stream.print(".tms[{}]={}\n", .{ i + game.ptrs.tms1.len, tm.value() });
+    for (game.ptrs.hms) |hm, i|
         try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
 
-    for (game.items) |item, i| {
+    for (game.ptrs.items) |item, i| {
         // Price in gen5 is actually price * 10. I imagine they where trying to avoid
         // having price be more than a u16
         try stream.print(".items[{}].price={}\n", .{ i, @as(u32, item.price.value()) * 10 });
@@ -925,13 +926,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         try stream.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
     }
 
-    for (game.map_headers) |map_header, i| {
+    for (game.ptrs.map_headers) |map_header, i| {
         try stream.print(".map[{}].music={}\n", .{ i, map_header.music.value() });
         try stream.print(".map[{}].battle_scene={}\n", .{ i, map_header.battle_scene });
     }
 
-    for (game.wild_pokemons.fat) |_, i| {
-        const wild_mons = try game.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
+    for (game.ptrs.wild_pokemons.fat) |_, i| {
+        const wild_mons = try game.ptrs.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
         // TODO: Get rid of inline for in favor of a function to call
         inline for ([_][]const u8{
             "grass",
@@ -953,22 +954,22 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
     }
 
-    for (game.static_pokemons) |static_mon, i| {
+    for (game.ptrs.static_pokemons) |static_mon, i| {
         try stream.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species.value() });
         try stream.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.value() });
     }
 
-    for (game.given_pokemons) |given_mon, i| {
+    for (game.ptrs.given_pokemons) |given_mon, i| {
         try stream.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species.value() });
         try stream.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.value() });
     }
 
-    for (game.pokeball_items) |given_item, i| {
+    for (game.ptrs.pokeball_items) |given_item, i| {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 
-    if (game.hidden_hollows) |hidden_hollows| {
+    if (game.ptrs.hidden_hollows) |hidden_hollows| {
         for (hidden_hollows) |hollow, i| {
             for (hollow.pokemons) |version, j| {
                 for (version) |group, k| {
@@ -994,38 +995,36 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
         }
     }
 
-    try outputGen5StringTable(stream, "pokemons", "name", game.pokemon_names);
-    try outputGen5StringTable(stream, "pokedex", "category", game.pokedex_category_names);
-    try outputGen5StringTable(stream, "moves", "name", game.move_names);
-    try outputGen5StringTable(stream, "moves", "description", game.move_descriptions);
-    try outputGen5StringTable(stream, "abilities", "name", game.ability_names);
-    try outputGen5StringTable(stream, "items", "name", game.item_names);
-    //try outputGen5StringTable(stream, "items", "name_on_ground", game.item_names_on_the_ground);
-    try outputGen5StringTable(stream, "items", "description", game.item_descriptions);
-    try outputGen5StringTable(stream, "types", "name", game.type_names);
-    //try outputGen5StringTable(stream, "map", "name", game.map_names);
-    try outputGen5StringTable(stream, "trainers", "name", game.trainer_names);
+    for (game.owned.pokemon_names) |*str, i|
+        try outputGen5String(stream, "pokemons", i, "name", str.span());
+    for (game.owned.pokedex_category_names) |*str, i|
+        try outputGen5String(stream, "pokedex", i, "category", str.span());
+    for (game.owned.move_names) |*str, i|
+        try outputGen5String(stream, "moves", i, "name", str.span());
+    for (game.owned.move_descriptions) |*str, i|
+        try outputGen5String(stream, "moves", i, "description", str.span());
+    for (game.owned.ability_names) |*str, i|
+        try outputGen5String(stream, "abilities", i, "name", str.span());
+    for (game.owned.item_names) |*str, i|
+        try outputGen5String(stream, "items", i, "name", str.span());
+    //for (game.owned.item_names_on_the_ground) |*str, i| try outputGen5String(stream, "items", i, "name_on_ground", str);
+    for (game.owned.item_descriptions) |*str, i|
+        try outputGen5String(stream, "items", i, "description", str.span());
+    for (game.owned.type_names) |*str, i|
+        try outputGen5String(stream, "types", i, "name", str.span());
+    //for (game.owned.map_names) |*str, i| try outputGen5String(stream, "map", i, "name", str);
+    for (game.owned.trainer_names[1..]) |*str, i|
+        try outputGen5String(stream, "trainers", i + 1, "name", str.span());
 
-    // This snippet of code can be uncommented to output all strings in gen5 games.
+    // This snippet of code can be uncommented to output all strings in gen5 game.ptrs..
     // This is useful when looking for new strings to expose.
     //    var buf: [1024]u8 = undefined;
-    //    for (game.text.fat) |_, i| {
+    //    for (game.ptrs.text.fat) |_, i| {
     //        const file = nds.fs.File{ .i = @intCast(u16, i) };
-    //        const table = gen5.StringTable{ .data = game.text.fileData(file) };
+    //        const table = gen5.StringTable{ .data = game.ptrs.text.fileData(file) };
     //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
     //        outputGen5StringTable(stream, name, "", table) catch continue;
     //    }
-}
-
-fn outputGen5StringTable(
-    stream: var,
-    array_name: []const u8,
-    field_name: []const u8,
-    est: gen5.StringTable,
-) !void {
-    var i: u32 = 0;
-    while (i < est.entryCount(0)) : (i += 1)
-        try outputGen5String(stream, array_name, i, field_name, i, est);
 }
 
 fn outputGen5String(
@@ -1033,13 +1032,10 @@ fn outputGen5String(
     array_name: []const u8,
     i: usize,
     field_name: []const u8,
-    string_i: usize,
-    est: gen5.StringTable,
+    string: []const u8,
 ) !void {
-    var buf: [1024]u8 = undefined;
     try stream.print(".{}[{}].{}=", .{ array_name, i, field_name });
-    const len = try est.getStringStream(0, string_i).inStream().readAll(&buf);
-    try escape.writeEscaped(stream, buf[0..len], escape.zig_escapes);
+    try escape.writeEscaped(stream, string, escape.zig_escapes);
     try stream.writeAll("\n");
 }
 

@@ -605,8 +605,8 @@ pub const Game = struct {
         const arm9 = try nds_rom.getDecodedArm9(allocator);
         const file_system = nds_rom.fileSystem();
 
-        const trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer);
-        const trainer_parties_narc = try getNarc(file_system, info.parties);
+        const trainers = try (try file_system.getNarc(info.trainers)).toSlice(0, Trainer);
+        const trainer_parties_narc = try file_system.getNarc(info.parties);
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
         mem.set([6]PartyMemberBoth, trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
 
@@ -650,9 +650,9 @@ pub const Game = struct {
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tms_len]);
 
-        const text = try getNarc(file_system, info.text);
-        const scripts = try getNarc(file_system, info.scripts);
-        const pokedex = try getNarc(file_system, info.pokedex);
+        const text = try file_system.getNarc(info.text);
+        const scripts = try file_system.getNarc(info.scripts);
+        const pokedex = try file_system.getNarc(info.pokedex);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -691,13 +691,13 @@ pub const Game = struct {
                     };
                 },
             },
-            .pokemons = try (try getNarc(file_system, info.pokemons)).toSlice(0, BasePokemon),
-            .moves = try (try getNarc(file_system, info.moves)).toSlice(0, Move),
-            .trainers = try (try getNarc(file_system, info.trainers)).toSlice(0, Trainer),
-            .items = try (try getNarc(file_system, info.itemdata)).toSlice(0, Item),
-            .evolutions = try (try getNarc(file_system, info.evolutions)).toSlice(0, EvolutionTable),
+            .pokemons = try (try file_system.getNarc(info.pokemons)).toSlice(0, BasePokemon),
+            .moves = try (try file_system.getNarc(info.moves)).toSlice(0, Move),
+            .trainers = try (try file_system.getNarc(info.trainers)).toSlice(0, Trainer),
+            .items = try (try file_system.getNarc(info.itemdata)).toSlice(0, Item),
+            .evolutions = try (try file_system.getNarc(info.evolutions)).toSlice(0, EvolutionTable),
             .wild_pokemons = blk: {
-                const narc = try getNarc(file_system, info.wild_pokemons);
+                const narc = try file_system.getNarc(info.wild_pokemons);
                 switch (info.version) {
                     .diamond,
                     .pearl,
@@ -712,7 +712,7 @@ pub const Game = struct {
             .tms = hm_tms[0..92],
             .hms = hm_tms[92..],
 
-            .level_up_moves = try getNarc(file_system, info.level_up_moves),
+            .level_up_moves = try file_system.getNarc(info.level_up_moves),
 
             .pokedex = pokedex,
             .pokedex_heights = mem.bytesAsSlice(lu32, pokedex.fileData(.{ .i = info.pokedex_heights })),
@@ -757,7 +757,7 @@ pub const Game = struct {
         const allocator = game.allocator;
         const file_system = game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
-        const trainers = try (try getNarc(file_system, game.info.trainers)).toSlice(0, Trainer);
+        const trainers = try (try file_system.getNarc(game.info.trainers)).toSlice(0, Trainer);
         const trainer_parties = game.trainer_parties;
 
         const content_size = @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) *
@@ -951,10 +951,5 @@ pub const Game = struct {
             .given_pokemons = given_pokemons.toOwnedSlice(),
             .pokeball_items = pokeball_items.toOwnedSlice(),
         };
-    }
-
-    fn getNarc(file_system: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
-        const file = try file_system.openFileData(nds.fs.root, path);
-        return try nds.fs.Fs.fromNarc(file);
     }
 };

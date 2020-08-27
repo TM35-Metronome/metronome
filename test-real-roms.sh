@@ -35,7 +35,7 @@ for release in $(printf "false\ntrue\n"); do
             -e "s/\.instant_text=.*/.instant_text=true/" \
             -e "s/\.text_delays\[([0-9]*)\]=.*/.text_delays[\1]=0/" \
             "$expect"
-        
+
         zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" < "$expect"
         zig-cache/bin/tm35-load "$rom_dest" > "$found"
 
