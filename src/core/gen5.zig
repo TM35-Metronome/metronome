@@ -972,7 +972,11 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
-        try game.rom.replaceSection(game.rom.arm9(), game.owned.arm9);
+        mem.copy(
+            u8,
+            try game.rom.resizeSection(game.rom.arm9(), game.owned.arm9.len),
+            game.owned.arm9,
+        );
         try game.applyTrainerParties();
         try game.applyStrings();
         game.ptrs.deinit(game.allocator);
@@ -996,23 +1000,14 @@ pub const Game = struct {
 
         const file_system = game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
-        const trainers = try (try file_system.getNarc(game.info.trainers)).toSlice(1, Trainer);
         const trainer_parties = game.owned.trainer_parties;
 
-        // Calculate size of the new trainer party narc
-        const content_size = full_party_size * trainer_parties.len;
+        const content_size = @sizeOf(FullParty) *
+            trainer_parties.len;
         const size = nds.fs.narcSize(trainer_parties.len, content_size);
 
-        // Here we check if we're able to perform the application inline
-        // in the rom. If we're not able to, the we allocate a buffer,
-        // and create the narc in that instead.
-        const can_apply_inline = trainer_parties_narc.len >= size;
-        const buf = if (can_apply_inline)
-            trainer_parties_narc
-        else
-            try allocator.alloc(u8, size);
-        defer if (!can_apply_inline)
-            allocator.free(buf);
+        const buf = try game.rom.resizeSection(trainer_parties_narc, size);
+        const trainers = try (try file_system.getNarc(game.info.trainers)).toSlice(1, Trainer);
 
         var builder = nds.fs.SimpleNarcBuilder.init(buf, trainer_parties.len);
 
@@ -1055,11 +1050,7 @@ pub const Game = struct {
             }
         }
 
-        // If we where not able to perform the application inline, then
-        // we will have to replace the old narc with the new one.
-        const res = builder.finish();
-        if (!can_apply_inline)
-            try game.rom.replaceSection(trainer_parties_narc, res);
+        _ = builder.finish();
     }
 
     /// Applies all decrypted strings to the game.
@@ -1122,126 +1113,118 @@ pub const Game = struct {
         };
 
         const file_system = game.rom.fileSystem();
-        const text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
-        const text = try nds.fs.Fs.fromNarc(text_bytes);
+        const old_text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
+        const old_text = try nds.fs.Fs.fromNarc(old_text_bytes);
 
-        // We then calculate the size of the content for our new narch. We also
-        // check that we can perform the application inline.
-        var can_apply_inline = true;
-        var content_size: usize = 0;
-        for (text.fat) |f, i| {
-            for (tables) |table| {
-                if (i != table.file)
-                    continue;
-
-                const size = EncryptedStringTable.size(
+        // We then calculate the size of the content for our new narc
+        var extra_bytes: usize = 0;
+        for (tables) |table| {
+            extra_bytes += math.sub(
+                u32,
+                EncryptedStringTable.size(
                     1,
                     table.len(),
                     table.chars * table.len(),
+                ),
+                old_text.fat[table.file].len(),
+            ) catch 0;
+        }
+
+        const buf = try game.rom.resizeSection(old_text_bytes, old_text_bytes.len + extra_bytes);
+        const text = try nds.fs.Fs.fromNarc(buf);
+
+        // First, resize all tables that need a resize
+        for (tables) |table, i| {
+            const Header = EncryptedStringTable.Header;
+            const file_size = EncryptedStringTable.size(
+                1,
+                table.len(),
+                table.chars * table.len(),
+            );
+
+            const file = text.fat[table.file];
+            if (file.len() < file_size) {
+                const extra = file_size - file.len();
+                mem.copyBackwards(
+                    u8,
+                    text.data[file.end.value() + extra ..],
+                    text.data[file.end.value() .. text.data.len - extra],
                 );
-                // If any of the new encrypted tables does not fit in their
-                // old file, then we cannot apply inline.
-                can_apply_inline = can_apply_inline and f.len() >= size;
-                content_size += size;
-                break;
-            } else {
-                content_size += f.len();
+                for (text.fat) |*f| {
+                    const start = f.start.value();
+                    const end = f.end.value();
+                    f.* = nds.Range.init(
+                        start + extra * @boolToInt(start >= file.end.value()),
+                        end + extra * @boolToInt(start >= file.end.value()) +
+                            extra * @boolToInt(start == file.start.value() and
+                            end == file.end.value()),
+                    );
+                }
             }
         }
 
-        const size = nds.fs.narcSize(text.fat.len, content_size);
-        const buf = if (can_apply_inline)
-            text_bytes
-        else
-            try allocator.alloc(u8, size);
-        defer if (!can_apply_inline)
-            allocator.free(buf);
+        for (tables) |table, i| {
+            const Header = EncryptedStringTable.Header;
+            const Entry = EncryptedStringTable.Entry;
+            const file_size = EncryptedStringTable.size(
+                1,
+                table.len(),
+                table.chars * table.len(),
+            );
+            const file = text.fat[table.file];
+            const bytes = text.data[file.start.value()..file.end.value()];
 
-        var builder = nds.fs.SimpleNarcBuilder.init(buf, text.fat.len);
-        const fat = builder.fat();
-        const stream = builder.stream.outStream();
-        const files_offset = builder.stream.pos;
-        for (text.fat) |f, i| {
-            // If we can apply inline, then we assert that we never change
-            // the start location of any of the files in the narc. This is
-            // important, orelse we will have overriden some data, which
-            // should not happen when application is possible.
-            const start = builder.stream.pos;
-            defer fat[i] = nds.Range.init(start - files_offset, builder.stream.pos - files_offset);
-            debug.assert(!can_apply_inline or start - files_offset == f.start.value());
+            // TODO: we don't need a stream
+            const stream = io.fixedBufferStream(bytes).outStream();
+            debug.assert(bytes.len >= file_size);
 
-            for (tables) |table| {
-                if (i != table.file)
-                    continue;
+            const entries_count = @intCast(u16, table.len());
+            const entry_size = table.chars + 1; // Always make room for a terminator
+            try stream.writeAll(&mem.toBytes(Header{
+                .sections = lu16.init(1),
+                .entries = lu16.init(entries_count),
+                .file_size = lu32.init(file_size),
+                .unknown2 = lu32.init(0),
+            }));
 
-                const Header = EncryptedStringTable.Header;
-                const Entry = EncryptedStringTable.Entry;
-                const file_size = EncryptedStringTable.size(
-                    1,
-                    table.len(),
-                    table.chars * table.len(),
-                );
-                const entries_count = @intCast(u16, table.len());
-                const entry_size = table.chars + 1; // Always make room for a terminator
-                try stream.writeAll(&mem.toBytes(Header{
-                    .sections = lu16.init(1),
-                    .entries = lu16.init(entries_count),
-                    .file_size = lu32.init(file_size),
-                    .unknown2 = lu32.init(0),
+            const section_start = @sizeOf(Header) + @sizeOf(lu32);
+            try stream.writeAll(&lu32.init(section_start).bytes);
+            try stream.writeAll(&lu32.init(entries_count *
+                (@sizeOf(Entry) + entry_size * 2)).bytes);
+
+            const entries_start = stream.context.pos;
+            for (@as([*]void, undefined)[0..entries_count]) |_, j| {
+                try stream.writeAll(&mem.toBytes(Entry{
+                    .offset = lu32.init(0),
+                    .count = lu16.init(0),
+                    .unknown = lu16.init(0),
                 }));
-
-                const section_start = @sizeOf(Header) + @sizeOf(lu32);
-                try stream.writeAll(&lu32.init(section_start).bytes);
-                try stream.writeAll(&lu32.init(entries_count *
-                    (@sizeOf(Entry) + entry_size * 2)).bytes);
-
-                const entries_start = builder.stream.pos;
-                for (@as([*]void, undefined)[0..entries_count]) |_, j| {
-                    try stream.writeAll(&mem.toBytes(Entry{
-                        .offset = lu32.init(0),
-                        .count = lu16.init(0),
-                        .unknown = lu16.init(0),
-                    }));
-                }
-
-                const entries = mem.bytesAsSlice(Entry, buf[entries_start..builder.stream.pos]);
-                for (entries) |*entry, j| {
-                    const pos = builder.stream.pos;
-                    const str = table.at(j);
-                    try encode(str.str, stream);
-
-                    const str_end = builder.stream.pos;
-                    const encoded_str = mem.bytesAsSlice(lu16, buf[pos..str_end]);
-                    encrypt(encoded_str, str.key);
-
-                    const str_len = @intCast(u16, (str_end - pos) / 2);
-                    entry.offset = lu32.init(@intCast(u32, (pos - start) - section_start));
-                    entry.count = lu16.init(str_len);
-
-                    // Pad the string, so that each entry is always entry_size
-                    // apart. This ensure that patches generated from tm35-apply
-                    // are small.
-                    try stream.writeByteNTimes(0, (entry_size - str_len) * 2);
-                    debug.assert(builder.stream.pos - pos == entry_size * 2);
-                }
-
-                // Assert that we got the file size right.
-                debug.assert(builder.stream.pos - start == file_size);
-                debug.assert(builder.stream.pos - start == file_size);
-                break;
-            } else if (can_apply_inline) {
-                // When appling inline, we don't need to copy files
-                // we don't change, so we just skip over them.
-                builder.stream.pos += f.len();
-            } else {
-                try stream.writeAll(text.data[f.start.value()..f.end.value()]);
             }
-        }
 
-        debug.assert(buf.len == builder.stream.pos);
-        const res = builder.finish();
-        if (!can_apply_inline)
-            try game.rom.replaceSection(text_bytes, res);
+            const entries = mem.bytesAsSlice(Entry, bytes[entries_start..stream.context.pos]);
+            for (entries) |*entry, j| {
+                const pos = stream.context.pos;
+                const str = table.at(j);
+                try encode(str.str, stream);
+
+                const str_end = stream.context.pos;
+                const encoded_str = mem.bytesAsSlice(lu16, bytes[pos..str_end]);
+                encrypt(encoded_str, str.key);
+
+                const str_len = @intCast(u16, (str_end - pos) / 2);
+                entry.offset = lu32.init(@intCast(u32, pos - section_start));
+                entry.count = lu16.init(str_len);
+
+                // Pad the string, so that each entry is always entry_size
+                // apart. This ensure that patches generated from tm35-apply
+                // are small.
+                try stream.writeByteNTimes(0, (entry_size - str_len) * 2);
+                debug.assert(stream.context.pos - pos == entry_size * 2);
+            }
+
+            // Assert that we got the file size right.
+            debug.assert(stream.context.pos == file_size);
+        }
     }
 
     pub fn deinit(game: Game) void {

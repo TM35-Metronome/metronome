@@ -407,11 +407,11 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
     try stream.print(".gamecode={}\n", .{header.gamecode});
     try stream.print(".instant_text=false\n", .{});
 
-    for (game.starters) |starter, i| {
+    for (game.ptrs.starters) |starter, i| {
         try stream.print(".starters[{}]={}\n", .{ i, starter.value() });
     }
 
-    for (game.trainers) |trainer, i| {
+    for (game.ptrs.trainers) |trainer, i| {
         try stream.print(".trainers[{}].party_size={}\n", .{ i, trainer.party_size });
         try stream.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
         try stream.print(".trainers[{}].class={}\n", .{ i, trainer.class });
@@ -423,7 +423,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
             try stream.print(".trainers[{}].items[{}]={}\n", .{ i, j, item.value() });
         }
 
-        const parties = game.trainer_parties;
+        const parties = game.owned.trainer_parties;
         if (parties.len <= i)
             continue;
 
@@ -440,7 +440,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         }
     }
 
-    for (game.moves) |move, i| {
+    for (game.ptrs.moves) |move, i| {
         try stream.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
         try stream.print(".moves[{}].power={}\n", .{ i, move.power });
         try stream.print(".moves[{}].type={}\n", .{ i, move.@"type" });
@@ -448,7 +448,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".moves[{}].pp={}\n", .{ i, move.pp });
     }
 
-    for (game.pokemons) |pokemon, i| {
+    for (game.ptrs.pokemons) |pokemon, i| {
         try stream.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
         try stream.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
         try stream.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
@@ -490,15 +490,15 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
         const machine_learnset = pokemon.machine_learnset.value();
         var j: usize = 0;
-        while (j < game.tms.len) : (j += 1)
+        while (j < game.ptrs.tms.len) : (j += 1)
             try stream.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
-        while (j < game.tms.len + game.hms.len) : (j += 1)
-            try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
+        while (j < game.ptrs.tms.len + game.ptrs.hms.len) : (j += 1)
+            try stream.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.ptrs.tms.len, bit.isSet(u128, machine_learnset, @intCast(u7, j)) });
     }
-    for (game.species_to_national_dex) |dex_entry, i|
+    for (game.ptrs.species_to_national_dex) |dex_entry, i|
         try stream.print(".pokemons[{}].pokedex_entry={}\n", .{ i + 1, dex_entry.value() });
 
-    for (game.evolutions) |evos, i| {
+    for (game.ptrs.evolutions) |evos, i| {
         for (evos.items) |evo, j| {
             if (evo.method == .unused)
                 continue;
@@ -510,8 +510,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
     {
         var i: u32 = 0;
-        while (i < game.level_up_moves.fat.len) : (i += 1) {
-            const bytes = game.level_up_moves.fileData(.{ .i = i });
+        while (i < game.ptrs.level_up_moves.fat.len) : (i += 1) {
+            const bytes = game.ptrs.level_up_moves.fileData(.{ .i = i });
             const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
             for (level_up_moves) |move, j| {
                 if (std.meta.eql(move, gen4.LevelUpMove.term))
@@ -522,16 +522,16 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         }
     }
 
-    for (game.pokedex_heights) |height, i|
+    for (game.ptrs.pokedex_heights) |height, i|
         try stream.print(".pokedex[{}].height={}\n", .{ i, height.value() });
-    for (game.pokedex_weights) |weight, i|
+    for (game.ptrs.pokedex_weights) |weight, i|
         try stream.print(".pokedex[{}].weight={}\n", .{ i, weight.value() });
-    for (game.tms) |tm, i|
+    for (game.ptrs.tms) |tm, i|
         try stream.print(".tms[{}]={}\n", .{ i, tm.value() });
-    for (game.hms) |hm, i|
+    for (game.ptrs.hms) |hm, i|
         try stream.print(".hms[{}]={}\n", .{ i, hm.value() });
 
-    for (game.items) |item, i| {
+    for (game.ptrs.items) |item, i| {
         try stream.print(".items[{}].price={}\n", .{ i, item.price.value() });
         try stream.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
         try stream.print(".items[{}].gain={}\n", .{ i, item.gain });
@@ -572,7 +572,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         .diamond,
         .pearl,
         .platinum,
-        => for (game.wild_pokemons.dppt) |wild_mons, i| {
+        => for (game.ptrs.wild_pokemons.dppt) |wild_mons, i| {
             try stream.print(".wild_pokemons[{}].grass.encounter_rate={}\n", .{ i, wild_mons.grass_rate.value() });
             for (wild_mons.grass) |grass, j| {
                 try stream.print(".wild_pokemons[{}].grass.pokemons[{}].min_level={}\n", .{ i, j, grass.level });
@@ -613,7 +613,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 
         .heart_gold,
         .soul_silver,
-        => for (game.wild_pokemons.hgss) |wild_mons, i| {
+        => for (game.ptrs.wild_pokemons.hgss) |wild_mons, i| {
             // TODO: Get rid of inline for in favor of a function to call
             inline for ([_][]const u8{
                 "grass_morning",
@@ -650,37 +650,46 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         else => unreachable,
     }
 
-    for (game.static_pokemons) |static_mon, i| {
+    for (game.ptrs.static_pokemons) |static_mon, i| {
         try stream.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species.value() });
         try stream.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.value() });
     }
 
-    for (game.given_pokemons) |given_mon, i| {
+    for (game.ptrs.given_pokemons) |given_mon, i| {
         try stream.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species.value() });
         try stream.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.value() });
     }
 
-    for (game.pokeball_items) |given_item, i| {
+    for (game.ptrs.pokeball_items) |given_item, i| {
         try stream.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item.value() });
         try stream.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount.value() });
     }
 
-    try outputGen4StringTable(stream, "pokemons", "name", game.pokemon_names);
-    // Decrompress trainer names
-    // try outputGen4StringTable(stream, "trainers", "name", game.trainer_names);
-    try outputGen4StringTable(stream, "moves", "name", game.move_names);
-    try outputGen4StringTable(stream, "moves", "description", game.move_descriptions);
-    try outputGen4StringTable(stream, "abilities", "name", game.ability_names);
-    try outputGen4StringTable(stream, "items", "name", game.item_names);
-    try outputGen4StringTable(stream, "items", "description", game.item_descriptions);
-    try outputGen4StringTable(stream, "types", "name", game.type_names);
+    for (game.owned.pokemon_names) |*str, i|
+        try outputString(stream, "pokemons", i, "name", str.span());
+    for (game.owned.move_names) |*str, i|
+        try outputString(stream, "moves", i, "name", str.span());
+    for (game.owned.move_descriptions) |*str, i|
+        try outputString(stream, "moves", i, "description", str.span());
+    for (game.owned.ability_names) |*str, i|
+        try outputString(stream, "abilities", i, "name", str.span());
+    for (game.owned.item_names) |*str, i|
+        try outputString(stream, "items", i, "name", str.span());
+    //for (game.owned.item_names_on_the_ground) |*str, i| try outputGen5String(stream, "items", i, "name_on_ground", str);
+    for (game.owned.item_descriptions) |*str, i|
+        try outputString(stream, "items", i, "description", str.span());
+    for (game.owned.type_names) |*str, i|
+        try outputString(stream, "types", i, "name", str.span());
+    //for (game.owned.map_names) |*str, i| try outputGen5String(stream, "map", i, "name", str);
+    //for (game.owned.trainer_names) |*str, i|
+    //    try outputString(stream, "trainers", i + 1, "name", str.span());
 
     // This snippet of code can be uncommented to output all strings in gen4 games.
     // This is useful when looking for new strings to expose.
     //    var buf: [1024]u8 = undefined;
-    //    for (game.text.fat) |_, i| {
+    //    for (game.ptrs.text.fat) |_, i| {
     //        const file = nds.fs.File{ .i = @intCast(u16, i) };
-    //        const table = gen4.StringTable{ .data = game.text.fileData(file) };
+    //        const table = gen4.StringTable{ .data = game.ptrs.text.fileData(file) };
     //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
     //        outputGen4StringTable(stream, name, "", table) catch continue;
     //    }
@@ -996,25 +1005,25 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     }
 
     for (game.owned.pokemon_names) |*str, i|
-        try outputGen5String(stream, "pokemons", i, "name", str.span());
+        try outputString(stream, "pokemons", i, "name", str.span());
     for (game.owned.pokedex_category_names) |*str, i|
-        try outputGen5String(stream, "pokedex", i, "category", str.span());
+        try outputString(stream, "pokedex", i, "category", str.span());
     for (game.owned.move_names) |*str, i|
-        try outputGen5String(stream, "moves", i, "name", str.span());
+        try outputString(stream, "moves", i, "name", str.span());
     for (game.owned.move_descriptions) |*str, i|
-        try outputGen5String(stream, "moves", i, "description", str.span());
+        try outputString(stream, "moves", i, "description", str.span());
     for (game.owned.ability_names) |*str, i|
-        try outputGen5String(stream, "abilities", i, "name", str.span());
+        try outputString(stream, "abilities", i, "name", str.span());
     for (game.owned.item_names) |*str, i|
-        try outputGen5String(stream, "items", i, "name", str.span());
+        try outputString(stream, "items", i, "name", str.span());
     //for (game.owned.item_names_on_the_ground) |*str, i| try outputGen5String(stream, "items", i, "name_on_ground", str);
     for (game.owned.item_descriptions) |*str, i|
-        try outputGen5String(stream, "items", i, "description", str.span());
+        try outputString(stream, "items", i, "description", str.span());
     for (game.owned.type_names) |*str, i|
-        try outputGen5String(stream, "types", i, "name", str.span());
+        try outputString(stream, "types", i, "name", str.span());
     //for (game.owned.map_names) |*str, i| try outputGen5String(stream, "map", i, "name", str);
     for (game.owned.trainer_names[1..]) |*str, i|
-        try outputGen5String(stream, "trainers", i + 1, "name", str.span());
+        try outputString(stream, "trainers", i + 1, "name", str.span());
 
     // This snippet of code can be uncommented to output all strings in gen5 game.ptrs..
     // This is useful when looking for new strings to expose.
@@ -1027,7 +1036,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
     //    }
 }
 
-fn outputGen5String(
+fn outputString(
     stream: var,
     array_name: []const u8,
     i: usize,

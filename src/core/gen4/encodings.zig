@@ -1161,9 +1161,12 @@ test "all" {
 
 pub fn encode(str: []const u8, out_stream: var) !void {
     try rom.encoding.encode(&all, 0, str, out_stream);
-    try out_stream.writeAll("\xff\xff");
 }
 
 pub fn decode(in_stream: var, out_stream: var) !void {
     try rom.encoding.encodeEx(&all, 1, in_stream, out_stream);
+}
+
+pub fn decode2(in: []const u8, out_stream: var) !void {
+    try decode(io.fixedBufferStream(in).inStream(), out_stream);
 }
