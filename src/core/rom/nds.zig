@@ -163,14 +163,14 @@ pub const Rom = struct {
         };
     }
 
-    pub fn replaceSection(rom: *Rom, old: []const u8, new: []const u8) !void {
+    pub fn resizeSection(rom: *Rom, old: []const u8, new_size: usize) ![]u8 {
         var timer = std.time.Timer.start() catch unreachable;
 
         const old_slice = Slice.fromSlice(rom.data.items, old);
         const old_start = old_slice.start.value();
         const old_end = old_slice.end();
 
-        const extra_bytes = math.sub(usize, new.len, old.len) catch 0;
+        const extra_bytes = math.sub(usize, new_size, old.len) catch 0;
         const old_len = rom.data.items.len;
         const new_len = old_len + extra_bytes;
         try rom.data.resize(new_len);
@@ -185,7 +185,7 @@ pub const Rom = struct {
             const len = section_slice.len.value();
             section.set(rom.data.items, Slice.init(
                 start + extra_bytes * @boolToInt(start > old_start),
-                len * @boolToInt(start != old_start) + new.len * @boolToInt(start == old_start),
+                len * @boolToInt(start != old_start) + new_size * @boolToInt(start == old_start),
             ));
         }
 
@@ -196,7 +196,6 @@ pub const Rom = struct {
                 rom.data.items[old_end..old_len],
             );
         }
-        mem.copy(u8, rom.data.items[old_start..], new);
 
         // Update header after resize
         const h = @intToPtr(*Header, @ptrToInt(rom.header()));
@@ -211,6 +210,7 @@ pub const Rom = struct {
         };
 
         h.header_checksum = lu16.init(h.calcChecksum());
+        return rom.data.items[old_start..][0..new_size];
     }
 
     /// A generic structure for pointing to memory in the nds rom. The memory

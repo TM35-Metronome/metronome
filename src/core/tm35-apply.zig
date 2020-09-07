@@ -224,7 +224,7 @@ pub fn main2(
             break :blk nds_rom.data.items.len;
         },
         .gen5 => |*gen5_game| blk: {
-            gen5_game.apply() catch return exit.allocErr(stdio.err);
+            gen5_game.apply() catch |err| return exit.err(stdio.err, "apply error: {}\n", .{err});
             nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk nds_rom.data.items.len;
         },
@@ -748,20 +748,20 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("instant_text") => {
             if (try parser.parse(parse.boolv))
-                common.patch(game.arm9, game.info.instant_text_patch);
+                common.patch(game.owned.arm9, game.info.instant_text_patch);
         },
         c("starters") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.starters.len)
+            if (index >= game.ptrs.starters.len)
                 return error.Error;
-            game.starters[index].* = try parser.parse(parselu16v);
+            game.ptrs.starters[index].* = try parser.parse(parselu16v);
         },
         c("trainers") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.trainers.len)
+            if (index >= game.ptrs.trainers.len)
                 return error.Error;
 
-            const trainer = &game.trainers[index];
+            const trainer = &game.ptrs.trainers[index];
             switch (m(try parser.parse(parse.anyField))) {
                 c("class") => trainer.class = try parser.parse(parse.u8v),
                 c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
@@ -772,12 +772,12 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen4.PartyType)),
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
-                    if (index >= game.trainer_parties.len)
+                    if (index >= game.owned.trainer_parties.len)
                         return error.Error;
                     if (pindex >= trainer.party_size)
                         return error.Error;
 
-                    const member = &game.trainer_parties[index][pindex];
+                    const member = &game.owned.trainer_parties[index][pindex];
                     switch (m(try parser.parse(parse.anyField))) {
                         c("iv") => member.base.iv = try parser.parse(parse.u8v),
                         c("gender") => member.base.gender_ability.gender = try parser.parse(parse.u4v),
@@ -797,12 +797,12 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen4String(game.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(game.move_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen4String(256, game.owned.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(16, game.owned.move_names, index, try parser.parse(parse.strv)),
                 else => {
-                    if (index >= game.moves.len)
+                    if (index >= game.ptrs.moves.len)
                         return error.Error;
-                    try parse.anyT(prev, &game.moves[index], converters);
+                    try parse.anyT(prev, &game.ptrs.moves[index], converters);
                 },
             }
         },
@@ -811,12 +811,12 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen4String(game.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(game.item_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen4String(128, game.owned.item_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(16, game.owned.item_names, index, try parser.parse(parse.strv)),
                 else => {
-                    if (index >= game.items.len)
+                    if (index >= game.ptrs.items.len)
                         return error.Error;
-                    try parse.anyT(prev, &game.items[index], converters);
+                    try parse.anyT(prev, &game.ptrs.items[index], converters);
                 },
             }
         },
@@ -824,14 +824,14 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
                 c("height") => {
-                    if (index >= game.pokedex_heights.len)
+                    if (index >= game.ptrs.pokedex_heights.len)
                         return error.Error;
-                    game.pokedex_heights[index] = try parser.parse(parselu32v);
+                    game.ptrs.pokedex_heights[index] = try parser.parse(parselu32v);
                 },
                 c("weight") => {
-                    if (index >= game.pokedex_weights.len)
+                    if (index >= game.ptrs.pokedex_weights.len)
                         return error.Error;
-                    game.pokedex_weights[index] = try parser.parse(parselu32v);
+                    game.ptrs.pokedex_weights[index] = try parser.parse(parselu32v);
                 },
                 else => return error.NoField,
             }
@@ -839,22 +839,22 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(game.ability_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(16, game.owned.ability_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
         c("types") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(game.type_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(16, game.owned.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
         c("pokemons") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.pokemons.len)
+            if (index >= game.ptrs.pokemons.len)
                 return error.Error;
-            const pokemon = &game.pokemons[index];
+            const pokemon = &game.ptrs.pokemons[index];
 
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
@@ -872,7 +872,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("name") => try applyGen4String(game.pokemon_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(16, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
                 c("egg_groups") => {
                     const eindex = try parser.parse(parse.index);
                     const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
@@ -886,37 +886,37 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
                     const value = try parser.parse(parse.boolv);
-                    const len = if (is_tms) game.tms.len else game.hms.len;
+                    const len = if (is_tms) game.ptrs.tms.len else game.ptrs.hms.len;
                     if (tindex >= len)
                         return error.Error;
 
-                    const rindex = tindex + game.tms.len * @boolToInt(!is_tms);
+                    const rindex = tindex + game.ptrs.tms.len * @boolToInt(!is_tms);
                     const learnset = &pokemon.machine_learnset;
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
                 },
                 c("moves") => {
-                    const bytes = game.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
+                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
                     const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
                     const lum = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
                     try parse.anyT(parser.str, &lum, converters);
                 },
                 c("evos") => {
-                    if (game.evolutions.len <= index)
+                    if (game.ptrs.evolutions.len <= index)
                         return error.Error;
-                    try parse.anyT(parser.str, &game.evolutions[index].items, converters);
+                    try parse.anyT(parser.str, &game.ptrs.evolutions[index].items, converters);
                 },
                 c("pokedex_entry") => {
-                    if (index == 0 or index - 1 >= game.species_to_national_dex.len)
+                    if (index == 0 or index - 1 >= game.ptrs.species_to_national_dex.len)
                         return error.Error;
-                    game.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
+                    game.ptrs.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
                 },
                 else => return error.NoField,
             }
         },
-        c("tms") => try parse.anyT(parser.str, &game.tms, converters),
-        c("hms") => try parse.anyT(parser.str, &game.hms, converters),
+        c("tms") => try parse.anyT(parser.str, &game.ptrs.tms, converters),
+        c("hms") => try parse.anyT(parser.str, &game.ptrs.hms, converters),
         c("wild_pokemons") => {
-            const wild_pokemons = game.wild_pokemons;
+            const wild_pokemons = game.ptrs.wild_pokemons;
             const index = try parser.parse(parse.index);
 
             switch (game.info.version) {
@@ -977,10 +977,10 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("static_pokemons") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.static_pokemons.len)
+            if (index >= game.ptrs.static_pokemons.len)
                 return error.Error;
 
-            const static_mon = game.static_pokemons[index];
+            const static_mon = game.ptrs.static_pokemons[index];
             switch (m(try parser.parse(parse.anyField))) {
                 c("species") => static_mon.species.* = try parser.parse(parselu16v),
                 c("level") => static_mon.level.* = try parser.parse(parselu16v),
@@ -989,10 +989,10 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("given_pokemons") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.given_pokemons.len)
+            if (index >= game.ptrs.given_pokemons.len)
                 return error.Error;
 
-            const given_mon = game.given_pokemons[index];
+            const given_mon = game.ptrs.given_pokemons[index];
             switch (m(try parser.parse(parse.anyField))) {
                 c("species") => given_mon.species.* = try parser.parse(parselu16v),
                 c("level") => given_mon.level.* = try parser.parse(parselu16v),
@@ -1001,9 +1001,9 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
         },
         c("pokeball_items") => {
             const index = try parser.parse(parse.index);
-            if (index >= game.pokeball_items.len)
+            if (index >= game.ptrs.pokeball_items.len)
                 return error.Error;
-            const given_item = game.pokeball_items[index];
+            const given_item = game.ptrs.pokeball_items[index];
 
             switch (m(try parser.parse(parse.anyField))) {
                 c("item") => given_item.item.* = try parser.parse(parselu16v),
@@ -1054,11 +1054,14 @@ fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
     }
 }
 
-fn applyGen4String(table: gen4.StringTable, index: usize, value: []const u8) !void {
-    if (index >= table.count())
+fn applyGen4String(comptime l: usize, strs: []gen4.String(l), index: usize, value: []const u8) !void {
+    if (strs.len <= index)
         return error.Error;
-    const stream = table.getStringStream(@intCast(u32, index)).outStream();
-    try gen4.encodings.encode(value, stream);
+
+    var buf = [_]u8{0} ** l;
+    var fba = io.fixedBufferStream(&buf);
+    try escape.writeUnEscaped(fba.outStream(), value, escape.zig_escapes);
+    strs[index].buf = buf;
 }
 
 fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
