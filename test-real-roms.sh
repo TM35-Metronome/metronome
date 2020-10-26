@@ -21,7 +21,7 @@ expect=$(mktemp)
 found=$(mktemp)
 
 for release in $(printf "false\ntrue\n"); do
-    zig build "-Drelease=$release"
+    zig build build-core "-Drelease=$release"
     for rom in $@; do
         echo "$rom" >&2
         zig-cache/bin/tm35-load "$rom" > "$expect"
