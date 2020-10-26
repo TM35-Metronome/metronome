@@ -147,7 +147,6 @@ pub fn main2(
 
     var line_num: usize = 1;
     while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
-        var timer = std.time.Timer.start() catch unreachable;
         const trimmed = mem.trimRight(u8, line, "\r\n");
         const new_bytes = switch (game) {
             .gen3 => |*gen3_game| blk: {
