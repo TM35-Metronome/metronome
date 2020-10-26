@@ -27,21 +27,18 @@ pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
     comptime debug.assert(@typeInfo(_Inner) == .Int);
 
     return packed struct {
-        bytes: [@sizeOf(Inner)]u8,
+        __inner: Inner,
 
         pub const Inner = _Inner;
         pub const endian = _endian;
 
         pub fn init(v: Inner) @This() {
-            var res: @This() = undefined;
-            mem.writeInt(Inner, &res.bytes, v, endian);
-
-            return res;
+            return .{ .__inner = swap(v) };
         }
 
         /// Converts the integer to native endianess and returns it.
         pub fn value(int: @This()) Inner {
-            return mem.readInt(Inner, &int.bytes, endian);
+            return swap(int.__inner);
         }
 
         /// Ignore the integers endianess and read it as if it was a native integer.
@@ -57,7 +54,20 @@ pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
         /// The values of A,B,C will differ on platforms of different endianess, but
         /// the bit layout of A,B,C will always be the same no matter the endianess.
         pub fn valueNative(int: @This()) Inner {
-            return mem.readInt(Inner, &int.bytes, builtin.endian);
+            return int.__inner;
+        }
+
+        pub fn format(
+            self: @This(),
+            comptime fmt: []const u8,
+            options: std.fmt.FormatOptions,
+            out_stream: var,
+        ) !void {
+            return std.fmt.formatIntValue(self.value(), fmt, options, out_stream);
+        }
+
+        fn swap(v: Inner) Inner {
+            return if (_endian != builtin.endian) @byteSwap(Inner, v) else v;
         }
     };
 }
@@ -68,8 +78,8 @@ test "Int" {
     const numBig = Int(u32, .Big).init(value);
     testing.expectEqual(value, numLittle.value());
     testing.expectEqual(value, numBig.value());
-    testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, &numLittle.bytes);
-    testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, &numBig.bytes);
+    testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, &@bitCast([4]u8, numLittle));
+    testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, &@bitCast([4]u8, numBig));
     switch (builtin.endian) {
         .Big => {
             testing.expectEqual(@as(u32, 0x78563412), numLittle.valueNative());

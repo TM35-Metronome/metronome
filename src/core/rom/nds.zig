@@ -111,7 +111,7 @@ pub const Rom = struct {
         const h = rom.header();
         const offset = h.arm9.offset.value() + h.arm9.size.value();
         const footer = rom.data.items[offset..][0..12];
-        if (!mem.startsWith(u8, footer, &lu32.init(0xDEC00621).bytes))
+        if (@bitCast(lu32, footer[0..4].*).value() != 0xDEC00621)
             return footer[0..0];
         return footer;
     }

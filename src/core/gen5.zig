@@ -681,14 +681,14 @@ fn encode(data: []const u8, out: var) !void {
     var n: usize = 0;
     while (n < data.len) {
         if (mem.startsWith(u8, data[n..], "\n")) {
-            try out.writeAll(&lu16.init(0xfffe).bytes);
+            try out.writeIntLittle(u16, 0xfffe);
             n += 1;
             continue;
         }
         if (mem.startsWith(u8, data[n..], "\\x")) {
             const hex = data[n + 2 ..][0..4];
             const parsed = try fmt.parseUnsigned(u16, hex, 16);
-            try out.writeAll(&lu16.init(parsed).bytes);
+            try out.writeIntLittle(u16, parsed);
             n += 6;
             continue;
         }
@@ -698,10 +698,10 @@ fn encode(data: []const u8, out: var) !void {
             break;
 
         const codepoint = unicode.utf8Decode(data[n..][0..ulen]) catch unreachable;
-        try out.writeAll(&lu16.init(@intCast(u16, codepoint)).bytes);
+        try out.writeIntLittle(u16, @intCast(u16, codepoint));
         n += ulen;
     }
-    try out.writeAll(&lu16.init(0xffff).bytes);
+    try out.writeIntLittle(u16, 0xffff);
 }
 
 fn encrypt(data: []lu16, key: u16) void {
@@ -1188,9 +1188,9 @@ pub const Game = struct {
             }));
 
             const section_start = @sizeOf(Header) + @sizeOf(lu32);
-            try stream.writeAll(&lu32.init(section_start).bytes);
-            try stream.writeAll(&lu32.init(entries_count *
-                (@sizeOf(Entry) + entry_size * 2)).bytes);
+            try stream.writeIntLittle(u32, section_start);
+            try stream.writeIntLittle(u32, entries_count *
+                (@sizeOf(Entry) + entry_size * 2));
 
             const entries_start = stream.context.pos;
             for (@as([*]void, undefined)[0..entries_count]) |_, j| {

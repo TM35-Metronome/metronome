@@ -528,13 +528,13 @@ fn decryptAndDecode(data: []const lu16, key: u16, out: var) !void {
                 const char = @intCast(u16, container & 0x1FF);
                 if (char == 0x1Ff)
                     return;
-                try encodings.decode2(&lu16.init(char).bytes, out);
+                try encodings.decode2(&@bitCast([2]u8, lu16.init(char)), out);
                 container >>= 9;
             }
         } else {
             if (decoded == 0xffff)
                 return;
-            try encodings.decode2(&lu16.init(decoded).bytes, out);
+            try encodings.decode2(&@bitCast([2]u8, lu16.init(decoded)), out);
         }
     }
 }

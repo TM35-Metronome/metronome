@@ -391,7 +391,7 @@ pub const Builder = struct {
         const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
         try fbs.writeByte(kind | len);
         try fbs.writeAll(dir_name);
-        try fbs.writeAll(&lu16.init(id).bytes);
+        try fbs.writeIntLittle(u16, id);
 
         const written = fbs.context.getWritten();
         try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len + 1);
