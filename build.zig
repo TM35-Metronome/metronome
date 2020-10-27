@@ -201,11 +201,10 @@ pub fn build(b: *Builder) void {
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
 
-        exe.install();
         exe.setTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        build_gui_step.dependOn(&exe.step);
+        build_gui_step.dependOn(&b.addInstallArtifact(exe).step);
     }
 }
 
@@ -223,7 +222,7 @@ fn buildAndInstallCmdlineProgram(
         exe.addPackage(pkg);
 
     if (install)
-        exe.install();
+        parent_step.dependOn(&b.addInstallArtifact(exe).step);
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.single_threaded = true;
