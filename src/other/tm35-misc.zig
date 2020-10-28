@@ -96,6 +96,7 @@ pub fn main2(
         }
     }
 
+    var fifo = util.read.Fifo(.Dynamic).init(allocator);
     const opt = Options{
         .fast_text = fast_text,
         .biking = biking.?,
@@ -104,7 +105,7 @@ pub fn main2(
         .wild_scale = wild_scale catch unreachable,
         .static_scale = static_scale catch unreachable,
     };
-    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(stdio.out, opt, str) catch |err| switch (err) {
             error.ParseError => true,

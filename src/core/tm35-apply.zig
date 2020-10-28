@@ -145,8 +145,9 @@ pub fn main2(
         .gen5 => |*gen5_game| gen5_game.deinit(),
     };
 
+    var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
-    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
+    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         const new_bytes = switch (game) {
             .gen3 => |*gen3_game| blk: {

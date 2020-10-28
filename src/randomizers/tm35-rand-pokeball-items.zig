@@ -67,10 +67,11 @@ pub fn main2(
     const include_tms_hms = args.flag("--include-tms-hms");
     const include_key_items = args.flag("--include-key-items");
 
+    var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{
         .strings = std.StringHashMap(usize).init(allocator),
     };
-    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),

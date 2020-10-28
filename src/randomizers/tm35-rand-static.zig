@@ -90,10 +90,11 @@ pub fn main2(
         return 1;
     };
 
+    var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{
         .strings = std.StringHashMap(usize).init(allocator),
     };
-    while (util.readLine(stdio.in.context) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         const str = mem.trimRight(u8, line, "\r\n");
         const print_line = parseLine(&data, str) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),

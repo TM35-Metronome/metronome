@@ -13,20 +13,21 @@ const os = std.os;
 pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
 pub const container = @import("container.zig");
-pub const exit = @import("exit.zig");
 pub const escape = @import("escape.zig");
+pub const exit = @import("exit.zig");
 pub const parse = @import("parse.zig");
+pub const read = @import("read.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
-
-pub const readLine = @import("readline.zig").readLine;
 
 test "" {
     _ = algorithm;
     _ = bit;
+    _ = container;
     _ = escape;
+    _ = exit;
     _ = parse;
-    _ = readLine;
+    _ = read;
     _ = testing;
     _ = unicode;
 }

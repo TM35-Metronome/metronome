@@ -64,10 +64,11 @@ pub fn main() !void {
         LookForFields: Command,
     };
 
+    var fifo = util.read.Fifo(.Dynamic).init(a);
     var commands = std.ArrayList(Command).init(a);
     var state: State = .Start;
 
-    next_line: while (try util.readLine(&stdio_buf.in)) |line| {
+    next_line: while (try util.read.line(stdio.in, &fifo)) |line| {
         const trimmed = mem.trim(u8, line, " \r\n");
         errdefer debug.warn("{}\n", .{trimmed});
         if (trimmed.len == 0)

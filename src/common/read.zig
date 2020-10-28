@@ -3,12 +3,11 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 
-/// This is a special case readLine implementation for BufferedInStreams.
-/// This function looks directly into the buffer that BufferedInStream manages
-/// to find lines. This function returns slices into the BufferedInStream and
-/// can therefor only read lines as long as the buffers size. For all programs
-/// in this project, this shouldn't really be a problem as lines are relativly
-/// small (at least a lot smaller than 4096, which is bufinstreams default).
+pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
+    return std.fifo.LinearFifo(u8, buffer_type);
+}
+
+/// Reads lines from `stream` using a `Fifo` for buffering.
 ///
 /// NOTE: using `readUntilDelimitorArrayList` over this function results in
 ///       tm35-rand-parties to be around 2x slower. This function is therefor
@@ -26,9 +25,7 @@ const testing = std.testing;
 ///};
 ///return buffer.items;
 ///```
-pub fn readLine(buf_in_stream: var) !?[]u8 {
-    const fifo = &buf_in_stream.fifo;
-
+pub fn line(stream: var, fifo: var) !?[]u8 {
     while (true) {
         const buf = fifo.readableSliceMut(0);
         if (mem.indexOfScalar(u8, buf, '\n')) |index| {
@@ -37,11 +34,16 @@ pub fn readLine(buf_in_stream: var) !?[]u8 {
             return buf[0..index];
         }
 
-        mem.copyBackwards(u8, fifo.buf[0..], buf);
-        fifo.head = 0;
+        const new_buf = blk: {
+            fifo.realign();
+            const slice = fifo.writableSlice(0);
+            if (slice.len != 0)
+                break :blk slice;
+            break :blk try fifo.writableWithSize(fifo.buf.len);
+        };
 
-        const num = try buf_in_stream.unbuffered_in_stream.read(fifo.writableSlice(0));
-        fifo.count += num;
+        const num = try stream.read(new_buf);
+        fifo.update(num);
 
         if (num == 0) {
             if (fifo.count != 0) {
@@ -68,11 +70,11 @@ test "readLine" {
 
 fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     var fbs = std.io.fixedBufferStream(str);
-    var bis = std.io.bufferedInStream(fbs.inStream());
+    var fifo = std.fifo.LinearFifo(u8, .{ .Static = 3 }).init();
 
     for (lines) |expected_line| {
-        const actual_line = (try readLine(&bis)).?;
+        const actual_line = (try readLine(fbs.inStream(), &fifo)).?;
         testing.expectEqualSlices(u8, expected_line, actual_line);
     }
-    testing.expectEqual(@as(?[]u8, null), try readLine(&bis));
+    testing.expectEqual(@as(?[]u8, null), try readLine(fbs.inStream(), &fifo));
 }

@@ -1015,11 +1015,8 @@ const Settings = struct {
         };
 
         var order_i: usize = 0;
-        var buf: [1024 * 2]u8 = undefined;
-        var fba = heap.FixedBufferAllocator.init(&buf);
-        var buf_in_stream = io.bufferedInStream(in_stream);
-
-        while (try util.readLine(&buf_in_stream)) |line| {
+        var fifo = util.read.Fifo(.{ .Static = 1024 * 2 }).init();
+        while (try util.read.line(in_stream, &fifo)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
@@ -1148,8 +1145,9 @@ const Exes = struct {
         defer res.deinit();
         defer freeCommands(allocator, res.items);
 
-        var buf_stream = io.bufferedInStream(command_file.inStream());
-        while (try util.readLine(&buf_stream)) |line| {
+        var fifo = util.read.Fifo(.Dynamic).init(allocator);
+        defer fifo.deinit();
+        while (try util.read.line(command_file.inStream(), &fifo)) |line| {
             if (fs.path.isAbsolute(line)) {
                 const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
                 try res.append(command);
