@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
 
@@ -39,7 +40,7 @@ pub fn line(stream: var, fifo: var) !?[]u8 {
             const slice = fifo.writableSlice(0);
             if (slice.len != 0)
                 break :blk slice;
-            break :blk try fifo.writableWithSize(fifo.buf.len);
+            break :blk try fifo.writableWithSize(math.max(1024, fifo.buf.len));
         };
 
         const num = try stream.read(new_buf);
@@ -73,8 +74,8 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     var fifo = std.fifo.LinearFifo(u8, .{ .Static = 3 }).init();
 
     for (lines) |expected_line| {
-        const actual_line = (try readLine(fbs.inStream(), &fifo)).?;
+        const actual_line = (try line(fbs.inStream(), &fifo)).?;
         testing.expectEqualSlices(u8, expected_line, actual_line);
     }
-    testing.expectEqual(@as(?[]u8, null), try readLine(fbs.inStream(), &fifo));
+    testing.expectEqual(@as(?[]u8, null), try line(fbs.inStream(), &fifo));
 }
