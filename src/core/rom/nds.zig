@@ -43,7 +43,7 @@ pub const Range = extern struct {
         return r.end.value() - r.start.value();
     }
 
-    pub fn slice(r: Range, s: var) mem.Span(@TypeOf(s)) {
+    pub fn slice(r: Range, s: anytype) mem.Span(@TypeOf(s)) {
         return s[r.start.value()..r.end.value()];
     }
 };
@@ -68,7 +68,7 @@ pub const Slice = extern struct {
         return s.start.value() + s.len.value();
     }
 
-    pub fn slice(sl: Slice, s: var) mem.Span(@TypeOf(s)) {
+    pub fn slice(sl: Slice, s: anytype) mem.Span(@TypeOf(s)) {
         return s[sl.start.value()..sl.end()];
     }
 };
@@ -191,10 +191,14 @@ pub const Rom = struct {
         const potential_new_end = old_start + new_size;
         const can_perform_in_place_resize = potential_new_end <= following_section_start;
         if (can_perform_in_place_resize) {
-            // If there is room, we can befor the resize of the section inline in memory.
+            // If there is room, we can beform the resize of the section inline in memory.
             // This only requires modifying the section offset in the rom. No copy required.
             const section = sections[section_index];
             section.set(rom_data, Slice.init(old_start, new_size));
+
+            const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+            h.header_checksum = lu16.init(h.calcChecksum());
+
             return rom_data[old_start..][0..new_size];
         }
 
@@ -397,7 +401,7 @@ pub const Rom = struct {
         return res;
     }
 
-    pub fn writeToStream(rom: Rom, stream: var) !void {
+    pub fn writeToStream(rom: Rom, stream: anytype) !void {
         // The contract here is that once you have an `nds.Rom`, it should
         // always be a valid rom, so we just assert that this is true here
         // for sanity.
