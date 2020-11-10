@@ -61,7 +61,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
             self: @This(),
             comptime fmt: []const u8,
             options: std.fmt.FormatOptions,
-            out_stream: var,
+            out_stream: anytype,
         ) !void {
             return std.fmt.formatIntValue(self.value(), fmt, options, out_stream);
         }

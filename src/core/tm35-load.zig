@@ -34,10 +34,10 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    Param{ .takes_value = true },
+    clap.parseParam("<ROM>          The rom to apply the changes to.                                                                  ") catch unreachable,
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-load");
     try clap.usage(stream, &params);
     try stream.writeAll("\nLoad data from Pokémon games." ++
@@ -51,7 +51,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
@@ -95,7 +95,7 @@ pub fn main2(
     }
 }
 
-fn outputGen3Data(game: gen3.Game, stream: var) !void {
+fn outputGen3Data(game: gen3.Game, stream: anytype) !void {
     try stream.print(".version={}\n", .{@tagName(game.version)});
     try stream.print(".game_title={}\n", .{game.header.game_title});
     try stream.print(".gamecode={}\n", .{game.header.gamecode});
@@ -204,8 +204,8 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
         try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
         try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
         try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 0, @tagName(pokemon.egg_group1) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 1, @tagName(pokemon.egg_group2) });
+        for (pokemon.egg_groups) |group, j|
+            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
 
         for (pokemon.abilities) |ability, j| {
             try stream.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
@@ -389,7 +389,7 @@ fn outputGen3Data(game: gen3.Game, stream: var) !void {
     }
 }
 
-fn outputGen3Area(stream: var, i: usize, name: []const u8, rate: u8, wilds: []const gen3.WildPokemon) !void {
+fn outputGen3Area(stream: anytype, i: usize, name: []const u8, rate: u8, wilds: []const gen3.WildPokemon) !void {
     try stream.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, name, rate });
     for (wilds) |pokemon, j| {
         try stream.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, name, j, pokemon.min_level });
@@ -398,7 +398,7 @@ fn outputGen3Area(stream: var, i: usize, name: []const u8, rate: u8, wilds: []co
     }
 }
 
-fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
+fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: anytype) !void {
     try stream.print(".version={}\n", .{@tagName(game.info.version)});
 
     const header = nds_rom.header();
@@ -477,8 +477,8 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
         try stream.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
         try stream.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
         try stream.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 0), @tagName(pokemon.egg_group1) });
-        try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, @as(usize, 1), @tagName(pokemon.egg_group2) });
+        for (pokemon.egg_groups) |group, j|
+            try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
 
         for (pokemon.abilities) |ability, j| {
             try stream.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
@@ -696,7 +696,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, stream: var) !void {
 }
 
 fn outputGen4StringTable(
-    stream: var,
+    stream: anytype,
     array_name: []const u8,
     field_name: []const u8,
     est: gen4.StringTable,
@@ -709,7 +709,7 @@ fn outputGen4StringTable(
     }
 }
 
-fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
+fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: anytype) !void {
     try stream.print(".version={}\n", .{@tagName(game.info.version)});
 
     const header = nds_rom.header();
@@ -835,8 +835,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
             //       common.EggGroup is a u4 enum and has a tag for all possible
             //       values, so it really should not.
             if (i < number_of_pokemons) {
-                try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 0, @tagName(pokemon.egg_group1) });
-                try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, 1, @tagName(pokemon.egg_group2) });
+                for (pokemon.egg_groups) |group, j|
+                    try stream.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
             }
 
             const abilities = pokemon.abilities;
@@ -1037,7 +1037,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, stream: var) !void {
 }
 
 fn outputString(
-    stream: var,
+    stream: anytype,
     array_name: []const u8,
     i: usize,
     field_name: []const u8,
@@ -1049,5 +1049,5 @@ fn outputString(
 }
 
 test "" {
-    std.meta.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }

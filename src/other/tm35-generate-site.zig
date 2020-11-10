@@ -32,7 +32,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-generate-site ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nGenerates a html web site for games. This is very useful " ++
@@ -51,7 +51,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const out = args.option("--output") orelse "site.html";
 
@@ -105,7 +105,7 @@ fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !
     }
 }
 
-fn generate(stream: var, root: Object) !void {
+fn generate(stream: anytype, root: Object) !void {
     const unknown = "???";
     const escapes = comptime blk: {
         var res: [255][]const u8 = undefined;
@@ -519,7 +519,7 @@ const HumanizeFormatter = struct {
         self: HumanizeFormatter,
         comptime f: []const u8,
         options: std.fmt.FormatOptions,
-        out_stream: var,
+        out_stream: anytype,
     ) !void {
         try writeHumanized(out_stream, self.str);
     }
@@ -529,7 +529,7 @@ fn humanize(str: []const u8) HumanizeFormatter {
     return HumanizeFormatter{ .str = str };
 }
 
-fn writeHumanized(stream: var, str: []const u8) !void {
+fn writeHumanized(stream: anytype, str: []const u8) !void {
     if (fmt.parseInt(isize, str, 10)) |_| {
         try stream.writeAll(str);
     } else |_| {

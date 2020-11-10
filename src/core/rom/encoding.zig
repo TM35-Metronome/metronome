@@ -15,7 +15,7 @@ pub const Char = [2][]const u8;
 /// `curr` specifies what the encoding the `in_stream` is in and is an index
 /// into entries in `map`. `out_stream` will always be the opposite encoding
 /// of `in_stream`.
-pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
+pub fn encodeEx(map: CharMap, curr: u1, in_stream: anytype, out_stream: anytype) !void {
     const in: usize = @boolToInt(curr == 1);
     const out: usize = @boolToInt(curr != 1);
     var buf: [16]u8 = undefined;
@@ -45,7 +45,7 @@ pub fn encodeEx(map: CharMap, curr: u1, in_stream: var, out_stream: var) !void {
     }
 }
 
-pub fn encode(map: CharMap, curr: u1, in: []const u8, out_stream: var) !void {
+pub fn encode(map: CharMap, curr: u1, in: []const u8, out_stream: anytype) !void {
     var fis = io.fixedBufferStream(in);
     try encodeEx(map, curr, fis.inStream(), out_stream);
 }

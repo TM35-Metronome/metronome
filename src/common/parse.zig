@@ -17,9 +17,9 @@ pub usingnamespace @import("mecha");
 //! IDENTIFIER <- [A-Za-z0-9_]+
 //!
 
-fn structure(str: []const u8, ptr: var, comptime converters: var) !void {
-    const fields = @typeInfo(@TypeOf(ptr).Child).Struct.fields;
-    inline for (fields) |field_info| blk: {
+fn structure(str: []const u8, ptr: anytype, comptime converters: anytype) !void {
+    const fields = @typeInfo(@typeInfo(@TypeOf(ptr)).Pointer.child).Struct.fields;
+    inline for (fields) |field_info| {
         const Field = field_info.field_type;
         const f = &@field(ptr, field_info.name);
         if (field(field_info.name)(str)) |ff|
@@ -29,19 +29,19 @@ fn structure(str: []const u8, ptr: var, comptime converters: var) !void {
     return error.FoundNoField;
 }
 
-fn slice(str: []const u8, s: var, comptime converters: var) !void {
+fn slice(str: []const u8, s: anytype, comptime converters: anytype) !void {
     const ii = index(str) orelse return error.FoundNoIndex;
     if (ii.value >= s.len)
         return error.IndexOutOfBound;
     return anyT(ii.rest, &s[ii.value], converters);
 }
 
-pub fn anyT(str: []const u8, ptr: var, comptime converters: var) !void {
-    const T = @TypeOf(ptr).Child;
+pub fn anyT(str: []const u8, ptr: anytype, comptime converters: anytype) !void {
+    const T = @typeInfo(@TypeOf(ptr)).Pointer.child;
     comptime var i = 0;
     inline while (i < converters.len) : (i += 1) {
         const conv = converters[i];
-        const Return = @TypeOf(conv).ReturnType.Child;
+        const Return = @typeInfo(@typeInfo(@TypeOf(conv)).Fn.return_type.?).Optional.child;
         if (T == Return) {
             const v = value(T, conv)(str) orelse return error.FoundNoValue;
             ptr.* = v.value;
@@ -120,7 +120,7 @@ pub const ident: Parser([]const u8) = manyRange(1, math.maxInt(usize), oneOf(.{
 pub const MutParser = struct {
     str: []const u8,
 
-    pub fn parse(p: *MutParser, comptime parser: var) !blk: {
+    pub fn parse(p: *MutParser, comptime parser: anytype) !blk: {
         @setEvalBranchQuota(100000);
         break :blk ParserResult(@TypeOf(parser));
     } {
@@ -158,7 +158,7 @@ pub const MutParser = struct {
 /// * for Swhash(4) an "\xff\xff\xff\xff" case will match any string larger than 4 bytes.
 pub fn Swhash(comptime max_bytes: comptime_int) type {
     const L = std.math.IntFittingRange(0, max_bytes + 1);
-    const Hash = std.meta.IntType(false, (max_bytes + @sizeOf(L)) * 8);
+    const Hash = std.meta.IntType(.signed, (max_bytes + @sizeOf(L)) * 8);
 
     return struct {
         pub fn match(str: []const u8) Hash {
@@ -177,7 +177,7 @@ pub fn Swhash(comptime max_bytes: comptime_int) type {
         fn result(length: L, h: []const u8) Hash {
             var res: Hash = length;
             for (h) |r|
-                res = (res * 256) + r;
+                res = (res * 256) + @intCast(Hash, r);
             return res;
         }
     };

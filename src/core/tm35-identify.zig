@@ -36,7 +36,7 @@ const params = [_]Param{
     Param{ .takes_value = true },
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-identify");
     try clap.usage(stream, &params);
     try stream.writeAll("\nIdentify which Pokémon game a file is.\n" ++
@@ -50,7 +50,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {

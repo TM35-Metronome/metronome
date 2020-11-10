@@ -35,7 +35,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-random-stones ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nChanges all Pokémons to evolve using new evolution stones. " ++
@@ -66,7 +66,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const replace_cheap = args.flag("--replace-cheap-items");
     const seed = if (args.option("--seed")) |seed|

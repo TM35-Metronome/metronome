@@ -39,7 +39,7 @@ const params = [_]Param{
     Param{ .takes_value = true },
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
     try clap.usage(stream, &params);
     try stream.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
@@ -54,7 +54,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     for (args.positionals()) |file_name, i| {
         const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErr(stdio.err, file_name, err);
@@ -72,7 +72,7 @@ pub fn main2(
     return 0;
 }
 
-fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
+fn outputInfo(stream: anytype, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].game_title={}\n", .{ i, info.game_title });
     try stream.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
     try stream.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });

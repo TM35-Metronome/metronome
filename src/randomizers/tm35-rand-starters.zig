@@ -32,7 +32,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-rand-starters ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nRandomizes starter Pokémons.\n" ++
@@ -49,7 +49,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {

@@ -35,7 +35,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-nds-extract ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nReads a Nintendo DS rom and extract its file system " ++
@@ -53,7 +53,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const cwd = fs.cwd();
     const pos = args.positionals();

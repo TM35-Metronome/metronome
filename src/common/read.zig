@@ -15,7 +15,7 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
 ///       still better to use until zigs std gets a better `readUntilDelimitor`
 ///       implementation. Replacement code bellow:
 ///```
-///buf_in_stream.inStream().readUntilDelimiterArrayList(buffer, '\n', std.math.maxInt(usize)) catch |err| switch (err) {
+///buf_in_stream.reader().readUntilDelimiterArrayList(buffer, '\n', std.math.maxInt(usize)) catch |err| switch (err) {
 ///    error.StreamTooLong => unreachable,
 ///    error.EndOfStream => {
 ///        if (buffer.items.len != 0)
@@ -26,9 +26,9 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
 ///};
 ///return buffer.items;
 ///```
-pub fn line(stream: var, fifo: var) !?[]u8 {
+pub fn line(stream: anytype, fifo: anytype) !?[]const u8 {
     while (true) {
-        const buf = fifo.readableSliceMut(0);
+        const buf = fifo.readableSlice(0);
         if (mem.indexOfScalar(u8, buf, '\n')) |index| {
             defer fifo.head += index + 1;
             defer fifo.count -= index + 1;
@@ -49,7 +49,7 @@ pub fn line(stream: var, fifo: var) !?[]u8 {
         if (num == 0) {
             if (fifo.count != 0) {
                 defer fifo.count = 0;
-                return fifo.readableSliceMut(0);
+                return fifo.readableSlice(0);
             }
 
             return null;
@@ -74,8 +74,8 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     var fifo = std.fifo.LinearFifo(u8, .{ .Static = 3 }).init();
 
     for (lines) |expected_line| {
-        const actual_line = (try line(fbs.inStream(), &fifo)).?;
+        const actual_line = (try line(fbs.reader(), &fifo)).?;
         testing.expectEqualSlices(u8, expected_line, actual_line);
     }
-    testing.expectEqual(@as(?[]u8, null), try line(fbs.inStream(), &fifo));
+    testing.expectEqual(@as(?[]const u8, null), try line(fbs.reader(), &fifo));
 }

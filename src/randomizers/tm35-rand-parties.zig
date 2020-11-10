@@ -37,7 +37,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-rand-parties ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nRandomizes trainer parties.\n" ++
@@ -87,7 +87,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
@@ -180,10 +180,10 @@ pub fn main2(
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
         const party_type = if (trainer.party_type == party_type_none) "none" //
-            else if (trainer.party_type == party_type_item) "item" //
-            else if (trainer.party_type == party_type_moves) "moves" //
-            else if (trainer.party_type == party_type_both) "both" //
-            else "none";
+        else if (trainer.party_type == party_type_item) "item" //
+        else if (trainer.party_type == party_type_moves) "moves" //
+        else if (trainer.party_type == party_type_both) "both" //
+        else "none";
 
         stdio.out.print(".trainers[{}].party_size={}\n", .{ trainer_i, trainer.party_size }) catch |err| return exit.stdoutErr(stdio.err, err);
         stdio.out.print(".trainers[{}].party_type={}\n", .{ trainer_i, party_type }) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -734,9 +734,9 @@ test "tm35-rand-parties" {
         }
         fn trainer(comptime id: []const u8, comptime species: []const u8, comptime item_: ?[]const u8, comptime move_: ?[]const u8) []const u8 {
             const _type: []const u8 = if (move_ != null and item_ != null) "both" //
-                else if (move_) |_| "moves" //
-                else if (item_) |_| "item" //
-                else "none";
+            else if (move_) |_| "moves" //
+            else if (item_) |_| "item" //
+            else "none";
             return ".trainers[" ++ id ++ "].party_size=2\n" ++
                 ".trainers[" ++ id ++ "].party_type=" ++ _type ++ "\n" ++
                 ".trainers[" ++ id ++ "].party[0].species=" ++ species ++ "\n" ++

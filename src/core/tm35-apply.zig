@@ -48,11 +48,11 @@ const params = blk: {
         clap.parseParam("-p, --patch <none|live|full>  Output patch data to stdout when not 'none'. 'live' = patch after each line. 'full' = patch when done.") catch unreachable,
         clap.parseParam("-r, --replace                 Replace output file if it already exists.                                                             ") catch unreachable,
         clap.parseParam("-v, --version                 Output version information and exit.                                                                  ") catch unreachable,
-        Param{ .takes_value = true },
+        clap.parseParam("<ROM>                         The rom to apply the changes to.                                                                  ") catch unreachable,
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-apply ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nApplies changes to Pokémon roms.\n" ++
@@ -75,7 +75,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
@@ -150,22 +150,23 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         const new_bytes = switch (game) {
+            else => |*gen4_game| unreachable,
             .gen3 => |*gen3_game| blk: {
                 applyGen3(gen3_game, line_num, trimmed) catch |err| break :blk err;
                 break :blk gen3_game.data;
             },
-            .gen4 => |*gen4_game| blk: {
-                applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
-                if (patch == .live)
-                    gen4_game.apply() catch return exit.allocErr(stdio.err);
-                break :blk nds_rom.data.items;
-            },
-            .gen5 => |*gen5_game| blk: {
-                applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
-                if (patch == .live)
-                    gen5_game.apply() catch return exit.allocErr(stdio.err);
-                break :blk nds_rom.data.items;
-            },
+            // .gen4 => |*gen4_game| blk: {
+            //     applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
+            //     if (patch == .live)
+            //         gen4_game.apply() catch return exit.allocErr(stdio.err);
+            //     break :blk nds_rom.data.items;
+            // },
+            // .gen5 => |*gen5_game| blk: {
+            //     applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
+            //     if (patch == .live)
+            //         gen5_game.apply() catch return exit.allocErr(stdio.err);
+            //     break :blk nds_rom.data.items;
+            // },
         } catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};
@@ -181,7 +182,7 @@ pub fn main2(
             };
             while (it.next()) |p| {
                 stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
-                    catch |err| return exit.stdoutErr(stdio.err, err);
+                catch |err| return exit.stdoutErr(stdio.err, err);
 
                 old_bytes.resize(math.max(
                     old_bytes.items.len,
@@ -204,7 +205,7 @@ pub fn main2(
         };
         while (it.next()) |p| {
             stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
-                catch |err| return exit.stdoutErr(stdio.err, err);
+            catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
 
@@ -264,8 +265,9 @@ pub const parselu64v = parse.value(lu64, toInt(u64, .Little));
 
 pub const converters = .{
     parse.toBool,
-    parse.toEnum(common.MoveCategory),
+    parse.toEnum(common.EggGroup),
     parse.toEnum(common.EvoMethod),
+    parse.toEnum(common.MoveCategory),
     parse.toEnum(gen4.Pocket),
     parse.toEnum(gen5.Evolution.Method),
     parse.toEnum(gen5.Pocket),
@@ -457,6 +459,7 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
                 c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
                 c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
                 c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
+                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
                 c("evos") => try parse.anyT(parser.str, &game.evolutions[index], converters),
                 c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
                 c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
@@ -467,15 +470,6 @@ fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
                 c("safari_zone_rate") => pokemon.safari_zone_rate = try parser.parse(parse.u8v),
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("egg_groups") => {
-                    const eindex = try parser.parse(parse.index);
-                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
-                    switch (eindex) {
-                        0 => pokemon.egg_group1 = evalue,
-                        1 => pokemon.egg_group2 = evalue,
-                        else => return error.Error,
-                    }
-                },
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
@@ -863,6 +857,7 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
                 c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
                 c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
+                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
                 c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
                 c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
                 c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
@@ -873,15 +868,6 @@ fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !v
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
                 c("name") => try applyGen4String(16, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
-                c("egg_groups") => {
-                    const eindex = try parser.parse(parse.index);
-                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
-                    switch (eindex) {
-                        0 => pokemon.egg_group1 = evalue,
-                        1 => pokemon.egg_group2 = evalue,
-                        else => return error.Error,
-                    }
-                },
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
@@ -1150,6 +1136,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
                 c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
                 c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
+                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
                 c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
                 c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
                 c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
@@ -1160,15 +1147,6 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("height") => pokemon.height = try parser.parse(parselu16v),
                 c("weight") => pokemon.weight = try parser.parse(parselu16v),
                 c("name") => try applyGen5String(16, game.allocator, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
-                c("egg_groups") => {
-                    const eindex = try parser.parse(parse.index);
-                    const evalue = try parser.parse(comptime parse.enumv(common.EggGroup));
-                    switch (eindex) {
-                        0 => pokemon.egg_group1 = evalue,
-                        1 => pokemon.egg_group2 = evalue,
-                        else => return error.IndexOutOfBound,
-                    }
-                },
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);

@@ -655,7 +655,7 @@ const Popups = struct {
     errors: std.ArrayList([]const u8),
     infos: std.ArrayList([]const u8),
 
-    fn err(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn err(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         popups.append(&popups.errors, fmt, args);
     }
 
@@ -663,7 +663,7 @@ const Popups = struct {
         return popups.errors.items[popups.errors.items.len - 1];
     }
 
-    fn info(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn info(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         popups.append(&popups.infos, fmt, args);
     }
 
@@ -671,7 +671,7 @@ const Popups = struct {
         return popups.infos.items[popups.infos.items.len - 1];
     }
 
-    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: var) void {
+    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: anytype) void {
         const msg = std.fmt.allocPrint(list.allocator, fmt, args) catch {
             return popups.fatal("Allocation failed", .{});
         };
@@ -681,7 +681,7 @@ const Popups = struct {
         };
     }
 
-    fn fatal(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn fatal(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         _ = std.fmt.bufPrint(&popups.fatal_error, fmt ++ "\x00", args) catch return;
     }
 
@@ -770,7 +770,7 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
     }
 }
 
-fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const escapes = switch (std.Target.current.os.tag) {
         .linux => blk: {
             var res: [255][]const u8 = undefined;
@@ -958,7 +958,7 @@ const Settings = struct {
         break :blk res;
     };
 
-    fn save(settings: Settings, exes: Exes, out_stream: var) !void {
+    fn save(settings: Settings, exes: Exes, out_stream: anytype) !void {
         for (settings.order) |o| {
             if (!settings.checks[o])
                 continue;
@@ -985,7 +985,7 @@ const Settings = struct {
         }
     }
 
-    fn load(settings: Settings, exes: Exes, in_stream: var) !void {
+    fn load(settings: Settings, exes: Exes, in_stream: anytype) !void {
         settings.reset(exes);
 
         const EscapedSplitterArgIterator = struct {
