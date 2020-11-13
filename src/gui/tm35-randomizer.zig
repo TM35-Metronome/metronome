@@ -28,7 +28,7 @@ const bug_message = "Hi user. You have just hit a bug/limitation in the program.
     "https://github.com/TM35-Metronome/metronome/issues/new";
 
 const fps = 60;
-const frame_time = time.second / fps;
+const frame_time = time.ns_per_s / fps;
 const WINDOW_WIDTH = 800;
 const WINDOW_HEIGHT = 600;
 
@@ -313,7 +313,7 @@ pub fn drawOptions(
     var biggest_width: f32 = 0;
     for (command.params) |param, i| {
         const text = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-        if (!param.takes_value)
+        if (param.takes_value == .None)
             continue;
         if (mem.eql(u8, text, "help"))
             continue;
@@ -338,7 +338,7 @@ pub fn drawOptions(
         if (mem.eql(u8, param_name, "version"))
             continue;
 
-        if (!param.takes_value) {
+        if (param.takes_value == .None) {
             c.nk_layout_row_dynamic(ctx, 0, 1);
 
             c.nkWidgetBounds(ctx, &bounds);
@@ -388,7 +388,7 @@ pub fn drawOptions(
                     continue;
                 },
                 .NFD_CANCEL => continue,
-                .NFD_OKAY => blk: {
+                .NFD_OKAY => {
                     const out_path = m_out_path.?;
                     defer std.c.free(out_path);
 
@@ -505,7 +505,7 @@ pub fn drawActions(
     const selected_path_slice = selected_path.toSliceConst();
 
     switch (file_browser_kind) {
-        .load_rom => done: {
+        .load_rom => {
             if (rom) |r|
                 exes.allocator.free(r.info);
 
@@ -819,7 +819,7 @@ fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8,
             try stream.writeAll(param_pre);
             try escape.writeEscaped(stream, param_name, escapes);
             try stream.writeAll(quotes);
-            if (param.takes_value) {
+            if (param.takes_value != .None) {
                 try stream.writeAll(" " ++ quotes);
                 try escape.writeEscaped(stream, arg.toSliceConst(), escapes);
                 try stream.writeAll(quotes);
@@ -976,7 +976,7 @@ const Settings = struct {
                 const param_name = if (param.names.long) |long| long else @as(*const [1]u8, &param.names.short.?)[0..];
                 try out_stream.writeAll(param_pre);
                 try escape.writeEscaped(out_stream, param_name, escapes);
-                if (param.takes_value) {
+                if (param.takes_value != .None) {
                     try out_stream.writeAll(",");
                     try escape.writeEscaped(out_stream, arg.toSliceConst(), escapes);
                 }
@@ -1036,7 +1036,7 @@ const Settings = struct {
                 .params = command.params,
             };
 
-            while (try streaming_clap.next()) |arg| {
+            while (try streaming_clap.next(null)) |arg| {
                 const param_i = util.indexOfPtr(clap.Param(clap.Help), command.params, arg.param);
                 const command_arg = &command_args[param_i];
 
@@ -1206,13 +1206,13 @@ const Exes = struct {
             try params.append(param);
         }
 
-        std.sort.sort(clap.Param(clap.Help), params.items, struct {
-            fn lessThan(a: clap.Param(clap.Help), b: clap.Param(clap.Help)) bool {
-                if (!a.takes_value and b.takes_value)
+        std.sort.sort(clap.Param(clap.Help), params.items, {}, struct {
+            fn lessThan(ctx: void, a: clap.Param(clap.Help), b: clap.Param(clap.Help)) bool {
+                if (a.takes_value == .None and b.takes_value != .None)
                     return true;
-                if (a.takes_value and !b.takes_value)
+                if (a.takes_value != .None and b.takes_value == .None)
                     return false;
-                if (a.takes_value and b.takes_value) {
+                if (a.takes_value != .None and b.takes_value != .None) {
                     const a_is_opt = mem.indexOfScalar(u8, a.id.value, '|') != null;
                     const b_is_opt = mem.indexOfScalar(u8, b.id.value, '|') != null;
                     if (a_is_opt and !b_is_opt)

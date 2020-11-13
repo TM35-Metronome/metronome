@@ -33,7 +33,7 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    Param{ .takes_value = true },
+    clap.parseParam("<ROM>          The rom to identify.                ") catch unreachable,
 };
 
 fn usage(stream: anytype) !void {

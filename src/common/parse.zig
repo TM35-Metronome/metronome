@@ -177,7 +177,7 @@ pub fn Swhash(comptime max_bytes: comptime_int) type {
         fn result(length: L, h: []const u8) Hash {
             var res: Hash = length;
             for (h) |r|
-                res = (res * 256) + @intCast(Hash, r);
+                res = (res << 8) + @intCast(Hash, r);
             return res;
         }
     };

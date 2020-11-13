@@ -31,7 +31,7 @@ const params = blk: {
         clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
         clap.parseParam("-r, --replace                 Replace output file if it already exists.    ") catch unreachable,
         clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
-        Param{ .takes_value = true },
+        clap.parseParam("<ROM>") catch unreachable,
     };
 };
 
