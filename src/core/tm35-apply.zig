@@ -150,23 +150,22 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
         const new_bytes = switch (game) {
-            else => |*gen4_game| unreachable,
             .gen3 => |*gen3_game| blk: {
                 applyGen3(gen3_game, line_num, trimmed) catch |err| break :blk err;
                 break :blk gen3_game.data;
             },
-            // .gen4 => |*gen4_game| blk: {
-            //     applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
-            //     if (patch == .live)
-            //         gen4_game.apply() catch return exit.allocErr(stdio.err);
-            //     break :blk nds_rom.data.items;
-            // },
-            // .gen5 => |*gen5_game| blk: {
-            //     applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
-            //     if (patch == .live)
-            //         gen5_game.apply() catch return exit.allocErr(stdio.err);
-            //     break :blk nds_rom.data.items;
-            // },
+            .gen4 => |*gen4_game| blk: {
+                applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
+                if (patch == .live)
+                    gen4_game.apply() catch return exit.allocErr(stdio.err);
+                break :blk nds_rom.data.items;
+            },
+            .gen5 => |*gen5_game| blk: {
+                applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
+                if (patch == .live)
+                    gen5_game.apply() catch return exit.allocErr(stdio.err);
+                break :blk nds_rom.data.items;
+            },
         } catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};

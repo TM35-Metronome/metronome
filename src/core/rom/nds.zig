@@ -20,12 +20,8 @@ pub const fs = @import("nds/fs.zig");
 pub const Banner = @import("nds/banner.zig").Banner;
 pub const Header = @import("nds/header.zig").Header;
 
-test "nds" {
-    _ = @import("nds/banner.zig");
-    _ = @import("nds/blz.zig");
-    _ = @import("nds/formats.zig");
-    _ = @import("nds/fs.zig");
-    _ = @import("nds/header.zig");
+comptime {
+    std.testing.refAllDecls(@This());
 }
 
 pub const Range = extern struct {
@@ -240,17 +236,20 @@ pub const Rom = struct {
                 ));
             }
 
+            const section = sections[section_index];
+            section.set(rom_data, Slice.init(old_start, new_size));
+
             mem.copyBackwards(
                 u8,
                 rom.data.items[old_sec_end + extra_bytes ..],
-                rom.data.items[old_sec_end..old_len],
+                rom.data.items[old_sec_end..old_rom_len],
             );
             break :blk old_start;
         };
 
         // Update header after resize
         const h = @intToPtr(*Header, @ptrToInt(rom.header()));
-        h.total_used_rom_size = lu32.init(@intCast(u32, rom_data.len));
+        h.total_used_rom_size = lu32.init(@intCast(u32, rom.data.items.len));
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = h.total_used_rom_size.value();
@@ -261,7 +260,7 @@ pub const Rom = struct {
         };
 
         h.header_checksum = lu16.init(h.calcChecksum());
-        return rom_data[old_start..][0..new_size];
+        return rom.data.items[old_start..][0..new_size];
     }
 
     /// A generic structure for pointing to memory in the nds rom. The memory
@@ -320,13 +319,8 @@ pub const Rom = struct {
             // is nothing unsafe about this discard.
             const const_discarded = @intToPtr([*]u8, @ptrToInt(data.ptr))[0..data.len];
             const start = section.getPtr(const_discarded, .start).value();
-            const len = switch (section.kind) {
-                .range => blk: {
-                    const end = section.getPtr(const_discarded, .other).value();
-                    break :blk end - start;
-                },
-                .slice => section.getPtr(const_discarded, .other).value(),
-            };
+            const other = section.getPtr(const_discarded, .other).value();
+            const len = other - start * @boolToInt(section.kind == .range);
             return Slice.init(start, len);
         }
 
@@ -345,6 +339,12 @@ pub const Rom = struct {
                 .slice => section.getPtr(data, .other).* = slice.len,
                 .range => section.getPtr(data, .other).* = lu32.init(slice.end()),
             }
+        }
+
+        fn before(data: []const u8, a: Section, b: Section) bool {
+            const a_slice = a.toSlice(data);
+            const b_slice = b.toSlice(data);
+            return a_slice.start.value() < b_slice.start.value();
         }
     };
 
@@ -377,7 +377,7 @@ pub const Rom = struct {
             sections.append(Section.fromRange(rom_data, f)) catch unreachable;
 
         // Sort sections by where they appear in the rom.
-        // std.sort.sort(Section, sections.items, Section.before);
+        std.sort.sort(Section, sections.items, rom_data, Section.before);
         return sections.toOwnedSlice();
     }
 
