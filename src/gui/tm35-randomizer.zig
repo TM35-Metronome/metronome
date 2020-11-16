@@ -1203,6 +1203,9 @@ const Exes = struct {
         var it = mem.split(help, "\n");
         while (it.next()) |line| {
             const param = clap.parseParam(line) catch continue;
+            if (param.names.long == null and param.names.short == null)
+                continue;
+
             try params.append(param);
         }
 
