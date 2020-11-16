@@ -17,7 +17,7 @@ jobs:
         with:
           version: 0.7.0
       - if: matrix.os == 'ubuntu-latest'
-        run: apt-get install xorg libxft-dev
+        run: sudo apt-get install xorg libxft-dev
       - run: zig build
       - run: zig build test
   lint:
