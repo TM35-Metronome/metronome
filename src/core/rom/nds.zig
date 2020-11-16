@@ -4,7 +4,6 @@ const blz = @import("nds/blz.zig");
 const int = @import("int.zig");
 
 const debug = std.debug;
-const generic = fun.generic;
 const heap = std.heap;
 const io = std.io;
 const math = std.math;
