@@ -158,7 +158,7 @@ pub const MutParser = struct {
 /// * for Swhash(4) an "\xff\xff\xff\xff" case will match any string larger than 4 bytes.
 pub fn Swhash(comptime max_bytes: comptime_int) type {
     const L = std.math.IntFittingRange(0, max_bytes + 1);
-    const Hash = std.meta.IntType(.signed, (max_bytes + @sizeOf(L)) * 8);
+    const Hash = std.meta.IntType(.unsigned, (max_bytes + @sizeOf(L)) * 8);
 
     return struct {
         pub fn match(str: []const u8) Hash {
@@ -175,10 +175,10 @@ pub fn Swhash(comptime max_bytes: comptime_int) type {
         }
 
         fn result(length: L, h: []const u8) Hash {
-            var res: Hash = length;
-            for (h) |r|
-                res = (res << 8) + @intCast(Hash, r);
-            return res;
+            var res = [_]u8{0} ** @sizeOf(Hash);
+            mem.copy(u8, &res, h);
+            mem.copy(u8, res[h.len..], mem.asBytes(&length));
+            return @ptrCast(*align(1) Hash, &res).*;
         }
     };
 }
