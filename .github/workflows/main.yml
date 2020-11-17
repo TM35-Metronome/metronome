@@ -16,9 +16,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1.2.5
         with:
           version: 0.7.0
-      - if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install libx11-dev libxft-dev
-      - run: zig build
+      - run: zig build build-cli
       - run: zig build test
   lint:
     runs-on: ubuntu-latest
