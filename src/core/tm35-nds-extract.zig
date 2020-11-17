@@ -92,8 +92,9 @@ pub fn main2(
 
     out_dir.writeFile("arm9", nds_rom.arm9()) catch |err| return exit.writeErr(stdio.err, "arm9", err);
     out_dir.writeFile("arm7", nds_rom.arm7()) catch |err| return exit.writeErr(stdio.err, "arm7", err);
-    out_dir.writeFile("banner", mem.asBytes(nds_rom.banner())) catch |err| return exit.writeErr(stdio.err, "banner", err);
     out_dir.writeFile("nitro_footer", nds_rom.nitroFooter()) catch |err| return exit.writeErr(stdio.err, "nitro_footer", err);
+    if (nds_rom.banner()) |banner|
+        out_dir.writeFile("banner", mem.asBytes(banner)) catch |err| return exit.writeErr(stdio.err, "banner", err);
 
     const file_system = nds_rom.fileSystem();
     writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return exit.writeErr(stdio.err, "arm9 overlays", err);

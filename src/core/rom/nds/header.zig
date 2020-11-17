@@ -279,7 +279,7 @@ pub const Header = extern struct {
             //    return error.InvalidReserved8;
             //if (!algorithm.all(u8, header.reserved9, isZero))
             //    return error.InvalidReserved9;
-            if (!mem.eql(u8, &header.title_id_rest, &[_]u8{ 0x00, 0x03, 0x00 }))
+            if (!mem.eql(u8, &header.title_id_rest, "\x00\x03\x00"))
                 return error.InvalidTitleIdRest;
             //if (!algorithm.all(u8, header.reserved12, isZero))
             //    return error.InvalidReserved12;

@@ -9,6 +9,7 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
+const testing = std.testing;
 
 const lu16 = int.lu16;
 const lu32 = int.lu32;
@@ -82,13 +83,56 @@ pub const Overlay = extern struct {
 pub const Rom = struct {
     data: std.ArrayList(u8),
 
-    pub fn header(rom: Rom) *const Header {
+    pub fn new(allocator: *mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
+        arm9_size: u32 = 0,
+        arm7_size: u32 = 0,
+        files: u32 = 0,
+    }) !Rom {
+        var res = Rom{ .data = std.ArrayList(u8).init(allocator) };
+        var writer = res.data.writer();
+        errdefer res.deinit();
+
+        var h = mem.zeroes(Header);
+        mem.copy(u8, &h.game_title, game_title);
+        mem.copy(u8, &h.gamecode, gamecode);
+        h.secure_area_delay = lu16.init(0x051E);
+        h.rom_header_size = lu32.init(0x4000);
+        h.digest_ntr_region_offset = lu32.init(0x4000);
+        h.title_id_rest = "\x00\x03\x00".*;
+
+        try writer.writeAll(mem.asBytes(&h));
+        try writer.writeAll("\x00" ** (0x4000 - @sizeOf(Header)));
+
+        h.arm9.entry_address = lu32.init(0x2000000);
+        h.arm9.ram_address = lu32.init(0x2000000);
+        h.arm9.offset = lu32.init(@intCast(u32, res.data.len));
+        h.arm9.size = lu32.init(opts.arm9_size);
+        try writer.writeByteNTimes(0, h.arm9.size.value());
+        try writer.writeByteNTimes(0, math.sub(usize, 0x8000, res.data.len) catch 0);
+
+        h.arm7.ram_address = lu32.init(0x2000000);
+        h.arm7.entry_address = lu32.init(0x2000000);
+        h.arm7.offset = lu32.init(@intCast(u32, res.data.len));
+        h.arm7.size = lu32.init(opts.arm7_size);
+        try writer.writeByteNTimes(0, h.arm7.size.value());
+
+        h.fat.start = lu32.init(@intCast(u32, res.data.len));
+        h.fat.len = lu32.init(opts.files * @sizeOf(Range));
+        try writer.writeByteNTimes(0, h.fat.len.value());
+
+        return res;
+    }
+
+    pub fn header(rom: Rom) *Header {
         return mem.bytesAsValue(Header, rom.data.items[0..@sizeOf(Header)]);
     }
 
-    pub fn banner(rom: Rom) *Banner {
+    pub fn banner(rom: Rom) ?*Banner {
         const h = rom.header();
         const offset = h.banner_offset.value();
+        if (offset == 0)
+            return null;
+
         const bytes = rom.data.items[offset..][0..@sizeOf(Banner)];
         return mem.bytesAsValue(Banner, bytes);
     }
@@ -191,7 +235,7 @@ pub const Rom = struct {
             const section = sections[section_index];
             section.set(rom_data, Slice.init(old_start, new_size));
 
-            const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+            const h = rom.header();
             h.header_checksum = lu16.init(h.calcChecksum());
 
             return rom_data[old_start..][0..new_size];
@@ -247,7 +291,7 @@ pub const Rom = struct {
         };
 
         // Update header after resize
-        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+        const h = rom.header();
         h.total_used_rom_size = lu32.init(@intCast(u32, rom.data.items.len));
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
@@ -348,10 +392,7 @@ pub const Rom = struct {
     };
 
     fn buildSectionTable(rom: Rom, allocator: *mem.Allocator) ![]Section {
-        // Nds internals like this functions are allowed to modify data
-        // that is returned as `const` to the user, so we discard `const`
-        // here. This is always safe.
-        const h = @intToPtr(*Header, @ptrToInt(rom.header()));
+        const h = rom.header();
 
         const nitro_footer = rom.nitroFooter();
         const file_system = rom.fileSystem();
