@@ -49,7 +49,7 @@ pub fn Managed(comptime Int: type) type {
             return set.inner.remove(set.allocator, i);
         }
 
-        pub fn span(set: var) mem.Span(@TypeOf(&set.inner.small)) {
+        pub fn span(set: anytype) mem.Span(@TypeOf(&set.inner.small)) {
             return set.inner.span();
         }
     };
@@ -169,7 +169,7 @@ pub fn Unmanaged(comptime Int: type) type {
             return true;
         }
 
-        pub fn span(set: var) mem.Span(@TypeOf(&set.data.small)) {
+        pub fn span(set: anytype) mem.Span(@TypeOf(&set.data.small)) {
             if (set.entries == 0)
                 return &[_]Range{};
             if (set.entries == 1)
@@ -205,7 +205,7 @@ pub fn Unmanaged(comptime Int: type) type {
         }
 
         fn toOwnedList(set: *@This(), allocator: *mem.Allocator) !std.ArrayList(Range) {
-            return if (set.entries == 1) blk: {
+            return if (set.entries == 1) {
                 var list = std.ArrayList(Range).init(allocator);
                 errdefer list.deinit();
                 try list.ensureCapacity(2);

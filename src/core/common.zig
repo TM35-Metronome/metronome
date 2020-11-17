@@ -154,7 +154,7 @@ pub const GrowthRate = packed enum(u8) {
     slow = 0x05,
 };
 
-pub const EggGroup = packed enum(u4) {
+pub const EggGroup = packed enum(u8) {
     invalid = 0x00, // TODO: Figure out if there is a 0x00 egg group
     monster = 0x01,
     water1 = 0x02,
@@ -171,6 +171,7 @@ pub const EggGroup = packed enum(u4) {
     ditto = 0x0D,
     dragon = 0x0E,
     undiscovered = 0x0F,
+    _,
 };
 
 pub const ColorKind = packed enum(u7) {

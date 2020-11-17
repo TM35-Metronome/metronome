@@ -30,7 +30,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-no-trade-evolutions ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nReplace trade evolutions with non trade versions.\n" ++
@@ -56,7 +56,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{};

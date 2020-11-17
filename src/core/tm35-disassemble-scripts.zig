@@ -33,10 +33,10 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    Param{ .takes_value = true },
+    clap.parseParam("<ROM>") catch unreachable,
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
     try clap.usage(stream, &params);
     try stream.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
@@ -51,7 +51,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else {
@@ -94,7 +94,7 @@ pub fn main2(
     }
 }
 
-fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
+fn outputGen3GameScripts(game: gen3.Game, stream: anytype) !void {
     @setEvalBranchQuota(100000);
     for (game.map_headers) |map_header, map_id| {
         const scripts = try map_header.map_scripts.toSliceEnd(game.data);
@@ -137,7 +137,7 @@ fn outputGen3GameScripts(game: gen3.Game, stream: var) !void {
     }
 }
 
-fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
+fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: anytype) anyerror!void {
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
         var offsets = std.ArrayList(isize).init(allocator);
@@ -195,7 +195,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, stream: var
     }
 }
 
-fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var) anyerror!void {
+fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: anytype) anyerror!void {
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
@@ -252,13 +252,13 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, stream: var
     }
 }
 
-fn printCommand(stream: var, command: var, decoder: var) !void {
+fn printCommand(stream: anytype, command: anytype, decoder: anytype) !void {
     try stream.writeAll("\t");
     try printCommandHelper(stream, command);
     try stream.print("\t@0x{x}\n", .{decoder.i - try script.packedLength(command)});
 }
 
-fn printCommandHelper(stream: var, value: var) !void {
+fn printCommandHelper(stream: anytype, value: anytype) !void {
     const T = @TypeOf(value);
 
     // Infered error sets enforce us to have to return an error somewhere. This

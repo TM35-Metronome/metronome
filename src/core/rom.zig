@@ -4,6 +4,6 @@ pub const int = @import("rom/int.zig");
 pub const nds = @import("rom/nds.zig");
 pub const ptr = @import("rom/ptr.zig");
 
-test "" {
-    @import("std").meta.refAllDecls(@This());
+comptime {
+    @import("std").testing.refAllDecls(@This());
 }

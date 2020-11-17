@@ -32,7 +32,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-generate-site ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nGenerates a html web site for games. This is very useful " ++
@@ -51,7 +51,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const out = args.option("--output") orelse "site.html";
 
@@ -80,11 +80,11 @@ fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !
     var p = parse.MutParser{ .str = str };
     while (true) {
         if (p.parse(parse.anyField)) |field| {
-            const string_entry = try strings.getOrPut(field);
-            if (!string_entry.found_existing)
-                string_entry.kv.key = try mem.dupe(allocator, u8, field);
+            const string = try strings.getOrPut(field);
+            if (!string.found_existing)
+                string.entry.key = try mem.dupe(allocator, u8, field);
 
-            const entry = try curr.fields.getOrPutValue(string_entry.kv.key, Object{
+            const entry = try curr.fields.getOrPutValue(string.entry.key, Object{
                 .fields = Fields.init(allocator),
             });
             curr = &entry.value;
@@ -93,11 +93,11 @@ fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !
                 .fields = Fields.init(allocator),
             });
         } else |_| if (p.parse(parse.strv)) |value| {
-            const string_entry = try strings.getOrPut(value);
-            if (!string_entry.found_existing)
-                string_entry.kv.key = try mem.dupe(allocator, u8, value);
+            const string = try strings.getOrPut(value);
+            if (!string.found_existing)
+                string.entry.key = try mem.dupe(allocator, u8, value);
 
-            curr.value = string_entry.kv.key;
+            curr.value = string.entry.key;
             return;
         } else |_| {
             return;
@@ -105,7 +105,7 @@ fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !
     }
 }
 
-fn generate(stream: var, root: Object) !void {
+fn generate(stream: anytype, root: Object) !void {
     const unknown = "???";
     const escapes = comptime blk: {
         var res: [255][]const u8 = undefined;
@@ -168,7 +168,7 @@ fn generate(stream: var, root: Object) !void {
     try stream.writeAll("</head>\n");
     try stream.writeAll("</body>\n");
 
-    if (root.fields.getValue("starters")) |starters| {
+    if (root.fields.get("starters")) |starters| {
         try stream.writeAll("<h1>Starters</h1>\n");
         try stream.writeAll("<table>\n");
         for (starters.indexs.values()) |starter_v, si| {
@@ -179,8 +179,8 @@ fn generate(stream: var, root: Object) !void {
         try stream.writeAll("</table>\n");
     }
 
-    const m_pokemons = root.fields.getValue("pokemons");
-    const m_pokedex = root.fields.getValue("pokedex");
+    const m_pokemons = root.fields.get("pokemons");
+    const m_pokedex = root.fields.get("pokedex");
     if (m_pokemons != null and m_pokedex != null) {
         const pokemons = m_pokemons.?;
         const pokedex = m_pokedex.?;
@@ -212,7 +212,7 @@ fn generate(stream: var, root: Object) !void {
             try stream.print("<h2 id=\"pokemon_{}\">#{} {}</h2>\n", .{ species, species, pokemon_name });
 
             try stream.writeAll("<table>\n");
-            if (pokemon.fields.getValue("types")) |types| {
+            if (pokemon.fields.get("types")) |types| {
                 try stream.writeAll("<tr><td>Type:</td><td>");
                 outer: for (types.indexs.values()) |t, ti| {
                     const type_str = t.value orelse continue;
@@ -232,7 +232,7 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</td>\n");
             }
 
-            if (pokemon.fields.getValue("abilities")) |abilities| {
+            if (pokemon.fields.get("abilities")) |abilities| {
                 try stream.writeAll("<tr><td>Abilities:</td><td>");
                 for (abilities.indexs.values()) |ability_v, ai| {
                     const ability = fmt.parseInt(usize, ability_v.value orelse continue, 10) catch continue;
@@ -247,7 +247,7 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</td>\n");
             }
 
-            if (pokemon.fields.getValue("items")) |abilities| {
+            if (pokemon.fields.get("items")) |abilities| {
                 try stream.writeAll("<tr><td>Items:</td><td>");
                 for (abilities.indexs.values()) |item_v, ii| {
                     const item = fmt.parseInt(usize, item_v.value orelse continue, 10) catch continue;
@@ -260,7 +260,7 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</td>\n");
             }
 
-            if (pokemon.fields.getValue("egg_groups")) |egg_groups| {
+            if (pokemon.fields.get("egg_groups")) |egg_groups| {
                 try stream.writeAll("<tr><td>Egg Groups:</td><td>");
                 outer: for (egg_groups.indexs.values()) |egg_group_v, ei| {
                     const egg_group = egg_group_v.value orelse continue;
@@ -290,7 +290,7 @@ fn generate(stream: var, root: Object) !void {
 
             try stream.writeAll("</table>\n");
 
-            if (pokemon.fields.getValue("evos")) |evos| {
+            if (pokemon.fields.get("evos")) |evos| {
                 try stream.writeAll("<details><summary><b>Evolutions</b></summary>\n");
                 try stream.writeAll("<table>\n");
                 try stream.writeAll("<tr><th>Evolution</th><th>Method</th></tr>\n");
@@ -367,7 +367,7 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</table></details>\n");
             }
 
-            if (pokemon.fields.getValue("stats")) |stats| {
+            if (pokemon.fields.get("stats")) |stats| {
                 try stream.writeAll("<details><summary><b>Stats</b></summary>\n");
                 try stream.writeAll("<table class=\"pokemon_stat_table\">\n");
 
@@ -385,7 +385,7 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</table></details>\n");
             }
 
-            if (pokemon.fields.getValue("ev_yield")) |stats| {
+            if (pokemon.fields.get("ev_yield")) |stats| {
                 try stream.writeAll("<details><summary><b>Ev Yield</b></summary>\n");
                 try stream.writeAll("<table>\n");
 
@@ -401,9 +401,9 @@ fn generate(stream: var, root: Object) !void {
                 try stream.writeAll("</table></details>\n");
             }
 
-            const m_tms = pokemon.fields.getValue("tms");
-            const m_hms = pokemon.fields.getValue("hms");
-            const m_moves = pokemon.fields.getValue("moves");
+            const m_tms = pokemon.fields.get("tms");
+            const m_hms = pokemon.fields.get("hms");
+            const m_moves = pokemon.fields.get("moves");
             if (m_tms != null or m_hms != null or m_moves != null)
                 try stream.writeAll("<details><summary><b>Learnset</b></summary>\n");
 
@@ -440,7 +440,7 @@ fn generate(stream: var, root: Object) !void {
         }
     }
 
-    if (root.fields.getValue("moves")) |moves| {
+    if (root.fields.get("moves")) |moves| {
         try stream.writeAll("<h1>Moves</h1>\n");
         for (moves.indexs.values()) |move, mi| {
             const move_id = moves.indexs.at(mi).key;
@@ -477,7 +477,7 @@ fn generate(stream: var, root: Object) !void {
         }
     }
 
-    if (root.fields.getValue("items")) |items| {
+    if (root.fields.get("items")) |items| {
         try stream.writeAll("<h1>Items</h1>\n");
         for (items.indexs.values()) |item, ii| {
             const item_id = items.indexs.at(ii).key;
@@ -519,7 +519,7 @@ const HumanizeFormatter = struct {
         self: HumanizeFormatter,
         comptime f: []const u8,
         options: std.fmt.FormatOptions,
-        out_stream: var,
+        out_stream: anytype,
     ) !void {
         try writeHumanized(out_stream, self.str);
     }
@@ -529,7 +529,7 @@ fn humanize(str: []const u8) HumanizeFormatter {
     return HumanizeFormatter{ .str = str };
 }
 
-fn writeHumanized(stream: var, str: []const u8) !void {
+fn writeHumanized(stream: anytype, str: []const u8) !void {
     if (fmt.parseInt(isize, str, 10)) |_| {
         try stream.writeAll(str);
     } else |_| {
@@ -555,20 +555,20 @@ const Object = struct {
     value: ?[]const u8 = null,
 
     fn getFieldValue(obj: Object, field: []const u8) ?[]const u8 {
-        if (obj.fields.getValue(field)) |v|
+        if (obj.fields.get(field)) |v|
             return v.value;
         return null;
     }
 
     fn getArrayValue(obj: Object, array_field: []const u8, index: usize) ?[]const u8 {
-        if (obj.fields.getValue(array_field)) |array|
+        if (obj.fields.get(array_field)) |array|
             if (array.indexs.get(index)) |elem|
                 return elem.value;
         return null;
     }
 
     fn getArrayFieldValue(obj: Object, array_field: []const u8, index: usize, field: []const u8) ?[]const u8 {
-        if (obj.fields.getValue(array_field)) |array|
+        if (obj.fields.get(array_field)) |array|
             if (array.indexs.get(index)) |elem|
                 return elem.getFieldValue(field);
         return null;

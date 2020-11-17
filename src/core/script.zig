@@ -105,7 +105,7 @@ test "findTagFieldName" {
 
 /// Calculates the packed size of 'value'. The packed size is the size 'value'
 /// would have if unions did not have to have the size of their biggest field.
-pub fn packedLength(value: var) error{InvalidTag}!usize {
+pub fn packedLength(value: anytype) error{InvalidTag}!usize {
     @setEvalBranchQuota(10000000);
     const T = @TypeOf(value);
     switch (@typeInfo(T)) {
@@ -175,7 +175,7 @@ pub fn packedLength(value: var) error{InvalidTag}!usize {
     }
 }
 
-fn testPackedLength(value: var, expect: error{InvalidTag}!usize) void {
+fn testPackedLength(value: anytype, expect: error{InvalidTag}!usize) void {
     if (packedLength(value)) |size| {
         const expected_size = expect catch unreachable;
         testing.expectEqual(expected_size, size);

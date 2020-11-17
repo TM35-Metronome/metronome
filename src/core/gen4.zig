@@ -36,9 +36,7 @@ pub const BasePokemon = extern struct {
     egg_cycles: u8,
     base_friendship: u8,
     growth_rate: common.GrowthRate,
-
-    egg_group1: common.EggGroup,
-    egg_group2: common.EggGroup,
+    egg_groups: [2]common.EggGroup,
 
     abilities: [2]u8,
     flee_rate: u8,
@@ -503,9 +501,9 @@ pub const EncryptedStringTable = struct {
     };
 };
 
-fn decryptAndDecode(data: []const lu16, key: u16, out: var) !void {
+fn decryptAndDecode(data: []const lu16, key: u16, out: anytype) !void {
     const H = struct {
-        fn output(out2: var, char: u16) !bool {
+        fn output(out2: anytype, char: u16) !bool {
             if (char == 0xffff)
                 return true;
             return false;
@@ -633,7 +631,7 @@ pub const Game = struct {
         }
     };
 
-    pub fn identify(stream: var) !offsets.Info {
+    pub fn identify(stream: anytype) !offsets.Info {
         const header = try stream.readStruct(nds.Header);
         for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))

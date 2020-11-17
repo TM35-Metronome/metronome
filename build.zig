@@ -94,17 +94,6 @@ pub fn build(b: *Builder) void {
     });
 
     const skip_release = b.option(bool, "skip-release", "Main test suite skips release builds") orelse false;
-
-    // Zig fmt doesn't work on windows, so let's just skip it
-    if (builtin.os.tag != .windows) {
-        const fmt_step = b.addFmt(&[_][]const u8{
-            "build.zig",
-            src_folder,
-            tools_folder,
-        });
-        b.default_step.dependOn(&fmt_step.step);
-    }
-
     const modes_to_test: []const builtin.Mode = if (skip_release)
         &[_]builtin.Mode{.Debug}
     else

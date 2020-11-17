@@ -20,8 +20,8 @@ pub const encodings = @import("gen3/encodings.zig");
 pub const offsets = @import("gen3/offsets.zig");
 pub const script = @import("gen3/script.zig");
 
-test "" {
-    std.meta.refAllDecls(@This());
+comptime {
+    std.testing.refAllDecls(@This());
 }
 
 pub const Language = enum {
@@ -52,9 +52,7 @@ pub const BasePokemon = extern struct {
     base_friendship: u8,
 
     growth_rate: common.GrowthRate,
-
-    egg_group1: common.EggGroup,
-    egg_group2: common.EggGroup,
+    egg_groups: [2]common.EggGroup,
 
     abilities: [2]u8,
     safari_zone_rate: u8,
@@ -579,7 +577,7 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
     text: []*Ptr([*:0xff]u8),
 
-    pub fn identify(stream: var) !offsets.Info {
+    pub fn identify(stream: anytype) !offsets.Info {
         const header = try stream.readStruct(gba.Header);
         for (offsets.infos) |info| {
             if (!mem.eql(u8, &info.game_title, &header.game_title))
@@ -767,7 +765,7 @@ pub const Game = struct {
         };
     }
 
-    pub fn writeToStream(game: Game, out_stream: var) !void {
+    pub fn writeToStream(game: Game, out_stream: anytype) !void {
         try game.header.validate();
         try out_stream.writeAll(game.data);
     }

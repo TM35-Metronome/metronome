@@ -36,10 +36,10 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = [_]Param{
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    Param{ .takes_value = true },
+    clap.parseParam("<ROM>") catch unreachable,
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
     try clap.usage(stream, &params);
     try stream.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
@@ -54,7 +54,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     for (args.positionals()) |file_name, i| {
         const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErr(stdio.err, file_name, err);
@@ -72,7 +72,7 @@ pub fn main2(
     return 0;
 }
 
-fn outputInfo(stream: var, i: usize, info: offsets.Info) !void {
+fn outputInfo(stream: anytype, i: usize, info: offsets.Info) !void {
     try stream.print(".game[{}].game_title={}\n", .{ i, info.game_title });
     try stream.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
     try stream.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
@@ -428,12 +428,12 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
         return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b));
 
     switch (info) {
-        .Array => {
+        .Array => |array| {
             if (a.len != b.len)
                 return false;
 
             for (a) |_, i| {
-                if (!matches(T.Child, ignored_fields, a[i], b[i]))
+                if (!matches(array.child, ignored_fields, a[i], b[i]))
                     return false;
             }
 
@@ -899,9 +899,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .base_friendship = 0,
 
         .growth_rate = .medium_fast,
-
-        .egg_group1 = .invalid,
-        .egg_group2 = .invalid,
+        .egg_groups = [_]common.EggGroup{ .invalid, .invalid },
 
         .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
@@ -946,9 +944,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .base_friendship = 70,
 
         .growth_rate = .medium_slow,
-
-        .egg_group1 = .monster,
-        .egg_group2 = .grass,
+        .egg_groups = [_]common.EggGroup{ .monster, .grass },
 
         .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
@@ -996,9 +992,7 @@ gen3.BasePokemon{
     .base_friendship = 70,
 
     .growth_rate = .fast,
-
-    .egg_group1 = .amorphous,
-    .egg_group2 = .amorphous,
+    .egg_groups = [_]common.EggGroup{ .amorphous, .amorphous },
 
     .abilities = [_]u8{ 26, 0 },
     .safari_zone_rate = 0,

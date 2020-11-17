@@ -197,7 +197,7 @@ pub fn encode(lang: gen3.Language, str: []const u8, out: []u8) !void {
     try fos.outStream().writeByte(0xff);
 }
 
-pub fn decode(lang: gen3.Language, str: []const u8, out_stream: var) !void {
+pub fn decode(lang: gen3.Language, str: []const u8, out_stream: anytype) !void {
     const map = switch (lang) {
         .en_us => &en_us,
     };

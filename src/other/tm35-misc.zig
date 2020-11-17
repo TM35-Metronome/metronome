@@ -35,7 +35,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-no-trade-evolutions ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nCommand to apply miscellaneous changed.\n" ++
@@ -58,7 +58,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";
     const running_arg = args.option("--allow-running") orelse "unchanged";
@@ -127,7 +127,7 @@ const Options = struct {
     static_scale: f64,
 };
 
-fn parseLine(out: var, opt: Options, str: []const u8) !bool {
+fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -142,11 +142,13 @@ fn parseLine(out: var, opt: Options, str: []const u8) !bool {
         c("text_delays") => if (opt.fast_text) {
             const index = try p.parse(parse.index);
             _ = try p.parse(parse.usizev);
-            try out.print(".text_delays[{}]={}\n", .{ index, switch (index) {
-                0 => @as(usize, 2),
-                1 => @as(usize, 1),
-                else => @as(usize, 0),
-            } });
+            try out.print(".text_delays[{}]={}\n", .{
+                index, switch (index) {
+                    0 => @as(usize, 2),
+                    1 => @as(usize, 1),
+                    else => @as(usize, 0),
+                },
+            });
             return false;
         },
         c("map") => {

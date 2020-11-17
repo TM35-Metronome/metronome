@@ -31,7 +31,7 @@ pub const zig_escapes = comptime blk: {
     break :blk res;
 };
 
-pub fn writeEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
+pub fn writeEscaped(out_stream: anytype, buf: []const u8, escapes: [255][]const u8) !void {
     for (buf) |char| {
         try out_stream.writeAll(escapes[char]);
     }
@@ -64,7 +64,7 @@ fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u
     testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 
-pub fn writeUnEscaped(out_stream: var, buf: []const u8, escapes: [255][]const u8) !void {
+pub fn writeUnEscaped(out_stream: anytype, buf: []const u8, escapes: [255][]const u8) !void {
     var index: usize = 0;
     outer: while (index < buf.len) {
         for (escapes) |esc, c| {

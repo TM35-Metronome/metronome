@@ -28,7 +28,7 @@ const bug_message = "Hi user. You have just hit a bug/limitation in the program.
     "https://github.com/TM35-Metronome/metronome/issues/new";
 
 const fps = 60;
-const frame_time = time.second / fps;
+const frame_time = time.ns_per_s / fps;
 const WINDOW_WIDTH = 800;
 const WINDOW_HEIGHT = 600;
 
@@ -313,7 +313,7 @@ pub fn drawOptions(
     var biggest_width: f32 = 0;
     for (command.params) |param, i| {
         const text = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-        if (!param.takes_value)
+        if (param.takes_value == .None)
             continue;
         if (mem.eql(u8, text, "help"))
             continue;
@@ -338,7 +338,7 @@ pub fn drawOptions(
         if (mem.eql(u8, param_name, "version"))
             continue;
 
-        if (!param.takes_value) {
+        if (param.takes_value == .None) {
             c.nk_layout_row_dynamic(ctx, 0, 1);
 
             c.nkWidgetBounds(ctx, &bounds);
@@ -388,7 +388,7 @@ pub fn drawOptions(
                     continue;
                 },
                 .NFD_CANCEL => continue,
-                .NFD_OKAY => blk: {
+                .NFD_OKAY => {
                     const out_path = m_out_path.?;
                     defer std.c.free(out_path);
 
@@ -505,7 +505,7 @@ pub fn drawActions(
     const selected_path_slice = selected_path.toSliceConst();
 
     switch (file_browser_kind) {
-        .load_rom => done: {
+        .load_rom => {
             if (rom) |r|
                 exes.allocator.free(r.info);
 
@@ -655,7 +655,7 @@ const Popups = struct {
     errors: std.ArrayList([]const u8),
     infos: std.ArrayList([]const u8),
 
-    fn err(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn err(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         popups.append(&popups.errors, fmt, args);
     }
 
@@ -663,7 +663,7 @@ const Popups = struct {
         return popups.errors.items[popups.errors.items.len - 1];
     }
 
-    fn info(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn info(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         popups.append(&popups.infos, fmt, args);
     }
 
@@ -671,7 +671,7 @@ const Popups = struct {
         return popups.infos.items[popups.infos.items.len - 1];
     }
 
-    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: var) void {
+    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: anytype) void {
         const msg = std.fmt.allocPrint(list.allocator, fmt, args) catch {
             return popups.fatal("Allocation failed", .{});
         };
@@ -681,7 +681,7 @@ const Popups = struct {
         };
     }
 
-    fn fatal(popups: *Popups, comptime fmt: []const u8, args: var) void {
+    fn fatal(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         _ = std.fmt.bufPrint(&popups.fatal_error, fmt ++ "\x00", args) catch return;
     }
 
@@ -770,7 +770,7 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
     }
 }
 
-fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const escapes = switch (std.Target.current.os.tag) {
         .linux => blk: {
             var res: [255][]const u8 = undefined;
@@ -819,7 +819,7 @@ fn outputScript(stream: var, exes: Exes, settings: Settings, in: []const u8, out
             try stream.writeAll(param_pre);
             try escape.writeEscaped(stream, param_name, escapes);
             try stream.writeAll(quotes);
-            if (param.takes_value) {
+            if (param.takes_value != .None) {
                 try stream.writeAll(" " ++ quotes);
                 try escape.writeEscaped(stream, arg.toSliceConst(), escapes);
                 try stream.writeAll(quotes);
@@ -958,7 +958,7 @@ const Settings = struct {
         break :blk res;
     };
 
-    fn save(settings: Settings, exes: Exes, out_stream: var) !void {
+    fn save(settings: Settings, exes: Exes, out_stream: anytype) !void {
         for (settings.order) |o| {
             if (!settings.checks[o])
                 continue;
@@ -976,7 +976,7 @@ const Settings = struct {
                 const param_name = if (param.names.long) |long| long else @as(*const [1]u8, &param.names.short.?)[0..];
                 try out_stream.writeAll(param_pre);
                 try escape.writeEscaped(out_stream, param_name, escapes);
-                if (param.takes_value) {
+                if (param.takes_value != .None) {
                     try out_stream.writeAll(",");
                     try escape.writeEscaped(out_stream, arg.toSliceConst(), escapes);
                 }
@@ -985,7 +985,7 @@ const Settings = struct {
         }
     }
 
-    fn load(settings: Settings, exes: Exes, in_stream: var) !void {
+    fn load(settings: Settings, exes: Exes, in_stream: anytype) !void {
         settings.reset(exes);
 
         const EscapedSplitterArgIterator = struct {
@@ -1036,7 +1036,7 @@ const Settings = struct {
                 .params = command.params,
             };
 
-            while (try streaming_clap.next()) |arg| {
+            while (try streaming_clap.next(null)) |arg| {
                 const param_i = util.indexOfPtr(clap.Param(clap.Help), command.params, arg.param);
                 const command_arg = &command_args[param_i];
 
@@ -1203,16 +1203,19 @@ const Exes = struct {
         var it = mem.split(help, "\n");
         while (it.next()) |line| {
             const param = clap.parseParam(line) catch continue;
+            if (param.names.long == null and param.names.short == null)
+                continue;
+
             try params.append(param);
         }
 
-        std.sort.sort(clap.Param(clap.Help), params.items, struct {
-            fn lessThan(a: clap.Param(clap.Help), b: clap.Param(clap.Help)) bool {
-                if (!a.takes_value and b.takes_value)
+        std.sort.sort(clap.Param(clap.Help), params.items, {}, struct {
+            fn lessThan(ctx: void, a: clap.Param(clap.Help), b: clap.Param(clap.Help)) bool {
+                if (a.takes_value == .None and b.takes_value != .None)
                     return true;
-                if (a.takes_value and !b.takes_value)
+                if (a.takes_value != .None and b.takes_value == .None)
                     return false;
-                if (a.takes_value and b.takes_value) {
+                if (a.takes_value != .None and b.takes_value != .None) {
                     const a_is_opt = mem.indexOfScalar(u8, a.id.value, '|') != null;
                     const b_is_opt = mem.indexOfScalar(u8, b.id.value, '|') != null;
                     if (a_is_opt and !b_is_opt)

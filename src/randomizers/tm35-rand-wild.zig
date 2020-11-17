@@ -31,7 +31,7 @@ const params = blk: {
     };
 };
 
-fn usage(stream: var) !void {
+fn usage(stream: anytype) !void {
     try stream.writeAll("Usage: tm35-rand-wild ");
     try clap.usage(stream, &params);
     try stream.writeAll("\nRandomizes wild Pokémon encounters.\n" ++
@@ -48,7 +48,7 @@ pub fn main2(
     comptime InStream: type,
     comptime OutStream: type,
     stdio: util.CustomStdIoStreams(InStream, OutStream),
-    args: var,
+    args: anytype,
 ) u8 {
     const seed = if (args.option("--seed")) |seed|
         fmt.parseUnsigned(u64, seed, 10) catch |err| {
@@ -248,10 +248,10 @@ const Data = struct {
     fn string(d: *Data, str: []const u8) !usize {
         const res = try d.strings.getOrPut(str);
         if (!res.found_existing) {
-            res.kv.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.kv.value = d.strings.count() - 1;
+            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
+            res.entry.value = d.strings.count() - 1;
         }
-        return res.kv.value;
+        return res.entry.value;
     }
 
     fn pokedexPokemons(d: Data) !Set {

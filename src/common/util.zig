@@ -34,9 +34,9 @@ test "" {
 
 pub fn generateMain(
     version: []const u8,
-    comptime main2: var,
+    comptime main2: anytype,
     comptime params: []const clap.Param(clap.Help),
-    comptime usage: var,
+    comptime usage: anytype,
 ) fn () u8 {
     return struct {
         fn main() u8 {
@@ -48,8 +48,9 @@ pub fn generateMain(
             // ends and all the memory will be freed by the os. This saves a bit
             // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
-            var args = clap.parse(clap.Help, params, &arena.allocator) catch |err| {
-                stdio.err.print("{}\n", .{err}) catch {};
+            var diag = clap.Diagnostic{};
+            var args = clap.parse(clap.Help, params, &arena.allocator, &diag) catch |err| {
+                diag.report(stdio.err, err) catch {};
                 usage(stdio.err) catch {};
                 return 1;
             };

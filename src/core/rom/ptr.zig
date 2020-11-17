@@ -45,7 +45,7 @@ pub fn RelativePointer(
 
         /// Given a slice of data, and a pointer that points into this
         /// data, construct a `RelativePointer`.
-        pub fn init(ptr: var, data: []const u8) Error!@This() {
+        pub fn init(ptr: anytype, data: []const u8) Error!@This() {
             const ptr_is_optional = @typeInfo(@TypeOf(ptr)) == .Optional or
                 @typeInfo(@TypeOf(ptr)) == .Null;
             if (is_optional and ptr_is_optional and ptr == null)
@@ -56,7 +56,7 @@ pub fn RelativePointer(
                 return error.InvalidPointer;
 
             const res = std.math.add(Int, i, offset) //
-                catch return error.InvalidPointer;
+            catch return error.InvalidPointer;
             return @This(){ .inner = Inner.init(res) };
         }
 
@@ -94,7 +94,7 @@ pub fn RelativePointer(
         /// possible from the pointer to the end of `data`.
         pub fn toSliceEnd(ptr: @This(), data: Data) Error!SliceNoSentinel {
             const rest = std.math.sub(usize, data.len, try ptr.toInt()) //
-                catch return error.InvalidPointer;
+            catch return error.InvalidPointer;
             return ptr.toSlice(data, rest / @sizeOf(ptr_info.child));
         }
 
@@ -126,7 +126,7 @@ pub fn RelativePointer(
 
         fn toInt(ptr: @This()) Error!Int {
             return std.math.sub(Int, ptr.inner.value(), offset) //
-                catch return error.InvalidPointer;
+            catch return error.InvalidPointer;
         }
     };
 }
