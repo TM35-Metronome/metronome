@@ -39,21 +39,21 @@ const params = [_]Param{
     clap.parseParam("<ROM>") catch unreachable,
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-gen3-disassemble-scripts");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-gen3-disassemble-scripts");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
         "disassembles them and writes them to stdout.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     for (args.positionals()) |file_name, i| {
@@ -72,57 +72,57 @@ pub fn main2(
     return 0;
 }
 
-fn outputInfo(stream: anytype, i: usize, info: offsets.Info) !void {
-    try stream.print(".game[{}].game_title={}\n", .{ i, info.game_title });
-    try stream.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
-    try stream.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
-    try stream.print(".game[{}].software_version={}\n", .{ i, info.software_version });
-    try stream.print(".game[{}].text_delays.start={}\n", .{ i, info.text_delays.start });
-    try stream.print(".game[{}].text_delays.len={}\n", .{ i, info.text_delays.len });
-    try stream.print(".game[{}].trainers.start={}\n", .{ i, info.trainers.start });
-    try stream.print(".game[{}].trainers.len={}\n", .{ i, info.trainers.len });
-    try stream.print(".game[{}].moves.start={}\n", .{ i, info.moves.start });
-    try stream.print(".game[{}].moves.len={}\n", .{ i, info.moves.len });
-    try stream.print(".game[{}].machine_learnsets.start={}\n", .{ i, info.machine_learnsets.start });
-    try stream.print(".game[{}].machine_learnsets.len={}\n", .{ i, info.machine_learnsets.len });
-    try stream.print(".game[{}].pokemons.start={}\n", .{ i, info.pokemons.start });
-    try stream.print(".game[{}].pokemons.len={}\n", .{ i, info.pokemons.len });
-    try stream.print(".game[{}].evolutions.start={}\n", .{ i, info.evolutions.start });
-    try stream.print(".game[{}].evolutions.len={}\n", .{ i, info.evolutions.len });
-    try stream.print(".game[{}].level_up_learnset_pointers.start={}\n", .{ i, info.level_up_learnset_pointers.start });
-    try stream.print(".game[{}].level_up_learnset_pointers.len={}\n", .{ i, info.level_up_learnset_pointers.len });
-    try stream.print(".game[{}].hms.start={}\n", .{ i, info.hms.start });
-    try stream.print(".game[{}].hms.len={}\n", .{ i, info.hms.len });
-    try stream.print(".game[{}].tms.start={}\n", .{ i, info.tms.start });
-    try stream.print(".game[{}].tms.len={}\n", .{ i, info.tms.len });
-    try stream.print(".game[{}].items.start={}\n", .{ i, info.items.start });
-    try stream.print(".game[{}].items.len={}\n", .{ i, info.items.len });
-    try stream.print(".game[{}].wild_pokemon_headers.start={}\n", .{ i, info.wild_pokemon_headers.start });
-    try stream.print(".game[{}].wild_pokemon_headers.len={}\n", .{ i, info.wild_pokemon_headers.len });
-    try stream.print(".game[{}].map_headers.start={}\n", .{ i, info.map_headers.start });
-    try stream.print(".game[{}].map_headers.len={}\n", .{ i, info.map_headers.len });
-    try stream.print(".game[{}].pokemon_names.start={}\n", .{ i, info.pokemon_names.start });
-    try stream.print(".game[{}].pokemon_names.len={}\n", .{ i, info.pokemon_names.len });
-    try stream.print(".game[{}].ability_names.start={}\n", .{ i, info.ability_names.start });
-    try stream.print(".game[{}].ability_names.len={}\n", .{ i, info.ability_names.len });
-    try stream.print(".game[{}].move_names.start={}\n", .{ i, info.move_names.start });
-    try stream.print(".game[{}].move_names.len={}\n", .{ i, info.move_names.len });
-    try stream.print(".game[{}].type_names.start={}\n", .{ i, info.type_names.start });
-    try stream.print(".game[{}].type_names.len={}\n", .{ i, info.type_names.len });
-    try stream.print(".game[{}].species_to_national_dex.start={}\n", .{ i, info.species_to_national_dex.start });
-    try stream.print(".game[{}].species_to_national_dex.len={}\n", .{ i, info.species_to_national_dex.len });
+fn outputInfo(writer: anytype, i: usize, info: offsets.Info) !void {
+    try writer.print(".game[{}].game_title={}\n", .{ i, info.game_title });
+    try writer.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
+    try writer.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
+    try writer.print(".game[{}].software_version={}\n", .{ i, info.software_version });
+    try writer.print(".game[{}].text_delays.start={}\n", .{ i, info.text_delays.start });
+    try writer.print(".game[{}].text_delays.len={}\n", .{ i, info.text_delays.len });
+    try writer.print(".game[{}].trainers.start={}\n", .{ i, info.trainers.start });
+    try writer.print(".game[{}].trainers.len={}\n", .{ i, info.trainers.len });
+    try writer.print(".game[{}].moves.start={}\n", .{ i, info.moves.start });
+    try writer.print(".game[{}].moves.len={}\n", .{ i, info.moves.len });
+    try writer.print(".game[{}].machine_learnsets.start={}\n", .{ i, info.machine_learnsets.start });
+    try writer.print(".game[{}].machine_learnsets.len={}\n", .{ i, info.machine_learnsets.len });
+    try writer.print(".game[{}].pokemons.start={}\n", .{ i, info.pokemons.start });
+    try writer.print(".game[{}].pokemons.len={}\n", .{ i, info.pokemons.len });
+    try writer.print(".game[{}].evolutions.start={}\n", .{ i, info.evolutions.start });
+    try writer.print(".game[{}].evolutions.len={}\n", .{ i, info.evolutions.len });
+    try writer.print(".game[{}].level_up_learnset_pointers.start={}\n", .{ i, info.level_up_learnset_pointers.start });
+    try writer.print(".game[{}].level_up_learnset_pointers.len={}\n", .{ i, info.level_up_learnset_pointers.len });
+    try writer.print(".game[{}].hms.start={}\n", .{ i, info.hms.start });
+    try writer.print(".game[{}].hms.len={}\n", .{ i, info.hms.len });
+    try writer.print(".game[{}].tms.start={}\n", .{ i, info.tms.start });
+    try writer.print(".game[{}].tms.len={}\n", .{ i, info.tms.len });
+    try writer.print(".game[{}].items.start={}\n", .{ i, info.items.start });
+    try writer.print(".game[{}].items.len={}\n", .{ i, info.items.len });
+    try writer.print(".game[{}].wild_pokemon_headers.start={}\n", .{ i, info.wild_pokemon_headers.start });
+    try writer.print(".game[{}].wild_pokemon_headers.len={}\n", .{ i, info.wild_pokemon_headers.len });
+    try writer.print(".game[{}].map_headers.start={}\n", .{ i, info.map_headers.start });
+    try writer.print(".game[{}].map_headers.len={}\n", .{ i, info.map_headers.len });
+    try writer.print(".game[{}].pokemon_names.start={}\n", .{ i, info.pokemon_names.start });
+    try writer.print(".game[{}].pokemon_names.len={}\n", .{ i, info.pokemon_names.len });
+    try writer.print(".game[{}].ability_names.start={}\n", .{ i, info.ability_names.start });
+    try writer.print(".game[{}].ability_names.len={}\n", .{ i, info.ability_names.len });
+    try writer.print(".game[{}].move_names.start={}\n", .{ i, info.move_names.start });
+    try writer.print(".game[{}].move_names.len={}\n", .{ i, info.move_names.len });
+    try writer.print(".game[{}].type_names.start={}\n", .{ i, info.type_names.start });
+    try writer.print(".game[{}].type_names.len={}\n", .{ i, info.type_names.len });
+    try writer.print(".game[{}].species_to_national_dex.start={}\n", .{ i, info.species_to_national_dex.start });
+    try writer.print(".game[{}].species_to_national_dex.len={}\n", .{ i, info.species_to_national_dex.len });
     switch (info.version) {
         .emerald => {
-            try stream.print(".game[{}].pokedex.start={}\n", .{ i, info.pokedex.emerald.start });
-            try stream.print(".game[{}].pokedex.len={}\n", .{ i, info.pokedex.emerald.len });
+            try writer.print(".game[{}].pokedex.start={}\n", .{ i, info.pokedex.emerald.start });
+            try writer.print(".game[{}].pokedex.len={}\n", .{ i, info.pokedex.emerald.len });
         },
         .ruby,
         .sapphire,
         .fire_red,
         .leaf_green,
         => {
-            try stream.print(".game[{}].pokedex.start={}\n", .{ i, info.pokedex.rsfrlg.start });
-            try stream.print(".game[{}].pokedex.len={}\n", .{ i, info.pokedex.rsfrlg.len });
+            try writer.print(".game[{}].pokedex.start={}\n", .{ i, info.pokedex.rsfrlg.start });
+            try writer.print(".game[{}].pokedex.len={}\n", .{ i, info.pokedex.rsfrlg.len });
         },
         else => unreachable,
     }

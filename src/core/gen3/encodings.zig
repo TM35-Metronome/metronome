@@ -193,15 +193,15 @@ pub fn encode(lang: gen3.Language, str: []const u8, out: []u8) !void {
     };
 
     var fos = io.fixedBufferStream(out);
-    try rom.encoding.encode(map, 0, str, fos.outStream());
-    try fos.outStream().writeByte(0xff);
+    try rom.encoding.encode(map, 0, str, fos.writer());
+    try fos.writer().writeByte(0xff);
 }
 
-pub fn decode(lang: gen3.Language, str: []const u8, out_stream: anytype) !void {
+pub fn decode(lang: gen3.Language, str: []const u8, writer: anytype) !void {
     const map = switch (lang) {
         .en_us => &en_us,
     };
 
     const end = mem.indexOfScalar(u8, str, 0xff) orelse str.len;
-    try rom.encoding.encode(map, 1, str[0..end], out_stream);
+    try rom.encoding.encode(map, 1, str[0..end], writer);
 }

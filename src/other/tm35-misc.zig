@@ -35,13 +35,13 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-no-trade-evolutions ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nCommand to apply miscellaneous changed.\n" ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-no-trade-evolutions ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nCommand to apply miscellaneous changed.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 const Allow = enum {
@@ -55,9 +55,9 @@ const Allow = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";

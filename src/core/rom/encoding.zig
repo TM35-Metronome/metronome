@@ -12,17 +12,17 @@ pub const Char = [2][]const u8;
 
 /// Encode from one encoding to another using `CharMap` as the specification
 /// of how to do transform between the encodings.
-/// `curr` specifies what the encoding the `in_stream` is in and is an index
-/// into entries in `map`. `out_stream` will always be the opposite encoding
-/// of `in_stream`.
-pub fn encodeEx(map: CharMap, curr: u1, in_stream: anytype, out_stream: anytype) !void {
+/// `curr` specifies what the encoding the `reader` is in and is an index
+/// into entries in `map`. `writer` will always be the opposite encoding
+/// of `reader`.
+pub fn encodeEx(map: CharMap, curr: u1, reader: anytype, writer: anytype) !void {
     const in: usize = @boolToInt(curr == 1);
     const out: usize = @boolToInt(curr != 1);
     var buf: [16]u8 = undefined;
     var len: usize = 0;
 
     while (true) {
-        len += try in_stream.readAll(buf[len..]);
+        len += try reader.readAll(buf[len..]);
         const chars = buf[0..len];
         if (chars.len == 0)
             break;
@@ -39,21 +39,21 @@ pub fn encodeEx(map: CharMap, curr: u1, in_stream: anytype, out_stream: anytype)
 
         const best = best_match orelse
             return error.DecodeError;
-        try out_stream.writeAll(best[out]);
+        try writer.writeAll(best[out]);
         mem.copy(u8, chars, chars[best[in].len..]);
         len -= best[in].len;
     }
 }
 
-pub fn encode(map: CharMap, curr: u1, in: []const u8, out_stream: anytype) !void {
+pub fn encode(map: CharMap, curr: u1, in: []const u8, writer: anytype) !void {
     var fis = io.fixedBufferStream(in);
-    try encodeEx(map, curr, fis.inStream(), out_stream);
+    try encodeEx(map, curr, fis.reader(), writer);
 }
 
 fn testHelper(map: CharMap, curr: u1, in: []const u8, out: []const u8) !void {
     var res: [1024]u8 = undefined;
     var fos = io.fixedBufferStream(&res);
-    try encode(map, curr, in, fos.outStream());
+    try encode(map, curr, in, fos.writer());
     testing.expectEqualSlices(u8, out, fos.getWritten());
 }
 

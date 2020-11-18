@@ -541,7 +541,7 @@ pub fn drawActions(
             const out_path = selected_path.toSliceConst();
 
             const stderr = std.io.getStdErr();
-            outputScript(stderr.outStream(), exes, settings, in_path, out_path) catch {};
+            outputScript(stderr.writer(), exes, settings, in_path, out_path) catch {};
             stderr.writeAll("\n") catch {};
             randomize(exes, settings, in_path, out_path) catch |err| {
                 // TODO: Maybe print the stderr from the command we run in the randomizer function
@@ -557,7 +557,7 @@ pub fn drawActions(
                 return rom;
             };
             defer file.close();
-            settings.load(exes, file.inStream()) catch |err| {
+            settings.load(exes, file.reader()) catch |err| {
                 popups.err("Failed to load from '{}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
@@ -568,7 +568,7 @@ pub fn drawActions(
                 return rom;
             };
             defer file.close();
-            settings.save(exes, file.outStream()) catch |err| {
+            settings.save(exes, file.writer()) catch |err| {
                 popups.err("Failed to write to '{}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
@@ -727,8 +727,8 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
             sh.stdin_behavior = .Pipe;
             try sh.spawn();
 
-            const stream = sh.stdin.?.outStream();
-            try outputScript(stream, exes, settings, in, out);
+            const writer = sh.stdin.?.writer();
+            try outputScript(writer, exes, settings, in, out);
 
             sh.stdin.?.close();
             sh.stdin = null;
@@ -749,7 +749,7 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
                 try fs.cwd().makePath(program_cache_dir.toSliceConst());
                 const file = try fs.cwd().createFile(script_file_name.toSliceConst(), .{});
                 defer file.close();
-                try outputScript(file.outStream(), exes, settings, in, out);
+                try outputScript(file.writer(), exes, settings, in, out);
             }
 
             const cmd = try std.ChildProcess.init(&[_][]const u8{ "cmd", "/c", "call", script_file_name.toSliceConst() }, exes.allocator);
@@ -770,7 +770,7 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
     }
 }
 
-fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
+fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const escapes = switch (std.Target.current.os.tag) {
         .linux => blk: {
             var res: [255][]const u8 = undefined;
@@ -792,11 +792,11 @@ fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8,
         else => @compileError("Unsupported os"),
     };
 
-    try stream.writeAll(quotes);
-    try escape.writeEscaped(stream, exes.load.toSliceConst(), escapes);
-    try stream.writeAll(quotes ++ " " ++ quotes);
-    try escape.writeEscaped(stream, in, escapes);
-    try stream.writeAll(quotes ++ " | ");
+    try writer.writeAll(quotes);
+    try escape.writeEscaped(writer, exes.load.toSliceConst(), escapes);
+    try writer.writeAll(quotes ++ " " ++ quotes);
+    try escape.writeEscaped(writer, in, escapes);
+    try writer.writeAll(quotes ++ " | ");
 
     for (settings.order) |order| {
         const command = exes.commands[order];
@@ -804,9 +804,9 @@ fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8,
         if (!settings.checks[order])
             continue;
 
-        try stream.writeAll(quotes);
-        try escape.writeEscaped(stream, command.path, escapes);
-        try stream.writeAll(quotes);
+        try writer.writeAll(quotes);
+        try escape.writeEscaped(writer, command.path, escapes);
+        try writer.writeAll(quotes);
 
         for (command.params) |param, i| {
             const param_pre = if (param.names.long) |_| "--" else "-";
@@ -815,28 +815,28 @@ fn outputScript(stream: anytype, exes: Exes, settings: Settings, in: []const u8,
             if (arg.len == 0)
                 continue;
 
-            try stream.writeAll(" " ++ quotes);
-            try stream.writeAll(param_pre);
-            try escape.writeEscaped(stream, param_name, escapes);
-            try stream.writeAll(quotes);
+            try writer.writeAll(" " ++ quotes);
+            try writer.writeAll(param_pre);
+            try escape.writeEscaped(writer, param_name, escapes);
+            try writer.writeAll(quotes);
             if (param.takes_value != .None) {
-                try stream.writeAll(" " ++ quotes);
-                try escape.writeEscaped(stream, arg.toSliceConst(), escapes);
-                try stream.writeAll(quotes);
+                try writer.writeAll(" " ++ quotes);
+                try escape.writeEscaped(writer, arg.toSliceConst(), escapes);
+                try writer.writeAll(quotes);
             }
         }
 
-        try stream.writeAll(" | ");
+        try writer.writeAll(" | ");
     }
 
-    try stream.writeAll(quotes);
-    try escape.writeEscaped(stream, exes.apply.toSliceConst(), escapes);
-    try stream.writeAll(quotes ++ " --replace --output " ++ quotes);
-    try escape.writeEscaped(stream, out, escapes);
-    try stream.writeAll(quotes ++ " " ++ quotes);
-    try escape.writeEscaped(stream, in, escapes);
-    try stream.writeAll(quotes);
-    try stream.writeAll("\n");
+    try writer.writeAll(quotes);
+    try escape.writeEscaped(writer, exes.apply.toSliceConst(), escapes);
+    try writer.writeAll(quotes ++ " --replace --output " ++ quotes);
+    try escape.writeEscaped(writer, out, escapes);
+    try writer.writeAll(quotes ++ " " ++ quotes);
+    try escape.writeEscaped(writer, in, escapes);
+    try writer.writeAll(quotes);
+    try writer.writeAll("\n");
 }
 
 fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
@@ -958,34 +958,34 @@ const Settings = struct {
         break :blk res;
     };
 
-    fn save(settings: Settings, exes: Exes, out_stream: anytype) !void {
+    fn save(settings: Settings, exes: Exes, writer: anytype) !void {
         for (settings.order) |o| {
             if (!settings.checks[o])
                 continue;
 
             const command = exes.commands[o];
             const args = settings.commands_args[o];
-            try escape.writeEscaped(out_stream, path.basename(command.path), escapes);
+            try escape.writeEscaped(writer, path.basename(command.path), escapes);
             for (args) |arg, i| {
                 const param = command.params[i];
                 if (arg.len == 0)
                     continue;
 
-                try out_stream.writeAll(",");
+                try writer.writeAll(",");
                 const param_pre = if (param.names.long) |_| "--" else "-";
                 const param_name = if (param.names.long) |long| long else @as(*const [1]u8, &param.names.short.?)[0..];
-                try out_stream.writeAll(param_pre);
-                try escape.writeEscaped(out_stream, param_name, escapes);
+                try writer.writeAll(param_pre);
+                try escape.writeEscaped(writer, param_name, escapes);
                 if (param.takes_value != .None) {
-                    try out_stream.writeAll(",");
-                    try escape.writeEscaped(out_stream, arg.toSliceConst(), escapes);
+                    try writer.writeAll(",");
+                    try escape.writeEscaped(writer, arg.toSliceConst(), escapes);
                 }
             }
-            try out_stream.writeAll("\n");
+            try writer.writeAll("\n");
         }
     }
 
-    fn load(settings: Settings, exes: Exes, in_stream: anytype) !void {
+    fn load(settings: Settings, exes: Exes, reader: anytype) !void {
         settings.reset(exes);
 
         const EscapedSplitterArgIterator = struct {
@@ -996,7 +996,7 @@ const Settings = struct {
             pub fn next(iter: *@This()) Error!?[]const u8 {
                 const n = iter.separator.next() orelse return null;
                 var fbs = io.fixedBufferStream(&iter.buf);
-                try escape.writeUnEscaped(fbs.outStream(), n, escapes);
+                try escape.writeUnEscaped(fbs.writer(), n, escapes);
 
                 return fbs.getWritten();
             }
@@ -1016,7 +1016,7 @@ const Settings = struct {
 
         var order_i: usize = 0;
         var fifo = util.read.Fifo(.{ .Static = 1024 * 2 }).init();
-        while (try util.read.line(in_stream, &fifo)) |line| {
+        while (try util.read.line(reader, &fifo)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
@@ -1147,7 +1147,7 @@ const Exes = struct {
 
         var fifo = util.read.Fifo(.Dynamic).init(allocator);
         defer fifo.deinit();
-        while (try util.read.line(command_file.inStream(), &fifo)) |line| {
+        while (try util.read.line(command_file.reader(), &fifo)) |line| {
             if (fs.path.isAbsolute(line)) {
                 const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
                 try res.append(command);
@@ -1282,7 +1282,7 @@ fn execHelp(allocator: *mem.Allocator, exe: []const u8, cwd: []const u8, env_map
     try p.spawn();
     errdefer _ = p.kill() catch undefined;
 
-    const help = try p.stdout.?.inStream().readAllAlloc(allocator, 1024 * 1024);
+    const help = try p.stdout.?.reader().readAllAlloc(allocator, 1024 * 1024);
     errdefer allocator.free(help);
 
     const res = try p.wait();

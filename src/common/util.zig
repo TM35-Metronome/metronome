@@ -69,8 +69,8 @@ pub fn generateMain(
 
             const res = main2(
                 &arena.allocator,
-                StdIo.In.InStream,
-                StdIo.Out.OutStream,
+                StdIo.In.Reader,
+                StdIo.Out.Writer,
                 stdio,
                 args,
             );
@@ -82,8 +82,8 @@ pub fn generateMain(
 }
 
 pub const StdIo = struct {
-    pub const In = io.BufferedInStream(4096, fs.File.InStream);
-    pub const Out = io.BufferedOutStream(4096, fs.File.OutStream);
+    pub const In = io.BufferedReader(4096, fs.File.Reader);
+    pub const Out = io.BufferedWriter(4096, fs.File.Writer);
 
     in: In,
     out: Out,
@@ -91,30 +91,30 @@ pub const StdIo = struct {
 
     pub fn streams(stdio: *StdIo) StdIoStreams {
         return StdIoStreams{
-            .in = stdio.in.inStream(),
-            .out = stdio.out.outStream(),
-            .err = stdio.err.outStream(),
+            .in = stdio.in.reader(),
+            .out = stdio.out.writer(),
+            .err = stdio.err.writer(),
         };
     }
 };
 
-pub const StdIoStreams = CustomStdIoStreams(StdIo.In.InStream, StdIo.Out.OutStream);
-pub fn CustomStdIoStreams(comptime _InStream: type, comptime _OutStream: type) type {
+pub const StdIoStreams = CustomStdIoStreams(StdIo.In.Reader, StdIo.Out.Writer);
+pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
     return struct {
-        pub const InStream = _InStream;
-        pub const OutStream = _OutStream;
+        pub const Reader = _Reader;
+        pub const Writer = _Writer;
 
-        in: InStream,
-        out: OutStream,
-        err: OutStream,
+        in: Reader,
+        out: Writer,
+        err: Writer,
     };
 }
 
 pub fn getStdIo() StdIo {
     return StdIo{
-        .in = io.bufferedInStream(io.getStdIn().inStream()),
-        .out = io.bufferedOutStream(io.getStdOut().outStream()),
-        .err = io.bufferedOutStream(io.getStdErr().outStream()),
+        .in = io.bufferedReader(io.getStdIn().reader()),
+        .out = io.bufferedWriter(io.getStdOut().writer()),
+        .err = io.bufferedWriter(io.getStdErr().writer()),
     };
 }
 
@@ -335,9 +335,9 @@ pub const dir = struct {
         process.spawn() catch return DirError.NotAvailable;
         errdefer _ = process.kill() catch undefined;
 
-        const stdout_stream = &process.stdout.?.inStream().stream;
+        const stdout_reader = &process.stdout.?.reader().stream;
         var res: Path = undefined;
-        res.len = stdout_stream.readFull(&res.items) catch return DirError.NotAvailable;
+        res.len = stdout_reader.readFull(&res.items) catch return DirError.NotAvailable;
 
         const term = process.wait() catch return DirError.NotAvailable;
         if (term == .Exited and term.Exited != 0)

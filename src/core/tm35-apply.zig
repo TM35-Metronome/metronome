@@ -52,13 +52,13 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-apply ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nApplies changes to Pokémon roms.\n" ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-apply ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nApplies changes to Pokémon roms.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 const PatchOption = enum {
@@ -72,9 +72,9 @@ const PatchOption = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const pos = args.positionals();
@@ -212,20 +212,20 @@ pub fn main2(
         return 0;
 
     const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace, .truncate = false }) catch |err| return exit.createErr(stdio.err, out, err);
-    const out_stream = out_file.outStream();
+    const writer = out_file.writer();
     const file_len = switch (game) {
         .gen3 => |gen3_game| blk: {
-            gen3_game.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            gen3_game.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk gen3_game.data.len;
         },
         .gen4 => |*gen4_game| blk: {
-            gen4_game.apply() catch return exit.allocErr(stdio.err);
-            nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            gen4_game.apply() catch unreachable; //|err| return exit.err(stdio.err, "apply error: {}\n", .{err});
+            nds_rom.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk nds_rom.data.items.len;
         },
         .gen5 => |*gen5_game| blk: {
             gen5_game.apply() catch |err| return exit.err(stdio.err, "apply error: {}\n", .{err});
-            nds_rom.writeToStream(out_stream) catch |err| return exit.writeErr(stdio.err, out, err);
+            nds_rom.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
             break :blk nds_rom.data.items.len;
         },
     };
@@ -1045,7 +1045,7 @@ fn applyGen4String(comptime l: usize, strs: []gen4.String(l), index: usize, valu
 
     var buf = [_]u8{0} ** l;
     var fba = io.fixedBufferStream(&buf);
-    try escape.writeUnEscaped(fba.outStream(), value, escape.zig_escapes);
+    try escape.writeUnEscaped(fba.writer(), value, escape.zig_escapes);
     strs[index].buf = buf;
 }
 
@@ -1097,7 +1097,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("cash") => trainer.cash = try parser.parse(parse.u8v),
                 c("post_battle_item") => trainer.post_battle_item = try parser.parse(parselu16v),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("name") => try applyGen5String(16, game.allocator, game.owned.trainer_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(16, game.owned.trainer_names, index, try parser.parse(parse.strv)),
                 c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
                 c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen5.PartyType)),
                 c("party") => {
@@ -1145,7 +1145,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
                 c("height") => pokemon.height = try parser.parse(parselu16v),
                 c("weight") => pokemon.weight = try parser.parse(parselu16v),
-                c("name") => try applyGen5String(16, game.allocator, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(16, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
@@ -1194,7 +1194,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen5String(128, game.allocator, game.owned.item_descriptions, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen5String(128, game.owned.item_descriptions, index, try parser.parse(parse.strv)),
                 c("name") => {
                     if (index >= game.owned.item_names.len)
                         return error.Error;
@@ -1207,13 +1207,12 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
                     // string
                     applyGen5StringReplace(
                         64,
-                        game.allocator,
                         game.owned.item_names_on_the_ground,
                         index,
                         old_name,
                         new_name,
                     ) catch {};
-                    try applyGen5String(16, game.allocator, game.owned.item_names, index, new_name);
+                    try applyGen5String(16, game.owned.item_names, index, new_name);
                 },
                 c("price") => {
                     if (index >= game.ptrs.items.len)
@@ -1233,7 +1232,7 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
         c("pokedex") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("category") => try applyGen5String(32, game.allocator, game.owned.pokedex_category_names, index, try parser.parse(parse.strv)),
+                c("category") => try applyGen5String(32, game.owned.pokedex_category_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -1241,22 +1240,22 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
             const prev = parser.str;
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("description") => try applyGen5String(256, game.allocator, game.owned.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen5String(16, game.allocator, game.owned.move_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen5String(256, game.owned.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(16, game.owned.move_names, index, try parser.parse(parse.strv)),
                 else => try parse.anyT(prev, &game.ptrs.moves, converters),
             }
         },
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(16, game.allocator, game.owned.ability_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(16, game.owned.ability_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
         c("types") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(8, game.allocator, game.owned.type_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(8, game.owned.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -1382,7 +1381,6 @@ fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !v
 
 fn applyGen5StringReplace(
     comptime l: usize,
-    allocator: *mem.Allocator,
     strs: []gen5.String(l),
     index: usize,
     search_for: []const u8,
@@ -1397,21 +1395,20 @@ fn applyGen5StringReplace(
     const after = str[i + search_for.len ..];
 
     var buf = [_]u8{0} ** l;
-    var fba = io.fixedBufferStream(&buf);
-    const stream = fba.outStream();
-    try stream.writeAll(before);
-    try escape.writeUnEscaped(stream, replace_with, escape.zig_escapes);
-    try stream.writeAll(after);
-    _ = stream.write("\x00") catch undefined;
+    const writer = io.fixedBufferStream(&buf).writer();
+    try writer.writeAll(before);
+    try escape.writeUnEscaped(writer, replace_with, escape.zig_escapes);
+    try writer.writeAll(after);
+    _ = writer.write("\x00") catch undefined;
     strs[index].buf = buf;
 }
 
-fn applyGen5String(comptime l: usize, allocator: *mem.Allocator, strs: []gen5.String(l), index: usize, value: []const u8) !void {
+fn applyGen5String(comptime l: usize, strs: []gen5.String(l), index: usize, value: []const u8) !void {
     if (strs.len <= index)
         return error.Error;
 
     var buf = [_]u8{0} ** l;
-    var fba = io.fixedBufferStream(&buf);
-    try escape.writeUnEscaped(fba.outStream(), value, escape.zig_escapes);
+    const writer = io.fixedBufferStream(&buf).writer();
+    try escape.writeUnEscaped(writer, value, escape.zig_escapes);
     strs[index].buf = buf;
 }

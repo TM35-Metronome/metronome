@@ -802,8 +802,8 @@ pub const Game = struct {
         }
     };
 
-    pub fn identify(stream: anytype) !offsets.Info {
-        const header = try stream.readStruct(nds.Header);
+    pub fn identify(reader: anytype) !offsets.Info {
+        const header = try reader.readStruct(nds.Header);
         for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))
             //    continue;
@@ -818,7 +818,7 @@ pub const Game = struct {
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         const file_system = nds_rom.fileSystem();
-        const info = try identify(io.fixedBufferStream(nds_rom.data.items).inStream());
+        const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
         const arm9 = try nds_rom.getDecodedArm9(allocator);
         errdefer allocator.free(arm9);
 
@@ -1172,13 +1172,13 @@ pub const Game = struct {
             const file = text.fat[table.file];
             const bytes = text.data[file.start.value()..file.end.value()];
 
-            // TODO: we don't need a stream
-            const stream = io.fixedBufferStream(bytes).outStream();
+            // TODO: we don't need a writer
+            const writer = io.fixedBufferStream(bytes).writer();
             debug.assert(bytes.len >= file_size);
 
             const entries_count = @intCast(u16, table.len());
             const entry_size = table.chars + 1; // Always make room for a terminator
-            try stream.writeAll(&mem.toBytes(Header{
+            try writer.writeAll(&mem.toBytes(Header{
                 .sections = lu16.init(1),
                 .entries = lu16.init(entries_count),
                 .file_size = lu32.init(file_size),
@@ -1186,26 +1186,26 @@ pub const Game = struct {
             }));
 
             const section_start = @sizeOf(Header) + @sizeOf(lu32);
-            try stream.writeIntLittle(u32, section_start);
-            try stream.writeIntLittle(u32, entries_count *
+            try writer.writeIntLittle(u32, section_start);
+            try writer.writeIntLittle(u32, entries_count *
                 (@sizeOf(Entry) + entry_size * 2));
 
-            const entries_start = stream.context.pos;
+            const entries_start = writer.context.pos;
             for (@as([*]void, undefined)[0..entries_count]) |_, j| {
-                try stream.writeAll(&mem.toBytes(Entry{
+                try writer.writeAll(&mem.toBytes(Entry{
                     .offset = lu32.init(0),
                     .count = lu16.init(0),
                     .unknown = lu16.init(0),
                 }));
             }
 
-            const entries = mem.bytesAsSlice(Entry, bytes[entries_start..stream.context.pos]);
+            const entries = mem.bytesAsSlice(Entry, bytes[entries_start..writer.context.pos]);
             for (entries) |*entry, j| {
-                const pos = stream.context.pos;
+                const pos = writer.context.pos;
                 const str = table.at(j);
-                try encode(str.str, stream);
+                try encode(str.str, writer);
 
-                const str_end = stream.context.pos;
+                const str_end = writer.context.pos;
                 const encoded_str = mem.bytesAsSlice(lu16, bytes[pos..str_end]);
                 encrypt(encoded_str, str.key);
 
@@ -1216,12 +1216,12 @@ pub const Game = struct {
                 // Pad the string, so that each entry is always entry_size
                 // apart. This ensure that patches generated from tm35-apply
                 // are small.
-                try stream.writeByteNTimes(0, (entry_size - str_len) * 2);
-                debug.assert(stream.context.pos - pos == entry_size * 2);
+                try writer.writeByteNTimes(0, (entry_size - str_len) * 2);
+                debug.assert(writer.context.pos - pos == entry_size * 2);
             }
 
             // Assert that we got the file size right.
-            debug.assert(stream.context.pos == file_size);
+            debug.assert(writer.context.pos == file_size);
         }
     }
 
@@ -1347,10 +1347,9 @@ pub const Game = struct {
 
         mem.set(String(len), res, String(len){});
         for (res) |*str, i| {
-            var fba = io.fixedBufferStream(&str.buf);
-            const stream = fba.outStream();
+            const writer = io.fixedBufferStream(&str.buf).writer();
             const encrypted_string = table.getEncryptedString(0, i);
-            try decrypt(encrypted_string, stream);
+            try decrypt(encrypted_string, writer);
             str.key = getKey(encrypted_string);
         }
 

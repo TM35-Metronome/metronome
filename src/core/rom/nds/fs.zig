@@ -141,10 +141,10 @@ pub const Fs = struct {
     /// bytes are not a valid narc.
     pub fn fromNarc(data: []u8) !Fs {
         var fbs = io.fixedBufferStream(data);
-        const stream = fbs.inStream();
+        const reader = fbs.reader();
         const names = formats.Chunk.names;
 
-        const header = try stream.readStruct(formats.Header);
+        const header = try reader.readStruct(formats.Header);
         if (!mem.eql(u8, &header.chunk_name, names.narc))
             return error.InvalidNarcHeader;
         if (header.byte_order.value() != 0xFFFE)
@@ -154,7 +154,7 @@ pub const Fs = struct {
         if (header.following_chunks.value() != 0x0003)
             return error.InvalidNarcHeader;
 
-        const fat_header = try stream.readStruct(formats.FatChunk);
+        const fat_header = try reader.readStruct(formats.FatChunk);
         if (!mem.eql(u8, &fat_header.header.name, names.fat))
             return error.InvalidNarcHeader;
 
@@ -162,7 +162,7 @@ pub const Fs = struct {
         const fat = mem.bytesAsSlice(nds.Range, data[fbs.pos..][0..fat_size]);
         fbs.pos += fat_size;
 
-        const fnt_header = try stream.readStruct(formats.Chunk);
+        const fnt_header = try reader.readStruct(formats.Chunk);
         const fnt_size = fnt_header.size.value() - @sizeOf(formats.Chunk);
         if (!mem.eql(u8, &fnt_header.name, names.fnt))
             return error.InvalidNarcHeader;
@@ -170,7 +170,7 @@ pub const Fs = struct {
         const fnt = data[fbs.pos..][0..fnt_size];
         fbs.pos += fnt_size;
 
-        const file_data_header = try stream.readStruct(formats.Chunk);
+        const file_data_header = try reader.readStruct(formats.Chunk);
         if (!mem.eql(u8, &file_data_header.name, names.file_data))
             return error.InvalidNarcHeader;
 
@@ -195,8 +195,8 @@ pub const Iterator = struct {
     pub fn next(it: *Iterator) ?Result {
         var fbs = io.fixedBufferStream(it.fnt_sub_table);
 
-        const stream = fbs.inStream();
-        const type_length = stream.readByte() catch return null;
+        const reader = fbs.reader();
+        const type_length = reader.readByte() catch return null;
         if (type_length == 0)
             return null;
 
@@ -206,7 +206,7 @@ pub const Iterator = struct {
         fbs.pos += length;
 
         const handle = if (is_folder) blk: {
-            const read_id = stream.readIntLittle(u16) catch return null;
+            const read_id = reader.readIntLittle(u16) catch return null;
             debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
             break :blk read_id & 0x0FFF;
         } else blk: {
@@ -256,26 +256,25 @@ pub const SimpleNarcBuilder = struct {
     stream: io.FixedBufferStream([]u8),
 
     pub fn init(buf: []u8, file_count: usize) SimpleNarcBuilder {
-        var fba = io.fixedBufferStream(buf);
-        const stream = fba.outStream();
-        stream.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
-        stream.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
-        fba.pos += file_count * @sizeOf(nds.Range);
-        stream.writeAll(&mem.toBytes(formats.Chunk{
+        const writer = io.fixedBufferStream(buf).writer();
+        writer.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
+        writer.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
+        writer.context.pos += file_count * @sizeOf(nds.Range);
+        writer.writeAll(&mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.fnt.*,
             .size = lu32.init(@sizeOf(formats.Chunk) + @sizeOf(FntMainEntry)),
         })) catch unreachable;
-        stream.writeAll(&mem.toBytes(FntMainEntry{
+        writer.writeAll(&mem.toBytes(FntMainEntry{
             .offset_to_subtable = lu32.init(0),
             .first_file_handle = lu16.init(0),
             .parent_id = lu16.init(1),
         })) catch unreachable;
-        stream.writeAll(&mem.toBytes(formats.Chunk{
+        writer.writeAll(&mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.file_data.*,
             .size = lu32.init(0),
         })) catch unreachable;
 
-        return SimpleNarcBuilder{ .stream = fba };
+        return SimpleNarcBuilder{ .stream = writer.context.* };
     }
 
     pub fn fat(builder: SimpleNarcBuilder) []nds.Range {
@@ -385,7 +384,7 @@ pub const Builder = struct {
         const handle = @intCast(u16, b.fnt_main.items.len);
 
         var buf: [1024]u8 = undefined;
-        const fbs = io.fixedBufferStream(&buf).outStream();
+        const fbs = io.fixedBufferStream(&buf).writer();
         const len = @intCast(u7, dir_name.len);
         const kind = @as(u8, @boolToInt(true)) << 7;
         const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
@@ -434,7 +433,7 @@ pub const Builder = struct {
         const handle = parent_entry.first_file_handle.value();
 
         var buf: [1024]u8 = undefined;
-        const fbs = io.fixedBufferStream(&buf).outStream();
+        const fbs = io.fixedBufferStream(&buf).writer();
         const len = @intCast(u7, file_name.len);
         const kind = @as(u8, @boolToInt(false)) << 7;
         try fbs.writeByte(kind | len);

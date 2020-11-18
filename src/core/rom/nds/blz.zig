@@ -15,7 +15,7 @@ const default_mask = 0x80;
 //       some kind of encoding. `searchMatch` is an example of my refactor, that actually
 //       did help make a little piece of this code clearer.
 
-// TODO: Figure out if it's possible to make these encode and decode functions use streams.
+// TODO: Figure out if it's possible to make these encode and decode functions use readers.
 pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
     const Lengths = struct {
         enc: u32,

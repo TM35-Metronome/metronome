@@ -577,8 +577,8 @@ pub const Game = struct {
     pokeball_items: []PokeballItem,
     text: []*Ptr([*:0xff]u8),
 
-    pub fn identify(stream: anytype) !offsets.Info {
-        const header = try stream.readStruct(gba.Header);
+    pub fn identify(reader: anytype) !offsets.Info {
+        const header = try reader.readStruct(gba.Header);
         for (offsets.infos) |info| {
             if (!mem.eql(u8, &info.game_title, &header.game_title))
                 continue;
@@ -593,8 +593,8 @@ pub const Game = struct {
     }
 
     pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
-        const in_stream = file.inStream();
-        const info = try identify(in_stream);
+        const reader = file.reader();
+        const info = try identify(reader);
         const size = try file.getEndPos();
         try file.seekTo(0);
 
@@ -604,7 +604,7 @@ pub const Game = struct {
         const gba_rom = try allocator.alloc(u8, 1024 * 1024 * 32);
         errdefer allocator.free(gba_rom);
 
-        const free_offset = try in_stream.readAll(gba_rom);
+        const free_offset = try reader.readAll(gba_rom);
         mem.set(u8, gba_rom[free_offset..], 0xff);
 
         const map_headers = info.map_headers.slice(gba_rom);
@@ -765,9 +765,9 @@ pub const Game = struct {
         };
     }
 
-    pub fn writeToStream(game: Game, out_stream: anytype) !void {
+    pub fn write(game: Game, writer: anytype) !void {
         try game.header.validate();
-        try out_stream.writeAll(game.data);
+        try writer.writeAll(game.data);
     }
 
     pub fn requestFreeBytes(game: *Game, size: usize) ![]u8 {

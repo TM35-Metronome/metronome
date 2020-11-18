@@ -28,20 +28,20 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-h, --help        Display this help text and exit.                                                                ") catch unreachable,
-        clap.parseParam("    --hms         Also randomize hms (this may break your game).") catch unreachable,
-        clap.parseParam("-s, --seed <INT>  The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
-        clap.parseParam("-v, --version     Output version information and exit.                                                            ") catch unreachable,
+        clap.parseParam("-h, --help        Display this help text and exit.                                                          ") catch unreachable,
+        clap.parseParam("    --hms         Also randomize hms (this may break your game).                                            ") catch unreachable,
+        clap.parseParam("-s, --seed <INT>  The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+        clap.parseParam("-v, --version     Output version information and exit.                                                      ") catch unreachable,
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-rand-machines ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes the moves of tms.\n" ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-rand-machines ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nRandomizes the moves of tms.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 const Preference = enum {
@@ -54,9 +54,9 @@ const Preference = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const hms = args.flag("--hms");

@@ -32,14 +32,14 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-rand-starters ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes static, given and hollow Pokémons. Doesn't work for " ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-rand-starters ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nRandomizes static, given and hollow Pokémons. Doesn't work for " ++
         "hg and ss yet.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 const Method = enum {
@@ -59,9 +59,9 @@ const Type = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const seed = if (args.option("--seed")) |seed|

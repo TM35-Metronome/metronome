@@ -30,13 +30,13 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-rand-learned-moves ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nRandomizes the moves Pokémons can learn.\n" ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-rand-learned-moves ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nRandomizes the moves Pokémons can learn.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 const Preference = enum {
@@ -49,9 +49,9 @@ const Preference = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const seed = if (args.option("--seed")) |seed|

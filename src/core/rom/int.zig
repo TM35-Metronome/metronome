@@ -61,9 +61,9 @@ pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
             self: @This(),
             comptime fmt: []const u8,
             options: std.fmt.FormatOptions,
-            out_stream: anytype,
+            writer: anytype,
         ) !void {
-            return std.fmt.formatIntValue(self.value(), fmt, options, out_stream);
+            return std.fmt.formatIntValue(self.value(), fmt, options, writer);
         }
 
         fn swap(v: Inner) Inner {

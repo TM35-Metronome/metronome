@@ -479,26 +479,6 @@ pub const EncryptedStringTable = struct {
             strings * @sizeOf(lu16) + // String terminators
             chars * @sizeOf(lu16); // String chars
     }
-
-    const Stream = struct {
-        data: []u8,
-        key: u16,
-        pos: u32 = 0,
-
-        pub const ReadError = error{};
-        pub const WriteError = error{NoSpaceLeft};
-
-        pub const InStream = io.InStream(*Stream, ReadError, read);
-        pub const OutStream = io.OutStream(*Stream, WriteError, write);
-
-        pub fn inStream(self: *Stream) InStream {
-            return .{ .context = self };
-        }
-
-        pub fn outStream(self: *Stream) OutStream {
-            return .{ .context = self };
-        }
-    };
 };
 
 fn decryptAndDecode(data: []const lu16, key: u16, out: anytype) !void {
@@ -631,8 +611,8 @@ pub const Game = struct {
         }
     };
 
-    pub fn identify(stream: anytype) !offsets.Info {
-        const header = try stream.readStruct(nds.Header);
+    pub fn identify(reader: anytype) !offsets.Info {
+        const header = try reader.readStruct(nds.Header);
         for (offsets.infos) |info| {
             //if (!mem.eql(u8, info.game_title, game_title))
             //    continue;
@@ -646,7 +626,7 @@ pub const Game = struct {
     }
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
-        const info = try identify(io.fixedBufferStream(nds_rom.data.items).inStream());
+        const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
         const arm9 = try nds_rom.getDecodedArm9(allocator);
         const file_system = nds_rom.fileSystem();
 
@@ -833,7 +813,7 @@ pub const Game = struct {
             trainer_parties.len,
         );
         const fat = builder.fat();
-        const stream = builder.stream.outStream();
+        const writer = builder.stream.writer();
         const files_offset = builder.stream.pos;
 
         for (trainer_parties) |party, i| {
@@ -843,18 +823,18 @@ pub const Game = struct {
 
             for (party[0..party_size]) |member| {
                 switch (trainers[i].party_type) {
-                    .none => stream.writeAll(&mem.toBytes(PartyMemberNone{
+                    .none => writer.writeAll(&mem.toBytes(PartyMemberNone{
                         .base = member.base,
                     })) catch unreachable,
-                    .item => stream.writeAll(&mem.toBytes(PartyMemberItem{
+                    .item => writer.writeAll(&mem.toBytes(PartyMemberItem{
                         .base = member.base,
                         .item = member.item,
                     })) catch unreachable,
-                    .moves => stream.writeAll(&mem.toBytes(PartyMemberMoves{
+                    .moves => writer.writeAll(&mem.toBytes(PartyMemberMoves{
                         .base = member.base,
                         .moves = member.moves,
                     })) catch unreachable,
-                    .both => stream.writeAll(&mem.toBytes(member)) catch unreachable,
+                    .both => writer.writeAll(&mem.toBytes(member)) catch unreachable,
                 }
                 // Write padding
                 switch (game.info.version) {
@@ -863,14 +843,14 @@ pub const Game = struct {
                     .platinum,
                     .heart_gold,
                     .soul_silver,
-                    => stream.writeAll("\x00\x00") catch unreachable,
+                    => writer.writeAll("\x00\x00") catch unreachable,
 
                     else => unreachable,
                 }
             }
 
             const len = (builder.stream.pos - files_offset) - start;
-            stream.writeByteNTimes(
+            writer.writeByteNTimes(
                 0,
                 @sizeOf([6]HgSsPlatMember(PartyMemberBoth)) - len,
             ) catch unreachable;
@@ -991,32 +971,32 @@ pub const Game = struct {
             const file = text.fat[table.file];
             const bytes = text.data[file.start.value()..file.end.value()];
 
-            // TODO: we don't need a stream
-            const stream = io.fixedBufferStream(bytes).outStream();
+            // TODO: we don't need a writer
+            const writer = io.fixedBufferStream(bytes).writer();
             debug.assert(bytes.len == file_size);
 
             const string_size = table.chars + 1; // Always make room for a terminator
-            try stream.writeAll(&mem.toBytes(Header{
+            try writer.writeAll(&mem.toBytes(Header{
                 .count = lu16.init(table.len()),
                 .key = lu16.init(0),
             }));
 
-            const slices_start = stream.context.pos;
+            const slices_start = writer.context.pos;
             for (@as([*]void, undefined)[0..table.len()]) |_, j| {
-                try stream.writeAll(&mem.toBytes(nds.Slice{
+                try writer.writeAll(&mem.toBytes(nds.Slice{
                     .start = lu32.init(0),
                     .len = lu32.init(0),
                 }));
             }
 
-            const slices = mem.bytesAsSlice(nds.Slice, bytes[slices_start..stream.context.pos]);
+            const slices = mem.bytesAsSlice(nds.Slice, bytes[slices_start..writer.context.pos]);
             for (slices) |*slice, j| {
-                const pos = stream.context.pos;
+                const pos = writer.context.pos;
                 const str = table.at(j);
-                try encodings.encode(str, stream);
-                try stream.writeAll("\xff\xff");
+                try encodings.encode(str, writer);
+                try writer.writeAll("\xff\xff");
 
-                const str_end = stream.context.pos;
+                const str_end = writer.context.pos;
                 const encoded_str = mem.bytesAsSlice(lu16, bytes[pos..str_end]);
                 encrypt(encoded_str, getKey(@intCast(u32, j)));
 
@@ -1027,12 +1007,12 @@ pub const Game = struct {
                 // Pad the string, so that each entry is always entry_size
                 // apart. This ensure that patches generated from tm35-apply
                 // are small.
-                try stream.writeByteNTimes(0, (string_size - str_len) * 2);
-                debug.assert(stream.context.pos - pos == string_size * 2);
+                try writer.writeByteNTimes(0, (string_size - str_len) * 2);
+                debug.assert(writer.context.pos - pos == string_size * 2);
             }
 
             // Assert that we got the file size right.
-            debug.assert(stream.context.pos == bytes.len);
+            debug.assert(writer.context.pos == bytes.len);
         }
     }
     pub fn deinit(game: Game) void {
@@ -1170,10 +1150,9 @@ pub const Game = struct {
         mem.set(String(len), res, String(len){});
         for (res) |*str, i| {
             const id = @intCast(u32, i);
-            var fba = io.fixedBufferStream(&str.buf);
-            const stream = fba.outStream();
+            const writer = io.fixedBufferStream(&str.buf).writer();
             const encrypted_string = table.getEncryptedString(id);
-            try decryptAndDecode(encrypted_string, getKey(id), stream);
+            try decryptAndDecode(encrypted_string, getKey(id), writer);
         }
 
         return res;

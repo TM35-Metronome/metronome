@@ -35,14 +35,14 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-nds-extract ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nReads a Nintendo DS rom and extract its file system " ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-nds-extract ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nReads a Nintendo DS rom and extract its file system " ++
         "into a folder.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 /// TODO: This function actually expects an allocator that owns all the memory allocated, such
@@ -50,9 +50,9 @@ fn usage(stream: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const cwd = fs.cwd();

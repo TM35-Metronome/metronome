@@ -36,20 +36,20 @@ const params = [_]Param{
     clap.parseParam("<ROM>          The rom to identify.                ") catch unreachable,
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-identify");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nIdentify which Pokémon game a file is.\n" ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-identify");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nIdentify which Pokémon game a file is.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const pos = args.positionals();
@@ -60,7 +60,7 @@ pub fn main2(
     };
 
     const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
-    const in_stream = file.inStream();
+    const reader = file.reader();
     defer file.close();
 
     inline for ([_]type{
@@ -69,7 +69,7 @@ pub fn main2(
         gen5.Game,
     }) |Game| {
         file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
-        if (Game.identify(in_stream)) |info| {
+        if (Game.identify(reader)) |info| {
             stdio.out.print("Version: Pokémon {}\nGamecode: {}\n", .{
                 info.version.humanString(),
                 info.gamecode,

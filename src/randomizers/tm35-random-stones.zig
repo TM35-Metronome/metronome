@@ -35,10 +35,10 @@ const params = blk: {
     };
 };
 
-fn usage(stream: anytype) !void {
-    try stream.writeAll("Usage: tm35-random-stones ");
-    try clap.usage(stream, &params);
-    try stream.writeAll("\nChanges all Pokémons to evolve using new evolution stones. " ++
+fn usage(writer: anytype) !void {
+    try writer.writeAll("Usage: tm35-random-stones ");
+    try clap.usage(writer, &params);
+    try writer.writeAll("\nChanges all Pokémons to evolve using new evolution stones. " ++
         "These stones evolve a Pokémon to a random new Pokémon that upholds the " ++
         "requirements of the stone. Here is a list of all stones:\n" ++
         "* Chance Stone: Evolves a Pokémon into random Pokémon.\n" ++
@@ -55,7 +55,7 @@ fn usage(stream: anytype) !void {
         "item names.\n" ++
         "\n" ++
         "Options:\n");
-    try clap.help(stream, &params);
+    try clap.help(writer, &params);
 }
 
 /// TODO: This function actually expects an allocator that owns all the memory allocated, such
@@ -63,9 +63,9 @@ fn usage(stream: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    comptime InStream: type,
-    comptime OutStream: type,
-    stdio: util.CustomStdIoStreams(InStream, OutStream),
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
     const replace_cheap = args.flag("--replace-cheap-items");

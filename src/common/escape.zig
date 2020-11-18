@@ -31,9 +31,9 @@ pub const zig_escapes = comptime blk: {
     break :blk res;
 };
 
-pub fn writeEscaped(out_stream: anytype, buf: []const u8, escapes: [255][]const u8) !void {
+pub fn writeEscaped(writer: anytype, buf: []const u8, escapes: [255][]const u8) !void {
     for (buf) |char| {
-        try out_stream.writeAll(escapes[char]);
+        try writer.writeAll(escapes[char]);
     }
 }
 
@@ -42,7 +42,7 @@ pub fn escape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]const 
     errdefer res.deinit();
 
     try res.ensureCapacity(buf.len);
-    try writeEscape(res.outStream(), buf, escapes);
+    try writeEscape(res.writer(), buf, escapes);
     return res.toOwnedSlice();
 }
 
@@ -60,22 +60,22 @@ test "writeEscaped" {
 fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
-    writeEscaped(fbs.outStream(), str, escapes) catch unreachable;
+    writeEscaped(fbs.writer(), str, escapes) catch unreachable;
     testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 
-pub fn writeUnEscaped(out_stream: anytype, buf: []const u8, escapes: [255][]const u8) !void {
+pub fn writeUnEscaped(writer: anytype, buf: []const u8, escapes: [255][]const u8) !void {
     var index: usize = 0;
     outer: while (index < buf.len) {
         for (escapes) |esc, c| {
             if (mem.startsWith(u8, buf[index..], esc)) {
                 index += esc.len;
-                try out_stream.writeAll(@as(*const [1]u8, &@intCast(u8, c)));
+                try writer.writeAll(@as(*const [1]u8, &@intCast(u8, c)));
                 continue :outer;
             }
         }
 
-        try out_stream.writeAll(buf[index .. index + 1]);
+        try writer.writeAll(buf[index .. index + 1]);
         index += 1;
     }
 }
@@ -85,7 +85,7 @@ pub fn unEscape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]cons
     errdefer res.deinit();
 
     try res.ensureCapacity(buf.len);
-    try writeUnEscaped(res.outStream(), buf, escapes);
+    try writeUnEscaped(res.writer(), buf, escapes);
     return res.toOwnedSlice();
 }
 
@@ -102,7 +102,7 @@ test "writeUnEscaped" {
 fn testWriteUnEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
-    writeUnEscaped(fbs.outStream(), str, escapes) catch unreachable;
+    writeUnEscaped(fbs.writer(), str, escapes) catch unreachable;
     testing.expectEqualSlices(u8, expect, fbs.getWritten());
 }
 

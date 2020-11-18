@@ -8,14 +8,14 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
     return std.fifo.LinearFifo(u8, buffer_type);
 }
 
-/// Reads lines from `stream` using a `Fifo` for buffering.
+/// Reads lines from `reader` using a `Fifo` for buffering.
 ///
 /// NOTE: using `readUntilDelimitorArrayList` over this function results in
 ///       tm35-rand-parties to be around 2x slower. This function is therefor
 ///       still better to use until zigs std gets a better `readUntilDelimitor`
 ///       implementation. Replacement code bellow:
 ///```
-///buf_in_stream.reader().readUntilDelimiterArrayList(buffer, '\n', std.math.maxInt(usize)) catch |err| switch (err) {
+///buf_reader.reader().readUntilDelimiterArrayList(buffer, '\n', std.math.maxInt(usize)) catch |err| switch (err) {
 ///    error.StreamTooLong => unreachable,
 ///    error.EndOfStream => {
 ///        if (buffer.items.len != 0)
@@ -26,7 +26,7 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
 ///};
 ///return buffer.items;
 ///```
-pub fn line(stream: anytype, fifo: anytype) !?[]const u8 {
+pub fn line(reader: anytype, fifo: anytype) !?[]const u8 {
     while (true) {
         const buf = fifo.readableSlice(0);
         if (mem.indexOfScalar(u8, buf, '\n')) |index| {
@@ -43,7 +43,7 @@ pub fn line(stream: anytype, fifo: anytype) !?[]const u8 {
             break :blk try fifo.writableWithSize(math.max(1024, fifo.buf.len));
         };
 
-        const num = try stream.read(new_buf);
+        const num = try reader.read(new_buf);
         fifo.update(num);
 
         if (num == 0) {

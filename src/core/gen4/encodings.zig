@@ -1159,14 +1159,14 @@ test "all" {
     try rom.encoding.testCharMap(&all, "HELLO WORLD", "\x32\x01\x2F\x01\x36\x01\x36\x01\x39\x01\xDE\x01\x41\x01\x39\x01\x3C\x01\x36\x01\x2E\x01");
 }
 
-pub fn encode(str: []const u8, out_stream: anytype) !void {
-    try rom.encoding.encode(&all, 0, str, out_stream);
+pub fn encode(str: []const u8, writer: anytype) !void {
+    try rom.encoding.encode(&all, 0, str, writer);
 }
 
-pub fn decode(in_stream: anytype, out_stream: anytype) !void {
-    try rom.encoding.encodeEx(&all, 1, in_stream, out_stream);
+pub fn decode(reader: anytype, writer: anytype) !void {
+    try rom.encoding.encodeEx(&all, 1, reader, writer);
 }
 
-pub fn decode2(in: []const u8, out_stream: anytype) !void {
-    try decode(io.fixedBufferStream(in).inStream(), out_stream);
+pub fn decode2(in: []const u8, writer: anytype) !void {
+    try decode(io.fixedBufferStream(in).reader(), writer);
 }

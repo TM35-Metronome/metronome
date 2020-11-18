@@ -203,17 +203,17 @@ pub const Rom = struct {
     }
 
     pub fn resizeSection(rom: *Rom, old: []const u8, new_size: usize) ![]u8 {
-        const rom_data = rom.data.items;
+        const data = &rom.data;
         var buf: [1 * (1024 * 1024)]u8 = undefined;
         const fba = &std.heap.FixedBufferAllocator.init(&buf).allocator;
         const sections = try rom.buildSectionTable(fba);
 
-        const old_slice = Slice.fromSlice(rom_data, old);
+        const old_slice = Slice.fromSlice(data.items, old);
         const old_start = old_slice.start.value();
         const old_len = old_slice.len.value();
 
         const section_index = for (sections) |s, i| {
-            const slice = s.toSlice(rom_data);
+            const slice = s.toSlice(data.items);
             if (slice.start.value() == old_start and
                 slice.len.value() == old_len)
             {
@@ -225,7 +225,7 @@ pub const Rom = struct {
         const following_section_start = if (is_last_section)
             math.maxInt(u32)
         else
-            sections[section_index + 1].toSlice(rom_data).start.value();
+            sections[section_index + 1].toSlice(data.items).start.value();
 
         const potential_new_end = old_start + new_size;
         const can_perform_in_place_resize = potential_new_end <= following_section_start;
@@ -233,12 +233,12 @@ pub const Rom = struct {
             // If there is room, we can beform the resize of the section inline in memory.
             // This only requires modifying the section offset in the rom. No copy required.
             const section = sections[section_index];
-            section.set(rom_data, Slice.init(old_start, new_size));
+            section.set(data.items, Slice.init(old_start, new_size));
 
             const h = rom.header();
             h.header_checksum = lu16.init(h.calcChecksum());
 
-            return rom_data[old_start..][0..new_size];
+            return data.items[old_start..][0..new_size];
         }
 
         const arm9_section = rom.arm9();
@@ -248,51 +248,51 @@ pub const Rom = struct {
             // than making room for the section where it is currently located. It will
             // fragment the rom a little, but we don't have to perform massive copies
             // using this method.
-            const last_section = sections[sections.len - 1].toSlice(rom_data);
+            const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
             const new_start = mem.alignForward(last_section_end, 128);
-            try rom.data.resize(new_start + new_size);
+            try data.resize(new_start + new_size);
             mem.copy(
                 u8,
-                rom.data.items[new_start..][0..new_size],
-                rom.data.items[old_start..][0..math.min(new_size, old.len)],
+                data.items[new_start..][0..new_size],
+                data.items[old_start..][0..old.len],
             );
 
             const section = sections[section_index];
-            section.set(rom_data, Slice.init(new_start, new_size));
+            section.set(data.items, Slice.init(new_start, new_size));
             break :blk new_start;
         } else blk: {
             // Some sections (arm9) are not allowed to be moved, so we have to make room
             // for it where it is currently stored. This is expensive, but there is really
             // no other option.
             const extra_bytes = new_size - old.len;
-            const old_rom_len = rom_data.len;
+            const old_rom_len = data.items.len;
             const old_sec_end = old_slice.end();
             const new_rom_len = old_rom_len + extra_bytes;
-            try rom.data.resize(new_rom_len);
+            try data.resize(new_rom_len);
 
             for (sections[section_index + 1 ..]) |section, i| {
-                const section_slice = section.toSlice(rom_data);
-                section.set(rom_data, Slice.init(
+                const section_slice = section.toSlice(data.items);
+                section.set(data.items, Slice.init(
                     section_slice.start.value() + extra_bytes,
                     section_slice.len.value(),
                 ));
             }
 
             const section = sections[section_index];
-            section.set(rom_data, Slice.init(old_start, new_size));
+            section.set(data.items, Slice.init(old_start, new_size));
 
             mem.copyBackwards(
                 u8,
-                rom.data.items[old_sec_end + extra_bytes ..],
-                rom.data.items[old_sec_end..old_rom_len],
+                data.items[old_sec_end + extra_bytes ..],
+                data.items[old_sec_end..old_rom_len],
             );
             break :blk old_start;
         };
 
         // Update header after resize
         const h = rom.header();
-        h.total_used_rom_size = lu32.init(@intCast(u32, rom.data.items.len));
+        h.total_used_rom_size = lu32.init(@intCast(u32, data.items.len));
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = h.total_used_rom_size.value();
@@ -303,7 +303,7 @@ pub const Rom = struct {
         };
 
         h.header_checksum = lu16.init(h.calcChecksum());
-        return rom.data.items[old_start..][0..new_size];
+        return data.items[new_start..][0..new_size];
     }
 
     /// A generic structure for pointing to memory in the nds rom. The memory
@@ -401,39 +401,38 @@ pub const Rom = struct {
         var sections = std.ArrayList(Section).init(allocator);
         try sections.ensureCapacity(7 + fat.len);
 
-        const rom_data = rom.data.items;
+        const data = &rom.data;
         sections.append(Section.fromStartLen(
-            rom_data,
+            data.items,
             &h.banner_offset,
             &h.banner_size,
         )) catch unreachable;
-        sections.append(Section.fromArm(rom_data, &h.arm9)) catch unreachable;
-        sections.append(Section.fromArm(rom_data, &h.arm7)) catch unreachable;
-        sections.append(Section.fromSlice(rom_data, &h.arm9_overlay)) catch unreachable;
-        sections.append(Section.fromSlice(rom_data, &h.arm7_overlay)) catch unreachable;
-        sections.append(Section.fromSlice(rom_data, &h.fat)) catch unreachable;
-        sections.append(Section.fromSlice(rom_data, &h.fnt)) catch unreachable;
+        sections.append(Section.fromArm(data.items, &h.arm9)) catch unreachable;
+        sections.append(Section.fromArm(data.items, &h.arm7)) catch unreachable;
+        sections.append(Section.fromSlice(data.items, &h.arm9_overlay)) catch unreachable;
+        sections.append(Section.fromSlice(data.items, &h.arm7_overlay)) catch unreachable;
+        sections.append(Section.fromSlice(data.items, &h.fat)) catch unreachable;
+        sections.append(Section.fromSlice(data.items, &h.fnt)) catch unreachable;
         for (fat) |*f|
-            sections.append(Section.fromRange(rom_data, f)) catch unreachable;
+            sections.append(Section.fromRange(data.items, f)) catch unreachable;
 
         // Sort sections by where they appear in the rom.
-        std.sort.sort(Section, sections.items, rom_data, Section.before);
+        std.sort.sort(Section, sections.items, data.items, Section.before);
         return sections.toOwnedSlice();
     }
 
     pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {
-        const in_stream = file.inStream();
+        const reader = file.reader();
         const size = try file.getEndPos();
         try file.seekTo(0);
 
-        var rom_data = std.ArrayList(u8).init(allocator);
-        errdefer rom_data.deinit();
-        try rom_data.resize(size);
+        var data = std.ArrayList(u8).init(allocator);
+        errdefer data.deinit();
 
-        try in_stream.readNoEof(rom_data.items);
-        const res = Rom{
-            .data = rom_data,
-        };
+        try data.resize(size);
+        try reader.readNoEof(data.items);
+
+        const res = Rom{ .data = data };
         try res.header().validate();
 
         // TODO: we should validate that all the offsets and sizes are not
@@ -441,12 +440,12 @@ pub const Rom = struct {
         return res;
     }
 
-    pub fn writeToStream(rom: Rom, stream: anytype) !void {
+    pub fn write(rom: Rom, writer: anytype) !void {
         // The contract here is that once you have an `nds.Rom`, it should
         // always be a valid rom, so we just assert that this is true here
         // for sanity.
         rom.header().validate() catch unreachable;
-        try stream.writeAll(rom.data.items);
+        try writer.writeAll(rom.data.items);
     }
 
     pub fn deinit(rom: Rom) void {
