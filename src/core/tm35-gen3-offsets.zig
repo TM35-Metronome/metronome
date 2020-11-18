@@ -28,7 +28,6 @@ const lu64 = rom.int.lu64;
 const TypeId = builtin.TypeId;
 const TypeInfo = builtin.TypeInfo;
 
-const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);

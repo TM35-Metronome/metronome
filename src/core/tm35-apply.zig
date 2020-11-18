@@ -33,7 +33,6 @@ const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 const lu128 = rom.int.lu128;
 
-const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);

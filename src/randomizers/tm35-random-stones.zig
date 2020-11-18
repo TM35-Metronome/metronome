@@ -20,7 +20,6 @@ const parse = util.parse;
 
 const Utf8 = util.unicode.Utf8View;
 
-const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);

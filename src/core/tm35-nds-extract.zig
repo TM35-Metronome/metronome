@@ -18,7 +18,6 @@ const exit = util.exit;
 
 const nds = rom.nds;
 
-const Clap = clap.ComptimeClap(clap.Help, &params);
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
