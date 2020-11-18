@@ -99,19 +99,12 @@ pub fn main2(
         break :blk res catch |err| return exit.allocErr(stdio.err);
     };
 
-    // When --patch is passed, we store a copy of the games old state, so that we
-    // can generate binary patches between old and new versions.
-    var old_bytes = std.ArrayList(u8).init(allocator);
-    defer old_bytes.deinit();
-
     var nds_rom: nds.Rom = undefined;
     var game: Game = blk: {
         const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
-            if (patch != .none)
-                old_bytes.appendSlice(game.data) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen3 = game };
         } else |err| err;
 
@@ -123,14 +116,10 @@ pub fn main2(
         };
 
         const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
-            if (patch != .none)
-                old_bytes.appendSlice(nds_rom.data.items) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen4 = game };
         } else |err| err;
 
         const gen5_error = if (gen5.Game.fromRom(allocator, &nds_rom)) |game| {
-            if (patch != .none)
-                old_bytes.appendSlice(nds_rom.data.items) catch return exit.allocErr(stdio.err);
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
@@ -139,49 +128,43 @@ pub fn main2(
         stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error }) catch {};
         return 1;
     };
-    defer switch (game) {
-        .gen3 => |*gen3_game| gen3_game.deinit(),
-        .gen4 => |*gen4_game| gen4_game.deinit(),
-        .gen5 => |*gen5_game| gen5_game.deinit(),
-    };
+    defer game.deinit();
+
+    // When --patch is passed, we store a copy of the games old state, so that we
+    // can generate binary patches between old and new versions.
+    var old_bytes = std.ArrayList(u8).init(allocator);
+    defer old_bytes.deinit();
+    if (patch != .none)
+        old_bytes.appendSlice(game.data()) catch return exit.allocErr(stdio.err);
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const trimmed = mem.trimRight(u8, line, "\r\n");
-        const new_bytes = switch (game) {
-            .gen3 => |*gen3_game| blk: {
-                applyGen3(gen3_game, line_num, trimmed) catch |err| break :blk err;
-                break :blk gen3_game.data;
-            },
-            .gen4 => |*gen4_game| blk: {
-                applyGen4(nds_rom, gen4_game.*, line_num, trimmed) catch |err| break :blk err;
-                if (patch == .live)
-                    gen4_game.apply() catch return exit.allocErr(stdio.err);
-                break :blk nds_rom.data.items;
-            },
-            .gen5 => |*gen5_game| blk: {
-                applyGen5(nds_rom, gen5_game.*, line_num, trimmed) catch |err| break :blk err;
-                if (patch == .live)
-                    gen5_game.apply() catch return exit.allocErr(stdio.err);
-                break :blk nds_rom.data.items;
-            },
-        } catch |err| {
+        (switch (game) {
+            .gen3 => |*gen3_game| applyGen3(gen3_game, trimmed),
+            .gen4 => |*gen4_game| applyGen4(gen4_game.*, trimmed),
+            .gen5 => |*gen5_game| applyGen5(gen5_game.*, trimmed),
+        }) catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};
             if (abort_on_first_warning)
                 return 1;
             continue;
         };
+        if (patch == .live)
+            game.apply() catch return exit.allocErr(stdio.err);
 
         if (patch == .live) {
             var it = common.PatchIterator{
                 .old = old_bytes.items,
-                .new = new_bytes,
+                .new = game.data(),
             };
             while (it.next()) |p| {
-                stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
-                catch |err| return exit.stdoutErr(stdio.err, err);
+                stdio.out.print("[{}]={x}\n", .{
+                    p.offset,
+                    p.replacement,
+                }) catch |err| return exit.stdoutErr(stdio.err, err);
 
                 old_bytes.resize(math.max(
                     old_bytes.items.len,
@@ -196,40 +179,30 @@ pub fn main2(
     if (patch == .full) {
         var it = common.PatchIterator{
             .old = old_bytes.items,
-            .new = switch (game) {
-                .gen3 => |gen3_game| gen3_game.data,
-                .gen4 => nds_rom.data.items,
-                .gen5 => nds_rom.data.items,
-            },
+            .new = game.data(),
         };
         while (it.next()) |p| {
-            stdio.out.print("[{}]={x}\n", .{ p.offset, p.replacement }) //
-            catch |err| return exit.stdoutErr(stdio.err, err);
+            stdio.out.print("[{}]={x}\n", .{
+                p.offset,
+                p.replacement,
+            }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
 
     if (no_output)
         return 0;
 
-    const out_file = fs.cwd().createFile(out, .{ .exclusive = !replace, .truncate = false }) catch |err| return exit.createErr(stdio.err, out, err);
+    const out_file = fs.cwd().createFile(out, .{
+        .exclusive = !replace,
+        .truncate = false,
+    }) catch |err| return exit.createErr(stdio.err, out, err);
     const writer = out_file.writer();
-    const file_len = switch (game) {
-        .gen3 => |gen3_game| blk: {
-            gen3_game.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
-            break :blk gen3_game.data.len;
-        },
-        .gen4 => |*gen4_game| blk: {
-            gen4_game.apply() catch unreachable; //|err| return exit.err(stdio.err, "apply error: {}\n", .{err});
-            nds_rom.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
-            break :blk nds_rom.data.items.len;
-        },
-        .gen5 => |*gen5_game| blk: {
-            gen5_game.apply() catch |err| return exit.err(stdio.err, "apply error: {}\n", .{err});
-            nds_rom.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
-            break :blk nds_rom.data.items.len;
-        },
-    };
-    out_file.setEndPos(file_len) catch |err| return exit.writeErr(stdio.err, out, err);
+
+    game.apply() catch |err| return exit.err(stdio.err, "apply error: {}\n", .{err});
+    game.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
+
+    const len = game.data().len;
+    out_file.setEndPos(len) catch |err| return exit.writeErr(stdio.err, out, err);
 
     return 0;
 }
@@ -238,6 +211,38 @@ const Game = union(enum) {
     gen3: gen3.Game,
     gen4: gen4.Game,
     gen5: gen5.Game,
+
+    pub fn data(game: Game) []const u8 {
+        return switch (game) {
+            .gen3 => |g| g.data,
+            .gen4 => |g| g.rom.data.items,
+            .gen5 => |g| g.rom.data.items,
+        };
+    }
+
+    pub fn apply(game: *Game) !void {
+        switch (game.*) {
+            .gen3 => {},
+            .gen4 => |*g| try g.apply(),
+            .gen5 => |*g| try g.apply(),
+        }
+    }
+
+    pub fn write(game: Game, writer: anytype) !void {
+        switch (game) {
+            .gen3 => |g| try g.write(writer),
+            .gen4 => |g| try g.rom.write(writer),
+            .gen5 => |g| try g.rom.write(writer),
+        }
+    }
+
+    pub fn deinit(game: Game) void {
+        switch (game) {
+            .gen3 => |g| g.deinit(),
+            .gen4 => |g| g.deinit(),
+            .gen5 => |g| g.deinit(),
+        }
+    }
 };
 
 const sw = parse.Swhash(16);
@@ -284,7 +289,7 @@ pub const converters = .{
     toInt(u64, .Little),
 };
 
-fn applyGen3(game: *gen3.Game, line: usize, str: []const u8) !void {
+fn applyGen3(game: *gen3.Game, str: []const u8) !void {
     var parser = parse.MutParser{ .str = str };
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {
@@ -718,9 +723,9 @@ fn applyGen3Area(par: *parse.MutParser, rate: *u8, wilds: []gen3.WildPokemon) !v
     }
 }
 
-fn applyGen4(nds_rom: nds.Rom, game: gen4.Game, line: usize, str: []const u8) !void {
+fn applyGen4(game: gen4.Game, str: []const u8) !void {
     var parser = parse.MutParser{ .str = str };
-    const header = nds_rom.header();
+    const header = game.rom.header();
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {
             const value = try parser.parse(comptime parse.enumv(common.Version));
@@ -1049,9 +1054,9 @@ fn applyGen4String(comptime l: usize, strs: []gen4.String(l), index: usize, valu
     strs[index].buf = buf;
 }
 
-fn applyGen5(nds_rom: nds.Rom, game: gen5.Game, line: usize, str: []const u8) !void {
+fn applyGen5(game: gen5.Game, str: []const u8) !void {
     var parser = parse.MutParser{ .str = str };
-    const header = nds_rom.header();
+    const header = game.rom.header();
 
     switch (m(try parser.parse(parse.anyField))) {
         c("version") => {

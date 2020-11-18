@@ -801,11 +801,10 @@ pub const Game = struct {
         return error.NoFreeSpaceAvailable;
     }
 
-    pub fn deinit(game: *Game) void {
+    pub fn deinit(game: Game) void {
         game.allocator.free(game.data);
         game.allocator.free(game.static_pokemons);
         game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
-        game.* = undefined;
     }
 };
