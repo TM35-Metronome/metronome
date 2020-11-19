@@ -240,7 +240,7 @@ pub fn RelativeSlice(
             return slice.inner.ptr.toSlice(data, slice.len());
         }
 
-        pub fn len(slice: @This()) usize {
+        pub fn len(slice: @This()) Int {
             return slice.inner.len.value();
         }
     };

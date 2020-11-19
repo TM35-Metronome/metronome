@@ -221,7 +221,7 @@ const Game = union(enum) {
 
     pub fn apply(game: *Game) !void {
         switch (game.*) {
-            .gen3 => {},
+            .gen3 => |*g| try g.apply(),
             .gen4 => |*g| try g.apply(),
             .gen5 => |*g| try g.apply(),
         }
@@ -325,6 +325,7 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
             if (index >= game.trainers.len)
                 return error.Error;
             const trainer = &game.trainers[index];
+            const party = &game.trainer_parties[index];
 
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
@@ -333,116 +334,23 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
                 c("encounter_music") => trainer.encounter_music.music = try parser.parse(parse.u7v),
                 c("trainer_picture") => trainer.trainer_picture = try parser.parse(parse.u8v),
                 c("is_double") => trainer.is_double = try parser.parse(parselu32v),
+                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen3.PartyType)),
+                c("party_size") => party.size = try parser.parse(parse.u32v),
                 c("ai") => trainer.ai = try parser.parse(parselu32v),
                 c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &trainer.name),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("party_size"), c("party_type") => {
-                    const is_len = c("party_size") == m(field);
-
-                    const old_member_size = trainer.party_type.memberSize();
-                    const old_type = trainer.party_type;
-                    const old_len = trainer.partyLen();
-                    const old_size = old_member_size * old_len;
-
-                    var new_len: u32 = undefined;
-                    var new_type: gen3.PartyType = undefined;
-                    const new_size = if (is_len) blk: {
-                        new_len = try parser.parse(parse.u32v);
-                        break :blk new_len * old_member_size;
-                    } else blk: {
-                        new_type = try parser.parse(comptime parse.enumv(gen3.PartyType));
-                        break :blk old_len * new_type.memberSize();
-                    };
-
-                    if (new_size > old_size) {
-                        const Ptr = gen3.Ptr([*]gen3.PartyMemberNone);
-                        const old_bytes = try trainer.partyBytes(game.data);
-                        const new_bytes = try game.requestFreeBytes(new_size);
-                        mem.set(u8, new_bytes, 0x0);
-                        mem.copy(u8, new_bytes, old_bytes);
-                        mem.set(u8, old_bytes, 0xff);
-                        trainer.party.none.inner.ptr = try Ptr.init(new_bytes.ptr, game.data);
-                    }
-                    if (is_len) {
-                        trainer.party.none.inner.len = lu32.init(new_len);
-                    } else {
-                        // A lot of boilerplat code for changing the party type correctly.
-                        // We copy out the old party, and then write it back in. This
-                        // ensures that as much data from the old party is preserved
-                        // without overriding things during copy.
-                        var old_copy = [_]gen3.PartyMemberBoth{.{}} ** 6;
-                        switch (trainer.party_type) {
-                            .none => for (try trainer.party.none.toSlice(game.data)) |member, j| {
-                                old_copy[j].base = member.base;
-                            },
-                            .item => for (try trainer.party.item.toSlice(game.data)) |member, j| {
-                                old_copy[j].base = member.base;
-                                old_copy[j].item = member.item;
-                            },
-                            .moves => for (try trainer.party.moves.toSlice(game.data)) |member, j| {
-                                old_copy[j].base = member.base;
-                                old_copy[j].moves = member.moves;
-                            },
-                            .both => mem.copy(
-                                gen3.PartyMemberBoth,
-                                &old_copy,
-                                try trainer.party.both.toSlice(game.data),
-                            ),
-                        }
-
-                        trainer.party_type = new_type;
-                        switch (trainer.party_type) {
-                            .none => for (try trainer.party.none.toSlice(game.data)) |*member, j| {
-                                member.base = old_copy[j].base;
-                            },
-                            .item => for (try trainer.party.item.toSlice(game.data)) |*member, j| {
-                                member.base = old_copy[j].base;
-                                member.item = old_copy[j].item;
-                            },
-                            .moves => for (try trainer.party.moves.toSlice(game.data)) |*member, j| {
-                                member.base = old_copy[j].base;
-                                member.moves = old_copy[j].moves;
-                            },
-                            .both => mem.copy(
-                                gen3.PartyMemberBoth,
-                                try trainer.party.both.toSlice(game.data),
-                                old_copy[0..old_len],
-                            ),
-                        }
-                    }
-
-                    const old_bytes = try trainer.partyBytes(game.data);
-                    mem.set(u8, old_bytes[new_size..], 0xff);
-                },
                 c("party") => {
                     const pindex = try parser.parse(parse.index);
-                    if (pindex >= trainer.partyLen())
+                    if (pindex >= party.size)
                         return error.Error;
-                    const member = try trainer.partyAt(pindex, game.data);
 
+                    const member = &party.members[pindex];
                     switch (m(try parser.parse(parse.anyField))) {
-                        c("iv") => member.iv = try parser.parse(parselu16v),
-                        c("level") => member.level = try parser.parse(parselu16v),
-                        c("species") => member.species = try parser.parse(parselu16v),
-                        c("item") => {
-                            const item = try parser.parse(parselu16v);
-                            switch (trainer.party_type) {
-                                .item => member.toParent(gen3.PartyMemberItem).item = item,
-                                .both => member.toParent(gen3.PartyMemberBoth).item = item,
-                                else => return error.NoField,
-                            }
-                        },
-                        c("moves") => switch (trainer.party_type) {
-                            .moves => {
-                                const move_member = member.toParent(gen3.PartyMemberMoves);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            .both => {
-                                const move_member = member.toParent(gen3.PartyMemberBoth);
-                                try parse.anyT(parser.str, &move_member.moves, converters);
-                            },
-                            else => return error.NoField,
-                        },
+                        c("iv") => member.base.iv = try parser.parse(parselu16v),
+                        c("level") => member.base.level = try parser.parse(parselu16v),
+                        c("species") => member.base.species = try parser.parse(parselu16v),
+                        c("item") => member.item = try parser.parse(parselu16v),
+                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
                         else => return error.NoField,
                     }
                 },
