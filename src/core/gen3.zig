@@ -107,7 +107,7 @@ pub const Trainer = extern struct {
         };
     }
 
-    pub fn partyLen(trainer: Trainer) usize {
+    pub fn partyLen(trainer: Trainer) u32 {
         return switch (trainer.party_type) {
             .none => trainer.party.none.len(),
             .item => trainer.party.item.len(),
@@ -541,12 +541,21 @@ const PokeballItem = struct {
     amount: *lu16,
 };
 
+const TrainerParty = struct {
+    size: u32 = 0,
+    members: [6]PartyMemberBoth = [_]PartyMemberBoth{PartyMemberBoth{}} ** 6,
+};
+
 pub const Game = struct {
     allocator: *mem.Allocator,
     version: common.Version,
 
     free_offset: usize,
     data: []u8,
+
+    // These fields are owned by the game and will be applied to
+    // the rom oppon calling `apply`.
+    trainer_parties: []TrainerParty,
 
     // All these fields point into data
     header: *gba.Header,
@@ -606,6 +615,31 @@ pub const Game = struct {
 
         const free_offset = try reader.readAll(gba_rom);
         mem.set(u8, gba_rom[free_offset..], 0xff);
+
+        const trainers = info.trainers.slice(gba_rom);
+        const trainer_parties = try allocator.alloc(TrainerParty, trainers.len);
+        mem.set(TrainerParty, trainer_parties, TrainerParty{});
+
+        for (trainer_parties) |*party, i| {
+            party.size = if (i < trainers.len) trainers[i].partyLen() else 0;
+
+            var j: usize = 0;
+            while (j < party.size) : (j += 1) {
+                const base = try trainers[i].partyAt(j, gba_rom);
+                party.members[j].base = base.*;
+
+                switch (trainers[i].party_type) {
+                    .none => {},
+                    .item => party.members[j].item = base.toParent(PartyMemberItem).item,
+                    .moves => party.members[j].moves = base.toParent(PartyMemberMoves).moves,
+                    .both => {
+                        const member = base.toParent(PartyMemberBoth);
+                        party.members[j].item = member.item;
+                        party.members[j].moves = member.moves;
+                    },
+                }
+            }
+        }
 
         const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
@@ -721,6 +755,9 @@ pub const Game = struct {
             .allocator = allocator,
             .free_offset = free_offset,
             .data = gba_rom,
+
+            .trainer_parties = trainer_parties,
+
             .header = @ptrCast(*gba.Header, &gba_rom[0]),
             .starters = [_]*lu16{
                 info.starters[0].ptr(gba_rom),
@@ -733,7 +770,7 @@ pub const Game = struct {
                 info.starters_repeat[2].ptr(gba_rom),
             },
             .text_delays = info.text_delays.slice(gba_rom),
-            .trainers = info.trainers.slice(gba_rom),
+            .trainers = trainers,
             .moves = info.moves.slice(gba_rom),
             .machine_learnsets = info.machine_learnsets.slice(gba_rom),
             .pokemons = info.pokemons.slice(gba_rom),
@@ -763,6 +800,56 @@ pub const Game = struct {
             .pokeball_items = script_data.pokeball_items.toOwnedSlice(),
             .text = script_data.text.toOwnedSlice(),
         };
+    }
+
+    pub fn apply(game: *Game) !void {
+        try game.applyTrainerParties();
+    }
+
+    fn applyTrainerParties(game: *Game) !void {
+        const allocator = game.allocator;
+        const trainer_parties = game.trainer_parties;
+        const trainers = game.trainers;
+
+        for (trainer_parties) |party, i| {
+            const trainer = &trainers[i];
+            const party_bytes = try trainer.partyBytes(game.data);
+            const party_type = trainer.party_type;
+            const party_size = party.size * party_type.memberSize();
+
+            if (party_size == 0) {
+                const p = &trainer.party.none;
+                p.inner.len = lu32.init(party.size);
+                continue;
+            }
+
+            const bytes = if (party_bytes.len < party_size)
+                try game.requestFreeBytes(party_size)
+            else
+                party_bytes;
+
+            const writer = io.fixedBufferStream(bytes).writer();
+            for (party.members[0..party.size]) |member| {
+                switch (party_type) {
+                    .none => writer.writeAll(&mem.toBytes(PartyMemberNone{
+                        .base = member.base,
+                    })) catch unreachable,
+                    .item => writer.writeAll(&mem.toBytes(PartyMemberItem{
+                        .base = member.base,
+                        .item = member.item,
+                    })) catch unreachable,
+                    .moves => writer.writeAll(&mem.toBytes(PartyMemberMoves{
+                        .base = member.base,
+                        .moves = member.moves,
+                    })) catch unreachable,
+                    .both => writer.writeAll(&mem.toBytes(member)) catch unreachable,
+                }
+            }
+
+            const p = &trainer.party.none;
+            p.inner.ptr.inner = (try Ptr([*]u8).init(bytes.ptr, game.data)).inner;
+            p.inner.len = lu32.init(party.size);
+        }
     }
 
     pub fn write(game: Game, writer: anytype) !void {
@@ -806,5 +893,6 @@ pub const Game = struct {
         game.allocator.free(game.static_pokemons);
         game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
+        game.allocator.free(game.trainer_parties);
     }
 };

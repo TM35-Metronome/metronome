@@ -110,6 +110,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         try writer.print(".text_delays[{}]={}\n", .{ i, delay });
 
     for (game.trainers) |trainer, i| {
+        const party = game.trainer_parties[i];
         try writer.print(".trainers[{}].class={}\n", .{ i, trainer.class });
         try writer.print(".trainers[{}].gender={}\n", .{ i, @tagName(trainer.encounter_music.gender) });
         try writer.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music.music });
@@ -127,35 +128,17 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
 
         try writer.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
         try writer.print(".trainers[{}].party_size={}\n", .{ i, trainer.partyLen() });
-        switch (trainer.party_type) {
-            .none => for (try trainer.party.none.toSlice(game.data)) |member, j| {
-                try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-                try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-                try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
-            },
-            .item => for (try trainer.party.item.toSlice(game.data)) |member, j| {
-                try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-                try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-                try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
+        for (party.members[0..party.size]) |member, j| {
+            try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
+            try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
+            try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
+            if (trainer.party_type == .item or trainer.party_type == .both)
                 try writer.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item });
-            },
-            .moves => for (try trainer.party.moves.toSlice(game.data)) |member, j| {
-                try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-                try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-                try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
+            if (trainer.party_type == .moves or trainer.party_type == .both) {
                 for (member.moves) |move, k| {
                     try writer.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move });
                 }
-            },
-            .both => for (try trainer.party.both.toSlice(game.data)) |member, j| {
-                try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-                try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-                try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
-                try writer.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item });
-                for (member.moves) |move, k| {
-                    try writer.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move });
-                }
-            },
+            }
         }
     }
 
