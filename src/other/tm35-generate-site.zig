@@ -58,11 +58,10 @@ pub fn main2(
     var strings = std.StringHashMap(void).init(allocator);
     var obj = Object{ .fields = Fields.init(allocator) };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&obj, &strings, str) catch |err| switch (err) {
+        parseLine(&obj, &strings, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
-        stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
+        stdio.out.print("{}\n", .{line}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);

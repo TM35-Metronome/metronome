@@ -41,16 +41,7 @@ pub fn testProgram(
         },
         clap_args,
     );
-    debug.warn("{}", .{stderr.getWritten()});
     testing.expectEqual(@as(u8, 0), res);
-    testing.expectEqualSlices(u8, "", stderr.getWritten());
-    if (!mem.eql(u8, out, stdout.getWritten())) {
-        debug.warn("\n====== expected this output: =========\n", .{});
-        debug.warn("{}", .{out});
-        debug.warn("\n======== instead found this: =========\n", .{});
-        debug.warn("{}", .{stdout.getWritten()});
-        debug.warn("\n======================================\n", .{});
-        testing.expect(false);
-    }
-    testing.expectEqualSlices(u8, out, stdout.getWritten());
+    testing.expectEqualStrings("", stderr.getWritten());
+    testing.expectEqualStrings(out, stdout.getWritten());
 }

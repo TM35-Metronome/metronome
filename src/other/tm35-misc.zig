@@ -105,13 +105,12 @@ pub fn main2(
         .static_scale = static_scale catch unreachable,
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(stdio.out, opt, str) catch |err| switch (err) {
-            error.ParseError => true,
+        parseLine(stdio.out, opt, line) catch |err| switch (err) {
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
             else => return exit.stdoutErr(stdio.err, err),
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     return 0;
@@ -126,7 +125,7 @@ const Options = struct {
     static_scale: f64,
 };
 
-fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
+fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -135,20 +134,18 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
     switch (m(try p.parse(parse.anyField))) {
         c("instant_text") => if (opt.fast_text) {
             _ = try p.parse(parse.boolv);
-            try out.writeAll(".instant_text=true\n");
-            return false;
+            return out.writeAll(".instant_text=true\n");
         },
         c("text_delays") => if (opt.fast_text) {
             const index = try p.parse(parse.index);
             _ = try p.parse(parse.usizev);
-            try out.print(".text_delays[{}]={}\n", .{
+            return out.print(".text_delays[{}]={}\n", .{
                 index, switch (index) {
                     0 => @as(usize, 2),
                     1 => @as(usize, 1),
                     else => @as(usize, 0),
                 },
             });
-            return false;
         },
         c("map") => {
             const index = try p.parse(parse.index);
@@ -157,12 +154,11 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
                 c("allow_cycling"), c("allow_running") => {
                     const allow = if (c("allow_running") == m(field)) opt.running else opt.biking;
                     if (allow == .unchanged)
-                        return true;
+                        return error.ParseError;
 
-                    try out.print(".map[{}].{}={}\n", .{ index, field, allow == .everywhere });
-                    return false;
+                    return out.print(".map[{}].{}={}\n", .{ index, field, allow == .everywhere });
                 },
-                else => return true,
+                else => return error.ParseError,
             }
         },
         c("trainers") => if (opt.trainer_scale != 1.0) {
@@ -174,12 +170,11 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
 
             const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
             const new_level = @floatToInt(u8, math.min(new_level_float, 100));
-            try out.print(".trainers[{}].party[{}].level={}\n", .{
+            return out.print(".trainers[{}].party[{}].level={}\n", .{
                 trainer_index,
                 party_index,
                 new_level,
             });
-            return false;
         },
         c("wild_pokemons") => if (opt.wild_scale != 1.0) {
             const zone_index = try p.parse(parse.index);
@@ -194,16 +189,15 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
                     const level = try p.parse(parse.u8v);
                     const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
                     const new_level = @floatToInt(u8, math.min(new_level_float, 100));
-                    try out.print(".wild_pokemons[{}].{}.pokemons[{}].{}={}\n", .{
+                    return out.print(".wild_pokemons[{}].{}.pokemons[{}].{}={}\n", .{
                         zone_index,
                         area_name,
                         poke_index,
                         field,
                         new_level,
                     });
-                    return false;
                 },
-                else => return true,
+                else => return error.ParseError,
             }
         },
         c("static_pokemons") => {
@@ -213,13 +207,10 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !bool {
 
             const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
             const new_level = @floatToInt(u8, math.min(new_level_float, 100));
-            try out.print(".static_pokemons[{}].level={}\n", .{ index, new_level });
-            return false;
+            return out.print(".static_pokemons[{}].level={}\n", .{ index, new_level });
         },
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return true;
 }
 
 test "tm35-misc" {

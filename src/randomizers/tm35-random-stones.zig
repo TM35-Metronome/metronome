@@ -85,15 +85,14 @@ pub fn main2(
         .strings = std.StringHashMap(usize).init(allocator),
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, replace_cheap, str) catch |err| switch (err) {
+        parseLine(allocator, &data, replace_cheap, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError,
             error.InvalidUtf8,
-            => true,
+            error.ParseError,
+            => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
@@ -124,7 +123,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -136,6 +135,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
         c("pokedex") => {
             const index = try p.parse(parse.index);
             _ = try data.pokedex.put(allocator, index);
+            return error.ParseError;
         },
         c("pokemons") => {
             const index = try p.parse(parse.index);
@@ -153,7 +153,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                     c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
                     c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
                     c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return true,
+                    else => return error.ParseError,
                 },
                 c("types") => {
                     _ = try p.parse(parse.index);
@@ -180,11 +180,11 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                         c("method") => evo.method = try data.string(try p.parse(parse.strv)),
                         else => {},
                     }
-                    return false;
+                    return;
                 },
-                else => return true,
+                else => return error.ParseError,
             }
-            return true;
+            return error.ParseError;
         },
         c("items") => {
             const index = try p.parse(parse.index);
@@ -205,21 +205,20 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                 },
                 c("price") => {
                     item.price = try p.parse(parse.usizev);
-                    return true;
+                    return error.ParseError;
                 },
-                else => return true,
+                else => return error.ParseError,
             }
-            return false;
+            return;
         },
         c("pokeball_items") => if (replace_cheap) {
             const index = try p.parse(parse.index);
             _ = try p.parse(comptime parse.field("item"));
             _ = try data.pokeball_items.put(allocator, index, try p.parse(parse.usizev));
-            return false;
+            return;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-    return true;
 }
 
 fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {

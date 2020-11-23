@@ -151,13 +151,12 @@ pub fn main2(
         .strings = std.StringHashMap(usize).init(allocator),
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(allocator, &data, .{
@@ -206,7 +205,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -216,6 +215,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
         c("pokedex") => {
             const index = try p.parse(parse.index);
             _ = try data.pokedex.put(allocator, index);
+            return error.ParseError;
         },
         c("pokemons") => {
             const poke_index = try p.parse(parse.index);
@@ -231,7 +231,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                     c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
                     c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
                     c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return true,
+                    else => return error.ParseError,
                 },
                 c("types") => {
                     _ = try p.parse(parse.index);
@@ -244,11 +244,12 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                     switch (m(try p.parse(parse.anyField))) {
                         c("id") => move.id = try p.parse(parse.usizev),
                         c("level") => move.level = try p.parse(parse.u16v),
-                        else => return true,
+                        else => return error.ParseError,
                     }
                 },
-                else => return true,
+                else => return error.ParseError,
             }
+            return error.ParseError;
         },
         c("trainers") => {
             const trainer_index = try p.parse(parse.index);
@@ -270,15 +271,13 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                             const move = try p.parse(parse.usizev);
                             _ = try member.moves.put(allocator, move_index, move);
                         },
-                        else => return true,
+                        else => return error.ParseError,
                     }
-
-                    return false;
+                    return;
                 },
-                else => return true,
+                else => return error.ParseError,
             }
-
-            return false;
+            return;
         },
         c("items") => {
             const index = try p.parse(parse.index);
@@ -288,9 +287,9 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                     if (effect != 0)
                         _ = try data.held_items.put(allocator, index);
                 },
-                else => return true,
+                else => return error.ParseError,
             }
-            return true;
+            return error.ParseError;
         },
         c("moves") => {
             const index = try p.parse(parse.index);
@@ -301,13 +300,12 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                 c("type") => move.type = try p.parse(parse.usizev),
                 c("pp") => move.pp = try p.parse(parse.u8v),
                 c("accuracy") => move.accuracy = try p.parse(parse.u8v),
-                else => return true,
+                else => {},
             }
+            return error.ParseError;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return true;
 }
 
 const Options = struct {
