@@ -68,13 +68,12 @@ pub fn main2(
         .strings = std.StringHashMap(usize).init(allocator),
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&data, str) catch |err| switch (err) {
+        parseLine(&data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(data, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
@@ -103,7 +102,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !bool {
+fn parseLine(data: *Data, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -114,6 +113,7 @@ fn parseLine(data: *Data, str: []const u8) !bool {
         c("pokedex") => {
             const index = try p.parse(parse.index);
             _ = try data.pokedex.put(allocator, index);
+            return error.ParseError;
         },
         c("pokemons") => {
             const index = try p.parse(parse.index);
@@ -129,15 +129,16 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                     c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
                     c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
                     c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return true,
+                    else => return error.ParseError,
                 },
                 // TODO: We're not using type information for anything yet
                 c("types") => {
                     _ = try p.parse(parse.index);
                     _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
                 },
-                else => return true,
+                else => return error.ParseError,
             }
+            return error.ParseError;
         },
         c("wild_pokemons") => {
             const zone_index = try p.parse(parse.index);
@@ -156,15 +157,13 @@ fn parseLine(data: *Data, str: []const u8) !bool {
                 c("min_level") => pokemon.min_level = try p.parse(parse.u8v),
                 c("max_level") => pokemon.max_level = try p.parse(parse.u8v),
                 c("species") => pokemon.species = try p.parse(parse.usizev),
-                else => return true,
+                else => return error.ParseError,
             }
 
-            return false;
+            return;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return true;
 }
 
 fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {

@@ -68,13 +68,12 @@ pub fn main2(
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var pokemons = Pokemons{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &pokemons, str) catch |err| switch (err) {
+        parseLine(allocator, &pokemons, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(pokemons, seed, same_total_stats, follow_evos);
@@ -90,7 +89,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {
     const sw = util.parse.Swhash(8);
     const m = sw.match;
     const c = sw.case;
@@ -106,9 +105,10 @@ fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !b
                 if (p.parse(comptime parse.field(stat.name))) |_| {
                     pokemon.stats[i] = try p.parse(parse.u8v);
                     pokemon.output[i] = true;
-                    return false;
+                    return;
                 } else |_| {}
             }
+            return error.ParseError;
         },
         c("evos") => {
             _ = try p.parse(parse.index);
@@ -117,11 +117,10 @@ fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !b
 
             const evo_from = try pokemons.getOrPutValue(allocator, evo_from_i, Pokemon{});
             _ = try evo_from.evolves_from.put(allocator, index);
+            return error.ParseError;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return true;
 }
 
 fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {

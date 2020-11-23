@@ -76,15 +76,14 @@ pub fn main2(
         .strings = std.StringHashMap(usize).init(allocator),
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, hms, str) catch |err| switch (err) {
+        parseLine(allocator, &data, hms, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
             error.ParseError,
-            => true,
+            => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(&data, seed) catch return exit.allocErr(stdio.err);
@@ -112,7 +111,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8) !void {
     const sw = util.parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -125,7 +124,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
                 try p.parse(parse.index),
                 try p.parse(parse.usizev),
             );
-            return false;
+            return;
         },
         c("hms") => if (hms) {
             _ = try data.hms.put(
@@ -133,7 +132,9 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
                 try p.parse(parse.index),
                 try p.parse(parse.usizev),
             );
-            return false;
+            return;
+        } else {
+            return error.ParseError;
         },
         c("moves") => {
             const index = try p.parse(parse.index);
@@ -148,10 +149,9 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
                     );
                     move.description = try Utf8.init(desc);
                 },
-
                 else => {},
             }
-            return true;
+            return error.ParseError;
         },
         c("items") => {
             const index = try p.parse(parse.index);
@@ -173,11 +173,10 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
                 },
                 else => {},
             }
-            return true;
+            return error.ParseError;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-    return true;
 }
 
 fn randomize(data: *Data, seed: u64) !void {

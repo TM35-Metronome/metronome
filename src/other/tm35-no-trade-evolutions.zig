@@ -60,13 +60,12 @@ pub fn main2(
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     removeTradeEvolutions(data);
@@ -84,7 +83,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -101,10 +100,8 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
     switch (m(try p.parse(parse.anyField))) {
         c("param") => evo.param = try p.parse(parse.usizev),
         c("method") => evo.method = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return false;
 }
 
 fn removeTradeEvolutions(data: Data) void {

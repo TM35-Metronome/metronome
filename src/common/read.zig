@@ -32,7 +32,8 @@ pub fn line(reader: anytype, fifo: anytype) !?[]const u8 {
         if (mem.indexOfScalar(u8, buf, '\n')) |index| {
             defer fifo.head += index + 1;
             defer fifo.count -= index + 1;
-            return buf[0..index];
+            const res = buf[0..index];
+            return res[0 .. index - @boolToInt(mem.endsWith(u8, res, "\r"))];
         }
 
         const new_buf = blk: {
@@ -67,6 +68,16 @@ test "readLine" {
         "b",
         "c",
     });
+    try testReadLine(
+        "a\r\n" ++
+            "b\n" ++
+            "c",
+        &[_][]const u8{
+            "a",
+            "b",
+            "c",
+        },
+    );
 }
 
 fn testReadLine(str: []const u8, lines: []const []const u8) !void {
@@ -75,7 +86,7 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
 
     for (lines) |expected_line| {
         const actual_line = (try line(fbs.reader(), &fifo)).?;
-        testing.expectEqualSlices(u8, expected_line, actual_line);
+        testing.expectEqualStrings(expected_line, actual_line);
     }
     testing.expectEqual(@as(?[]const u8, null), try line(fbs.reader(), &fifo));
 }

@@ -81,13 +81,12 @@ pub fn main2(
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(allocator, data, seed, pref) catch return exit.allocErr(stdio.err);
@@ -119,7 +118,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const sw = util.parse.Swhash(8);
     const m = sw.match;
     const c = sw.case;
@@ -137,16 +136,20 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                     _ = try pokemon.tms.put(allocator, index);
                     if (try p.parse(parse.boolv))
                         _ = try pokemon.tms_learned.put(allocator, index);
+                    return;
                 },
                 c("hms") => {
                     _ = try pokemon.hms.put(allocator, index);
                     if (try p.parse(parse.boolv))
                         _ = try pokemon.hms_learned.put(allocator, index);
+                    return;
                 },
-                c("types") => _ = try pokemon.types.put(allocator, try p.parse(parse.usizev)),
-                else => return true,
+                c("types") => {
+                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
+                    return error.ParseError;
+                },
+                else => return error.ParseError,
             }
-            return c("tms") != m(field) and c("hms") != m(field);
         },
         c("moves") => {
             const index = try p.parse(parse.index);
@@ -157,20 +160,26 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
                 c("type") => move.type = try p.parse(parse.usizev),
                 else => {},
             }
+            return error.ParseError;
         },
-        c("tms") => _ = try data.tms.put(
-            allocator,
-            try p.parse(parse.index),
-            try p.parse(parse.usizev),
-        ),
-        c("hms") => _ = try data.hms.put(
-            allocator,
-            try p.parse(parse.index),
-            try p.parse(parse.usizev),
-        ),
-        else => return true,
+        c("tms") => {
+            _ = try data.tms.put(
+                allocator,
+                try p.parse(parse.index),
+                try p.parse(parse.usizev),
+            );
+            return error.ParseError;
+        },
+        c("hms") => {
+            _ = try data.hms.put(
+                allocator,
+                try p.parse(parse.index),
+                try p.parse(parse.usizev),
+            );
+            return error.ParseError;
+        },
+        else => return error.ParseError,
     }
-    return true;
 }
 
 fn randomize(allocator: *mem.Allocator, data: Data, seed: u64, pref: Preference) !void {

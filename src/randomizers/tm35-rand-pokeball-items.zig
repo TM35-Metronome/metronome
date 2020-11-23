@@ -71,13 +71,12 @@ pub fn main2(
         .strings = std.StringHashMap(usize).init(allocator),
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(allocator, &data, str) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => true,
+            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+                return exit.stdoutErr(stdio.err, err2);
+            },
         };
-        if (print_line)
-            stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     randomize(allocator, &data, seed, include_tms_hms, include_key_items) catch |err| return exit.randErr(stdio.err, err);
@@ -89,7 +88,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -101,7 +100,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
             _ = try p.parse(comptime parse.field("item"));
             const ball_item = try p.parse(parse.usizev);
             _ = try data.pokeballs.put(allocator, ball_index, ball_item);
-            return false;
+            return;
         },
         c("items") => {
             const index = try p.parse(parse.index);
@@ -109,15 +108,12 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !bool {
             switch (m(try p.parse(parse.anyField))) {
                 c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
                 c("price") => item.price = try p.parse(parse.usizev),
-                else => return true,
+                else => return error.ParseError,
             }
-
-            return true;
+            return error.ParseError;
         },
-        else => return true,
+        else => return error.ParseError,
     }
-
-    return true;
 }
 
 fn randomize(

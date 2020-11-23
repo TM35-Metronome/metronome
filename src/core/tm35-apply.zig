@@ -139,11 +139,10 @@ pub fn main2(
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
-        const trimmed = mem.trimRight(u8, line, "\r\n");
         (switch (game) {
-            .gen3 => |*gen3_game| applyGen3(gen3_game, trimmed),
-            .gen4 => |*gen4_game| applyGen4(gen4_game.*, trimmed),
-            .gen5 => |*gen5_game| applyGen5(gen5_game.*, trimmed),
+            .gen3 => |*gen3_game| applyGen3(gen3_game, line),
+            .gen4 => |*gen4_game| applyGen4(gen4_game.*, line),
+            .gen5 => |*gen5_game| applyGen5(gen5_game.*, line),
         }) catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};

@@ -58,14 +58,20 @@ pub fn main2(
     var strings = std.StringHashMap(void).init(allocator);
     var obj = Object{ .fields = Fields.init(allocator) };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        const str = mem.trimRight(u8, line, "\r\n");
-        const print_line = parseLine(&obj, &strings, str) catch |err| switch (err) {
+        parseLine(&obj, &strings, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
-        stdio.out.print("{}\n", .{str}) catch |err| return exit.stdoutErr(stdio.err, err);
+        stdio.out.print("{}\n", .{line}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
+    // We are now completly done with stdout, so we close it. This gives programs further down the
+    // pipeline the ability to finish up what they need to do while we generate the site.
+    stdio.out.context.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+    stdio.out.context.unbuffered_writer.context.close();
+
     const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);
+    defer out_file.close();
+
     var writer = io.bufferedWriter(out_file.writer());
     generate(writer.writer(), obj) catch |err| return exit.writeErr(stdio.err, out, err);
     writer.flush() catch |err| return exit.writeErr(stdio.err, out, err);
@@ -165,7 +171,7 @@ fn generate(writer: anytype, root: Object) !void {
 
     try writer.writeAll("</style>\n");
     try writer.writeAll("</head>\n");
-    try writer.writeAll("</body>\n");
+    try writer.writeAll("<body>\n");
 
     if (root.fields.get("starters")) |starters| {
         try writer.writeAll("<h1>Starters</h1>\n");

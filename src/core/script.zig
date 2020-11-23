@@ -58,7 +58,7 @@ pub fn findTagFieldName(comptime Container: type, comptime union_field: []const 
 
 fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) void {
     if (comptime findTagFieldName(Container, union_field)) |actual| {
-        testing.expectEqualSlices(u8, expect.?, actual);
+        testing.expectEqualStrings(expect.?, actual);
     } else {
         testing.expectEqual(expect, null);
     }
