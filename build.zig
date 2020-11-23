@@ -61,19 +61,19 @@ const mecha_pkg = Pkg{
     .name = "mecha",
     .path = lib_folder ++ "/mecha/mecha.zig",
 };
+const known_folders_pkg = Pkg{
+    .name = "folders",
+    .path = lib_folder ++ "/known-folders/known-folders.zig",
+};
 
 const util_pkg = Pkg{
     .name = "util",
     .path = src_folder ++ "/common/util.zig",
-
-    // Why is this field no const? I have to do
-    // this awful hack because of it...
-    .dependencies = &struct {
-        var dep = [2]Pkg{
-            clap_pkg,
-            mecha_pkg,
-        };
-    }.dep,
+    .dependencies = &[_]Pkg{
+        clap_pkg,
+        known_folders_pkg,
+        mecha_pkg,
+    },
 };
 
 const pkgs = [_]Pkg{
