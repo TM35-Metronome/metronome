@@ -171,7 +171,7 @@ fn generate(writer: anytype, root: Object) !void {
 
     try writer.writeAll("</style>\n");
     try writer.writeAll("</head>\n");
-    try writer.writeAll("</body>\n");
+    try writer.writeAll("<body>\n");
 
     if (root.fields.get("starters")) |starters| {
         try writer.writeAll("<h1>Starters</h1>\n");
