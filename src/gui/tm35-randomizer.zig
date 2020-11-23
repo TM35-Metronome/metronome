@@ -1163,7 +1163,7 @@ const Exes = struct {
 
     fn findCommand(name: []const u8) !util.Path {
         const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
-        const config_dir = (try util.dir.config()).toSliceConst();
+        const config_dir = (try util.dir.folder(.local_configuration)).toSliceConst();
         const cwd = (try util.dir.cwd()).toSliceConst();
         return joinAccess(&[_][]const u8{ cwd, name }) catch
             joinAccess(&[_][]const u8{ config_dir, program_name, name }) catch
@@ -1174,7 +1174,7 @@ const Exes = struct {
 
     fn openCommandFile() !fs.File {
         const cwd = fs.cwd();
-        const config_dir = (try util.dir.config()).toSliceConst();
+        const config_dir = (try util.dir.folder(.local_configuration)).toSliceConst();
         const command_path = util.path.join(&[_][]const u8{
             config_dir,
             program_name,

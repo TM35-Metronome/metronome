@@ -16,3 +16,6 @@
 [submodule "lib/mecha"]
 	path = lib/mecha
 	url = https://github.com/Hejsil/mecha.git
+[submodule "lib/known-folders"]
+	path = lib/known-folders
+	url = https://github.com/ziglibs/known-folders.git
