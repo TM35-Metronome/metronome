@@ -135,17 +135,21 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
         c("instant_text") => if (opt.fast_text) {
             _ = try p.parse(parse.boolv);
             return out.writeAll(".instant_text=true\n");
+        } else {
+            return error.ParseError;
         },
         c("text_delays") => if (opt.fast_text) {
             const index = try p.parse(parse.index);
             _ = try p.parse(parse.usizev);
-            return out.print(".text_delays[{}]={}\n", .{
-                index, switch (index) {
-                    0 => @as(usize, 2),
-                    1 => @as(usize, 1),
-                    else => @as(usize, 0),
-                },
-            });
+
+            const new_index = switch (index) {
+                0 => @as(usize, 2),
+                1 => @as(usize, 1),
+                else => @as(usize, 0),
+            };
+            return out.print(".text_delays[{}]={}\n", .{ index, new_index });
+        } else {
+            return error.ParseError;
         },
         c("map") => {
             const index = try p.parse(parse.index);
@@ -168,13 +172,15 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
             try p.parse(comptime parse.field("level"));
             const level = try p.parse(parse.u8v);
 
-            const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
+            const new_level_float = math.floor(@intToFloat(f64, level) * opt.trainer_scale);
             const new_level = @floatToInt(u8, math.min(new_level_float, 100));
             return out.print(".trainers[{}].party[{}].level={}\n", .{
                 trainer_index,
                 party_index,
                 new_level,
             });
+        } else {
+            return error.ParseError;
         },
         c("wild_pokemons") => if (opt.wild_scale != 1.0) {
             const zone_index = try p.parse(parse.index);
@@ -199,18 +205,23 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
                 },
                 else => return error.ParseError,
             }
+        } else {
+            return error.ParseError;
         },
-        c("static_pokemons") => {
+        c("static_pokemons") => if (opt.static_scale != 1.0) {
             const index = try p.parse(parse.index);
             try p.parse(comptime parse.field("level"));
             const level = try p.parse(parse.u8v);
 
-            const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
+            const new_level_float = math.floor(@intToFloat(f64, level) * opt.static_scale);
             const new_level = @floatToInt(u8, math.min(new_level_float, 100));
             return out.print(".static_pokemons[{}].level={}\n", .{ index, new_level });
+        } else {
+            return error.ParseError;
         },
         else => return error.ParseError,
     }
+    unreachable;
 }
 
 test "tm35-misc" {
@@ -266,6 +277,54 @@ test "tm35-misc" {
     ,
         \\.map[0].allow_running=false
         \\.map[0].allow_running=true
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--fast-text"},
+        \\.instant_text=false
+        \\.instant_text=true
+        \\.text_delays[0]=10
+        \\.text_delays[1]=10
+        \\.text_delays[2]=10
+        \\.text_delays[3]=10
+        \\
+    ,
+        \\.instant_text=true
+        \\.instant_text=true
+        \\.text_delays[0]=2
+        \\.text_delays[1]=1
+        \\.text_delays[2]=0
+        \\.text_delays[3]=0
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--static-level-scaling=0.5"},
+        \\.static_pokemons[0].level=20
+        \\.static_pokemons[1].level=30
+        \\
+    ,
+        \\.static_pokemons[0].level=10
+        \\.static_pokemons[1].level=15
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--trainer-level-scaling=0.5"},
+        \\.trainers[0].party[0].level=20
+        \\.trainers[10].party[10].level=10
+        \\
+    ,
+        \\.trainers[0].party[0].level=10
+        \\.trainers[10].party[10].level=5
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--wild-level-scaling=0.5"},
+        \\.wild_pokemons[0].grass.pokemons[0].min_level=10
+        \\.wild_pokemons[0].grass.pokemons[0].max_level=20
+        \\.wild_pokemons[0].fishing.pokemons[0].min_level=20
+        \\.wild_pokemons[0].fishing.pokemons[0].max_level=40
+        \\
+    ,
+        \\.wild_pokemons[0].grass.pokemons[0].min_level=5
+        \\.wild_pokemons[0].grass.pokemons[0].max_level=10
+        \\.wild_pokemons[0].fishing.pokemons[0].min_level=10
+        \\.wild_pokemons[0].fishing.pokemons[0].max_level=20
         \\
     );
 }

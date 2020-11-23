@@ -177,6 +177,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
         },
         else => return error.ParseError,
     }
+    unreachable;
 }
 
 fn randomize(data: *Data, seed: u64) !void {

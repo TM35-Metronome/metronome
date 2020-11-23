@@ -219,6 +219,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
         },
         else => return error.ParseError,
     }
+    unreachable;
 }
 
 fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {

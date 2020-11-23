@@ -121,6 +121,7 @@ fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !v
         },
         else => return error.ParseError,
     }
+    unreachable;
 }
 
 fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {

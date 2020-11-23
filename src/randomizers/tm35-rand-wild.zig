@@ -164,6 +164,7 @@ fn parseLine(data: *Data, str: []const u8) !void {
         },
         else => return error.ParseError,
     }
+    unreachable;
 }
 
 fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
