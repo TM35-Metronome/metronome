@@ -64,7 +64,14 @@ pub fn main2(
         stdio.out.print("{}\n", .{line}) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
+    // We are now completly done with stdout, so we close it. This gives programs further down the
+    // pipeline the ability to finish up what they need to do while we generate the site.
+    stdio.out.context.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+    stdio.out.context.unbuffered_writer.context.close();
+
     const out_file = fs.cwd().createFile(out, .{ .exclusive = false }) catch |err| return exit.createErr(stdio.err, out, err);
+    defer out_file.close();
+
     var writer = io.bufferedWriter(out_file.writer());
     generate(writer.writer(), obj) catch |err| return exit.writeErr(stdio.err, out, err);
     writer.flush() catch |err| return exit.writeErr(stdio.err, out, err);
