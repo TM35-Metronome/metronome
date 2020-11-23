@@ -86,7 +86,7 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
 
     for (lines) |expected_line| {
         const actual_line = (try line(fbs.reader(), &fifo)).?;
-        testing.expectEqualSlices(u8, expected_line, actual_line);
+        testing.expectEqualStrings(expected_line, actual_line);
     }
     testing.expectEqual(@as(?[]const u8, null), try line(fbs.reader(), &fifo));
 }

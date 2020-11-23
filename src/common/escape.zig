@@ -61,7 +61,7 @@ fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     writeEscaped(fbs.writer(), str, escapes) catch unreachable;
-    testing.expectEqualSlices(u8, expect, fbs.getWritten());
+    testing.expectEqualStrings(expect, fbs.getWritten());
 }
 
 pub fn writeUnEscaped(writer: anytype, buf: []const u8, escapes: [255][]const u8) !void {
@@ -103,7 +103,7 @@ fn testWriteUnEscaped(escapes: [255][]const u8, str: []const u8, expect: []const
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     writeUnEscaped(fbs.writer(), str, escapes) catch unreachable;
-    testing.expectEqualSlices(u8, expect, fbs.getWritten());
+    testing.expectEqualStrings(expect, fbs.getWritten());
 }
 
 pub fn splitEscaped(buffer: []const u8, esc: []const u8, delimiter: []const u8) EscapedSplitter {
@@ -160,37 +160,37 @@ pub const EscapedSplitter = struct {
 
 test "splitEscaped" {
     var it = splitEscaped("abc|def||ghi\\|jkl", "\\", "|");
-    testing.expectEqualSlices(u8, "abc", it.next().?);
-    testing.expectEqualSlices(u8, "def", it.next().?);
-    testing.expectEqualSlices(u8, "", it.next().?);
-    testing.expectEqualSlices(u8, "ghi\\|jkl", it.next().?);
+    testing.expectEqualStrings("abc", it.next().?);
+    testing.expectEqualStrings("def", it.next().?);
+    testing.expectEqualStrings("", it.next().?);
+    testing.expectEqualStrings("ghi\\|jkl", it.next().?);
     testing.expect(it.next() == null);
 
     it = splitEscaped("", "\\", "|");
-    testing.expectEqualSlices(u8, "", it.next().?);
+    testing.expectEqualStrings("", it.next().?);
     testing.expect(it.next() == null);
 
     it = splitEscaped("|", "\\", "|");
-    testing.expectEqualSlices(u8, "", it.next().?);
-    testing.expectEqualSlices(u8, "", it.next().?);
+    testing.expectEqualStrings("", it.next().?);
+    testing.expectEqualStrings("", it.next().?);
     testing.expect(it.next() == null);
 
     it = splitEscaped("hello", "\\", " ");
-    testing.expectEqualSlices(u8, it.next().?, "hello");
+    testing.expectEqualStrings(it.next().?, "hello");
     testing.expect(it.next() == null);
 
     it = splitEscaped("\\,\\,,", "\\", ",");
-    testing.expectEqualSlices(u8, it.next().?, "\\,\\,");
-    testing.expectEqualSlices(u8, it.next().?, "");
+    testing.expectEqualStrings(it.next().?, "\\,\\,");
+    testing.expectEqualStrings(it.next().?, "");
     testing.expect(it.next() == null);
 }
 
 test "splitEscaped (multibyte)" {
     var it = splitEscaped("a, b ,, c, d, e\\\\, f", "\\\\", ", ");
-    testing.expectEqualSlices(u8, it.next().?, "a");
-    testing.expectEqualSlices(u8, it.next().?, "b ,");
-    testing.expectEqualSlices(u8, it.next().?, "c");
-    testing.expectEqualSlices(u8, it.next().?, "d");
-    testing.expectEqualSlices(u8, it.next().?, "e\\\\, f");
+    testing.expectEqualStrings(it.next().?, "a");
+    testing.expectEqualStrings(it.next().?, "b ,");
+    testing.expectEqualStrings(it.next().?, "c");
+    testing.expectEqualStrings(it.next().?, "d");
+    testing.expectEqualStrings(it.next().?, "e\\\\, f");
     testing.expect(it.next() == null);
 }
