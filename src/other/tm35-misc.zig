@@ -26,9 +26,10 @@ const params = blk: {
         clap.parseParam("    --allow-biking <unchanged|nowhere|everywhere>   Change where biking is allowed (gen3 only) (default: unchanged).") catch unreachable,
         clap.parseParam("    --allow-running <unchanged|nowhere|everywhere>  Change where running is allowed (gen3 only) (default: unchanged).") catch unreachable,
         clap.parseParam("    --fast-text                                     Change text speed to fastest possible for the game.") catch unreachable,
+        clap.parseParam("    --exp-yield-scaling <FLOAT>                     Scale The amount of exp Pokémons give. (default: 1.0).") catch unreachable,
+        clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
         clap.parseParam("    --trainer-level-scaling <FLOAT>                 Scale trainer Pokémon levels by this number. (default: 1.0).") catch unreachable,
         clap.parseParam("    --wild-level-scaling <FLOAT>                    Scale wild Pokémon levels by this number. (default: 1.0).") catch unreachable,
-        clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
         clap.parseParam("-h, --help                                          Display this help text and exit.") catch unreachable,
         clap.parseParam("-v, --version                                       Output version information and exit.") catch unreachable,
     };
@@ -61,9 +62,10 @@ pub fn main2(
 ) u8 {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";
     const running_arg = args.option("--allow-running") orelse "unchanged";
+    const exp_scale_arg = args.option("--exp-yield-scaling") orelse "1.0";
+    const static_scale_arg = args.option("--static-level-scaling") orelse "1.0";
     const trainer_scale_arg = args.option("--trainer-level-scaling") orelse "1.0";
     const wild_scale_arg = args.option("--wild-level-scaling") orelse "1.0";
-    const static_scale_arg = args.option("--static-level-scaling") orelse "1.0";
 
     const fast_text = args.flag("--fast-text");
     const biking = std.meta.stringToEnum(Allow, biking_arg);
@@ -71,6 +73,7 @@ pub fn main2(
     const trainer_scale = fmt.parseFloat(f64, trainer_scale_arg);
     const wild_scale = fmt.parseFloat(f64, wild_scale_arg);
     const static_scale = fmt.parseFloat(f64, static_scale_arg);
+    const exp_scale = fmt.parseFloat(f64, exp_scale_arg);
 
     for ([_]struct { arg: []const u8, value: []const u8, check: ?Allow }{
         .{ .arg = "--allow-biking", .value = biking_arg, .check = biking },
@@ -84,8 +87,9 @@ pub fn main2(
     }
 
     for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!f64 }{
-        .{ .arg = "--trainer-level-scaling", .value = trainer_scale_arg, .check = trainer_scale },
+        .{ .arg = "--exp-yield-scaling", .value = exp_scale_arg, .check = exp_scale },
         .{ .arg = "--static-level-scaling", .value = static_scale_arg, .check = static_scale },
+        .{ .arg = "--trainer-level-scaling", .value = trainer_scale_arg, .check = trainer_scale },
         .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
@@ -100,9 +104,10 @@ pub fn main2(
         .fast_text = fast_text,
         .biking = biking.?,
         .running = running.?,
+        .exp_scale = exp_scale catch unreachable,
+        .static_scale = static_scale catch unreachable,
         .trainer_scale = trainer_scale catch unreachable,
         .wild_scale = wild_scale catch unreachable,
-        .static_scale = static_scale catch unreachable,
     };
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(stdio.out, opt, line) catch |err| switch (err) {
@@ -120,9 +125,10 @@ const Options = struct {
     fast_text: bool,
     running: Allow,
     biking: Allow,
+    exp_scale: f64,
+    static_scale: f64,
     trainer_scale: f64,
     wild_scale: f64,
-    static_scale: f64,
 };
 
 fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
@@ -150,6 +156,18 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
             return out.print(".text_delays[{}]={}\n", .{ index, new_index });
         } else {
             return error.ParseError;
+        },
+        c("pokemons") => if (opt.exp_scale != 1.0) {
+            const pokemon_index = try p.parse(parse.index);
+            try p.parse(comptime parse.field("base_exp_yield"));
+            const yield = try p.parse(parse.u16v);
+
+            const new_yield_float = math.floor(@intToFloat(f64, yield) * opt.exp_scale);
+            const new_yield = @floatToInt(u16, new_yield_float);
+            return out.print(".pokemons[{}].base_exp_yield={}\n", .{
+                pokemon_index,
+                new_yield,
+            });
         },
         c("map") => {
             const index = try p.parse(parse.index);
@@ -325,6 +343,15 @@ test "tm35-misc" {
         \\.wild_pokemons[0].grass.pokemons[0].max_level=10
         \\.wild_pokemons[0].fishing.pokemons[0].min_level=10
         \\.wild_pokemons[0].fishing.pokemons[0].max_level=20
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{"--exp-yield-scaling=0.5"},
+        \\.pokemons[0].base_exp_yield=20
+        \\.pokemons[1].base_exp_yield=40
+        \\
+    ,
+        \\.pokemons[0].base_exp_yield=10
+        \\.pokemons[1].base_exp_yield=20
         \\
     );
 }
