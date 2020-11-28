@@ -168,6 +168,8 @@ fn parseLine(out: anytype, opt: Options, str: []const u8) !void {
                 pokemon_index,
                 new_yield,
             });
+        } else {
+            return error.ParseError;
         },
         c("map") => {
             const index = try p.parse(parse.index);
@@ -346,10 +348,12 @@ test "tm35-misc" {
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{"--exp-yield-scaling=0.5"},
+        \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].base_exp_yield=20
         \\.pokemons[1].base_exp_yield=40
         \\
     ,
+        \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].base_exp_yield=10
         \\.pokemons[1].base_exp_yield=20
         \\
