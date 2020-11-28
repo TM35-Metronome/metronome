@@ -30,6 +30,7 @@ const core_exes = [_][]const u8{
 const randomizer_exes = [_][]const u8{
     "tm35-rand-learned-moves",
     "tm35-rand-machines",
+    "tm35-rand-names",
     "tm35-rand-parties",
     "tm35-rand-pokeball-items",
     "tm35-rand-starters",

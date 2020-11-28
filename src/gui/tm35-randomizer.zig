@@ -1085,6 +1085,7 @@ const default_commands = //
     "tm35-rand-static" ++ extension ++ "\n" ++
     "tm35-rand-wild" ++ extension ++ "\n" ++
     "tm35-random-stones" ++ extension ++ "\n" ++
+    "tm35-rand-names" ++ extension ++ "\n" ++
     "tm35-no-trade-evolutions" ++ extension ++ "\n" ++
     "tm35-misc" ++ extension ++ "\n" ++
     "tm35-generate-site" ++ extension ++ "\n";
