@@ -53,18 +53,7 @@ pub fn main2(
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) u8 {
-    const seed = if (args.option("--seed")) |seed|
-        fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            stdio.err.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
-            usage(stdio.err) catch {};
-            return 1;
-        }
-    else blk: {
-        var buf: [8]u8 = undefined;
-        os.getrandom(buf[0..]) catch break :blk @as(u64, 0);
-        break :blk mem.readInt(u64, &buf, .Little);
-    };
-
+    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
     const pref = if (args.option("--preference")) |pref|
         if (mem.eql(u8, pref, "random"))
             Preference.random

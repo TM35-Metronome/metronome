@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const folders = @import("folders");
 
 const debug = std.debug;
+const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
@@ -31,6 +32,20 @@ test "" {
     _ = read;
     _ = testing;
     _ = unicode;
+}
+
+pub fn getSeed(stderr: anytype, usage: anytype, args: anytype) !u64 {
+    if (args.option("--seed")) |seed| {
+        return fmt.parseUnsigned(u64, seed, 10) catch |err| {
+            stderr.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
+            usage(stderr) catch {};
+            return error.InvalidSeed;
+        };
+    } else {
+        var buf: [8]u8 = undefined;
+        os.getrandom(buf[0..]) catch return @as(u64, 0);
+        return mem.readInt(u64, &buf, .Little);
+    }
 }
 
 pub fn generateMain(
