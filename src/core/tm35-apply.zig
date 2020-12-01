@@ -1008,7 +1008,7 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                 c("cash") => trainer.cash = try parser.parse(parse.u8v),
                 c("post_battle_item") => trainer.post_battle_item = try parser.parse(parselu16v),
                 c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("name") => try applyGen5String(16, game.owned.trainer_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.owned.strings.trainer_names, index, try parser.parse(parse.strv)),
                 c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
                 c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen5.PartyType)),
                 c("party") => {
@@ -1056,7 +1056,7 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
                 c("height") => pokemon.height = try parser.parse(parselu16v),
                 c("weight") => pokemon.weight = try parser.parse(parselu16v),
-                c("name") => try applyGen5String(16, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.owned.strings.pokemon_names, index, try parser.parse(parse.strv)),
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
@@ -1105,25 +1105,25 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen5String(128, game.owned.item_descriptions, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen5String(game.owned.strings.item_descriptions, index, try parser.parse(parse.strv)),
                 c("name") => {
-                    if (index >= game.owned.item_names.len)
+                    const item_names = game.owned.strings.item_names;
+                    if (index >= item_names.keys.len)
                         return error.Error;
                     const new_name = try parser.parse(parse.strv);
-                    const old_name = game.owned.item_names[index].span();
+                    const old_name = item_names.getSpan(index);
 
                     // Here, we also applies the item name to the item_names_on_the_ground
                     // table. The way we do this is to search for the item name in the
                     // ground string, and if it exists, we replace it and apply this new
                     // string
                     applyGen5StringReplace(
-                        64,
-                        game.owned.item_names_on_the_ground,
+                        game.owned.strings.item_names_on_the_ground,
                         index,
                         old_name,
                         new_name,
                     ) catch {};
-                    try applyGen5String(16, game.owned.item_names, index, new_name);
+                    try applyGen5String(item_names, index, new_name);
                 },
                 c("price") => {
                     if (index >= game.ptrs.items.len)
@@ -1143,7 +1143,7 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
         c("pokedex") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("category") => try applyGen5String(32, game.owned.pokedex_category_names, index, try parser.parse(parse.strv)),
+                c("category") => try applyGen5String(game.owned.strings.pokedex_category_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -1151,22 +1151,22 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
             const prev = parser.str;
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("description") => try applyGen5String(256, game.owned.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen5String(16, game.owned.move_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen5String(game.owned.strings.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.owned.strings.move_names, index, try parser.parse(parse.strv)),
                 else => try parse.anyT(prev, &game.ptrs.moves, converters),
             }
         },
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(16, game.owned.ability_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.owned.strings.ability_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
         c("types") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(8, game.owned.type_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen5String(game.owned.strings.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -1291,35 +1291,47 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
 }
 
 fn applyGen5StringReplace(
-    comptime l: usize,
-    strs: []gen5.String(l),
+    strs: gen5.StringTable,
     index: usize,
     search_for: []const u8,
     replace_with: []const u8,
 ) !void {
-    if (strs.len <= index)
+    if (strs.keys.len <= index)
         return error.Error;
 
-    const str = strs[index].span();
+    const str = strs.getSpan(index);
     const i = mem.indexOf(u8, str, search_for) orelse return;
     const before = str[0..i];
     const after = str[i + search_for.len ..];
 
-    var buf = [_]u8{0} ** l;
+    var buf: [1024]u8 = undefined;
     const writer = io.fixedBufferStream(&buf).writer();
     try writer.writeAll(before);
     try escape.writeUnEscaped(writer, replace_with, escape.zig_escapes);
     try writer.writeAll(after);
     _ = writer.write("\x00") catch undefined;
-    strs[index].buf = buf;
-}
 
-fn applyGen5String(comptime l: usize, strs: []gen5.String(l), index: usize, value: []const u8) !void {
-    if (strs.len <= index)
+    const written = writer.context.getWritten();
+    const copy_into = strs.get(index);
+    if (copy_into.len < written.len)
         return error.Error;
 
-    var buf = [_]u8{0} ** l;
-    const writer = io.fixedBufferStream(&buf).writer();
+    mem.copy(u8, copy_into, written);
+
+    // Null terminate, if we didn't fill the buffer
+    if (written.len < copy_into.len)
+        buf[written.len] = 0;
+}
+
+fn applyGen5String(strs: gen5.StringTable, index: usize, value: []const u8) !void {
+    if (strs.keys.len <= index)
+        return error.Error;
+
+    const buf = strs.get(index);
+    const writer = io.fixedBufferStream(buf).writer();
     try escape.writeUnEscaped(writer, value, escape.zig_escapes);
-    strs[index].buf = buf;
+
+    // Null terminate, if we didn't fill the buffer
+    if (writer.context.pos < buf.len)
+        buf[writer.context.pos] = 0;
 }
