@@ -986,26 +986,14 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.owned.pokemon_names) |*str, i|
-        try outputString(writer, "pokemons", i, "name", str.span());
-    for (game.owned.pokedex_category_names) |*str, i|
-        try outputString(writer, "pokedex", i, "category", str.span());
-    for (game.owned.move_names) |*str, i|
-        try outputString(writer, "moves", i, "name", str.span());
-    for (game.owned.move_descriptions) |*str, i|
-        try outputString(writer, "moves", i, "description", str.span());
-    for (game.owned.ability_names) |*str, i|
-        try outputString(writer, "abilities", i, "name", str.span());
-    for (game.owned.item_names) |*str, i|
-        try outputString(writer, "items", i, "name", str.span());
-    //for (game.owned.item_names_on_the_ground) |*str, i| try outputGen5String(writer, "items", i, "name_on_ground", str);
-    for (game.owned.item_descriptions) |*str, i|
-        try outputString(writer, "items", i, "description", str.span());
-    for (game.owned.type_names) |*str, i|
-        try outputString(writer, "types", i, "name", str.span());
-    //for (game.owned.map_names) |*str, i| try outputGen5String(writer, "map", i, "name", str);
-    for (game.owned.trainer_names[1..]) |*str, i|
-        try outputString(writer, "trainers", i + 1, "name", str.span());
+    try outputGen5StringTable(writer, 0, "pokemons", "name", game.owned.strings.pokemon_names);
+    try outputGen5StringTable(writer, 0, "pokedex", "category", game.owned.strings.pokedex_category_names);
+    try outputGen5StringTable(writer, 0, "moves", "name", game.owned.strings.move_names);
+    try outputGen5StringTable(writer, 0, "moves", "description", game.owned.strings.move_descriptions);
+    try outputGen5StringTable(writer, 0, "abilities", "name", game.owned.strings.ability_names);
+    try outputGen5StringTable(writer, 0, "items", "name", game.owned.strings.item_names);
+    try outputGen5StringTable(writer, 0, "types", "name", game.owned.strings.type_names);
+    try outputGen5StringTable(writer, 1, "trainers", "name", game.owned.strings.trainer_names);
 
     // This snippet of code can be uncommented to output all strings in gen5 game.ptrs..
     // This is useful when looking for new strings to expose.
@@ -1016,6 +1004,17 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
     //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
     //        outputGen5StringTable(writer, name, "", table) catch continue;
     //    }
+}
+
+fn outputGen5StringTable(
+    writer: anytype,
+    start: usize,
+    array_name: []const u8,
+    field_name: []const u8,
+    table: gen5.StringTable,
+) !void {
+    for (table.keys[start..]) |_, i|
+        try outputString(writer, array_name, i + start, field_name, table.getSpan(i + start));
 }
 
 fn outputString(
