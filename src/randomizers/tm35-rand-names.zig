@@ -156,9 +156,8 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
             const view = unicode.Utf8View.init(item) catch continue;
 
             var node = &(try pairs.getOrPutValue(allocator, start_of_string, Occurences{})).value;
-            var len: usize = 0;
             var it = view.iterator();
-            while (it.nextCodepointSlice()) |code| : (len += 1) {
+            while (it.nextCodepointSlice()) |code| {
                 const occurance = try node.codepoints.getOrPutValue(allocator, code, 0);
                 occurance.value += 1;
                 node.total += 1;
@@ -168,7 +167,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
             const occurance = try node.codepoints.getOrPutValue(allocator, end_of_string, 0);
             occurance.value += 1;
             node.total += 1;
-            max = math.max(max, len);
+            max = math.max(max, item.len);
         }
 
         // Generate our random names from our pair map. This is done by picking a C2
@@ -178,8 +177,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
             var new_name = std.ArrayList(u8).init(allocator);
             var node = pairs.get(start_of_string).?;
 
-            var len: usize = 0;
-            while (len < max) : (len += 1) {
+            while (new_name.items.len < max) {
                 var i = random.intRangeLessThan(usize, 0, node.total);
                 const pick = for (node.codepoints.items()) |item| {
                     if (i < item.value)
@@ -188,6 +186,8 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                 } else unreachable;
 
                 if (mem.eql(u8, pick, end_of_string))
+                    break;
+                if (new_name.items.len + pick.len > max)
                     break;
 
                 try new_name.appendSlice(pick);
