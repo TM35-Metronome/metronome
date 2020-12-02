@@ -758,6 +758,14 @@ pub const StringTable = struct {
         const end = mem.indexOfScalar(u8, res, 0) orelse res.len;
         return res[0..end];
     }
+
+    pub fn encryptedSize(table: StringTable) u32 {
+        return EncryptedStringTable.size(
+            1,
+            @intCast(u32, table.keys.len),
+            @intCast(u32, table.maxStringLen() * table.keys.len),
+        );
+    }
 };
 
 pub const Game = struct {
@@ -794,21 +802,19 @@ pub const Game = struct {
         item_descriptions: StringTable,
         move_descriptions: StringTable,
 
-        pub const Array = [std.meta.fields(Strings).len]StringTable;
+        pub const Array = [std.meta.fields(Strings).len]*const StringTable;
 
         pub fn deinit(strings: Strings, allocator: *mem.Allocator) void {
             for (strings.asArray()) |table|
                 table.destroy(allocator);
         }
 
-        // Ok, I really want to be able to transform this struct into an array
-        // for certain operations. I know that normal structs have no defined
-        // layout, but lets be real here. As long as the string is the same
-        // size as the array, then how else would it be layed out other than
-        // linearly.
-        pub fn asArray(strings: *const Strings) *const Array {
-            comptime debug.assert(@sizeOf(Strings) == @sizeOf(Array));
-            return @ptrCast(*const Array, strings);
+        pub fn asArray(strings: *const Strings) Array {
+            var res: Array = undefined;
+            inline for (std.meta.fields(Strings)) |field, i|
+                res[i] = &@field(strings, field.name);
+
+            return res;
         }
     };
 
@@ -1112,11 +1118,7 @@ pub const Game = struct {
         for (game.owned.strings.asArray()) |table| {
             extra_bytes += math.sub(
                 u32,
-                EncryptedStringTable.size(
-                    1,
-                    @intCast(u32, table.keys.len),
-                    @intCast(u32, table.maxStringLen() * table.keys.len),
-                ),
+                table.encryptedSize(),
                 old_text.fat[table.file_this_was_extracted_from].len(),
             ) catch 0;
         }
@@ -1125,13 +1127,9 @@ pub const Game = struct {
         const text = try nds.fs.Fs.fromNarc(buf);
 
         for (game.owned.strings.asArray()) |table, i| {
-            const new_file_size = EncryptedStringTable.size(
-                1,
-                @intCast(u32, table.keys.len),
-                @intCast(u32, table.maxStringLen() * table.keys.len),
-            );
-
+            const new_file_size = table.encryptedSize();
             const file = &text.fat[table.file_this_was_extracted_from];
+
             const file_needs_a_resize = file.len() < new_file_size;
             if (file_needs_a_resize) {
                 const extra = new_file_size - file.len();

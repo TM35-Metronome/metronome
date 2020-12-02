@@ -530,16 +530,52 @@ fn getKey(i: u32) u16 {
     return @truncate(u16, 0x91BD3 * (i + 1));
 }
 
-pub fn String(comptime len: usize) type {
-    return struct {
-        buf: [len]u8 = [_]u8{0} ** len,
+pub const StringTable = struct {
+    file_this_was_extracted_from: u16,
+    number_of_strings: u16,
+    buf: []u8 = &[_]u8{},
 
-        pub fn span(str: *const @This()) []const u8 {
-            const end = mem.indexOfScalar(u8, &str.buf, 0) orelse len;
-            return str.buf[0..end];
-        }
-    };
-}
+    pub fn create(
+        allocator: *mem.Allocator,
+        file_this_was_extracted_from: u16,
+        number_of_strings: u16,
+        max_string_len: usize,
+    ) !StringTable {
+        const buf = try allocator.alloc(u8, number_of_strings * max_string_len);
+        errdefer allocator.free(buf);
+        return StringTable{
+            .file_this_was_extracted_from = file_this_was_extracted_from,
+            .number_of_strings = number_of_strings,
+            .buf = buf,
+        };
+    }
+
+    pub fn destroy(table: StringTable, allocator: *mem.Allocator) void {
+        allocator.free(table.buf);
+    }
+
+    pub fn maxStringLen(table: StringTable) usize {
+        return table.buf.len / table.number_of_strings;
+    }
+
+    pub fn get(table: StringTable, i: usize) []u8 {
+        const len = table.maxStringLen();
+        return table.buf[len * i ..][0..len];
+    }
+
+    pub fn getSpan(table: StringTable, i: usize) []u8 {
+        const res = table.get(i);
+        const end = mem.indexOfScalar(u8, res, 0) orelse res.len;
+        return res[0..end];
+    }
+
+    pub fn encryptedSize(table: StringTable) u32 {
+        return EncryptedStringTable.size(
+            @intCast(u32, table.number_of_strings),
+            @intCast(u32, table.maxStringLen() * table.number_of_strings),
+        );
+    }
+};
 
 pub const Game = struct {
     info: offsets.Info,
@@ -553,26 +589,38 @@ pub const Game = struct {
     pub const Owned = struct {
         arm9: []u8,
         trainer_parties: [][6]PartyMemberBoth,
-        type_names: []String(16),
-        pokemon_names: []String(16),
-        //trainer_names: []String(32),
-        move_names: []String(16),
-        ability_names: []String(16),
-        item_names: []String(16),
-        item_descriptions: []String(128),
-        move_descriptions: []String(256),
+        strings: Strings,
 
         pub fn deinit(owned: Owned, allocator: *mem.Allocator) void {
             allocator.free(owned.arm9);
             allocator.free(owned.trainer_parties);
-            allocator.free(owned.pokemon_names);
-            //allocator.free(owned.trainer_names);
-            allocator.free(owned.move_names);
-            allocator.free(owned.move_descriptions);
-            allocator.free(owned.ability_names);
-            allocator.free(owned.item_names);
-            allocator.free(owned.item_descriptions);
-            allocator.free(owned.type_names);
+            owned.strings.deinit(allocator);
+        }
+    };
+
+    pub const Strings = struct {
+        type_names: StringTable,
+        pokemon_names: StringTable,
+        //trainer_names:StringTable,
+        move_names: StringTable,
+        ability_names: StringTable,
+        item_names: StringTable,
+        item_descriptions: StringTable,
+        move_descriptions: StringTable,
+
+        pub const Array = [std.meta.fields(Strings).len]*const StringTable;
+
+        pub fn deinit(strings: Strings, allocator: *mem.Allocator) void {
+            for (strings.asArray()) |table|
+                table.destroy(allocator);
+        }
+
+        pub fn asArray(strings: *const Strings) Array {
+            var res: Array = undefined;
+            inline for (std.meta.fields(Strings)) |field, i|
+                res[i] = &@field(strings, field.name);
+
+            return res;
         }
     };
 
@@ -658,33 +706,35 @@ pub const Game = struct {
         }
 
         const text = try file_system.getNarc(info.text);
-        const type_names = try decryptStringTable(16, allocator, text, info.type_names);
-        errdefer allocator.free(type_names);
-        const pokemon_names = try decryptStringTable(16, allocator, text, info.pokemon_names);
-        errdefer allocator.free(pokemon_names);
-        const item_names = try decryptStringTable(16, allocator, text, info.item_names);
-        errdefer allocator.free(item_names);
-        const ability_names = try decryptStringTable(16, allocator, text, info.ability_names);
-        errdefer allocator.free(ability_names);
-        const move_names = try decryptStringTable(16, allocator, text, info.move_names);
-        errdefer allocator.free(move_names);
-        //const trainer_names = try decryptStringTable(32, allocator, text, info.trainer_names);
-        //errdefer allocator.free(trainer_names);
-        const item_descriptions = try decryptStringTable(128, allocator, text, info.item_descriptions);
-        errdefer allocator.free(item_descriptions);
-        const move_descriptions = try decryptStringTable(256, allocator, text, info.move_descriptions);
-        errdefer allocator.free(move_descriptions);
+        const type_names = try decryptStringTable(allocator, 16, text, info.type_names);
+        errdefer type_names.destroy(allocator);
+        const pokemon_names = try decryptStringTable(allocator, 16, text, info.pokemon_names);
+        errdefer pokemon_names.destroy(allocator);
+        const item_names = try decryptStringTable(allocator, 16, text, info.item_names);
+        errdefer item_names.destroy(allocator);
+        const ability_names = try decryptStringTable(allocator, 16, text, info.ability_names);
+        errdefer ability_names.destroy(allocator);
+        const move_names = try decryptStringTable(allocator, 16, text, info.move_names);
+        errdefer move_names.destroy(allocator);
+        //const trainer_names = try decryptStringTable( allocator, 32,text, info.trainer_names);
+        //errdefer trainer_names.destroy(allocator);
+        const item_descriptions = try decryptStringTable(allocator, 128, text, info.item_descriptions);
+        errdefer item_descriptions.destroy(allocator);
+        const move_descriptions = try decryptStringTable(allocator, 256, text, info.move_descriptions);
+        errdefer move_descriptions.destroy(allocator);
         return fromRomEx(allocator, nds_rom, info, .{
             .arm9 = arm9,
             .trainer_parties = trainer_parties,
-            .type_names = type_names,
-            .item_descriptions = item_descriptions,
-            .item_names = item_names,
-            .ability_names = ability_names,
-            .move_descriptions = move_descriptions,
-            .move_names = move_names,
-            //.trainer_names = trainer_names,
-            .pokemon_names = pokemon_names,
+            .strings = .{
+                .type_names = type_names,
+                .item_descriptions = item_descriptions,
+                .item_names = item_names,
+                .ability_names = ability_names,
+                .move_descriptions = move_descriptions,
+                .move_names = move_names,
+                //.trainer_names = trainer_names,
+                .pokemon_names = pokemon_names,
+            },
         });
     }
 
@@ -866,67 +916,17 @@ pub const Game = struct {
         // the tables.
         const allocator = game.allocator;
         const info = game.info;
-        const StringTable = struct {
-            file: u16,
-            chars: u32,
-            elem_size: u32,
-            slice: []const u8,
-            getter: fn ([]const u8) []const u8,
-
-            fn init(file: u16, comptime l: u32, strs: []const String(l)) @This() {
-                const S = String(l);
-                const slice = mem.sliceAsBytes(strs);
-                debug.assert(strs.len * @sizeOf(S) == slice.len);
-                return .{
-                    .file = file,
-                    .chars = l,
-                    .elem_size = @sizeOf(S),
-                    .slice = slice,
-                    .getter = struct {
-                        fn getter(buf: []const u8) []const u8 {
-                            debug.assert(buf.len == @sizeOf(S));
-                            const unaligned = mem.bytesAsValue(S, buf[0..@sizeOf(S)]);
-                            const str = @alignCast(@alignOf(S), unaligned);
-                            return str.span();
-                        }
-                    }.getter,
-                };
-            }
-
-            fn len(table: @This()) u16 {
-                return @intCast(u16, table.slice.len / table.elem_size);
-            }
-
-            fn at(table: @This(), i: usize) []const u8 {
-                const rest = table.slice[i * table.elem_size ..];
-                return table.getter(rest[0..table.elem_size]);
-            }
-        };
-        const tables = [_]StringTable{
-            StringTable.init(info.type_names, 16, game.owned.type_names),
-            StringTable.init(info.pokemon_names, 16, game.owned.pokemon_names),
-            StringTable.init(info.item_names, 16, game.owned.item_names),
-            StringTable.init(info.ability_names, 16, game.owned.ability_names),
-            StringTable.init(info.move_names, 16, game.owned.move_names),
-            //StringTable.init(info.trainer_names, 32, game.owned.trainer_names),
-            StringTable.init(info.item_descriptions, 128, game.owned.item_descriptions),
-            StringTable.init(info.move_descriptions, 256, game.owned.move_descriptions),
-        };
-
         const file_system = game.rom.fileSystem();
         const old_text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
         const old_text = try nds.fs.Fs.fromNarc(old_text_bytes);
 
         // We then calculate the size of the content for our new narc
         var extra_bytes: usize = 0;
-        for (tables) |table| {
+        for (game.owned.strings.asArray()) |table| {
             extra_bytes += math.sub(
                 u32,
-                EncryptedStringTable.size(
-                    table.len(),
-                    table.chars * table.len(),
-                ),
-                old_text.fat[table.file].len(),
+                table.encryptedSize(),
+                old_text.fat[table.file_this_was_extracted_from].len(),
             ) catch 0;
         }
 
@@ -934,81 +934,75 @@ pub const Game = struct {
         const text = try nds.fs.Fs.fromNarc(buf);
 
         // First, resize all tables that need a resize
-        for (tables) |table, i| {
-            const Header = EncryptedStringTable.Header;
-            const file_size = EncryptedStringTable.size(
-                table.len(),
-                table.chars * table.len(),
-            );
+        for (game.owned.strings.asArray()) |table, i| {
+            const new_file_size = table.encryptedSize();
+            const file = &text.fat[table.file_this_was_extracted_from];
 
-            const file = text.fat[table.file];
-            if (file.len() < file_size) {
-                const extra = file_size - file.len();
+            const file_needs_a_resize = file.len() < new_file_size;
+            if (file_needs_a_resize) {
+                const extra = new_file_size - file.len();
                 mem.copyBackwards(
                     u8,
                     text.data[file.end.value() + extra ..],
                     text.data[file.end.value() .. text.data.len - extra],
                 );
+
+                const old_file_end = file.end.value();
+                file.* = nds.Range.init(file.start.value(), file.end.value() + extra);
+
                 for (text.fat) |*f| {
                     const start = f.start.value();
                     const end = f.end.value();
-                    f.* = nds.Range.init(
-                        start + extra * @boolToInt(start >= file.end.value()),
-                        end + extra * @boolToInt(start >= file.end.value()) +
-                            extra * @boolToInt(start == file.start.value() and
-                            end == file.end.value()),
-                    );
+                    const file_is_before_the_file_we_moved = start < old_file_end;
+                    if (file_is_before_the_file_we_moved)
+                        continue;
+
+                    f.* = nds.Range.init(start + extra, end + extra);
                 }
             }
-        }
 
-        for (tables) |table, i| {
             const Header = EncryptedStringTable.Header;
-            const file_size = EncryptedStringTable.size(
-                table.len(),
-                table.chars * table.len(),
-            );
-            const file = text.fat[table.file];
             const bytes = text.data[file.start.value()..file.end.value()];
+            debug.assert(bytes.len == new_file_size);
 
-            // TODO: we don't need a writer
+            // Non of the writes here can fail as long as we calculated the size
+            // of the file correctly above
             const writer = io.fixedBufferStream(bytes).writer();
-            debug.assert(bytes.len == file_size);
-
-            const string_size = table.chars + 1; // Always make room for a terminator
+            const chars_per_entry = table.maxStringLen() + 1; // Always make room for a terminator
+            const bytes_per_entry = chars_per_entry * 2;
             try writer.writeAll(&mem.toBytes(Header{
-                .count = lu16.init(table.len()),
+                .count = lu16.init(table.number_of_strings),
                 .key = lu16.init(0),
             }));
 
-            const slices_start = writer.context.pos;
-            for (@as([*]void, undefined)[0..table.len()]) |_, j| {
+            const start_of_entry_table = writer.context.pos;
+            for (@as([*]void, undefined)[0..table.number_of_strings]) |_, j| {
                 try writer.writeAll(&mem.toBytes(nds.Slice{
                     .start = lu32.init(0),
                     .len = lu32.init(0),
                 }));
             }
 
-            const slices = mem.bytesAsSlice(nds.Slice, bytes[slices_start..writer.context.pos]);
-            for (slices) |*slice, j| {
-                const pos = writer.context.pos;
-                const str = table.at(j);
+            const entries = mem.bytesAsSlice(nds.Slice, bytes[start_of_entry_table..writer.context.pos]);
+            for (entries) |*entry, j| {
+                const start_of_str = writer.context.pos;
+                const str = table.getSpan(j);
                 try encodings.encode(str, writer);
                 try writer.writeAll("\xff\xff");
 
-                const str_end = writer.context.pos;
-                const encoded_str = mem.bytesAsSlice(lu16, bytes[pos..str_end]);
+                const end_of_str = writer.context.pos;
+                const encoded_str = mem.bytesAsSlice(lu16, bytes[start_of_str..end_of_str]);
                 encrypt(encoded_str, getKey(@intCast(u32, j)));
 
-                const str_len = @intCast(u16, (str_end - pos) / 2);
-                slice.start = lu32.init(@intCast(u32, pos));
-                slice.len = lu32.init(str_len);
+                const length_of_str = @intCast(u32, (end_of_str - start_of_str) / 2);
+                entry.start = lu32.init(@intCast(u32, start_of_str));
+                entry.len = lu32.init(length_of_str);
 
                 // Pad the string, so that each entry is always entry_size
                 // apart. This ensure that patches generated from tm35-apply
                 // are small.
-                try writer.writeByteNTimes(0, (string_size - str_len) * 2);
-                debug.assert(writer.context.pos - pos == string_size * 2);
+                writer.writeByteNTimes(0, (chars_per_entry - length_of_str) * 2) catch unreachable;
+                debug.assert(writer.context.pos - start_of_str == bytes_per_entry);
             }
 
             // Assert that we got the file size right.
@@ -1142,15 +1136,28 @@ pub const Game = struct {
         };
     }
 
-    fn decryptStringTable(comptime len: usize, allocator: *mem.Allocator, text: nds.fs.Fs, file: u16) ![]String(len) {
+    fn decryptStringTable(
+        allocator: *mem.Allocator,
+        max_string_len: usize,
+        text: nds.fs.Fs,
+        file: u16,
+    ) !StringTable {
         const table = EncryptedStringTable{ .data = text.fileData(.{ .i = file }) };
-        const res = try allocator.alloc(String(len), table.count());
-        errdefer allocator.free(res);
+        const res = try StringTable.create(
+            allocator,
+            file,
+            table.count(),
+            max_string_len,
+        );
+        errdefer res.destroy(allocator);
 
-        mem.set(String(len), res, String(len){});
-        for (res) |*str, i| {
+        mem.set(u8, res.buf, 0);
+
+        var i: usize = 0;
+        while (i < res.number_of_strings) : (i += 1) {
             const id = @intCast(u32, i);
-            const writer = io.fixedBufferStream(&str.buf).writer();
+            const buf = res.get(i);
+            const writer = io.fixedBufferStream(buf).writer();
             const encrypted_string = table.getEncryptedString(id);
             try decryptAndDecode(encrypted_string, getKey(id), writer);
         }
