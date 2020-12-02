@@ -701,8 +701,8 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen4String(256, game.owned.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(16, game.owned.move_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen4String(game.owned.strings.move_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.owned.strings.move_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.ptrs.moves.len)
                         return error.Error;
@@ -715,8 +715,8 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
             const prev = parser.str;
             const field = try parser.parse(parse.anyField);
             switch (m(field)) {
-                c("description") => try applyGen4String(128, game.owned.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(16, game.owned.item_names, index, try parser.parse(parse.strv)),
+                c("description") => try applyGen4String(game.owned.strings.item_descriptions, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.owned.strings.item_names, index, try parser.parse(parse.strv)),
                 else => {
                     if (index >= game.ptrs.items.len)
                         return error.Error;
@@ -743,14 +743,14 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
         c("abilities") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(16, game.owned.ability_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.owned.strings.ability_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
         c("types") => {
             const index = try parser.parse(parse.index);
             switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(16, game.owned.type_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.owned.strings.type_names, index, try parser.parse(parse.strv)),
                 else => return error.Error,
             }
         },
@@ -777,7 +777,7 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
                 c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
                 c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
                 c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("name") => try applyGen4String(16, game.owned.pokemon_names, index, try parser.parse(parse.strv)),
+                c("name") => try applyGen4String(game.owned.strings.pokemon_names, index, try parser.parse(parse.strv)),
                 c("tms"), c("hms") => {
                     const is_tms = c("tms") == m(field);
                     const tindex = try parser.parse(parse.index);
@@ -950,14 +950,17 @@ fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
     }
 }
 
-fn applyGen4String(comptime l: usize, strs: []gen4.String(l), index: usize, value: []const u8) !void {
-    if (strs.len <= index)
+fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !void {
+    if (strs.number_of_strings <= index)
         return error.Error;
 
-    var buf = [_]u8{0} ** l;
-    var fba = io.fixedBufferStream(&buf);
-    try escape.writeUnEscaped(fba.writer(), value, escape.zig_escapes);
-    strs[index].buf = buf;
+    const buf = strs.get(index);
+    const writer = io.fixedBufferStream(buf).writer();
+    try escape.writeUnEscaped(writer, value, escape.zig_escapes);
+
+    // Null terminate, if we didn't fill the buffer
+    if (writer.context.pos < buf.len)
+        buf[writer.context.pos] = 0;
 }
 
 fn applyGen5(game: gen5.Game, str: []const u8) !void {

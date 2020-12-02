@@ -647,48 +647,25 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
         try writer.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount });
     }
 
-    for (game.owned.pokemon_names) |*str, i|
-        try outputString(writer, "pokemons", i, "name", str.span());
-    for (game.owned.move_names) |*str, i|
-        try outputString(writer, "moves", i, "name", str.span());
-    for (game.owned.move_descriptions) |*str, i|
-        try outputString(writer, "moves", i, "description", str.span());
-    for (game.owned.ability_names) |*str, i|
-        try outputString(writer, "abilities", i, "name", str.span());
-    for (game.owned.item_names) |*str, i|
-        try outputString(writer, "items", i, "name", str.span());
-    //for (game.owned.item_names_on_the_ground) |*str, i| try outputGen5String(writer, "items", i, "name_on_ground", str);
-    for (game.owned.item_descriptions) |*str, i|
-        try outputString(writer, "items", i, "description", str.span());
-    for (game.owned.type_names) |*str, i|
-        try outputString(writer, "types", i, "name", str.span());
-    //for (game.owned.map_names) |*str, i| try outputGen5String(writer, "map", i, "name", str);
-    //for (game.owned.trainer_names) |*str, i|
-    //    try outputString(writer, "trainers", i + 1, "name", str.span());
-
-    // This snippet of code can be uncommented to output all strings in gen4 games.
-    // This is useful when looking for new strings to expose.
-    //    var buf: [1024]u8 = undefined;
-    //    for (game.ptrs.text.fat) |_, i| {
-    //        const file = nds.fs.File{ .i = @intCast(u16, i) };
-    //        const table = gen4.StringTable{ .data = game.ptrs.text.fileData(file) };
-    //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
-    //        outputGen4StringTable(writer, name, "", table) catch continue;
-    //    }
+    try outputGen4StringTable(writer, 0, "pokemons", "name", game.owned.strings.pokemon_names);
+    try outputGen4StringTable(writer, 0, "moves", "name", game.owned.strings.move_names);
+    try outputGen4StringTable(writer, 0, "moves", "description", game.owned.strings.move_descriptions);
+    try outputGen4StringTable(writer, 0, "abilities", "name", game.owned.strings.ability_names);
+    try outputGen4StringTable(writer, 0, "items", "name", game.owned.strings.item_names);
+    try outputGen4StringTable(writer, 0, "items", "description", game.owned.strings.item_descriptions);
+    try outputGen4StringTable(writer, 0, "types", "name", game.owned.strings.type_names);
 }
 
 fn outputGen4StringTable(
     writer: anytype,
+    start: usize,
     array_name: []const u8,
     field_name: []const u8,
-    est: gen4.StringTable,
+    table: gen4.StringTable,
 ) !void {
-    var i: u32 = 10;
-    while (i < est.count()) : (i += 1) {
-        try writer.print(".{}[{}].{}=", .{ array_name, i, field_name });
-        try gen4.encodings.decode(est.getStringStream(i).reader(), writer);
-        try writer.writeAll("\n");
-    }
+    var i: usize = 0;
+    while (i < table.number_of_strings) : (i += 1)
+        try outputString(writer, array_name, i + start, field_name, table.getSpan(i + start));
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
@@ -992,18 +969,9 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
     try outputGen5StringTable(writer, 0, "moves", "description", game.owned.strings.move_descriptions);
     try outputGen5StringTable(writer, 0, "abilities", "name", game.owned.strings.ability_names);
     try outputGen5StringTable(writer, 0, "items", "name", game.owned.strings.item_names);
+    try outputGen5StringTable(writer, 0, "items", "description", game.owned.strings.item_descriptions);
     try outputGen5StringTable(writer, 0, "types", "name", game.owned.strings.type_names);
     try outputGen5StringTable(writer, 1, "trainers", "name", game.owned.strings.trainer_names);
-
-    // This snippet of code can be uncommented to output all strings in gen5 game.ptrs..
-    // This is useful when looking for new strings to expose.
-    //    var buf: [1024]u8 = undefined;
-    //    for (game.ptrs.text.fat) |_, i| {
-    //        const file = nds.fs.File{ .i = @intCast(u16, i) };
-    //        const table = gen5.StringTable{ .data = game.ptrs.text.fileData(file) };
-    //        const name = try std.fmt.bufPrint(&buf, "{}", .{i});
-    //        outputGen5StringTable(writer, name, "", table) catch continue;
-    //    }
 }
 
 fn outputGen5StringTable(

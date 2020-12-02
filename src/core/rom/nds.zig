@@ -426,6 +426,9 @@ pub const Rom = struct {
         const size = try file.getEndPos();
         try file.seekTo(0);
 
+        if (size < @sizeOf(Header))
+            return error.InvalidRom;
+
         var data = std.ArrayList(u8).init(allocator);
         errdefer data.deinit();
 
