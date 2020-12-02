@@ -614,7 +614,7 @@ const EncryptedStringTable = struct {
     }
 };
 
-fn decrypt(data: []const lu16, out: anytype) !void {
+fn decrypt(data: []const lu16, out: anytype) !u16 {
     const H = struct {
         fn output(out2: anytype, char: u16) !bool {
             const Pair = struct {
@@ -642,7 +642,8 @@ fn decrypt(data: []const lu16, out: anytype) !void {
     };
 
     const key = getKey(data);
-    const first = data[0].value() ^ keyForI(key, data.len, 0);
+    const res = keyForI(key, data.len, 0);
+    const first = data[0].value() ^ res;
     const compressed = first == 0xF100;
     const start = @boolToInt(compressed);
 
@@ -657,16 +658,18 @@ fn decrypt(data: []const lu16, out: anytype) !void {
             while (bits >= 9) : (bits -= 9) {
                 const char = @intCast(u16, container & 0x1FF);
                 if (char == 0x1Ff)
-                    return;
+                    return res;
                 if (try H.output(out, char))
-                    return;
+                    return res;
                 container >>= 9;
             }
         } else {
             if (try H.output(out, decoded))
-                return;
+                return res;
         }
     }
+
+    return res;
 }
 
 fn getKey(data: []const lu16) u16 {
@@ -702,9 +705,12 @@ fn encode(data: []const u8, out: anytype) !void {
     try out.writeIntLittle(u16, 0xffff);
 }
 
-fn encrypt(data: []lu16, key: u16) void {
-    for (data) |*c, i|
-        c.* = lu16.init(c.value() ^ keyForI(key, data.len, i));
+fn encrypt(data: []lu16, _key: u16) void {
+    var key = _key;
+    for (data) |*c, i| {
+        c.* = lu16.init(c.value() ^ key);
+        key = ((key << 3) | (key >> 13)) & 0xffff;
+    }
 }
 
 fn keyForI(key: u16, len: usize, i: usize) u16 {
@@ -1342,8 +1348,7 @@ pub const Game = struct {
 
             const writer = io.fixedBufferStream(buf).writer();
             const encrypted_string = table.getEncryptedString(0, i);
-            try decrypt(encrypted_string, writer);
-            key.* = getKey(encrypted_string);
+            key.* = try decrypt(encrypted_string, writer);
         }
 
         return res;
