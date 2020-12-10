@@ -62,6 +62,7 @@ fn usage(writer: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -70,12 +71,12 @@ pub fn main2(
     const seed = util.getSeed(stdio.err, usage, args) catch return 1;
     const replace_cheap = args.flag("--replace-cheap-items");
 
+    const unknown_method = strings.put("????") catch return exit.allocErr(stdio.err);
+
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, &data, replace_cheap, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &data, unknown_method, replace_cheap, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
             error.ParseError,
@@ -85,7 +86,12 @@ pub fn main2(
         };
     }
 
-    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
+    randomize(
+        allocator,
+        strings,
+        &data,
+        seed,
+    ) catch return exit.allocErr(stdio.err);
 
     for (data.pokemons.values()) |pokemon, i| {
         const pokemon_id = data.pokemons.at(i).key;
@@ -113,12 +119,17 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: []const u8) !void {
+fn parseLine(
+    allocator: *mem.Allocator,
+    strings: *util.StringCache,
+    data: *Data,
+    unknown_method: usize,
+    replace_cheap: bool,
+    str: []const u8,
+) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-
-    const unknown_method = try data.string("????");
 
     var p = parse.MutParser{ .str = str };
     switch (m(try p.parse(parse.anyField))) {
@@ -135,7 +146,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                 c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
                 c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
                 c("base_friendship") => pokemon.base_friendship = try p.parse(parse.usizev),
-                c("growth_rate") => pokemon.growth_rate = try data.string(try p.parse(parse.strv)),
+                c("growth_rate") => pokemon.growth_rate = try strings.put(try p.parse(parse.strv)),
                 c("stats") => switch (m(try p.parse(parse.anyField))) {
                     c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
                     c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
@@ -155,7 +166,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                 },
                 c("egg_groups") => {
                     _ = try p.parse(parse.index);
-                    _ = try pokemon.egg_groups.put(allocator, try data.string(try p.parse(parse.strv)));
+                    _ = try pokemon.egg_groups.put(allocator, try strings.put(try p.parse(parse.strv)));
                 },
                 c("evos") => {
                     const evo_index = try p.parse(parse.index);
@@ -167,7 +178,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
                     switch (m(try p.parse(parse.anyField))) {
                         c("target") => evo.target = try p.parse(parse.usizev),
                         c("param") => evo.item = try p.parse(parse.usizev),
-                        c("method") => evo.method = try data.string(try p.parse(parse.strv)),
+                        c("method") => evo.method = try strings.put(try p.parse(parse.strv)),
                         else => {},
                     }
                     return;
@@ -212,9 +223,14 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, replace_cheap: bool, str: [
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
+fn randomize(
+    allocator: *mem.Allocator,
+    strings: *util.StringCache,
+    data: *Data,
+    seed: usize,
+) !void {
     const random = &rand.DefaultPrng.init(seed).random;
-    const use_item_method = try data.string("use_item");
+    const use_item_method = try strings.put("use_item");
 
     // First, let's find items that are used for evolving Pokémons.
     // We will use these items as our stones.
@@ -487,7 +503,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
             },
         },
     };
-    for (stone_strings) |strings, stone| {
+    for (stone_strings) |strs, stone| {
         if (data.max_evolutions <= stone or stones.count() <= stone)
             break;
 
@@ -498,8 +514,8 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         // are working on. Our best guess will therefor be to use the current
         // items name/desc as the limits and pick something that fits.
         item.* = Item{
-            .name = pickString(item.name.len, strings.names),
-            .description = pickString(item.description.len, strings.descriptions),
+            .name = pickString(item.name.len, strs.names),
+            .description = pickString(item.description.len, strs.descriptions),
         };
     }
 
@@ -509,7 +525,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
         while (pokemon_id <= s_range.end) : (pokemon_id += 1) {
             const pokemon = data.pokemons.get(pokemon_id).?;
 
-            for (stone_strings) |strings, stone| {
+            for (stone_strings) |_, stone| {
                 if (data.max_evolutions <= stone or stones.count() <= stone)
                     break;
 
@@ -695,21 +711,11 @@ const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
 const PokeballItems = util.container.IntMap.Unmanaged(usize, usize);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     max_evolutions: usize = 0,
     pokedex: Set = Set{},
     items: Items = Items{},
     pokeball_items: PokeballItems = PokeballItems{},
     pokemons: Pokemons = Pokemons{},
-
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.entry.value = d.strings.count() - 1;
-        }
-        return res.entry.value;
-    }
 
     fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
         var res = Set{};

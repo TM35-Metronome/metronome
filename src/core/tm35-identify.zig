@@ -46,6 +46,7 @@ fn usage(writer: anytype) !void {
 
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),

@@ -19,6 +19,7 @@ pub fn testProgram(
     var out_buf: [1024 * 10]u8 = undefined;
     var err_buf: [1024]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&alloc_buf);
+    var strings = util.container.StringCache(.{}){ .allocator = &fba.allocator };
     var stdin = io.bufferedReader(io.fixedBufferStream(in).reader());
     var stdout = io.fixedBufferStream(&out_buf);
     var stderr = io.fixedBufferStream(&err_buf);
@@ -32,6 +33,7 @@ pub fn testProgram(
 
     const res = main(
         &fba.allocator,
+        &strings,
         StdIo.Reader,
         StdIo.Writer,
         StdIo{

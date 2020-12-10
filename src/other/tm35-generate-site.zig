@@ -47,6 +47,7 @@ fn usage(writer: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -55,10 +56,9 @@ pub fn main2(
     const out = args.option("--output") orelse "site.html";
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var strings = std.StringHashMap(void).init(allocator);
-    var obj = Object{ .fields = Fields.init(allocator) };
+    var obj = Object{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(&obj, &strings, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &obj, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
         stdio.out.print("{}\n", .{line}) catch |err| return exit.stdoutErr(stdio.err, err);
@@ -79,30 +79,20 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(obj: *Object, strings: *std.StringHashMap(void), str: []const u8) !void {
-    const allocator = obj.fields.allocator;
+fn parseLine(allocator: *mem.Allocator, strings: *util.container.StringCache(.{}), obj: *Object, str: []const u8) !void {
     var curr = obj;
     var p = parse.MutParser{ .str = str };
     while (true) {
         if (p.parse(parse.anyField)) |field| {
-            const string = try strings.getOrPut(field);
-            if (!string.found_existing)
-                string.entry.key = try mem.dupe(allocator, u8, field);
-
-            const entry = try curr.fields.getOrPutValue(string.entry.key, Object{
-                .fields = Fields.init(allocator),
-            });
+            const string = try strings.put(field);
+            const entry = try curr.fields.getOrPutValue(allocator, strings.get(string), Object{});
             curr = &entry.value;
         } else |_| if (p.parse(parse.index)) |index| {
             curr = try curr.indexs.getOrPutValue(allocator, index, Object{
                 .fields = Fields.init(allocator),
             });
         } else |_| if (p.parse(parse.strv)) |value| {
-            const string = try strings.getOrPut(value);
-            if (!string.found_existing)
-                string.entry.key = try mem.dupe(allocator, u8, value);
-
-            curr.value = string.entry.key;
+            curr.value = strings.get(try strings.put(value));
             return;
         } else |_| {
             return;
@@ -551,11 +541,11 @@ fn writeHumanized(writer: anytype, str: []const u8) !void {
     }
 }
 
-const Fields = std.StringHashMap(Object);
+const Fields = std.StringHashMapUnmanaged(Object);
 const Indexs = util.container.IntMap.Unmanaged(usize, Object);
 
 const Object = struct {
-    fields: Fields,
+    fields: Fields = Fields{},
     indexs: Indexs = Indexs{},
     value: ?[]const u8 = null,
 

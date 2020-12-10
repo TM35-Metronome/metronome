@@ -53,6 +53,7 @@ const Preference = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -62,11 +63,9 @@ pub fn main2(
     const hms = args.flag("--hms");
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, &data, hms, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &data, hms, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
             error.ParseError,
@@ -76,7 +75,7 @@ pub fn main2(
         };
     }
 
-    randomize(&data, seed) catch return exit.allocErr(stdio.err);
+    randomize(allocator, strings, &data, seed) catch return exit.allocErr(stdio.err);
 
     for (data.tms.values()) |tm, i| {
         stdio.out.print(".tms[{}]={}\n", .{
@@ -101,7 +100,13 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8) !void {
+fn parseLine(
+    allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
+    data: *Data,
+    hms: bool,
+    str: []const u8,
+) !void {
     const sw = util.parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -148,7 +153,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
             const item = try data.items.getOrPutValue(allocator, index, Item{});
 
             switch (m(try p.parse(parse.anyField))) {
-                c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
+                c("pocket") => item.pocket = try strings.put(try p.parse(parse.strv)),
                 c("name") => {
                     const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
                     item.name = try Utf8.init(name);
@@ -170,8 +175,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, hms: bool, str: []const u8)
     unreachable;
 }
 
-fn randomize(data: *Data, seed: u64) !void {
-    const allocator = data.strings.allocator;
+fn randomize(allocator: *mem.Allocator, strings: *util.container.StringCache(.{}), data: *Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.values()) |*tm|
@@ -197,7 +201,7 @@ fn randomize(data: *Data, seed: u64) !void {
     //       by some amount and hope it is enough for all strings.
     max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
-    const tms_hms_pocket = try data.string("tms_hms");
+    const tms_hms_pocket = try strings.put("tms_hms");
     for (data.items.values()) |*item, i| {
         const id = data.items.at(i).key;
         if (item.pocket != tms_hms_pocket)
@@ -239,20 +243,10 @@ const Moves = util.container.IntMap.Unmanaged(usize, Move);
 const Items = util.container.IntMap.Unmanaged(usize, Item);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     items: Items = Items{},
     moves: Moves = Moves{},
     tms: Machines = Machines{},
     hms: Machines = Machines{},
-
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.entry.value = d.strings.count() - 1;
-        }
-        return res.entry.value;
-    }
 };
 
 const Item = struct {

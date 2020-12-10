@@ -46,6 +46,7 @@ fn usage(writer: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -56,11 +57,9 @@ pub fn main2(
     const include_key_items = args.flag("--include-key-items");
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
@@ -68,7 +67,14 @@ pub fn main2(
         };
     }
 
-    randomize(allocator, &data, seed, include_tms_hms, include_key_items) catch |err| return exit.randErr(stdio.err, err);
+    randomize(
+        allocator,
+        strings,
+        &data,
+        seed,
+        include_tms_hms,
+        include_key_items,
+    ) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.pokeballs.values()) |ball, i| {
         const key = data.pokeballs.at(i).key;
@@ -77,7 +83,12 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
+fn parseLine(
+    allocator: *mem.Allocator,
+    strings: *util.StringCache,
+    data: *Data,
+    str: []const u8,
+) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -95,7 +106,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
             const index = try p.parse(parse.index);
             const item = try data.items.getOrPutValue(allocator, index, Item{});
             switch (m(try p.parse(parse.anyField))) {
-                c("pocket") => item.pocket = try data.string(try p.parse(parse.strv)),
+                c("pocket") => item.pocket = try strings.put(try p.parse(parse.strv)),
                 c("price") => item.price = try p.parse(parse.usizev),
                 else => return error.ParseError,
             }
@@ -108,6 +119,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 
 fn randomize(
     allocator: *mem.Allocator,
+    strings: *util.StringCache,
     data: *Data,
     seed: u64,
     include_tms_hms: bool,
@@ -121,13 +133,14 @@ fn randomize(
         var list = std.ArrayList(usize).fromOwnedSlice(std.testing.failing_allocator, &pocket_blacklist_buffer);
         list.resize(0) catch unreachable;
         if (!include_tms_hms)
-            list.append(try data.string("tms_hms")) catch unreachable;
+            list.append(try strings.put("tms_hms")) catch unreachable;
         if (!include_key_items)
-            list.append(try data.string("key_items")) catch unreachable;
+            list.append(try strings.put("key_items")) catch unreachable;
         break :blk list.items;
     };
 
-    const pick_from = try data.getItems(allocator, pocket_blacklist);
+    const items_pocket = try strings.put("items");
+    const pick_from = try data.getItems(allocator, items_pocket, pocket_blacklist);
     const max = pick_from.count();
 
     outer: for (data.pokeballs.values()) |*ball, i| {
@@ -147,24 +160,12 @@ const Pokeballs = util.container.IntMap.Unmanaged(usize, usize);
 const Items = util.container.IntMap.Unmanaged(usize, Item);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     pokeballs: Pokeballs = Pokeballs{},
     items: Items = Items{},
 
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.entry.value = d.strings.count() - 1;
-        }
-        return res.entry.value;
-    }
-
-    fn getItems(d: *Data, allocator: *mem.Allocator, pocket_blacklist: []const usize) !Set {
+    fn getItems(d: *Data, allocator: *mem.Allocator, items_pocket: usize, pocket_blacklist: []const usize) !Set {
         var res = Set{};
         errdefer res.deinit(allocator);
-
-        const items_pocket = try d.string("items");
 
         outer: for (d.items.values()) |item, i| {
             for (pocket_blacklist) |blacklisted_pocket| {

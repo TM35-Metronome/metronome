@@ -83,6 +83,7 @@ const PartySizeMethod = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -136,11 +137,9 @@ pub fn main2(
     }
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
@@ -148,7 +147,7 @@ pub fn main2(
         };
     }
 
-    randomize(allocator, &data, .{
+    randomize(allocator, strings, &data, .{
         .seed = seed,
         .types = types,
         .items = items,
@@ -159,10 +158,10 @@ pub fn main2(
         .party_size_max = party_size_max catch unreachable,
     }) catch |err| return exit.randErr(stdio.err, err);
 
-    const party_type_none = data.string("none") catch unreachable;
-    const party_type_item = data.string("item") catch unreachable;
-    const party_type_moves = data.string("moves") catch unreachable;
-    const party_type_both = data.string("both") catch unreachable;
+    const party_type_none = strings.put("none") catch unreachable;
+    const party_type_item = strings.put("item") catch unreachable;
+    const party_type_moves = strings.put("moves") catch unreachable;
+    const party_type_both = strings.put("both") catch unreachable;
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
@@ -194,7 +193,12 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
+fn parseLine(
+    allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
+    data: *Data,
+    str: []const u8,
+) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
@@ -246,7 +250,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 
             switch (m(try p.parse(parse.anyField))) {
                 c("party_size") => trainer.party_size = try p.parse(parse.usizev),
-                c("party_type") => trainer.party_type = try data.string(try p.parse(parse.strv)),
+                c("party_type") => trainer.party_type = try strings.put(try p.parse(parse.strv)),
                 c("party") => {
                     const party_index = try p.parse(parse.index);
                     const member = try trainer.party.getOrPutValue(allocator, party_index, PartyMember{});
@@ -309,15 +313,20 @@ const Options = struct {
     party_size_max: usize,
 };
 
-fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
+fn randomize(
+    allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
+    data: *Data,
+    opt: Options,
+) !void {
     var random_adapt = rand.DefaultPrng.init(opt.seed);
     const random = &random_adapt.random;
     var simular = std.ArrayList(usize).init(allocator);
 
-    const party_type_none = try data.string("none");
-    const party_type_item = try data.string("item");
-    const party_type_moves = try data.string("moves");
-    const party_type_both = try data.string("both");
+    const party_type_none = try strings.put("none");
+    const party_type_item = try strings.put("item");
+    const party_type_moves = try strings.put("moves");
+    const party_type_both = try strings.put("both");
 
     const species = try data.pokedexPokemons(allocator);
     const species_by_type = try data.speciesByType(allocator, species);
@@ -573,21 +582,11 @@ const MemberMoves = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     trainers: Trainers = Trainers{},
     moves: Moves = Moves{},
     held_items: Set = Set{},
-
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.entry.value = d.strings.count() - 1;
-        }
-        return res.entry.value;
-    }
 
     fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
         var res = Set{};

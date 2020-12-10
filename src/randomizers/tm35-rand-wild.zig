@@ -44,6 +44,7 @@ fn usage(writer: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
+    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -53,11 +54,9 @@ pub fn main2(
     const simular_total_stats = args.flag("--simular-total-stats");
 
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
-    var data = Data{
-        .strings = std.StringHashMap(usize).init(allocator),
-    };
+    var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(&data, line) catch |err| switch (err) {
+        parseLine(&data, strings, allocator, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
@@ -65,19 +64,17 @@ pub fn main2(
         };
     }
 
-    randomize(data, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
+    randomize(data, allocator, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
 
     for (data.wild_pokemons.values()) |zone, i| {
         const zone_i = data.wild_pokemons.at(i).key;
 
-        var area_iter = data.strings.iterator();
-        while (area_iter.next()) |area_kv| {
-            const area_name = area_kv.key;
-            const area_id = area_kv.value;
-            const area = zone.wild_areas.get(area_id) orelse continue;
+        for (zone.wild_areas.values()) |area, j| {
+            const area_id = zone.wild_areas.at(j).key;
+            const area_name = strings.get(area_id);
 
-            for (area.pokemons.values()) |*pokemon, j| {
-                const poke_i = area.pokemons.at(j).key;
+            for (area.pokemons.values()) |*pokemon, k| {
+                const poke_i = area.pokemons.at(k).key;
                 if (pokemon.min_level) |l|
                     stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.max_level) |l|
@@ -91,11 +88,15 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(data: *Data, str: []const u8) !void {
+fn parseLine(
+    data: *Data,
+    strings: *util.StringCache,
+    allocator: *mem.Allocator,
+    str: []const u8,
+) !void {
     const sw = parse.Swhash(16);
     const m = sw.match;
     const c = sw.case;
-    const allocator = data.strings.allocator;
     var p = parse.MutParser{ .str = str };
 
     switch (m(try p.parse(parse.anyField))) {
@@ -134,7 +135,7 @@ fn parseLine(data: *Data, str: []const u8) !void {
             const zone = try data.wild_pokemons.getOrPutValue(allocator, zone_index, Zone{});
             const area_name = try p.parse(parse.anyField);
 
-            const area_id = try data.string(area_name);
+            const area_id = try strings.put(area_name);
             const area = try zone.wild_areas.getOrPutValue(allocator, area_id, WildArea{});
 
             try p.parse(comptime parse.field("pokemons"));
@@ -156,12 +157,11 @@ fn parseLine(data: *Data, str: []const u8) !void {
     unreachable;
 }
 
-fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
-    const allocator = data.strings.allocator;
+fn randomize(data: Data, allocator: *mem.Allocator, seed: u64, simular_total_stats: bool) !void {
     const random = &rand.DefaultPrng.init(seed).random;
     var simular = std.ArrayList(usize).init(allocator);
 
-    const species = try data.pokedexPokemons();
+    const species = try data.pokedexPokemons(allocator);
     const species_max = species.count();
 
     for (data.wild_pokemons.values()) |zone| {
@@ -228,37 +228,23 @@ const WildAreas = util.container.IntMap.Unmanaged(usize, WildArea);
 const WildPokemons = util.container.IntMap.Unmanaged(usize, WildPokemon);
 
 const Data = struct {
-    strings: std.StringHashMap(usize),
     pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     wild_pokemons: Zones = Zones{},
 
-    fn string(d: *Data, str: []const u8) !usize {
-        const res = try d.strings.getOrPut(str);
-        if (!res.found_existing) {
-            res.entry.key = try mem.dupe(d.strings.allocator, u8, str);
-            res.entry.value = d.strings.count() - 1;
-        }
-        return res.entry.value;
-    }
-
-    fn pokedexPokemons(d: Data) !Set {
+    fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
         var res = Set{};
-        errdefer res.deinit(d.allocator());
+        errdefer res.deinit(allocator);
 
         for (d.pokemons.values()) |pokemon, i| {
             const s = d.pokemons.at(i).key;
             if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
                 continue;
 
-            _ = try res.put(d.allocator(), s);
+            _ = try res.put(allocator, s);
         }
 
         return res;
-    }
-
-    fn allocator(d: Data) *mem.Allocator {
-        return d.strings.allocator;
     }
 };
 
