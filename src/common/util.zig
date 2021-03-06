@@ -1,7 +1,7 @@
-const clap = @import("clap");
-const std = @import("std");
 const builtin = @import("builtin");
+const clap = @import("clap");
 const folders = @import("folders");
+const std = @import("std");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -159,6 +159,19 @@ test "indexOfPtr" {
     for (arr) |*item, i| {
         std.testing.expectEqual(i, indexOfPtr(u8, arr, item));
     }
+}
+
+/// A datastructure representing an array that is either terminated at
+/// `sentinel` or at `n`.
+pub fn TerminatedArray(comptime n: usize, comptime T: type, comptime sentinel: T) type {
+    return extern struct {
+        data: [n]T,
+
+        pub fn span(array: anytype) mem.Span(@TypeOf(&array.data)) {
+            const i = mem.indexOfScalar(T, &array.data, sentinel) orelse return &array.data;
+            return array.data[0..i];
+        }
+    };
 }
 
 pub fn StackArrayList(comptime size: usize, comptime T: type) type {

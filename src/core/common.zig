@@ -126,6 +126,13 @@ pub const Version = enum {
     }
 };
 
+pub const PartyType = packed enum(u8) {
+    none = 0b00,
+    item = 0b10,
+    moves = 0b01,
+    both = 0b11,
+};
+
 pub const Stats = extern struct {
     hp: u8,
     attack: u8,
@@ -186,7 +193,6 @@ pub const ColorKind = packed enum(u7) {
     white = 0x08,
     pink = 0x09,
     green2 = 0x0A,
-    _,
 };
 
 pub const Color = packed struct {

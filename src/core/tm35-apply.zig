@@ -3,6 +3,7 @@ const std = @import("std");
 const util = @import("util");
 
 const common = @import("common.zig");
+const format = @import("format.zig");
 const gen3 = @import("gen3.zig");
 const gen4 = @import("gen4.zig");
 const gen5 = @import("gen5.zig");
@@ -25,13 +26,12 @@ const nds = rom.nds;
 const bit = util.bit;
 const escape = util.escape;
 const exit = util.exit;
-const parse = util.parse;
 
 const li16 = rom.int.li16;
+const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
-const lu128 = rom.int.lu128;
 
 const Param = clap.Param(clap.Help);
 
@@ -238,15 +238,17 @@ const Game = union(enum) {
     pub fn deinit(game: Game) void {
         switch (game) {
             .gen3 => |g| g.deinit(),
-            .gen4 => |g| g.deinit(),
-            .gen5 => |g| g.deinit(),
+            .gen4 => |g| {
+                g.rom.deinit();
+                g.deinit();
+            },
+            .gen5 => |g| {
+                g.rom.deinit();
+                g.deinit();
+            },
         }
     }
 };
-
-const sw = parse.Swhash(16);
-const c = sw.case;
-const m = sw.match;
 
 pub fn toInt(
     comptime Int: type,
@@ -289,194 +291,296 @@ pub const converters = .{
 };
 
 fn applyGen3(game: *gen3.Game, str: []const u8) !void {
-    var parser = parse.MutParser{ .str = str };
-    switch (m(try parser.parse(parse.anyField))) {
-        c("version") => {
-            const value = try parser.parse(comptime parse.enumv(common.Version));
-            if (value != game.version)
+    const parsed = try format.parse(str);
+    switch (parsed) {
+        .version => |version| {
+            if (version != game.version)
                 return error.VersionDontMatch;
         },
-        c("game_title") => {
-            const value = try parser.parse(parse.strv);
-            if (!mem.eql(u8, value, &game.header.game_title))
+        .game_title => |title| {
+            if (!mem.eql(u8, title, game.header.game_title.span()))
                 return error.GameTitleDontMatch;
         },
-        c("gamecode") => {
-            const value = try parser.parse(parse.strv);
-            if (!mem.eql(u8, value, &game.header.gamecode))
+        .gamecode => |code| {
+            if (!mem.eql(u8, code, &game.header.gamecode))
                 return error.GameCodeDontMatch;
         },
-        c("starters") => {
-            const index = try parser.parse(parse.index);
-            const value = try parser.parse(parselu16v);
-            if (index >= game.starters.len)
+        .starters => |starter| {
+            if (starter.index >= game.starters.len)
                 return error.Error;
-            game.starters[index].* = value;
-            game.starters_repeat[index].* = value;
+            game.starters[starter.index].* = lu16.init(starter.value);
+            game.starters_repeat[starter.index].* = lu16.init(starter.value);
         },
-        c("text_delays") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.text_delays.len)
+        .text_delays => |delay| {
+            if (delay.index >= game.text_delays.len)
                 return error.Error;
-            game.text_delays[index] = try parser.parse(parse.u8v);
+            game.text_delays[delay.index] = delay.value;
         },
-        c("trainers") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.trainers.len)
+        .trainers => |trainers| {
+            if (trainers.index >= game.trainers.len)
                 return error.Error;
-            const trainer = &game.trainers[index];
-            const party = &game.trainer_parties[index];
+            const trainer = &game.trainers[trainers.index];
+            const party = &game.trainer_parties[trainers.index];
 
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("class") => trainer.class = try parser.parse(parse.u8v),
-                c("gender") => trainer.encounter_music.gender = try parser.parse(comptime parse.enumv(gen3.Gender)),
-                c("encounter_music") => trainer.encounter_music.music = try parser.parse(parse.u7v),
-                c("trainer_picture") => trainer.trainer_picture = try parser.parse(parse.u8v),
-                c("is_double") => trainer.is_double = try parser.parse(parselu32v),
-                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen3.PartyType)),
-                c("party_size") => party.size = try parser.parse(parse.u32v),
-                c("ai") => trainer.ai = try parser.parse(parselu32v),
-                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &trainer.name),
-                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("party") => {
-                    const pindex = try parser.parse(parse.index);
-                    if (pindex >= party.size)
+            switch (trainers.value) {
+                .class => |class| trainer.class = class,
+                .encounter_music => |encounter_music| trainer.encounter_music.music = try math.cast(u7, encounter_music),
+                .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
+                .party_type => |party_type| trainer.party_type = party_type,
+                .party_size => |party_size| party.size = party_size,
+                .name => |name| try gen3.encodings.encode(.en_us, name, &trainer.name),
+                .items => |items| {
+                    if (items.index >= trainer.items.len)
+                        return error.OutOfBound;
+
+                    trainer.items[trainers.index] = lu16.init(items.value);
+                },
+                .party => |members| {
+                    if (members.index >= party.size)
                         return error.Error;
 
-                    const member = &party.members[pindex];
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("iv") => member.base.iv = try parser.parse(parselu16v),
-                        c("level") => member.base.level = try parser.parse(parselu16v),
-                        c("species") => member.base.species = try parser.parse(parselu16v),
-                        c("item") => member.item = try parser.parse(parselu16v),
-                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
-                        else => return error.NoField,
+                    const member = &party.members[members.index];
+                    switch (members.value) {
+                        .level => |level| member.base.level = lu16.init(level),
+                        .species => |species| member.base.species = lu16.init(species),
+                        .item => |item| member.item = lu16.init(item),
+                        .moves => |moves| {
+                            if (moves.index >= member.moves.len)
+                                return error.IndexOutOfBound;
+                            member.moves[moves.index] = lu16.init(moves.value);
+                        },
+                        .ability => return error.ParserFailed,
                     }
                 },
-                else => return error.NoField,
             }
         },
-        c("pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.pokemons.len)
+        .moves => |moves| {
+            if (moves.index >= math.min(game.move_names.len, game.moves.len))
                 return error.Error;
-            const pokemon = &game.pokemons[index];
 
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
-                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
-                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
-                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
-                c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
-                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
-                c("evos") => try parse.anyT(parser.str, &game.evolutions[index], converters),
-                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
-                c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
-                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
-                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
-                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
-                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
-                c("safari_zone_rate") => pokemon.safari_zone_rate = try parser.parse(parse.u8v),
-                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
-                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("tms"), c("hms") => {
-                    const is_tms = c("tms") == m(field);
-                    const tindex = try parser.parse(parse.index);
-                    const value = try parser.parse(parse.boolv);
-                    const len = if (is_tms) game.tms.len else game.hms.len;
-                    if (tindex >= len)
-                        return error.Error;
+            const move = &game.moves[moves.index];
+            switch (moves.value) {
+                .name => |name| try gen3.encodings.encode(.en_us, name, &game.move_names[moves.index]),
+                .effect => |effect| move.effect = effect,
+                .power => |power| move.power = power,
+                .type => |_type| move.type = _type,
+                .accuracy => |accuracy| move.accuracy = accuracy,
+                .pp => |pp| move.pp = pp,
+                .target => |target| move.target = target,
+                .priority => |priority| move.priority = priority,
+                .category => |category| move.category = category,
+                .description => return error.IndexOutOfBound,
+            }
+        },
+        .pokemons => |pokemons| {
+            if (pokemons.index >= game.pokemons.len)
+                return error.Error;
 
-                    const rindex = tindex + game.tms.len * @boolToInt(!is_tms);
-                    const learnset = &game.machine_learnsets[index];
-                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, rindex), value));
+            const pokemon = &game.pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats.hp = hp,
+                    .attack => |attack| pokemon.stats.attack = attack,
+                    .defense => |defense| pokemon.stats.defense = defense,
+                    .speed => |speed| pokemon.stats.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
                 },
-                c("moves") => {
-                    const ptr = &game.level_up_learnset_pointers[index];
+                .ev_yield => |ev_yield| switch (ev_yield) {
+                    .hp => |hp| pokemon.ev_yield.hp = hp,
+                    .attack => |attack| pokemon.ev_yield.attack = attack,
+                    .defense => |defense| pokemon.ev_yield.defense = defense,
+                    .speed => |speed| pokemon.ev_yield.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
+                },
+                .items => |items| {
+                    if (items.index >= pokemon.items.len)
+                        return error.IndexOutOfBound;
+                    pokemon.items[items.index] = lu16.init(items.value);
+                },
+                .types => |types| {
+                    if (types.index >= pokemon.types.len)
+                        return error.IndexOutOfBound;
+                    pokemon.types[types.index] = types.value;
+                },
+                .egg_groups => |egg_groups| {
+                    if (egg_groups.index >= pokemon.egg_groups.len)
+                        return error.IndexOutOfBound;
+                    pokemon.egg_groups[egg_groups.index] = egg_groups.value;
+                },
+                .abilities => |abilities| {
+                    if (abilities.index >= pokemon.abilities.len)
+                        return error.IndexOutOfBound;
+                    pokemon.abilities[abilities.index] = abilities.value;
+                },
+                .moves => |moves| {
+                    if (pokemons.index >= game.level_up_learnset_pointers.len)
+                        return error.IndexOutOfBound;
+
+                    const ptr = &game.level_up_learnset_pointers[pokemons.index];
                     const lvl_up_moves = try ptr.toSliceZ2(game.data, gen3.LevelUpMove.term);
-                    try parse.anyT(parser.str, &lvl_up_moves, converters);
+                    if (moves.index >= lvl_up_moves.len)
+                        return error.IndexOutOfBound;
+
+                    const lvl_up_move = &lvl_up_moves[moves.index];
+                    switch (moves.value) {
+                        .id => |id| lvl_up_move.id = try math.cast(u9, id),
+                        .level => |level| lvl_up_move.level = try math.cast(u7, level),
+                    }
                 },
-                c("name") => {
-                    if (index >= game.pokemon_names.len)
+                .evos => |evos| {
+                    if (pokemons.index >= game.evolutions.len)
+                        return error.IndexOutOfBound;
+
+                    const evolutions = &game.evolutions[pokemons.index];
+                    if (evos.index >= evolutions.len)
+                        return error.IndexOutOfBound;
+
+                    const evolution = &evolutions[evos.index];
+                    switch (evos.value) {
+                        .method => |method| evolution.method = switch (method) {
+                            .attack_eql_defense => .attack_eql_defense,
+                            .attack_gth_defense => .attack_gth_defense,
+                            .attack_lth_defense => .attack_lth_defense,
+                            .beauty => .beauty,
+                            .friend_ship => .friend_ship,
+                            .friend_ship_during_day => .friend_ship_during_day,
+                            .friend_ship_during_night => .friend_ship_during_night,
+                            .level_up => .level_up,
+                            .level_up_female => .level_up_female,
+                            .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                            .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                            .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                            .level_up_knowning_move => .level_up_knowning_move,
+                            .level_up_male => .level_up_male,
+                            .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                            .level_up_near_ice_rock => .level_up_near_ice_rock,
+                            .level_up_near_moss_rock => .level_up_near_moss_rock,
+                            .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                            .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                            .personality_value1 => .personality_value1,
+                            .personality_value2 => .personality_value2,
+                            .trade => .trade,
+                            .trade_holding_item => .trade_holding_item,
+                            .unused => .unused,
+                            .use_item => .use_item,
+                            .use_item_on_female => .use_item_on_female,
+                            .use_item_on_male => .use_item_on_male,
+                            .unknown_0x02,
+                            .unknown_0x03,
+                            .trade_with_pokemon,
+                            => return error.ParserFailed,
+                        },
+                        .param => |param| evolution.param = lu16.init(param),
+                        .target => |target| evolution.target = lu16.init(target),
+                    }
+                },
+                .color => |color| pokemon.color.color = color,
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
+                .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
+                .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
+                .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
+                .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
+                .tms, .hms => |ms| {
+                    const is_tms = pokemons.value == .tms;
+                    const len = if (is_tms) game.tms.len else game.hms.len;
+                    if (ms.index >= len)
                         return error.Error;
 
-                    const new_name = try parser.parse(parse.strv);
-                    try gen3.encodings.encode(.en_us, new_name, &game.pokemon_names[index]);
+                    const index = ms.index + game.tms.len * @boolToInt(!is_tms);
+                    const learnset = &game.machine_learnsets[pokemons.index];
+                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, index), ms.value));
                 },
-                c("pokedex_entry") => {
-                    if (index == 0 or index - 1 >= game.species_to_national_dex.len)
+                .name => |name| {
+                    if (pokemons.index >= game.pokemon_names.len)
                         return error.Error;
-                    game.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
+                    try gen3.encodings.encode(.en_us, name, &game.pokemon_names[pokemons.index]);
                 },
-                else => return error.NoField,
-            }
-        },
-        c("tms") => try parse.anyT(parser.str, &game.tms, converters),
-        c("hms") => try parse.anyT(parser.str, &game.hms, converters),
-        c("moves") => {
-            const index = try parser.parse(parse.index);
-            const prev = parser.str;
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("name") => {
-                    if (index >= game.move_names.len)
+                .pokedex_entry => |entry| {
+                    if (pokemons.index == 0 or pokemons.index - 1 >= game.species_to_national_dex.len)
                         return error.Error;
-                    try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.move_names[index]);
-                },
-                else => {
-                    if (index >= game.moves.len)
-                        return error.Error;
-                    try parse.anyT(prev, &game.moves[index], converters);
+                    game.species_to_national_dex[pokemons.index - 1] = lu16.init(entry);
                 },
             }
         },
-        c("items") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.items.len)
+        .abilities => |abilities| {
+            if (abilities.index >= game.ability_names.len)
                 return error.Error;
-            const item = &game.items[index];
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("id") => item.id = try parser.parse(parselu16v),
-                c("price") => item.price = try parser.parse(parselu16v),
-                c("battle_effect") => item.battle_effect = try parser.parse(parse.u8v),
-                c("battle_effect_p") => item.battle_effect_param = try parser.parse(parse.u8v),
-                c("importance") => item.importance = try parser.parse(parse.u8v),
-                c("type") => item.@"type" = try parser.parse(parse.u8v),
-                c("battle_usage") => item.battle_usage = try parser.parse(parselu32v),
-                c("secondary_id") => item.secondary_id = try parser.parse(parselu32v),
-                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &item.name),
-                c("description") => {
+            switch (abilities.value) {
+                .name => |name| try gen3.encodings.encode(.en_us, name, &game.ability_names[abilities.index]),
+            }
+        },
+        .types => |types| {
+            if (types.index >= game.type_names.len)
+                return error.Error;
+
+            switch (types.value) {
+                .name => |name| try gen3.encodings.encode(.en_us, name, &game.type_names[types.index]),
+            }
+        },
+        .tms, .hms => |ms| {
+            const pick = switch (parsed) {
+                .tms => game.tms,
+                .hms => game.hms,
+                else => unreachable,
+            };
+
+            if (ms.index >= pick.len)
+                return error.IndexOutOfBound;
+            pick[ms.index] = lu16.init(ms.value);
+        },
+        .items => |items| {
+            if (items.index >= game.items.len)
+                return error.Error;
+
+            const item = &game.items[items.index];
+            switch (items.value) {
+                .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .name => |name| try gen3.encodings.encode(.en_us, name, &item.name),
+                .description => |description| {
                     const desc_small = try item.description.toSliceZ(game.data);
-                    const description = try item.description.toSlice(game.data, desc_small.len + 1);
-                    try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), description);
+                    const desc = try item.description.toSlice(game.data, desc_small.len + 1);
+                    try gen3.encodings.encode(.en_us, description, desc);
                 },
-                c("pocket") => switch (game.version) {
-                    .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{ .rse = try parser.parse(comptime parse.enumv(gen3.RSEPocket)) },
-                    .fire_red, .leaf_green => item.pocket = gen3.Pocket{ .frlg = try parser.parse(comptime parse.enumv(gen3.FRLGPocket)) },
+                .pocket => |pocket| switch (game.version) {
+                    .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{
+                        .rse = switch (pocket) {
+                            .none => .none,
+                            .items => .items,
+                            .key_items => .key_items,
+                            .poke_balls => .poke_balls,
+                            .tms_hms => .tms_hms,
+                            .berries => .berries,
+                        },
+                    },
+                    .fire_red, .leaf_green => item.pocket = gen3.Pocket{
+                        .frlg = switch (pocket) {
+                            .none => .none,
+                            .items => .items,
+                            .key_items => .key_items,
+                            .poke_balls => .poke_balls,
+                            .tms_hms => .tms_hms,
+                            .berries => .berries,
+                        },
+                    },
                     else => unreachable,
                 },
-                else => return error.NoField,
             }
         },
-        c("pokedex") => {
-            const index = try parser.parse(parse.index);
+        .pokedex => |pokedex| {
             switch (game.version) {
                 .emerald => {
-                    if (index >= game.pokedex.emerald.len)
+                    if (pokedex.index >= game.pokedex.emerald.len)
                         return error.Error;
-                    const entry = &game.pokedex.emerald[index];
 
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("height") => entry.height = try parser.parse(parselu16v),
-                        c("weight") => entry.weight = try parser.parse(parselu16v),
-                        c("pokemon_scale") => entry.pokemon_scale = try parser.parse(parselu16v),
-                        c("pokemon_offset") => entry.pokemon_offset = try parser.parse(parseli16v),
-                        c("trainer_scale") => entry.trainer_scale = try parser.parse(parselu16v),
-                        c("trainer_offset") => entry.trainer_offset = try parser.parse(parseli16v),
-                        else => return error.NoField,
+                    const entry = &game.pokedex.emerald[pokedex.index];
+                    switch (pokedex.value) {
+                        .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
+                        .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
+                        .category => return error.ParserFailed,
                     }
                 },
                 .ruby,
@@ -484,470 +588,603 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
                 .fire_red,
                 .leaf_green,
                 => {
-                    if (index >= game.pokedex.rsfrlg.len)
+                    if (pokedex.index >= game.pokedex.rsfrlg.len)
                         return error.Error;
-                    const entry = &game.pokedex.rsfrlg[index];
 
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("height") => entry.height = try parser.parse(parselu16v),
-                        c("weight") => entry.weight = try parser.parse(parselu16v),
-                        c("pokemon_scale") => entry.pokemon_scale = try parser.parse(parselu16v),
-                        c("pokemon_offset") => entry.pokemon_offset = try parser.parse(parseli16v),
-                        c("trainer_scale") => entry.trainer_scale = try parser.parse(parselu16v),
-                        c("trainer_offset") => entry.trainer_offset = try parser.parse(parseli16v),
-                        else => return error.NoField,
+                    const entry = &game.pokedex.rsfrlg[pokedex.index];
+                    switch (pokedex.value) {
+                        .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
+                        .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
+                        .category => return error.ParserFailed,
                     }
                 },
                 else => unreachable,
             }
         },
-        c("abilities") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ability_names.len)
+        .maps => |maps| {
+            if (maps.index >= game.map_headers.len)
                 return error.Error;
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.ability_names[index]),
-                else => return error.Error,
+            const header = &game.map_headers[maps.index];
+            switch (maps.value) {
+                .music => |music| header.music = lu16.init(music),
+                .cave => |cave| header.cave = cave,
+                .weather => |weather| header.weather = weather,
+                .type => |_type| header.map_type = _type,
+                .escape_rope => |escape_rope| header.escape_rope = escape_rope,
+                .battle_scene => |battle_scene| header.map_battle_scene = battle_scene,
+                .allow_cycling => |allow_cycling| header.flags.allow_cycling = allow_cycling,
+                .allow_escaping => |allow_escaping| header.flags.allow_escaping = allow_escaping,
+                .allow_running => |allow_running| header.flags.allow_running = allow_running,
+                .show_map_name => |show_map_name| header.flags.show_map_name = show_map_name,
             }
         },
-        c("types") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.type_names.len)
+        .wild_pokemons => |pokemons| {
+            if (pokemons.index >= game.wild_pokemon_headers.len)
                 return error.Error;
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), &game.type_names[index]),
-                else => return error.Error,
-            }
-        },
-        c("map") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.map_headers.len)
-                return error.Error;
-
-            const header = &game.map_headers[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("music") => header.music = try parser.parse(parselu16v),
-                c("cave") => header.cave = try parser.parse(parse.u8v),
-                c("weather") => header.weather = try parser.parse(parse.u8v),
-                c("type") => header.map_type = try parser.parse(parse.u8v),
-                c("escape_rope") => header.escape_rope = try parser.parse(parse.u8v),
-                c("battle_scene") => header.map_battle_scene = try parser.parse(parse.u8v),
-                c("allow_cycling") => header.flags.allow_cycling = try parser.parse(parse.boolv),
-                c("allow_escaping") => header.flags.allow_escaping = try parser.parse(parse.boolv),
-                c("allow_running") => header.flags.allow_running = try parser.parse(parse.boolv),
-                c("show_map_name") => header.flags.show_map_name = try parser.parse(parse.boolv),
-                else => return error.NoField,
-            }
-        },
-        c("wild_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.wild_pokemon_headers.len)
-                return error.Error;
-
-            const header = &game.wild_pokemon_headers[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("land") => {
+            const header = &game.wild_pokemon_headers[pokemons.index];
+            switch (pokemons.value) {
+                .land => |area| {
                     const land = try header.land.toPtr(game.data);
                     const wilds = try land.wild_pokemons.toPtr(game.data);
-                    try applyGen3Area(&parser, &land.encounter_rate, wilds);
+                    try applyGen3Area(area, &land.encounter_rate, wilds);
                 },
-                c("surf") => {
+                .surf => |area| {
                     const surf = try header.surf.toPtr(game.data);
                     const wilds = try surf.wild_pokemons.toPtr(game.data);
-                    try applyGen3Area(&parser, &surf.encounter_rate, wilds);
+                    try applyGen3Area(area, &surf.encounter_rate, wilds);
                 },
-                c("rock_smash") => {
+                .rock_smash => |area| {
                     const rock = try header.rock_smash.toPtr(game.data);
                     const wilds = try rock.wild_pokemons.toPtr(game.data);
-                    try applyGen3Area(&parser, &rock.encounter_rate, wilds);
+                    try applyGen3Area(area, &rock.encounter_rate, wilds);
                 },
-                c("fishing") => {
+                .fishing => |area| {
                     const fish = try header.fishing.toPtr(game.data);
                     const wilds = try fish.wild_pokemons.toPtr(game.data);
-                    try applyGen3Area(&parser, &fish.encounter_rate, wilds);
+                    try applyGen3Area(area, &fish.encounter_rate, wilds);
                 },
-                else => return error.NoField,
+                .grass,
+                .grass_morning,
+                .grass_day,
+                .grass_night,
+                .dark_grass,
+                .swarm_replace,
+                .day_replace,
+                .night_replace,
+                .radar_replace,
+                .unknown_replace,
+                .gba_replace,
+                .sea_unknown,
+                .old_rod,
+                .good_rod,
+                .super_rod,
+                .rustling_grass,
+                .ripple_surf,
+                .ripple_fishing,
+                => return error.ParserFailed,
             }
         },
-        c("static_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.static_pokemons.len)
+        .static_pokemons => |pokemons| {
+            if (pokemons.index >= game.static_pokemons.len)
                 return error.Error;
 
-            const static_mon = game.static_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => static_mon.species.* = try parser.parse(parselu16v),
-                c("level") => static_mon.level.* = try parser.parse(parse.u8v),
-                else => return error.NoField,
+            const static_mon = game.static_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| static_mon.species.* = lu16.init(species),
+                .level => |level| static_mon.level.* = level,
             }
         },
-        c("given_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.given_pokemons.len)
+        .given_pokemons => |pokemons| {
+            if (pokemons.index >= game.given_pokemons.len)
                 return error.Error;
 
-            const given_mon = game.given_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => given_mon.species.* = try parser.parse(parselu16v),
-                c("level") => given_mon.level.* = try parser.parse(parse.u8v),
-                else => return error.NoField,
+            const given_mon = game.given_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| given_mon.species.* = lu16.init(species),
+                .level => |level| given_mon.level.* = level,
             }
         },
-        c("pokeball_items") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.pokeball_items.len)
-                return error.Error;
-            const given_item = game.pokeball_items[index];
+        .pokeball_items => |items| {
+            if (items.index >= game.pokeball_items.len)
+                return error.OutOfBound;
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("item") => given_item.item.* = try parser.parse(parselu16v),
-                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
-                else => return error.NoField,
+            const given_item = game.pokeball_items[items.index];
+            switch (items.value) {
+                .item => |item| given_item.item.* = lu16.init(item),
+                .amount => |amount| given_item.amount.* = lu16.init(amount),
             }
         },
-        c("text") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.text.len)
+        .text => |texts| {
+            if (texts.index >= game.text.len)
                 return error.Error;
-            const text_ptr = game.text[index];
+            const text_ptr = game.text[texts.index];
             const text_slice = try text_ptr.toSliceZ(game.data);
 
             // Slice to include the sentinel inside the slice.
             const text = text_slice[0 .. text_slice.len + 1];
-            try gen3.encodings.encode(.en_us, try parser.parse(parse.strv), text);
+            try gen3.encodings.encode(.en_us, texts.value, text);
         },
-        else => return error.NoField,
+        .hidden_hollows,
+        .instant_text,
+        => return error.ParserFailed,
     }
 }
 
-fn applyGen3Area(par: *parse.MutParser, rate: *u8, wilds: []gen3.WildPokemon) !void {
-    switch (m(try par.parse(parse.anyField))) {
-        c("encounter_rate") => rate.* = try par.parse(parse.u8v),
-        c("pokemons") => try parse.anyT(par.str, &wilds, converters),
-        else => return error.NoField,
+fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !void {
+    switch (area) {
+        .encounter_rate => |encounter_rate| rate.* = try math.cast(u8, encounter_rate),
+        .pokemons => |pokemons| {
+            if (pokemons.index >= wilds.len)
+                return error.IndexOutOfBound;
+
+            const wild = &wilds[pokemons.index];
+            switch (pokemons.value) {
+                .min_level => |min_level| wild.min_level = min_level,
+                .max_level => |max_level| wild.max_level = max_level,
+                .species => |species| wild.species = lu16.init(species),
+            }
+        },
     }
 }
 
 fn applyGen4(game: gen4.Game, str: []const u8) !void {
-    var parser = parse.MutParser{ .str = str };
     const header = game.rom.header();
-    switch (m(try parser.parse(parse.anyField))) {
-        c("version") => {
-            const value = try parser.parse(comptime parse.enumv(common.Version));
-            if (value != game.info.version)
+    const parsed = try format.parse(str);
+    switch (parsed) {
+        .version => |version| {
+            if (version != game.info.version)
                 return error.VersionDontMatch;
         },
-        c("game_title") => {
-            const value = try parser.parse(parse.strv);
-            const null_index = mem.indexOfScalar(u8, &header.game_title, 0) //
-                orelse header.game_title.len;
-            if (!mem.eql(u8, value, header.game_title[0..null_index]))
+        .game_title => |game_title| {
+            if (!mem.eql(u8, game_title, header.game_title.span()))
                 return error.GameTitleDontMatch;
         },
-        c("gamecode") => {
-            const value = try parser.parse(parse.strv);
-            if (!mem.eql(u8, value, &header.gamecode))
+        .gamecode => |gamecode| {
+            if (!mem.eql(u8, gamecode, &header.gamecode))
                 return error.GameCodeDontMatch;
         },
-        c("instant_text") => {
-            if (try parser.parse(parse.boolv))
+        .instant_text => |instant_text| {
+            if (instant_text)
                 common.patch(game.owned.arm9, game.info.instant_text_patch);
         },
-        c("starters") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.starters.len)
+        .starters => |starters| {
+            if (starters.index >= game.ptrs.starters.len)
                 return error.Error;
-            game.ptrs.starters[index].* = try parser.parse(parselu16v);
+            game.ptrs.starters[starters.index].* = lu16.init(starters.value);
         },
-        c("trainers") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.trainers.len)
+        .trainers => |trainers| {
+            if (trainers.index >= game.ptrs.trainers.len)
                 return error.Error;
 
-            const trainer = &game.ptrs.trainers[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("class") => trainer.class = try parser.parse(parse.u8v),
-                c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
-                c("battle_type2") => trainer.battle_type2 = try parser.parse(parse.u8v),
-                c("ai") => trainer.ai = try parser.parse(parselu32v),
-                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
-                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen4.PartyType)),
-                c("party") => {
-                    const pindex = try parser.parse(parse.index);
-                    if (index >= game.owned.trainer_parties.len)
+            const trainer = &game.ptrs.trainers[trainers.index];
+            switch (trainers.value) {
+                .class => |class| trainer.class = class,
+                .party_size => |party_size| trainer.party_size = party_size,
+                .party_type => |party_type| trainer.party_type = party_type,
+                .items => |items| {
+                    if (items.index >= trainer.items.len)
+                        return error.IndexOutOfBound;
+                    trainer.items[items.index] = lu16.init(items.value);
+                },
+                .party => |party| {
+                    if (trainers.index >= game.owned.trainer_parties.len)
                         return error.Error;
-                    if (pindex >= trainer.party_size)
+                    if (party.index >= trainer.party_size)
                         return error.Error;
 
-                    const member = &game.owned.trainer_parties[index][pindex];
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("iv") => member.base.iv = try parser.parse(parse.u8v),
-                        c("gender") => member.base.gender_ability.gender = try parser.parse(parse.u4v),
-                        c("ability") => member.base.gender_ability.ability = try parser.parse(parse.u4v),
-                        c("level") => member.base.level = try parser.parse(parselu16v),
-                        c("species") => member.base.species = try parser.parse(parselu16v),
-                        c("item") => member.item = try parser.parse(parselu16v),
-                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
-                        else => return error.NoField,
+                    const member = &game.owned.trainer_parties[trainers.index][party.index];
+                    switch (party.value) {
+                        .ability => |ability| member.base.gender_ability.ability = ability,
+                        .level => |level| member.base.level = lu16.init(level),
+                        .species => |species| member.base.species = lu16.init(species),
+                        .item => |item| member.item = lu16.init(item),
+                        .moves => |moves| {
+                            if (moves.index >= member.moves.len)
+                                return error.IndexOutOfBound;
+                            member.moves[moves.index] = lu16.init(moves.value);
+                        },
                     }
                 },
-                else => return error.NoField,
+                .encounter_music,
+                .trainer_picture,
+                .name,
+                => return error.ParserFailed,
             }
         },
-        c("moves") => {
-            const index = try parser.parse(parse.index);
-            const prev = parser.str;
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("description") => try applyGen4String(game.owned.strings.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(game.owned.strings.move_names, index, try parser.parse(parse.strv)),
-                else => {
-                    if (index >= game.ptrs.moves.len)
-                        return error.Error;
-                    try parse.anyT(prev, &game.ptrs.moves[index], converters);
-                },
-            }
-        },
-        c("items") => {
-            const index = try parser.parse(parse.index);
-            const prev = parser.str;
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("description") => try applyGen4String(game.owned.strings.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen4String(game.owned.strings.item_names, index, try parser.parse(parse.strv)),
-                else => {
-                    if (index >= game.ptrs.items.len)
-                        return error.Error;
-                    try parse.anyT(prev, &game.ptrs.items[index], converters);
-                },
-            }
-        },
-        c("pokedex") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("height") => {
-                    if (index >= game.ptrs.pokedex_heights.len)
-                        return error.Error;
-                    game.ptrs.pokedex_heights[index] = try parser.parse(parselu32v);
-                },
-                c("weight") => {
-                    if (index >= game.ptrs.pokedex_weights.len)
-                        return error.Error;
-                    game.ptrs.pokedex_weights[index] = try parser.parse(parselu32v);
-                },
-                else => return error.NoField,
-            }
-        },
-        c("abilities") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(game.owned.strings.ability_names, index, try parser.parse(parse.strv)),
-                else => return error.Error,
-            }
-        },
-        c("types") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen4String(game.owned.strings.type_names, index, try parser.parse(parse.strv)),
-                else => return error.Error,
-            }
-        },
-        c("pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.pokemons.len)
+        .moves => |moves| {
+            if (moves.index >= game.ptrs.moves.len)
                 return error.Error;
-            const pokemon = &game.ptrs.pokemons[index];
 
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
-                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
-                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
-                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
-                c("ev_yield") => try parse.anyT(parser.str, &pokemon.ev_yield, converters),
-                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
-                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
-                c("base_exp_yield") => pokemon.base_exp_yield = try parser.parse(parse.u8v),
-                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
-                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
-                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
-                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
-                c("flee_rate") => pokemon.flee_rate = try parser.parse(parse.u8v),
-                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
-                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("name") => try applyGen4String(game.owned.strings.pokemon_names, index, try parser.parse(parse.strv)),
-                c("tms"), c("hms") => {
-                    const is_tms = c("tms") == m(field);
-                    const tindex = try parser.parse(parse.index);
-                    const value = try parser.parse(parse.boolv);
-                    const len = if (is_tms) game.ptrs.tms.len else game.ptrs.hms.len;
-                    if (tindex >= len)
-                        return error.Error;
-
-                    const rindex = tindex + game.ptrs.tms.len * @boolToInt(!is_tms);
-                    const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
-                },
-                c("moves") => {
-                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
-                    const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
-                    const lum = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
-                    try parse.anyT(parser.str, &lum, converters);
-                },
-                c("evos") => {
-                    if (game.ptrs.evolutions.len <= index)
-                        return error.Error;
-                    try parse.anyT(parser.str, &game.ptrs.evolutions[index].items, converters);
-                },
-                c("pokedex_entry") => {
-                    if (index == 0 or index - 1 >= game.ptrs.species_to_national_dex.len)
-                        return error.Error;
-                    game.ptrs.species_to_national_dex[index - 1] = try parser.parse(parselu16v);
-                },
-                else => return error.NoField,
+            const move = &game.ptrs.moves[moves.index];
+            switch (moves.value) {
+                .description => |description| try applyGen4String(game.owned.strings.move_descriptions, moves.index, description),
+                .name => |name| try applyGen4String(game.owned.strings.move_names, moves.index, name),
+                .power => |power| move.power = power,
+                .type => |_type| move.type = _type,
+                .accuracy => |accuracy| move.accuracy = accuracy,
+                .pp => |pp| move.pp = pp,
+                .category => |category| move.category = category,
+                .effect,
+                .priority,
+                .target,
+                => return error.ParserFailed,
             }
         },
-        c("tms") => try parse.anyT(parser.str, &game.ptrs.tms, converters),
-        c("hms") => try parse.anyT(parser.str, &game.ptrs.hms, converters),
-        c("wild_pokemons") => {
-            const wild_pokemons = game.ptrs.wild_pokemons;
-            const index = try parser.parse(parse.index);
+        .items => |items| {
+            if (items.index >= game.ptrs.items.len)
+                return error.IndexOutOfBound;
 
+            const item = &game.ptrs.items[items.index];
+            switch (items.value) {
+                .description => |description| try applyGen4String(game.owned.strings.item_descriptions, items.index, description),
+                .name => |name| try applyGen4String(game.owned.strings.item_names, items.index, name),
+                .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .pocket => |pocket| item.pocket = switch (pocket) {
+                    .items => .items,
+                    .key_items => .key_items,
+                    .tms_hms => .tms_hms,
+                    .berries => .berries,
+                    .poke_balls => .balls,
+                    .none => return error.ParserFailed,
+                },
+            }
+        },
+        .pokedex => |pokedex| {
+            switch (pokedex.value) {
+                .height => |height| {
+                    if (pokedex.index >= game.ptrs.pokedex_heights.len)
+                        return error.Error;
+                    game.ptrs.pokedex_heights[pokedex.index] = lu32.init(height);
+                },
+                .weight => |weight| {
+                    if (pokedex.index >= game.ptrs.pokedex_weights.len)
+                        return error.Error;
+                    game.ptrs.pokedex_weights[pokedex.index] = lu32.init(weight);
+                },
+                .category => return error.ParserFailed,
+            }
+        },
+        .abilities => |abilities| {
+            switch (abilities.value) {
+                .name => |name| try applyGen4String(game.owned.strings.ability_names, abilities.index, name),
+            }
+        },
+        .types => |types| {
+            switch (types.value) {
+                .name => |name| try applyGen4String(game.owned.strings.type_names, types.index, name),
+            }
+        },
+        .pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.pokemons.len)
+                return error.Error;
+
+            const pokemon = &game.ptrs.pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats.hp = hp,
+                    .attack => |attack| pokemon.stats.attack = attack,
+                    .defense => |defense| pokemon.stats.defense = defense,
+                    .speed => |speed| pokemon.stats.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
+                },
+                .ev_yield => |ev_yield| switch (ev_yield) {
+                    .hp => |hp| pokemon.ev_yield.hp = hp,
+                    .attack => |attack| pokemon.ev_yield.attack = attack,
+                    .defense => |defense| pokemon.ev_yield.defense = defense,
+                    .speed => |speed| pokemon.ev_yield.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
+                },
+                .items => |items| {
+                    if (items.index >= pokemon.items.len)
+                        return error.IndexOutOfBound;
+                    pokemon.items[items.index] = lu16.init(items.value);
+                },
+                .types => |types| {
+                    if (types.index >= pokemon.types.len)
+                        return error.IndexOutOfBound;
+                    pokemon.types[types.index] = types.value;
+                },
+                .egg_groups => |egg_groups| {
+                    if (egg_groups.index >= pokemon.egg_groups.len)
+                        return error.IndexOutOfBound;
+                    pokemon.egg_groups[egg_groups.index] = egg_groups.value;
+                },
+                .abilities => |abilities| {
+                    if (abilities.index >= pokemon.abilities.len)
+                        return error.IndexOutOfBound;
+                    pokemon.abilities[abilities.index] = abilities.value;
+                },
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
+                .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
+                .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
+                .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
+                .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
+                .color => |color| pokemon.color.color = color,
+                .name => |name| try applyGen4String(game.owned.strings.pokemon_names, pokemons.index, name),
+                .tms, .hms => |ms| {
+                    const is_tms = pokemons.value == .tms;
+                    const len = if (is_tms) game.ptrs.tms.len else game.ptrs.hms.len;
+                    if (ms.index >= len)
+                        return error.Error;
+
+                    const index = ms.index + game.ptrs.tms.len * @boolToInt(!is_tms);
+                    const learnset = &pokemon.machine_learnset;
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
+                },
+                .moves => |moves| {
+                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, pokemons.index) });
+                    const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
+                    const lvl_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
+
+                    if (moves.index >= lvl_up_moves.len)
+                        return error.IndexOutOfBound;
+
+                    const lvl_up_move = &lvl_up_moves[moves.index];
+                    switch (moves.value) {
+                        .id => |id| lvl_up_move.id = try math.cast(u9, id),
+                        .level => |level| lvl_up_move.level = try math.cast(u7, level),
+                    }
+                },
+                .evos => |evos| {
+                    if (pokemons.index >= game.ptrs.evolutions.len)
+                        return error.IndexOutOfBound;
+
+                    const evolutions = &game.ptrs.evolutions[pokemons.index].items;
+                    if (evos.index >= evolutions.len)
+                        return error.IndexOutOfBound;
+
+                    const evolution = &evolutions[evos.index];
+                    switch (evos.value) {
+                        .method => |method| evolution.method = switch (method) {
+                            .attack_eql_defense => .attack_eql_defense,
+                            .attack_gth_defense => .attack_gth_defense,
+                            .attack_lth_defense => .attack_lth_defense,
+                            .beauty => .beauty,
+                            .friend_ship => .friend_ship,
+                            .friend_ship_during_day => .friend_ship_during_day,
+                            .friend_ship_during_night => .friend_ship_during_night,
+                            .level_up => .level_up,
+                            .level_up_female => .level_up_female,
+                            .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                            .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                            .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                            .level_up_knowning_move => .level_up_knowning_move,
+                            .level_up_male => .level_up_male,
+                            .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                            .level_up_near_ice_rock => .level_up_near_ice_rock,
+                            .level_up_near_moss_rock => .level_up_near_moss_rock,
+                            .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                            .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                            .personality_value1 => .personality_value1,
+                            .personality_value2 => .personality_value2,
+                            .trade => .trade,
+                            .trade_holding_item => .trade_holding_item,
+                            .unused => .unused,
+                            .use_item => .use_item,
+                            .use_item_on_female => .use_item_on_female,
+                            .use_item_on_male => .use_item_on_male,
+                            .unknown_0x02,
+                            .unknown_0x03,
+                            .trade_with_pokemon,
+                            => return error.ParserFailed,
+                        },
+                        .param => |param| evolution.param = lu16.init(param),
+                        .target => |target| evolution.target = lu16.init(target),
+                    }
+                },
+                .pokedex_entry => |pokedex_entry| {
+                    if (pokemons.index == 0 or pokemons.index - 1 >= game.ptrs.species_to_national_dex.len)
+                        return error.Error;
+                    game.ptrs.species_to_national_dex[pokemons.index - 1] = lu16.init(pokedex_entry);
+                },
+            }
+        },
+        .tms, .hms => |ms| {
+            const pick = switch (parsed) {
+                .tms => game.ptrs.tms,
+                .hms => game.ptrs.hms,
+                else => unreachable,
+            };
+
+            if (ms.index >= pick.len)
+                return error.IndexOutOfBound;
+            pick[ms.index] = lu16.init(ms.value);
+        },
+        .wild_pokemons => |pokemons| {
+            const wild_pokemons = game.ptrs.wild_pokemons;
             switch (game.info.version) {
                 .diamond,
                 .pearl,
                 .platinum,
                 => {
-                    const wilds = &wild_pokemons.dppt[index];
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("grass") => switch (m(try parser.parse(parse.anyField))) {
-                            c("encounter_rate") => wilds.grass_rate = try parser.parse(parselu32v),
-                            c("pokemons") => {
-                                const i = try parser.parse(parse.index);
-                                if (i >= wilds.grass.len)
+                    if (pokemons.index >= wild_pokemons.dppt.len)
+                        return error.IndexOutOfBound;
+
+                    const wilds = &wild_pokemons.dppt[pokemons.index];
+                    switch (pokemons.value) {
+                        .grass => |grass| switch (grass) {
+                            .encounter_rate => |encounter_rate| wilds.grass_rate = lu32.init(encounter_rate),
+                            .pokemons => |mons| {
+                                if (mons.index >= wilds.grass.len)
                                     return error.IndexOutOfBound;
-                                switch (m(try parser.parse(parse.anyField))) {
-                                    c("min_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
-                                    c("max_level") => wilds.grass[i].level = try parser.parse(parse.u8v),
-                                    c("species") => wilds.grass[i].species = try parser.parse(parselu16v),
-                                    else => return error.NoField,
+
+                                const mon = &wilds.grass[mons.index];
+                                switch (mons.value) {
+                                    .min_level => |min_level| mon.level = min_level,
+                                    .max_level => |max_level| mon.level = max_level,
+                                    .species => |species| mon.species = lu16.init(species),
                                 }
                             },
-                            else => return error.NoField,
                         },
-                        c("swarm_replace") => try applyDpptReplacement(&parser, &wilds.swarm_replace),
-                        c("day_replace") => try applyDpptReplacement(&parser, &wilds.day_replace),
-                        c("night_replace") => try applyDpptReplacement(&parser, &wilds.night_replace),
-                        c("radar_replace") => try applyDpptReplacement(&parser, &wilds.radar_replace),
-                        c("unknown_replace") => try applyDpptReplacement(&parser, &wilds.unknown_replace),
-                        c("gba_replace") => try applyDpptReplacement(&parser, &wilds.gba_replace),
-                        c("surf") => try applyDpptSea(&parser, &wilds.surf),
-                        c("sea_unknown") => try applyDpptSea(&parser, &wilds.sea_unknown),
-                        c("old_rod") => try applyDpptSea(&parser, &wilds.old_rod),
-                        c("good_rod") => try applyDpptSea(&parser, &wilds.good_rod),
-                        c("super_rod") => try applyDpptSea(&parser, &wilds.super_rod),
-                        else => return error.NoField,
+                        .swarm_replace => |area| try applyDpptReplacement(area, &wilds.swarm_replace),
+                        .day_replace => |area| try applyDpptReplacement(area, &wilds.day_replace),
+                        .night_replace => |area| try applyDpptReplacement(area, &wilds.night_replace),
+                        .radar_replace => |area| try applyDpptReplacement(area, &wilds.radar_replace),
+                        .unknown_replace => |area| try applyDpptReplacement(area, &wilds.unknown_replace),
+                        .gba_replace => |area| try applyDpptReplacement(area, &wilds.gba_replace),
+                        .surf => |area| try applyDpptSea(area, &wilds.surf),
+                        .sea_unknown => |area| try applyDpptSea(area, &wilds.sea_unknown),
+                        .old_rod => |area| try applyDpptSea(area, &wilds.old_rod),
+                        .good_rod => |area| try applyDpptSea(area, &wilds.good_rod),
+                        .super_rod => |area| try applyDpptSea(area, &wilds.super_rod),
+                        .grass_morning,
+                        .grass_day,
+                        .grass_night,
+                        .dark_grass,
+                        .rock_smash,
+                        .fishing,
+                        .land,
+                        .rustling_grass,
+                        .ripple_surf,
+                        .ripple_fishing,
+                        => return error.ParserFailed,
                     }
                 },
 
                 .heart_gold,
                 .soul_silver,
                 => {
-                    const wilds = &wild_pokemons.hgss[index];
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("grass_morning") => try applyHgssGrass(&parser, wilds, &wilds.grass_morning),
-                        c("grass_day") => try applyHgssGrass(&parser, wilds, &wilds.grass_day),
-                        c("grass_night") => try applyHgssGrass(&parser, wilds, &wilds.grass_night),
-                        c("surf") => try applyHgssSea(&parser, &wilds.sea_rates[0], &wilds.surf),
-                        c("sea_unknown") => try applyHgssSea(&parser, &wilds.sea_rates[1], &wilds.sea_unknown),
-                        c("old_rod") => try applyHgssSea(&parser, &wilds.sea_rates[2], &wilds.old_rod),
-                        c("good_rod") => try applyHgssSea(&parser, &wilds.sea_rates[3], &wilds.good_rod),
-                        c("super_rod") => try applyHgssSea(&parser, &wilds.sea_rates[4], &wilds.super_rod),
-                        else => return error.NoField,
+                    if (pokemons.index >= wild_pokemons.dppt.len)
+                        return error.IndexOutOfBound;
+
+                    const wilds = &wild_pokemons.hgss[pokemons.index];
+                    switch (pokemons.value) {
+                        .grass_morning => |area| try applyHgssGrass(area, wilds, &wilds.grass_morning),
+                        .grass_day => |area| try applyHgssGrass(area, wilds, &wilds.grass_day),
+                        .grass_night => |area| try applyHgssGrass(area, wilds, &wilds.grass_night),
+                        .surf => |area| try applyHgssSea(area, &wilds.sea_rates[0], &wilds.surf),
+                        .sea_unknown => |area| try applyHgssSea(area, &wilds.sea_rates[1], &wilds.sea_unknown),
+                        .old_rod => |area| try applyHgssSea(area, &wilds.sea_rates[2], &wilds.old_rod),
+                        .good_rod => |area| try applyHgssSea(area, &wilds.sea_rates[3], &wilds.good_rod),
+                        .super_rod => |area| try applyHgssSea(area, &wilds.sea_rates[4], &wilds.super_rod),
+                        .grass,
+                        .dark_grass,
+                        .swarm_replace,
+                        .day_replace,
+                        .night_replace,
+                        .radar_replace,
+                        .unknown_replace,
+                        .gba_replace,
+                        .rock_smash,
+                        .fishing,
+                        .land,
+                        .rustling_grass,
+                        .ripple_surf,
+                        .ripple_fishing,
+                        => return error.ParserFailed,
                     }
                 },
                 else => unreachable,
             }
         },
-        c("static_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.static_pokemons.len)
+        .static_pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.static_pokemons.len)
                 return error.Error;
 
-            const static_mon = game.ptrs.static_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => static_mon.species.* = try parser.parse(parselu16v),
-                c("level") => static_mon.level.* = try parser.parse(parselu16v),
-                else => return error.NoField,
+            const static_mon = game.ptrs.static_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| static_mon.species.* = lu16.init(species),
+                .level => |level| static_mon.level.* = lu16.init(level),
             }
         },
-        c("given_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.given_pokemons.len)
+        .given_pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.given_pokemons.len)
                 return error.Error;
 
-            const given_mon = game.ptrs.given_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => given_mon.species.* = try parser.parse(parselu16v),
-                c("level") => given_mon.level.* = try parser.parse(parselu16v),
-                else => return error.NoField,
+            const given_mon = game.ptrs.given_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| given_mon.species.* = lu16.init(species),
+                .level => |level| given_mon.level.* = lu16.init(level),
             }
         },
-        c("pokeball_items") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.pokeball_items.len)
+        .pokeball_items => |items| {
+            if (items.index >= game.ptrs.pokeball_items.len)
                 return error.Error;
-            const given_item = game.ptrs.pokeball_items[index];
+            const given_item = game.ptrs.pokeball_items[items.index];
 
-            switch (m(try parser.parse(parse.anyField))) {
-                c("item") => given_item.item.* = try parser.parse(parselu16v),
-                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
-                else => return error.NoField,
+            switch (items.value) {
+                .item => |item| given_item.item.* = lu16.init(item),
+                .amount => |amount| given_item.amount.* = lu16.init(amount),
             }
         },
-        else => return error.NoField,
+        .hidden_hollows,
+        .text,
+        .maps,
+        .text_delays,
+        => return error.ParserFailed,
     }
 }
 
-fn applyHgssGrass(par: *parse.MutParser, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
-    switch (m(try par.parse(parse.anyField))) {
-        c("encounter_rate") => wilds.grass_rate = try par.parse(parse.u8v),
-        c("pokemons") => {
-            const index = try par.parse(parse.index);
-            if (index >= grass.len)
+fn applyHgssGrass(area: format.WildArea, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
+    switch (area) {
+        .encounter_rate => |encounter_rate| wilds.grass_rate = try math.cast(u8, encounter_rate),
+        .pokemons => |pokemons| {
+            if (pokemons.index >= grass.len)
                 return error.Error;
-            switch (m(try par.parse(parse.anyField))) {
-                c("min_level") => wilds.grass_levels[index] = try par.parse(parse.u8v),
-                c("max_level") => wilds.grass_levels[index] = try par.parse(parse.u8v),
-                c("species") => grass[index] = try par.parse(parselu16v),
-                else => return error.NoField,
+
+            switch (pokemons.value) {
+                .min_level => |min_level| wilds.grass_levels[pokemons.index] = min_level,
+                .max_level => |max_level| wilds.grass_levels[pokemons.index] = max_level,
+                .species => |species| grass[pokemons.index] = lu16.init(species),
             }
         },
-        else => return error.NoField,
     }
 }
 
-fn applyHgssSea(par: *parse.MutParser, rate: *u8, sea: []gen4.HgssWildPokemons.Sea) !void {
-    switch (m(try par.parse(parse.anyField))) {
-        c("encounter_rate") => rate.* = try par.parse(parse.u8v),
-        c("pokemons") => try parse.anyT(par.str, &sea, converters),
-        else => return error.NoField,
+fn applyHgssSea(area: format.WildArea, rate: *u8, sea: []gen4.HgssWildPokemons.Sea) !void {
+    switch (area) {
+        .encounter_rate => |encounter_rate| rate.* = try math.cast(u8, encounter_rate),
+        .pokemons => |pokemons| {
+            if (pokemons.index >= sea.len)
+                return error.IndexOutOfBound;
+
+            const mon = &sea[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| mon.species = lu16.init(species),
+                .min_level => |min_level| mon.min_level = min_level,
+                .max_level => |max_level| mon.max_level = max_level,
+            }
+        },
     }
 }
 
-fn applyDpptReplacement(par: *parse.MutParser, area: []gen4.DpptWildPokemons.Replacement) !void {
-    try par.parse(comptime parse.field("pokemons"));
-    try parse.anyT(par.str, &area, converters);
+fn applyDpptReplacement(area: format.WildArea, replacements: []gen4.DpptWildPokemons.Replacement) !void {
+    switch (area) {
+        .pokemons => |pokemons| {
+            if (pokemons.index >= replacements.len)
+                return error.IndexOutOfBound;
+
+            const replacement = &replacements[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| replacement.species = lu16.init(species),
+                .min_level,
+                .max_level,
+                => return error.ParserFailed,
+            }
+        },
+        .encounter_rate => return error.ParserFailed,
+    }
 }
 
-fn applyDpptSea(par: *parse.MutParser, sea: *gen4.DpptWildPokemons.Sea) !void {
-    switch (m(try par.parse(parse.anyField))) {
-        c("encounter_rate") => sea.rate = try par.parse(parselu32v),
-        c("pokemons") => try parse.anyT(par.str, &sea.mons, converters),
-        else => return error.NoField,
+fn applyDpptSea(area: format.WildArea, sea: *gen4.DpptWildPokemons.Sea) !void {
+    switch (area) {
+        .encounter_rate => |encounter_rate| sea.rate = lu32.init(encounter_rate),
+        .pokemons => |pokemons| {
+            if (pokemons.index >= sea.mons.len)
+                return error.IndexOutOfBound;
+
+            const mon = &sea.mons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| mon.species = lu16.init(species),
+                .min_level => |min_level| mon.min_level = min_level,
+                .max_level => |max_level| mon.max_level = max_level,
+            }
+        },
     }
 }
 
@@ -965,332 +1202,429 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
 }
 
 fn applyGen5(game: gen5.Game, str: []const u8) !void {
-    var parser = parse.MutParser{ .str = str };
     const header = game.rom.header();
-
-    switch (m(try parser.parse(parse.anyField))) {
-        c("version") => {
-            const value = try parser.parse(comptime parse.enumv(common.Version));
-            if (value != game.info.version)
+    const parsed = try format.parse(str);
+    switch (parsed) {
+        .version => |version| {
+            if (version != game.info.version)
                 return error.VersionDontMatch;
         },
-        c("game_title") => {
-            const value = try parser.parse(parse.strv);
-            const null_index = mem.indexOfScalar(u8, &header.game_title, 0) //
-                orelse header.game_title.len;
-            if (!mem.eql(u8, value, header.game_title[0..null_index]))
+        .game_title => |game_title| {
+            if (!mem.eql(u8, game_title, header.game_title.span()))
                 return error.GameTitleDontMatch;
         },
-        c("gamecode") => {
-            const value = try parser.parse(parse.strv);
-            if (!mem.eql(u8, value, &header.gamecode))
+        .gamecode => |gamecode| {
+            if (!mem.eql(u8, gamecode, &header.gamecode))
                 return error.GameCodeDontMatch;
         },
-        c("instant_text") => {
-            if (try parser.parse(parse.boolv))
+        .instant_text => |instant_text| {
+            if (instant_text)
                 common.patch(game.owned.arm9, game.info.instant_text_patch);
         },
-        c("starters") => {
-            const index = try parser.parse(parse.index);
-            const value = try parser.parse(parselu16v);
-            if (index >= game.ptrs.starters.len)
+        .starters => |starters| {
+            if (starters.index >= game.ptrs.starters.len)
                 return error.Error;
-            for (game.ptrs.starters[index]) |starter|
-                starter.* = value;
+            for (game.ptrs.starters[starters.index]) |starter|
+                starter.* = lu16.init(starters.value);
         },
-        c("trainers") => {
-            const index = try parser.parse(parse.index);
-            if (index == 0 or index - 1 >= game.ptrs.trainers.len)
+        .trainers => |trainers| {
+            if (trainers.index == 0 or trainers.index - 1 >= game.ptrs.trainers.len)
                 return error.Error;
 
-            const trainer = &game.ptrs.trainers[index - 1];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("class") => trainer.class = try parser.parse(parse.u8v),
-                c("battle_type") => trainer.battle_type = try parser.parse(parse.u8v),
-                c("ai") => trainer.ai = try parser.parse(parselu32v),
-                c("is_healer") => trainer.healer = try parser.parse(parse.boolv),
-                c("cash") => trainer.cash = try parser.parse(parse.u8v),
-                c("post_battle_item") => trainer.post_battle_item = try parser.parse(parselu16v),
-                c("items") => try parse.anyT(parser.str, &trainer.items, converters),
-                c("name") => try applyGen5String(game.owned.strings.trainer_names, index, try parser.parse(parse.strv)),
-                c("party_size") => trainer.party_size = try parser.parse(parse.u8v),
-                c("party_type") => trainer.party_type = try parser.parse(comptime parse.enumv(gen5.PartyType)),
-                c("party") => {
-                    const pindex = try parser.parse(parse.index);
-                    if (index >= game.owned.trainer_parties.len)
+            const trainer = &game.ptrs.trainers[trainers.index - 1];
+            switch (trainers.value) {
+                .class => |class| trainer.class = class,
+                .name => |name| try applyGen5String(game.owned.strings.trainer_names, trainers.index, name),
+                .items => |items| {
+                    if (items.index >= trainer.items.len)
+                        return error.IndexOutOfBound;
+                    trainer.items[items.index] = lu16.init(items.value);
+                },
+                .party_size => |party_size| trainer.party_size = party_size,
+                .party_type => |party_type| trainer.party_type = party_type,
+                .party => |party| {
+                    if (trainers.index >= game.owned.trainer_parties.len)
                         return error.Error;
-                    if (pindex >= trainer.party_size)
+                    if (party.index >= trainer.party_size)
                         return error.Error;
 
-                    const member = &game.owned.trainer_parties[index][pindex];
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("iv") => member.base.iv = try parser.parse(parse.u8v),
-                        c("gender") => member.base.gender_ability.gender = try parser.parse(parse.u4v),
-                        c("ability") => member.base.gender_ability.ability = try parser.parse(parse.u4v),
-                        c("level") => member.base.level = try parser.parse(parse.u8v),
-                        c("species") => member.base.species = try parser.parse(parselu16v),
-                        c("form") => member.base.form = try parser.parse(parselu16v),
-                        c("item") => member.item = try parser.parse(parselu16v),
-                        c("moves") => try parse.anyT(parser.str, &member.moves, converters),
-                        else => return error.NoField,
+                    const member = &game.owned.trainer_parties[trainers.index][party.index];
+                    switch (party.value) {
+                        .ability => |ability| member.base.gender_ability.ability = ability,
+                        .level => |level| member.base.level = level,
+                        .species => |species| member.base.species = lu16.init(species),
+                        .item => |item| member.item = lu16.init(item),
+                        .moves => |moves| {
+                            if (moves.index >= member.moves.len)
+                                return error.IndexOutOfBound;
+                            member.moves[moves.index] = lu16.init(moves.value);
+                        },
                     }
                 },
-                else => return error.NoField,
+                .encounter_music,
+                .trainer_picture,
+                => return error.ParserFailed,
             }
         },
-        c("pokemons") => {
-            const index = @intCast(u32, try parser.parse(parse.index));
-            if (index >= game.ptrs.pokemons.fat.len)
+        .pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.pokemons.fat.len)
                 return error.Error;
 
-            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = index }, gen5.BasePokemon);
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("stats") => try parse.anyT(parser.str, &pokemon.stats, converters),
-                c("types") => try parse.anyT(parser.str, &pokemon.types, converters),
-                c("items") => try parse.anyT(parser.str, &pokemon.items, converters),
-                c("abilities") => try parse.anyT(parser.str, &pokemon.abilities, converters),
-                c("egg_groups") => try parse.anyT(parser.str, &pokemon.egg_groups, converters),
-                c("catch_rate") => pokemon.catch_rate = try parser.parse(parse.u8v),
-                c("gender_ratio") => pokemon.gender_ratio = try parser.parse(parse.u8v),
-                c("egg_cycles") => pokemon.egg_cycles = try parser.parse(parse.u8v),
-                c("base_friendship") => pokemon.base_friendship = try parser.parse(parse.u8v),
-                c("growth_rate") => pokemon.growth_rate = try parser.parse(comptime parse.enumv(common.GrowthRate)),
-                c("color") => pokemon.color.color = try parser.parse(comptime parse.enumv(common.ColorKind)),
-                c("flip") => pokemon.color.flip = try parser.parse(parse.boolv),
-                c("height") => pokemon.height = try parser.parse(parselu16v),
-                c("weight") => pokemon.weight = try parser.parse(parselu16v),
-                c("name") => try applyGen5String(game.owned.strings.pokemon_names, index, try parser.parse(parse.strv)),
-                c("tms"), c("hms") => {
-                    const is_tms = c("tms") == m(field);
-                    const tindex = try parser.parse(parse.index);
-                    const value = try parser.parse(parse.boolv);
+            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
+            switch (pokemons.value) {
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats.hp = hp,
+                    .attack => |attack| pokemon.stats.attack = attack,
+                    .defense => |defense| pokemon.stats.defense = defense,
+                    .speed => |speed| pokemon.stats.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
+                },
+                .ev_yield => |ev_yield| switch (ev_yield) {
+                    .hp => |hp| pokemon.ev_yield.hp = hp,
+                    .attack => |attack| pokemon.ev_yield.attack = attack,
+                    .defense => |defense| pokemon.ev_yield.defense = defense,
+                    .speed => |speed| pokemon.ev_yield.speed = speed,
+                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
+                },
+                .items => |items| {
+                    if (items.index >= pokemon.items.len)
+                        return error.IndexOutOfBound;
+                    pokemon.items[items.index] = lu16.init(items.value);
+                },
+                .types => |types| {
+                    if (types.index >= pokemon.types.len)
+                        return error.IndexOutOfBound;
+                    pokemon.types[types.index] = types.value;
+                },
+                .egg_groups => |egg_groups| {
+                    if (egg_groups.index >= pokemon.egg_groups.len)
+                        return error.IndexOutOfBound;
+                    pokemon.egg_groups[egg_groups.index] = egg_groups.value;
+                },
+                .abilities => |abilities| {
+                    if (abilities.index >= pokemon.abilities.len)
+                        return error.IndexOutOfBound;
+                    pokemon.abilities[abilities.index] = abilities.value;
+                },
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
+                .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
+                .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = lu16.init(base_exp_yield),
+                .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
+                .color => |color| pokemon.color.color = color,
+                .name => |name| try applyGen5String(game.owned.strings.pokemon_names, pokemons.index, name),
+                .tms, .hms => |ms| {
+                    const is_tms = pokemons.value == .tms;
                     const len = if (is_tms) game.ptrs.tms1.len + game.ptrs.tms2.len else game.ptrs.hms.len;
-                    if (tindex >= len)
+                    if (ms.index >= len)
                         return error.Error;
 
-                    const rindex = if (is_tms) tindex else tindex + game.ptrs.tms1.len + game.ptrs.tms2.len;
+                    const index = if (is_tms) ms.index else ms.index + game.ptrs.tms1.len + game.ptrs.tms2.len;
                     const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, rindex), value));
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
-                c("moves") => {
-                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, index) });
+                .moves => |moves| {
+                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, moves.index) });
                     const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
-                    const lum = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
-                    try parse.anyT(parser.str, &lum, converters);
+                    const lvl_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
+
+                    if (moves.index >= lvl_up_moves.len)
+                        return error.IndexOutOfBound;
+
+                    const lvl_up_move = &lvl_up_moves[moves.index];
+                    switch (moves.value) {
+                        .id => |id| lvl_up_move.id = lu16.init(id),
+                        .level => |level| lvl_up_move.level = lu16.init(level),
+                    }
                 },
-                c("evos") => {
-                    if (game.ptrs.evolutions.len <= index)
+                .evos => |evos| {
+                    if (evos.index >= game.ptrs.evolutions.len)
                         return error.Error;
-                    try parse.anyT(parser.str, &game.ptrs.evolutions[index].items, converters);
+
+                    const evolutions = &game.ptrs.evolutions[evos.index].items;
+                    if (evos.index >= evolutions.len)
+                        return error.IndexOutOfBound;
+
+                    const evolution = &evolutions[evos.index];
+                    switch (evos.value) {
+                        .method => |method| evolution.method = switch (method) {
+                            .attack_eql_defense => .attack_eql_defense,
+                            .attack_gth_defense => .attack_gth_defense,
+                            .attack_lth_defense => .attack_lth_defense,
+                            .beauty => .beauty,
+                            .friend_ship => .friend_ship,
+                            .level_up => .level_up,
+                            .level_up_female => .level_up_female,
+                            .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                            .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                            .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                            .level_up_knowning_move => .level_up_knowning_move,
+                            .level_up_male => .level_up_male,
+                            .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                            .level_up_near_ice_rock => .level_up_near_ice_rock,
+                            .level_up_near_moss_rock => .level_up_near_moss_rock,
+                            .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                            .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                            .personality_value1 => .personality_value1,
+                            .personality_value2 => .personality_value2,
+                            .trade => .trade,
+                            .trade_holding_item => .trade_holding_item,
+                            .unused => .unused,
+                            .use_item => .use_item,
+                            .use_item_on_female => .use_item_on_female,
+                            .use_item_on_male => .use_item_on_male,
+                            .unknown_0x02 => .unknown_0x02,
+                            .unknown_0x03 => .unknown_0x03,
+                            .trade_with_pokemon => .trade_with_pokemon,
+                            .friend_ship_during_day,
+                            .friend_ship_during_night,
+                            => return error.ParserFailed,
+                        },
+                        .param => |param| evolution.param = lu16.init(param),
+                        .target => |target| evolution.target = lu16.init(target),
+                    }
                 },
-                c("pokedex_entry") => {
-                    const entry = try parser.parse(parse.u16v);
-                    if (index != entry)
+                .pokedex_entry => |pokedex_entry| {
+                    if (pokemons.index != pokedex_entry)
                         return error.TryingToChangeReadOnlyField;
                 },
-                else => return error.NoField,
             }
         },
-        c("tms") => {
-            const index = try parser.parse(parse.index);
-            const value = try parser.parse(parselu16v);
-            if (index >= game.ptrs.tms1.len + game.ptrs.tms2.len)
-                return error.Error;
-            if (index < game.ptrs.tms1.len) {
-                game.ptrs.tms1[index] = value;
+        .tms => |tms| {
+            if (tms.index >= game.ptrs.tms1.len + game.ptrs.tms2.len)
+                return error.IndexOutOfBound;
+            if (tms.index < game.ptrs.tms1.len) {
+                game.ptrs.tms1[tms.index] = lu16.init(tms.value);
             } else {
-                game.ptrs.tms2[index - game.ptrs.tms1.len] = value;
+                game.ptrs.tms2[tms.index - game.ptrs.tms1.len] = lu16.init(tms.value);
             }
         },
-        c("hms") => try parse.anyT(parser.str, &game.ptrs.hms, converters),
-        c("items") => {
-            const index = try parser.parse(parse.index);
-            const prev = parser.str;
-            const field = try parser.parse(parse.anyField);
-            switch (m(field)) {
-                c("description") => try applyGen5String(game.owned.strings.item_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => {
-                    const item_names = game.owned.strings.item_names;
-                    if (index >= item_names.keys.len)
-                        return error.Error;
-                    const new_name = try parser.parse(parse.strv);
-                    const old_name = item_names.getSpan(index);
+        .hms => |hms| {
+            if (hms.index >= game.ptrs.hms.len)
+                return error.IndexOutOfBound;
+            game.ptrs.hms[hms.index] = lu16.init(hms.value);
+        },
+        .items => |items| {
+            if (items.index >= game.ptrs.items.len)
+                return error.IndexOutOfBound;
 
+            const item = &game.ptrs.items[items.index];
+            switch (items.value) {
+                .description => |description| try applyGen5String(game.owned.strings.item_descriptions, items.index, description),
+                .name => |name| {
+                    const item_names = game.owned.strings.item_names;
+                    if (items.index >= item_names.keys.len)
+                        return error.Error;
+
+                    const old_name = item_names.getSpan(items.index);
                     // Here, we also applies the item name to the item_names_on_the_ground
                     // table. The way we do this is to search for the item name in the
                     // ground string, and if it exists, we replace it and apply this new
                     // string
                     applyGen5StringReplace(
                         game.owned.strings.item_names_on_the_ground,
-                        index,
+                        items.index,
                         old_name,
-                        new_name,
+                        name,
                     ) catch {};
-                    try applyGen5String(item_names, index, new_name);
+                    try applyGen5String(item_names, items.index, name);
                 },
-                c("price") => {
-                    if (index >= game.ptrs.items.len)
-                        return error.Error;
-                    const item = &game.ptrs.items[index];
-                    const parsed_price = try parser.parse(parse.u32v);
-                    const new_price = try math.cast(u16, parsed_price / 10);
-                    item.price = lu16.init(new_price);
-                },
-                else => {
-                    if (index >= game.ptrs.items.len)
-                        return error.Error;
-                    try parse.anyT(prev, &game.ptrs.items[index], converters);
+                .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
+                .pocket => |pocket| item.pocket = switch (pocket) {
+                    .items => .items,
+                    .key_items => .key_items,
+                    .poke_balls => .balls,
+                    .tms_hms => .tms_hms,
+                    .berries,
+                    .none,
+                    => return error.ParserFailed,
                 },
             }
         },
-        c("pokedex") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("category") => try applyGen5String(game.owned.strings.pokedex_category_names, index, try parser.parse(parse.strv)),
-                else => return error.Error,
+        .pokedex => |pokedex| {
+            switch (pokedex.value) {
+                .category => |category| try applyGen5String(
+                    game.owned.strings.pokedex_category_names,
+                    pokedex.index,
+                    category,
+                ),
+                .height,
+                .weight,
+                => return error.ParserFailed,
             }
         },
-        c("moves") => {
-            const prev = parser.str;
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("description") => try applyGen5String(game.owned.strings.move_descriptions, index, try parser.parse(parse.strv)),
-                c("name") => try applyGen5String(game.owned.strings.move_names, index, try parser.parse(parse.strv)),
-                else => try parse.anyT(prev, &game.ptrs.moves, converters),
-            }
-        },
-        c("abilities") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(game.owned.strings.ability_names, index, try parser.parse(parse.strv)),
-                else => return error.Error,
-            }
-        },
-        c("types") => {
-            const index = try parser.parse(parse.index);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("name") => try applyGen5String(game.owned.strings.type_names, index, try parser.parse(parse.strv)),
-                else => return error.Error,
-            }
-        },
-        c("map") => try parse.anyT(parser.str, &game.ptrs.map_headers, converters),
-        c("wild_pokemons") => {
-            const H = struct {
-                fn applyArea(par: *parse.MutParser, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
-                    switch (m(try par.parse(parse.anyField))) {
-                        c("encounter_rate") => wilds.rates[index] = try par.parse(parse.u8v),
-                        c("pokemons") => {
-                            const windex = try par.parse(parse.index);
-                            const area = &@field(wilds, name);
-                            if (windex >= area.len)
-                                return error.Error;
-                            const wild = &area[windex];
+        .moves => |moves| {
+            if (moves.index >= game.ptrs.moves.len)
+                return error.IndexOutOfBound;
 
-                            switch (m(try par.parse(parse.anyField))) {
-                                c("min_level") => wild.min_level = try par.parse(parse.u8v),
-                                c("max_level") => wild.max_level = try par.parse(parse.u8v),
-                                c("species") => wild.species.setSpecies(try par.parse(parse.u10v)),
-                                c("form") => wild.species.setForm(try par.parse(parse.u6v)),
-                                else => return error.NoField,
+            const move = &game.ptrs.moves[moves.index];
+            switch (moves.value) {
+                .description => |description| try applyGen5String(game.owned.strings.move_descriptions, moves.index, description),
+                .name => |name| try applyGen5String(game.owned.strings.move_names, moves.index, name),
+                .effect => |effect| move.effect = lu16.init(effect),
+                .power => |power| move.power = power,
+                .type => |_type| move.type = _type,
+                .accuracy => |accuracy| move.accuracy = accuracy,
+                .pp => |pp| move.pp = pp,
+                .target => |target| move.target = target,
+                .priority => |priority| move.priority = priority,
+                .category => |category| move.category = category,
+            }
+        },
+        .abilities => |abilities| {
+            switch (abilities.value) {
+                .name => |name| try applyGen5String(game.owned.strings.ability_names, abilities.index, name),
+            }
+        },
+        .types => |types| {
+            switch (types.value) {
+                .name => |name| try applyGen5String(game.owned.strings.type_names, types.index, name),
+            }
+        },
+        .maps => |maps| {
+            if (maps.index >= game.ptrs.map_headers.len)
+                return error.Error;
+
+            const map_header = &game.ptrs.map_headers[maps.index];
+            switch (maps.value) {
+                .music => |music| map_header.music = lu16.init(music),
+                .allow_cycling,
+                .allow_escaping,
+                .allow_running,
+                .show_map_name,
+                .weather,
+                .cave,
+                .type,
+                .escape_rope,
+                .battle_scene,
+                => return error.ParserFailed,
+            }
+        },
+        .wild_pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.wild_pokemons.fat.len)
+                return error.Error;
+
+            const wilds = try game.ptrs.wild_pokemons.fileAs(.{ .i = pokemons.index }, gen5.WildPokemons);
+            switch (pokemons.value) {
+                .grass => |area| try applyGen5Area(area, "grass", 0, wilds),
+                .dark_grass => |area| try applyGen5Area(area, "dark_grass", 1, wilds),
+                .rustling_grass => |area| try applyGen5Area(area, "rustling_grass", 2, wilds),
+                .surf => |area| try applyGen5Area(area, "surf", 3, wilds),
+                .ripple_surf => |area| try applyGen5Area(area, "ripple_surf", 4, wilds),
+                .fishing => |area| try applyGen5Area(area, "fishing", 5, wilds),
+                .ripple_fishing => |area| try applyGen5Area(area, "ripple_fishing", 6, wilds),
+                .grass_morning,
+                .grass_day,
+                .grass_night,
+                .land,
+                .rock_smash,
+                .swarm_replace,
+                .day_replace,
+                .night_replace,
+                .radar_replace,
+                .unknown_replace,
+                .gba_replace,
+                .sea_unknown,
+                .old_rod,
+                .good_rod,
+                .super_rod,
+                => return error.ParserFailed,
+            }
+        },
+        .static_pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.static_pokemons.len)
+                return error.Error;
+
+            const static_mon = game.ptrs.static_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| static_mon.species.* = lu16.init(species),
+                .level => |level| static_mon.level.* = lu16.init(level),
+            }
+        },
+        .given_pokemons => |pokemons| {
+            if (pokemons.index >= game.ptrs.given_pokemons.len)
+                return error.Error;
+
+            const given_mon = game.ptrs.given_pokemons[pokemons.index];
+            switch (pokemons.value) {
+                .species => |species| given_mon.species.* = lu16.init(species),
+                .level => |level| given_mon.level.* = lu16.init(level),
+            }
+        },
+        .pokeball_items => |items| {
+            if (items.index >= game.ptrs.pokeball_items.len)
+                return error.IndexOutOfBound;
+
+            const given_item = game.ptrs.pokeball_items[items.index];
+            switch (items.value) {
+                .item => |item| given_item.item.* = lu16.init(item),
+                .amount => |amount| given_item.amount.* = lu16.init(amount),
+            }
+        },
+        .hidden_hollows => |hidden_hollows| if (game.ptrs.hidden_hollows) |hollows| {
+            if (hidden_hollows.index >= hollows.len)
+                return error.Error;
+
+            const hollow = &hollows[hidden_hollows.index];
+            switch (hidden_hollows.value) {
+                .versions => |versions| {
+                    if (versions.index >= hollow.pokemons.len)
+                        return error.IndexOutOfBound;
+
+                    const version = &hollow.pokemons[versions.index];
+                    switch (versions.value) {
+                        .groups => |groups| {
+                            if (groups.index >= version.len)
+                                return error.Error;
+
+                            const group = &version[groups.index];
+                            switch (groups.value) {
+                                .pokemons => |pokemons| {
+                                    if (pokemons.index >= group.species.len)
+                                        return error.IndexOutOfBound;
+
+                                    switch (pokemons.value) {
+                                        .species => |species| group.species[pokemons.index] = lu16.init(species),
+                                    }
+                                },
                             }
                         },
-                        else => return error.Error,
-                    }
-                }
-            };
-
-            const index = @intCast(u32, try parser.parse(parse.index));
-
-            if (index >= game.ptrs.wild_pokemons.fat.len)
-                return error.Error;
-
-            const wilds = try game.ptrs.wild_pokemons.fileAs(.{ .i = index }, gen5.WildPokemons);
-            switch (m(try parser.parse(parse.anyField))) {
-                c("grass") => try H.applyArea(&parser, "grass", 0, wilds),
-                c("dark_grass") => try H.applyArea(&parser, "dark_grass", 1, wilds),
-                c("rustling_grass") => try H.applyArea(&parser, "rustling_grass", 2, wilds),
-                c("surf") => try H.applyArea(&parser, "surf", 3, wilds),
-                c("ripple_surf") => try H.applyArea(&parser, "ripple_surf", 4, wilds),
-                c("fishing") => try H.applyArea(&parser, "fishing", 5, wilds),
-                c("ripple_fishing") => try H.applyArea(&parser, "ripple_fishing", 6, wilds),
-                else => return error.NoField,
-            }
-        },
-        c("static_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.static_pokemons.len)
-                return error.Error;
-
-            const static_mon = game.ptrs.static_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => static_mon.species.* = try parser.parse(parselu16v),
-                c("level") => static_mon.level.* = try parser.parse(parselu16v),
-                else => return error.NoField,
-            }
-        },
-        c("given_pokemons") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.given_pokemons.len)
-                return error.Error;
-
-            const given_mon = game.ptrs.given_pokemons[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("species") => given_mon.species.* = try parser.parse(parselu16v),
-                c("level") => given_mon.level.* = try parser.parse(parselu16v),
-                else => return error.NoField,
-            }
-        },
-        c("pokeball_items") => {
-            const index = try parser.parse(parse.index);
-            if (index >= game.ptrs.pokeball_items.len)
-                return error.Error;
-            const given_item = game.ptrs.pokeball_items[index];
-
-            switch (m(try parser.parse(parse.anyField))) {
-                c("item") => given_item.item.* = try parser.parse(parselu16v),
-                c("amount") => given_item.amount.* = try parser.parse(parselu16v),
-                else => return error.NoField,
-            }
-        },
-        c("hidden_hollows") => if (game.ptrs.hidden_hollows) |hollows| {
-            const index = try parser.parse(parse.index);
-            if (index >= hollows.len)
-                return error.Error;
-
-            const hollow = &hollows[index];
-            switch (m(try parser.parse(parse.anyField))) {
-                c("versions") => {
-                    const vindex = try parser.parse(parse.index);
-                    if (vindex >= hollow.pokemons.len)
-                        return error.Error;
-
-                    const version = &hollow.pokemons[vindex];
-                    try parser.parse(comptime parse.field("groups"));
-                    const gindex = try parser.parse(parse.index);
-                    if (gindex >= version.len)
-                        return error.Error;
-
-                    const group = &version[gindex];
-                    try parser.parse(comptime parse.field("pokemons"));
-                    const pindex = try parser.parse(parse.index);
-                    if (pindex >= group.species.len)
-                        return error.Error;
-
-                    switch (m(try parser.parse(parse.anyField))) {
-                        c("species") => try parse.anyT(parser.str, &group.species[pindex], converters),
-                        c("gender") => try parse.anyT(parser.str, &group.genders[pindex], converters),
-                        c("form") => try parse.anyT(parser.str, &group.forms[pindex], converters),
-                        else => return error.NoField,
                     }
                 },
-                c("items") => try parse.anyT(parser.str, &hollow.items, converters),
-                else => return error.NoField,
+                .items => |items| {
+                    if (items.index >= hollow.items.len)
+                        return error.ParserFailed;
+
+                    hollow.items[items.index] = lu16.init(items.value);
+                },
             }
         } else {
-            return error.NoField;
+            return error.ParserFailed;
         },
-        else => return error.NoField,
+        .text_delays,
+        .text,
+        => return error.ParserFailed,
+    }
+}
+
+fn applyGen5Area(area: format.WildArea, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
+    switch (area) {
+        .encounter_rate => |encounter_rate| wilds.rates[index] = try math.cast(u8, encounter_rate),
+        .pokemons => |pokemons| {
+            const wild_area = &@field(wilds, name);
+            if (pokemons.index >= wild_area.len)
+                return error.Error;
+
+            const wild = &wild_area[pokemons.index];
+            switch (pokemons.value) {
+                .min_level => |min_level| wild.min_level = min_level,
+                .max_level => |max_level| wild.max_level = max_level,
+                .species => |species| wild.species.setSpecies(try math.cast(u10, species)),
+            }
+        },
     }
 }
 

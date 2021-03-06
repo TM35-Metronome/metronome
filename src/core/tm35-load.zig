@@ -3,6 +3,7 @@ const std = @import("std");
 const util = @import("util");
 
 const common = @import("common.zig");
+const format = @import("format.zig");
 const gen3 = @import("gen3.zig");
 const gen4 = @import("gen4.zig");
 const gen5 = @import("gen5.zig");
@@ -96,241 +97,320 @@ pub fn main2(
 }
 
 fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
-    try writer.print(".version={}\n", .{@tagName(game.version)});
-    try writer.print(".game_title={}\n", .{game.header.game_title});
-    try writer.print(".gamecode={}\n", .{game.header.gamecode});
+    var buf: [mem.page_size]u8 = undefined;
+    try format.write(writer, format.Game{ .version = game.version });
+    try format.write(writer, format.Game{ .game_title = game.header.game_title.span() });
+    try format.write(writer, format.Game{ .gamecode = &game.header.gamecode });
 
-    for (game.starters) |starter, i| {
-        if (starter.value() != game.starters_repeat[i].value())
+    for (game.starters) |starter, index| {
+        if (starter.value() != game.starters_repeat[index].value())
             debug.warn("warning: repeated starters don't match.\n", .{});
 
-        try writer.print(".starters[{}]={}\n", .{ i, starter });
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .starters = .{ .index = i, .value = starter.value() } });
     }
 
-    for (game.text_delays) |delay, i|
-        try writer.print(".text_delays[{}]={}\n", .{ i, delay });
+    for (game.text_delays) |delay, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .text_delays = .{ .index = i, .value = delay } });
+    }
 
-    for (game.trainers) |trainer, i| {
+    for (game.trainers) |trainer, index| {
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, &trainer.name, fbs.writer());
+        const name = fbs.getWritten();
+
+        const i = @intCast(u16, index);
         const party = game.trainer_parties[i];
-        try writer.print(".trainers[{}].class={}\n", .{ i, trainer.class });
-        try writer.print(".trainers[{}].gender={}\n", .{ i, @tagName(trainer.encounter_music.gender) });
-        try writer.print(".trainers[{}].encounter_music={}\n", .{ i, trainer.encounter_music.music });
-        try writer.print(".trainers[{}].trainer_picture={}\n", .{ i, trainer.trainer_picture });
-        try writer.print(".trainers[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &trainer.name, writer);
-        try writer.writeByte('\n');
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .class = trainer.class } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .encounter_music = trainer.encounter_music.music } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .trainer_picture = trainer.trainer_picture } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .name = name } } });
 
-        for (trainer.items) |item, j| {
-            try writer.print(".trainers[{}].items[{}]={}\n", .{ i, j, item });
+        for (trainer.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
         }
 
-        try writer.print(".trainers[{}].is_double={}\n", .{ i, trainer.is_double });
-        try writer.print(".trainers[{}].ai={}\n", .{ i, trainer.ai });
-
-        try writer.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
-        try writer.print(".trainers[{}].party_size={}\n", .{ i, trainer.partyLen() });
-        for (party.members[0..party.size]) |member, j| {
-            try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-            try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-            try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_type = trainer.party_type } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_size = trainer.partyLen() } } });
+        for (party.members[0..party.size]) |member, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .level = @intCast(u8, member.base.level.value()) } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .species = member.base.species.value() } } } } });
             if (trainer.party_type == .item or trainer.party_type == .both)
-                try writer.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item });
+                try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .item = member.item.value() } } } } });
             if (trainer.party_type == .moves or trainer.party_type == .both) {
-                for (member.moves) |move, k| {
-                    try writer.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move });
+                for (member.moves) |move, kndex| {
+                    const k = @intCast(u8, kndex);
+                    try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .moves = .{ .index = k, .value = move.value() } } } } } });
                 }
             }
         }
     }
 
-    for (game.moves) |move, i| {
-        try writer.print(".moves[{}].effect={}\n", .{ i, move.effect });
-        try writer.print(".moves[{}].power={}\n", .{ i, move.power });
-        try writer.print(".moves[{}].type={}\n", .{ i, move.@"type" });
-        try writer.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
-        try writer.print(".moves[{}].pp={}\n", .{ i, move.pp });
-        try writer.print(".moves[{}].side_effect_chance={}\n", .{ i, move.side_effect_chance });
-        try writer.print(".moves[{}].target={}\n", .{ i, move.target });
-        try writer.print(".moves[{}].priority={}\n", .{ i, move.priority });
-        try writer.print(".moves[{}].flags0={}\n", .{ i, move.flags0 });
-        try writer.print(".moves[{}].flags1={}\n", .{ i, move.flags1 });
-        try writer.print(".moves[{}].flags2={}\n", .{ i, move.flags2 });
-        try writer.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
+    for (game.moves) |move, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .effect = move.effect } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .power = move.power } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .type = move.@"type" } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .accuracy = move.accuracy } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .pp = move.pp } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .target = move.target } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .priority = move.priority } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .category = move.category } } });
     }
 
-    for (game.pokemons) |pokemon, i| {
-        try writer.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
-        try writer.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
-        try writer.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
-        try writer.print(".pokemons[{}].stats.speed={}\n", .{ i, pokemon.stats.speed });
-        try writer.print(".pokemons[{}].stats.sp_attack={}\n", .{ i, pokemon.stats.sp_attack });
-        try writer.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
+    for (game.pokemons) |pokemon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .hp = pokemon.stats.hp } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .attack = pokemon.stats.attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .defense = pokemon.stats.defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .speed = pokemon.stats.speed } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_attack = pokemon.stats.sp_attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_defense = pokemon.stats.sp_defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .catch_rate = pokemon.catch_rate } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .base_exp_yield = pokemon.base_exp_yield } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .hp = pokemon.ev_yield.hp } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .attack = pokemon.ev_yield.attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .defense = pokemon.ev_yield.defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .speed = pokemon.ev_yield.speed } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .sp_attack = pokemon.ev_yield.sp_attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .sp_defense = pokemon.ev_yield.sp_defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .gender_ratio = pokemon.gender_ratio } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_cycles = pokemon.egg_cycles } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .base_friendship = pokemon.base_friendship } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .growth_rate = pokemon.growth_rate } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .color = pokemon.color.color } } });
 
-        for (pokemon.types) |t, j| {
-            try writer.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
+        for (pokemon.types) |t, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .types = .{ .index = j, .value = t } } } });
         }
-
-        try writer.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
-        try writer.print(".pokemons[{}].base_exp_yield={}\n", .{ i, pokemon.base_exp_yield });
-        try writer.print(".pokemons[{}].ev_yield.hp={}\n", .{ i, pokemon.ev_yield.hp });
-        try writer.print(".pokemons[{}].ev_yield.attack={}\n", .{ i, pokemon.ev_yield.attack });
-        try writer.print(".pokemons[{}].ev_yield.defense={}\n", .{ i, pokemon.ev_yield.defense });
-        try writer.print(".pokemons[{}].ev_yield.speed={}\n", .{ i, pokemon.ev_yield.speed });
-        try writer.print(".pokemons[{}].ev_yield.sp_attack={}\n", .{ i, pokemon.ev_yield.sp_attack });
-        try writer.print(".pokemons[{}].ev_yield.sp_defense={}\n", .{ i, pokemon.ev_yield.sp_defense });
-
-        for (pokemon.items) |item, j| {
-            try writer.print(".pokemons[{}].items[{}]={}\n", .{ i, j, item });
+        for (pokemon.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
         }
-
-        try writer.print(".pokemons[{}].gender_ratio={}\n", .{ i, pokemon.gender_ratio });
-        try writer.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
-        try writer.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
-        try writer.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        for (pokemon.egg_groups) |group, j|
-            try writer.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
-
-        for (pokemon.abilities) |ability, j| {
-            try writer.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
+        for (pokemon.egg_groups) |group, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_groups = .{ .index = j, .value = group } } } });
         }
-
-        try writer.print(".pokemons[{}].safari_zone_rate={}\n", .{ i, pokemon.safari_zone_rate });
-        try writer.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
-        try writer.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
+        for (pokemon.abilities) |ability, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .abilities = .{ .index = j, .value = ability } } } });
+        }
     }
-    for (game.species_to_national_dex) |dex_entry, i|
-        try writer.print(".pokemons[{}].pokedex_entry={}\n", .{ i + 1, dex_entry });
+    for (game.species_to_national_dex) |dex_entry, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i + 1, .value = .{ .pokedex_entry = dex_entry.value() } } });
+    }
 
-    for (game.evolutions) |evos, i| {
-        for (evos) |evo, j| {
+    for (game.evolutions) |evos, index| {
+        const i = @intCast(u16, index);
+        for (evos) |evo, jndex| {
             if (evo.method == .unused)
                 continue;
-            try writer.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-            try writer.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param });
-            try writer.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target });
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{
+                .pokemons = .{
+                    .index = i,
+                    .value = .{
+                        .evos = .{
+                            .index = j,
+                            .value = .{
+                                .method = switch (evo.method) {
+                                    .unused => .unused,
+                                    .friend_ship => .friend_ship,
+                                    .friend_ship_during_day => .friend_ship_during_day,
+                                    .friend_ship_during_night => .friend_ship_during_night,
+                                    .level_up => .level_up,
+                                    .trade => .trade,
+                                    .trade_holding_item => .trade_holding_item,
+                                    .use_item => .use_item,
+                                    .attack_gth_defense => .attack_gth_defense,
+                                    .attack_eql_defense => .attack_eql_defense,
+                                    .attack_lth_defense => .attack_lth_defense,
+                                    .personality_value1 => .personality_value1,
+                                    .personality_value2 => .personality_value2,
+                                    .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                                    .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                                    .beauty => .beauty,
+                                    .use_item_on_male => .use_item_on_male,
+                                    .use_item_on_female => .use_item_on_female,
+                                    .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                                    .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                                    .level_up_knowning_move => .level_up_knowning_move,
+                                    .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                                    .level_up_male => .level_up_male,
+                                    .level_up_female => .level_up_female,
+                                    .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                                    .level_up_near_moss_rock => .level_up_near_moss_rock,
+                                    .level_up_near_ice_rock => .level_up_near_ice_rock,
+                                    _ => unreachable,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .param = evo.param.value() } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .target = evo.target.value() } } } } });
         }
     }
 
-    for (game.level_up_learnset_pointers) |lvl_up_learnset, i| {
+    for (game.level_up_learnset_pointers) |lvl_up_learnset, index| {
         const learnset = try lvl_up_learnset.toSliceEnd(game.data);
-        for (learnset) |l, j| {
+        const i = @intCast(u16, index);
+        for (learnset) |l, jndex| {
             if (std.meta.eql(l, gen3.LevelUpMove.term))
                 break;
-            try writer.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, l.id });
-            try writer.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, l.level });
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .id = l.id } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .level = l.level } } } } });
         }
     }
 
-    for (game.machine_learnsets) |machine_learnset, i| {
-        var j: usize = 0;
+    for (game.machine_learnsets) |machine_learnset, index| {
+        const i = @intCast(u16, index);
+        var j: u8 = 0;
         while (j < game.tms.len) : (j += 1)
-            try writer.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .tms = .{ .index = j, .value = bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) } } } });
         while (j < game.tms.len + game.hms.len) : (j += 1)
-            try writer.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.tms.len, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .hms = .{ .index = @intCast(u8, j - game.tms.len), .value = bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)) } } } });
     }
 
-    for (game.pokemon_names) |name, i| {
-        try writer.print(".pokemons[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &name, writer);
-        try writer.writeByte('\n');
+    for (game.pokemon_names) |name, index| {
+        const i = @intCast(u16, index);
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        const decoded_name = fbs.getWritten();
+
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .name = decoded_name } } });
     }
 
-    for (game.ability_names) |name, i| {
-        try writer.print(".abilities[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &name, writer);
-        try writer.writeByte('\n');
+    for (game.ability_names) |name, index| {
+        const i = @intCast(u16, index);
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        const decoded_name = fbs.getWritten();
+
+        try format.write(writer, format.Game{ .abilities = .{ .index = i, .value = .{ .name = decoded_name } } });
     }
 
-    for (game.move_names) |name, i| {
-        try writer.print(".moves[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &name, writer);
-        try writer.writeByte('\n');
+    for (game.move_names) |name, index| {
+        const i = @intCast(u16, index);
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        const decoded_name = fbs.getWritten();
+
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .name = decoded_name } } });
     }
 
-    for (game.type_names) |name, i| {
-        try writer.print(".types[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &name, writer);
-        try writer.writeByte('\n');
+    for (game.type_names) |name, index| {
+        const i = @intCast(u8, index);
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        const decoded_name = fbs.getWritten();
+
+        try format.write(writer, format.Game{ .types = .{ .index = i, .value = .{ .name = decoded_name } } });
     }
 
-    for (game.tms) |tm, i|
-        try writer.print(".tms[{}]={}\n", .{ i, tm });
-    for (game.hms) |hm, i|
-        try writer.print(".hms[{}]={}\n", .{ i, hm });
+    for (game.tms) |tm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .tms = .{ .index = i, .value = tm.value() } });
+    }
+    for (game.hms) |hm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .hms = .{ .index = i, .value = hm.value() } });
+    }
 
-    for (game.items) |item, i| {
+    for (game.items) |item, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = item.price.value() } } });
+
         const pocket = switch (game.version) {
-            .ruby, .sapphire, .emerald => @tagName(item.pocket.rse),
-            .fire_red, .leaf_green => @tagName(item.pocket.frlg),
+            .ruby, .sapphire, .emerald => try format.write(writer, format.Game{
+                .items = .{
+                    .index = i,
+                    .value = .{
+                        .pocket = switch (item.pocket.rse) {
+                            .none => .none,
+                            .items => .items,
+                            .key_items => .key_items,
+                            .poke_balls => .poke_balls,
+                            .tms_hms => .tms_hms,
+                            .berries => .berries,
+                        },
+                    },
+                },
+            }),
+            .fire_red, .leaf_green => try format.write(writer, format.Game{
+                .items = .{
+                    .index = i,
+                    .value = .{
+                        .pocket = switch (item.pocket.frlg) {
+                            .none => .none,
+                            .items => .items,
+                            .key_items => .key_items,
+                            .poke_balls => .poke_balls,
+                            .tms_hms => .tms_hms,
+                            .berries => .berries,
+                        },
+                    },
+                },
+            }),
             else => unreachable,
         };
 
-        try writer.print(".items[{}].name=", .{i});
-        try gen3.encodings.decode(.en_us, &item.name, writer);
-        try writer.writeByte('\n');
-        try writer.print(".items[{}].price={}\n", .{ i, item.price });
-        try writer.print(".items[{}].id={}\n", .{ i, item.id });
-        try writer.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
-        try writer.print(".items[{}].battle_effect_p={}\n", .{ i, item.battle_effect_param });
+        {
+            var fbs = io.fixedBufferStream(&buf);
+            try gen3.encodings.decode(.en_us, &item.name, fbs.writer());
+            const name = fbs.getWritten();
+            try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .name = name } } });
+        }
+
         if (item.description.toSliceZ(game.data)) |description| {
-            try writer.print(".items[{}].description=", .{i});
-            try gen3.encodings.decode(.en_us, description, writer);
-            try writer.writeByte('\n');
+            var fbs = io.fixedBufferStream(&buf);
+            try gen3.encodings.decode(.en_us, description, fbs.writer());
+            const decoded_description = fbs.getWritten();
+            try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .description = decoded_description } } });
         } else |_| {}
-        // try writer.print(".items[{}].description={}\n", .{i, item.description});
-        try writer.print(".items[{}].importance={}\n", .{ i, item.importance });
-        // try writer.print(".items[{}].unknown={}\n", .{i, item.unknown});
-        try writer.print(".items[{}].pocket={}\n", .{ i, pocket });
-        try writer.print(".items[{}].type={}\n", .{ i, item.@"type" });
-        // try writer.print(".items[{}].field_use_func={}\n", .{i, item.field_use_func});
-        try writer.print(".items[{}].battle_usage={}\n", .{ i, item.battle_usage });
-        //try writer.print(".items[{}].battle_use_func={}\n", .{i, item.battle_use_func});
-        try writer.print(".items[{}].secondary_id={}\n", .{ i, item.secondary_id });
     }
 
     switch (game.version) {
-        .emerald => for (game.pokedex.emerald) |entry, i| {
-            //try writer.print(".pokedex[{}].category_name={}\n", .{ i, entry.category_name});
-            try writer.print(".pokedex[{}].height={}\n", .{ i, entry.height });
-            try writer.print(".pokedex[{}].weight={}\n", .{ i, entry.weight });
-            //try writer.print(".pokedex[{}].description={}\n", .{ i, entry.description});
-            try writer.print(".pokedex[{}].pokemon_scale={}\n", .{ i, entry.pokemon_scale });
-            try writer.print(".pokedex[{}].pokemon_offset={}\n", .{ i, entry.pokemon_offset });
-            try writer.print(".pokedex[{}].trainer_scale={}\n", .{ i, entry.trainer_scale });
-            try writer.print(".pokedex[{}].trainer_offset={}\n", .{ i, entry.trainer_offset });
+        .emerald => for (game.pokedex.emerald) |entry, index| {
+            const i = @intCast(u16, index);
+            try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .height = entry.height.value() } } });
+            try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .weight = entry.weight.value() } } });
         },
         .ruby,
         .sapphire,
         .fire_red,
         .leaf_green,
-        => for (game.pokedex.rsfrlg) |entry, i| {
-            //try writer.print(".pokedex[{}].category_name={}\n", .{ i, entry.category_name});
-            try writer.print(".pokedex[{}].height={}\n", .{ i, entry.height });
-            try writer.print(".pokedex[{}].weight={}\n", .{ i, entry.weight });
-            //try writer.print(".pokedex[{}].description={}\n", .{ i, entry.description});
-            //try writer.print(".pokedex[{}].unused_description={}\n", .{ i, entry.unused_description});
-            try writer.print(".pokedex[{}].pokemon_scale={}\n", .{ i, entry.pokemon_scale });
-            try writer.print(".pokedex[{}].pokemon_offset={}\n", .{ i, entry.pokemon_offset });
-            try writer.print(".pokedex[{}].trainer_scale={}\n", .{ i, entry.trainer_scale });
-            try writer.print(".pokedex[{}].trainer_offset={}\n", .{ i, entry.trainer_offset });
+        => for (game.pokedex.rsfrlg) |entry, index| {
+            const i = @intCast(u16, index);
+            try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .height = entry.height.value() } } });
+            try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .weight = entry.weight.value() } } });
         },
         else => unreachable,
     }
 
-    for (game.map_headers) |header, i| {
-        try writer.print(".map[{}].music={}\n", .{ i, header.music });
-        try writer.print(".map[{}].cave={}\n", .{ i, header.cave });
-        try writer.print(".map[{}].weather={}\n", .{ i, header.weather });
-        try writer.print(".map[{}].type={}\n", .{ i, header.map_type });
-        try writer.print(".map[{}].escape_rope={}\n", .{ i, header.escape_rope });
-        try writer.print(".map[{}].battle_scene={}\n", .{ i, header.map_battle_scene });
-        try writer.print(".map[{}].allow_cycling={}\n", .{ i, header.flags.allow_cycling });
-        try writer.print(".map[{}].allow_escaping={}\n", .{ i, header.flags.allow_escaping });
-        try writer.print(".map[{}].allow_running={}\n", .{ i, header.flags.allow_running });
-        try writer.print(".map[{}].show_map_name={}\n", .{ i, header.flags.show_map_name });
+    for (game.map_headers) |header, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .music = header.music.value() } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .cave = header.cave } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .weather = header.weather } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .type = header.map_type } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .escape_rope = header.escape_rope } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .battle_scene = header.map_battle_scene } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .allow_cycling = header.flags.allow_cycling } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .allow_escaping = header.flags.allow_escaping } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .allow_running = header.flags.allow_running } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .show_map_name = header.flags.show_map_name } } });
     }
 
-    for (game.wild_pokemon_headers) |header, i| {
+    for (game.wild_pokemon_headers) |header, index| {
+        const i = @intCast(u16, index);
         if (header.land.toPtr(game.data)) |land| {
             const wilds = try land.wild_pokemons.toPtr(game.data);
             try outputGen3Area(writer, i, "land", land.encounter_rate, wilds);
@@ -349,218 +429,261 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         } else |_| {}
     }
 
-    for (game.static_pokemons) |static_mon, i| {
-        try writer.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species });
-        try writer.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level.* });
+    for (game.static_pokemons) |static_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .species = static_mon.species.value() } } });
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .level = static_mon.level.* } } });
     }
 
-    for (game.given_pokemons) |given_mon, i| {
-        try writer.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species });
-        try writer.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level.* });
+    for (game.given_pokemons) |given_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .species = given_mon.species.value() } } });
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .level = given_mon.level.* } } });
     }
 
-    for (game.pokeball_items) |given_item, i| {
-        try writer.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item });
-        try writer.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount });
+    for (game.pokeball_items) |given_item, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .item = given_item.item.value() } } });
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .amount = given_item.amount.value() } } });
     }
 
-    for (game.text) |text_ptr, i| {
+    for (game.text) |text_ptr, index| {
+        const i = @intCast(u16, index);
         const text = try text_ptr.toSliceZ(game.data);
-        try writer.print(".text[{}]=", .{i});
-        try gen3.encodings.decode(.en_us, text, writer);
-        try writer.writeByte('\n');
+        var fbs = io.fixedBufferStream(&buf);
+        try gen3.encodings.decode(.en_us, text, fbs.writer());
+        const decoded_text = fbs.getWritten();
+
+        try format.write(writer, format.Game{ .text = .{ .index = i, .value = decoded_text } });
     }
 }
 
-fn outputGen3Area(writer: anytype, i: usize, name: []const u8, rate: u8, wilds: []const gen3.WildPokemon) !void {
-    try writer.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, name, rate });
-    for (wilds) |pokemon, j| {
-        try writer.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, name, j, pokemon.min_level });
-        try writer.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, name, j, pokemon.max_level });
-        try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, name, j, pokemon.species });
+fn outputGen3Area(writer: anytype, i: u16, comptime name: []const u8, rate: u8, wilds: []const gen3.WildPokemon) !void {
+    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, name, .{ .encounter_rate = rate }) } });
+    for (wilds) |pokemon, jndex| {
+        const j = @intCast(u8, jndex);
+        try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, name, .{ .pokemons = .{ .index = j, .value = .{ .min_level = pokemon.min_level } } }) } });
+        try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, name, .{ .pokemons = .{ .index = j, .value = .{ .max_level = pokemon.max_level } } }) } });
+        try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, name, .{ .pokemons = .{ .index = j, .value = .{ .species = pokemon.species.value() } } }) } });
     }
 }
 
 fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
-    try writer.print(".version={}\n", .{@tagName(game.info.version)});
-
     const header = nds_rom.header();
-    const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
-    try writer.print(".game_title={}\n", .{header.game_title[0..null_index]});
-    try writer.print(".gamecode={}\n", .{header.gamecode});
-    try writer.print(".instant_text=false\n", .{});
+    try format.write(writer, format.Game{ .version = game.info.version });
+    try format.write(writer, format.Game{ .game_title = header.game_title.span() });
+    try format.write(writer, format.Game{ .gamecode = &header.gamecode });
+    try format.write(writer, format.Game{ .instant_text = false });
 
-    for (game.ptrs.starters) |starter, i| {
-        try writer.print(".starters[{}]={}\n", .{ i, starter });
+    for (game.ptrs.starters) |starter, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .starters = .{ .index = i, .value = starter.value() } });
     }
 
-    for (game.ptrs.trainers) |trainer, i| {
-        try writer.print(".trainers[{}].party_size={}\n", .{ i, trainer.party_size });
-        try writer.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
-        try writer.print(".trainers[{}].class={}\n", .{ i, trainer.class });
-        try writer.print(".trainers[{}].battle_type={}\n", .{ i, trainer.battle_type });
-        try writer.print(".trainers[{}].battle_type2={}\n", .{ i, trainer.battle_type2 });
-        try writer.print(".trainers[{}].ai={}\n", .{ i, trainer.ai });
+    for (game.ptrs.trainers) |trainer, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_size = trainer.party_size } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_type = trainer.party_type } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .class = trainer.class } } });
 
-        for (trainer.items) |item, j| {
-            try writer.print(".trainers[{}].items[{}]={}\n", .{ i, j, item });
+        for (trainer.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
         }
 
         const parties = game.owned.trainer_parties;
         if (parties.len <= i)
             continue;
 
-        for (parties[i][0..trainer.party_size]) |member, j| {
-            try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-            try writer.print(".trainers[{}].party[{}].gender={}\n", .{ i, j, member.base.gender_ability.gender });
-            try writer.print(".trainers[{}].party[{}].ability={}\n", .{ i, j, member.base.gender_ability.ability });
-            try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-            try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
-            try writer.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item });
-            for (member.moves) |move, k| {
-                try writer.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move });
+        for (parties[i][0..trainer.party_size]) |member, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .ability = member.base.gender_ability.ability } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .level = @intCast(u8, member.base.level.value()) } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .species = member.base.species.value() } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .item = member.item.value() } } } } });
+            for (member.moves) |move, kndex| {
+                const k = @intCast(u8, kndex);
+                try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .moves = .{ .index = k, .value = move.value() } } } } } });
             }
         }
     }
 
-    for (game.ptrs.moves) |move, i| {
-        try writer.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
-        try writer.print(".moves[{}].power={}\n", .{ i, move.power });
-        try writer.print(".moves[{}].type={}\n", .{ i, move.@"type" });
-        try writer.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
-        try writer.print(".moves[{}].pp={}\n", .{ i, move.pp });
+    for (game.ptrs.moves) |move, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .category = move.category } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .power = move.power } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .type = move.type } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .accuracy = move.accuracy } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .pp = move.pp } } });
     }
 
-    for (game.ptrs.pokemons) |pokemon, i| {
-        try writer.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
-        try writer.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
-        try writer.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
-        try writer.print(".pokemons[{}].stats.speed={}\n", .{ i, pokemon.stats.speed });
-        try writer.print(".pokemons[{}].stats.sp_attack={}\n", .{ i, pokemon.stats.sp_attack });
-        try writer.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
+    for (game.ptrs.pokemons) |pokemon, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .hp = pokemon.stats.hp } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .attack = pokemon.stats.attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .defense = pokemon.stats.defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .speed = pokemon.stats.speed } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_attack = pokemon.stats.sp_attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_defense = pokemon.stats.sp_defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .catch_rate = pokemon.catch_rate } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .base_exp_yield = pokemon.base_exp_yield } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .hp = pokemon.ev_yield.hp } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .attack = pokemon.ev_yield.attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .defense = pokemon.ev_yield.defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .speed = pokemon.ev_yield.speed } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .sp_attack = pokemon.ev_yield.sp_attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .ev_yield = .{ .sp_defense = pokemon.ev_yield.sp_defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .gender_ratio = pokemon.gender_ratio } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_cycles = pokemon.egg_cycles } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .base_friendship = pokemon.base_friendship } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .growth_rate = pokemon.growth_rate } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .color = pokemon.color.color } } });
 
-        for (pokemon.types) |t, j| {
-            try writer.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
+        for (pokemon.types) |t, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .types = .{ .index = j, .value = t } } } });
         }
-
-        try writer.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
-        try writer.print(".pokemons[{}].base_exp_yield={}\n", .{ i, pokemon.base_exp_yield });
-        try writer.print(".pokemons[{}].ev_yield.hp={}\n", .{ i, pokemon.ev_yield.hp });
-        try writer.print(".pokemons[{}].ev_yield.attack={}\n", .{ i, pokemon.ev_yield.attack });
-        try writer.print(".pokemons[{}].ev_yield.defense={}\n", .{ i, pokemon.ev_yield.defense });
-        try writer.print(".pokemons[{}].ev_yield.speed={}\n", .{ i, pokemon.ev_yield.speed });
-        try writer.print(".pokemons[{}].ev_yield.sp_attack={}\n", .{ i, pokemon.ev_yield.sp_attack });
-        try writer.print(".pokemons[{}].ev_yield.sp_defense={}\n", .{ i, pokemon.ev_yield.sp_defense });
-
-        for (pokemon.items) |item, j| {
-            try writer.print(".pokemons[{}].items[{}]={}\n", .{ i, j, item });
+        for (pokemon.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
         }
-
-        try writer.print(".pokemons[{}].gender_ratio={}\n", .{ i, pokemon.gender_ratio });
-        try writer.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
-        try writer.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
-        try writer.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-        for (pokemon.egg_groups) |group, j|
-            try writer.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
-
-        for (pokemon.abilities) |ability, j| {
-            try writer.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
+        for (pokemon.egg_groups) |group, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_groups = .{ .index = j, .value = group } } } });
         }
-
-        try writer.print(".pokemons[{}].flee_rate={}\n", .{ i, pokemon.flee_rate });
-        try writer.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
-        try writer.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
+        for (pokemon.abilities) |ability, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .abilities = .{ .index = j, .value = ability } } } });
+        }
 
         const machine_learnset = pokemon.machine_learnset;
-        var j: usize = 0;
+        var j: u8 = 0;
         while (j < game.ptrs.tms.len) : (j += 1)
-            try writer.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .tms = .{ .index = j, .value = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) } } } });
         while (j < game.ptrs.tms.len + game.ptrs.hms.len) : (j += 1)
-            try writer.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - game.ptrs.tms.len, bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .hms = .{ .index = @intCast(u8, j - game.ptrs.tms.len), .value = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) } } } });
     }
-    for (game.ptrs.species_to_national_dex) |dex_entry, i|
-        try writer.print(".pokemons[{}].pokedex_entry={}\n", .{ i + 1, dex_entry });
 
-    for (game.ptrs.evolutions) |evos, i| {
-        for (evos.items) |evo, j| {
+    for (game.ptrs.species_to_national_dex) |dex_entry, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i + 1, .value = .{ .pokedex_entry = dex_entry.value() } } });
+    }
+
+    for (game.ptrs.evolutions) |evos, index| {
+        const i = @intCast(u8, index);
+        for (evos.items) |evo, jndex| {
             if (evo.method == .unused)
                 continue;
-            try writer.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-            try writer.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param });
-            try writer.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target });
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{
+                .pokemons = .{
+                    .index = i,
+                    .value = .{
+                        .evos = .{
+                            .index = j,
+                            .value = .{
+                                .method = switch (evo.method) {
+                                    .unused => .unused,
+                                    .friend_ship => .friend_ship,
+                                    .friend_ship_during_day => .friend_ship_during_day,
+                                    .friend_ship_during_night => .friend_ship_during_night,
+                                    .level_up => .level_up,
+                                    .trade => .trade,
+                                    .trade_holding_item => .trade_holding_item,
+                                    .use_item => .use_item,
+                                    .attack_gth_defense => .attack_gth_defense,
+                                    .attack_eql_defense => .attack_eql_defense,
+                                    .attack_lth_defense => .attack_lth_defense,
+                                    .personality_value1 => .personality_value1,
+                                    .personality_value2 => .personality_value2,
+                                    .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                                    .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                                    .beauty => .beauty,
+                                    .use_item_on_male => .use_item_on_male,
+                                    .use_item_on_female => .use_item_on_female,
+                                    .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                                    .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                                    .level_up_knowning_move => .level_up_knowning_move,
+                                    .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                                    .level_up_male => .level_up_male,
+                                    .level_up_female => .level_up_female,
+                                    .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                                    .level_up_near_moss_rock => .level_up_near_moss_rock,
+                                    .level_up_near_ice_rock => .level_up_near_ice_rock,
+                                    _ => unreachable,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .param = evo.param.value() } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .target = evo.target.value() } } } } });
         }
     }
 
-    {
-        var i: u32 = 0;
-        while (i < game.ptrs.level_up_moves.fat.len) : (i += 1) {
-            const bytes = game.ptrs.level_up_moves.fileData(.{ .i = i });
-            const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
-            for (level_up_moves) |move, j| {
-                if (std.meta.eql(move, gen4.LevelUpMove.term))
-                    break;
-                try writer.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id });
-                try writer.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level });
-            }
+    for (game.ptrs.level_up_moves.fat) |_, index| {
+        const i = @intCast(u16, index);
+        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = i });
+        const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
+        for (level_up_moves) |move, jndex| {
+            if (std.meta.eql(move, gen4.LevelUpMove.term))
+                break;
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .id = move.id } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .level = move.level } } } } });
         }
     }
 
-    for (game.ptrs.pokedex_heights) |height, i|
-        try writer.print(".pokedex[{}].height={}\n", .{ i, height });
-    for (game.ptrs.pokedex_weights) |weight, i|
-        try writer.print(".pokedex[{}].weight={}\n", .{ i, weight });
-    for (game.ptrs.tms) |tm, i|
-        try writer.print(".tms[{}]={}\n", .{ i, tm });
-    for (game.ptrs.hms) |hm, i|
-        try writer.print(".hms[{}]={}\n", .{ i, hm });
+    for (game.ptrs.pokedex_heights) |height, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .height = height.value() } } });
+    }
+    for (game.ptrs.pokedex_weights) |weight, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokedex = .{ .index = i, .value = .{ .weight = weight.value() } } });
+    }
+    for (game.ptrs.tms) |tm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .tms = .{ .index = i, .value = tm.value() } });
+    }
+    for (game.ptrs.hms) |hm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .hms = .{ .index = i, .value = hm.value() } });
+    }
 
-    for (game.ptrs.items) |item, i| {
-        try writer.print(".items[{}].price={}\n", .{ i, item.price });
-        try writer.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
-        try writer.print(".items[{}].gain={}\n", .{ i, item.gain });
-        try writer.print(".items[{}].berry={}\n", .{ i, item.berry });
-        try writer.print(".items[{}].fling_effect={}\n", .{ i, item.fling_effect });
-        try writer.print(".items[{}].fling_power={}\n", .{ i, item.fling_power });
-        try writer.print(".items[{}].natural_gift_power={}\n", .{ i, item.natural_gift_power });
-        try writer.print(".items[{}].flag={}\n", .{ i, item.flag });
-        try writer.print(".items[{}].pocket={}\n", .{ i, @tagName(item.pocket) });
-        try writer.print(".items[{}].type={}\n", .{ i, item.type });
-        try writer.print(".items[{}].category={}\n", .{ i, item.category });
-        //try writer.print(".items[{}].category2={}\n", .{ i, item.category2 });
-        try writer.print(".items[{}].index={}\n", .{ i, item.index });
-        //try writer.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
-        //try writer.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
-        //try writer.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
-        //try writer.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
-        //try writer.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
-        //try writer.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
-        //try writer.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
-        //try writer.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
-        //try writer.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
-        //try writer.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
-        //try writer.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
-        //try writer.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
-        //try writer.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
-        try writer.print(".items[{}].ev_yield.hp={}\n", .{ i, item.ev_yield.hp });
-        try writer.print(".items[{}].ev_yield.attack={}\n", .{ i, item.ev_yield.attack });
-        try writer.print(".items[{}].ev_yield.defense={}\n", .{ i, item.ev_yield.defense });
-        try writer.print(".items[{}].ev_yield.speed={}\n", .{ i, item.ev_yield.speed });
-        try writer.print(".items[{}].ev_yield.sp_attack={}\n", .{ i, item.ev_yield.sp_attack });
-        try writer.print(".items[{}].ev_yield.sp_defense={}\n", .{ i, item.ev_yield.sp_defense });
-        try writer.print(".items[{}].hp_restore={}\n", .{ i, item.hp_restore });
-        try writer.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
+    for (game.ptrs.items) |item, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = item.price.value() } } });
+        try format.write(writer, format.Game{
+            .items = .{
+                .index = i,
+                .value = .{
+                    .pocket = switch (item.pocket) {
+                        .items => .items,
+                        .tms_hms => .tms_hms,
+                        .berries => .berries,
+                        .key_items => .key_items,
+                        .balls => .poke_balls,
+                        _ => unreachable,
+                    },
+                },
+            },
+        });
     }
 
     switch (game.info.version) {
         .diamond,
         .pearl,
         .platinum,
-        => for (game.ptrs.wild_pokemons.dppt) |wild_mons, i| {
-            try writer.print(".wild_pokemons[{}].grass.encounter_rate={}\n", .{ i, wild_mons.grass_rate });
-            for (wild_mons.grass) |grass, j| {
-                try writer.print(".wild_pokemons[{}].grass.pokemons[{}].min_level={}\n", .{ i, j, grass.level });
-                try writer.print(".wild_pokemons[{}].grass.pokemons[{}].max_level={}\n", .{ i, j, grass.level });
-                try writer.print(".wild_pokemons[{}].grass.pokemons[{}].species={}\n", .{ i, j, grass.species });
+        => for (game.ptrs.wild_pokemons.dppt) |wild_mons, index| {
+            const i = @intCast(u16, index);
+            try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = .{ .grass = .{ .encounter_rate = wild_mons.grass_rate.value() } } } });
+            for (wild_mons.grass) |grass, jndex| {
+                const j = @intCast(u8, jndex);
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = .{ .grass = .{ .pokemons = .{ .index = j, .value = .{ .min_level = grass.level } } } } } });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = .{ .grass = .{ .pokemons = .{ .index = j, .value = .{ .max_level = grass.level } } } } } });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = .{ .grass = .{ .pokemons = .{ .index = j, .value = .{ .species = grass.species.value() } } } } } });
             }
 
             // TODO: Get rid of inline for in favor of a function to call
@@ -572,8 +695,9 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
                 "unknown_replace",
                 "gba_replace",
             }) |area_name| {
-                for (@field(wild_mons, area_name)) |replacement, k| {
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, replacement.species });
+                for (@field(wild_mons, area_name)) |replacement, jndex| {
+                    const j = @intCast(u8, jndex);
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .species = replacement.species.value() } } }) } });
                 }
             }
 
@@ -585,29 +709,32 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
                 "good_rod",
                 "super_rod",
             }) |area_name| {
-                try writer.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, @field(wild_mons, area_name).rate });
-                for (@field(wild_mons, area_name).mons) |sea, k| {
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .encounter_rate = @field(wild_mons, area_name).rate.value() }) } });
+                for (@field(wild_mons, area_name).mons) |sea, jndex| {
+                    const j = @intCast(u8, jndex);
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .min_level = sea.min_level } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .max_level = sea.max_level } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .species = sea.species.value() } } }) } });
                 }
             }
         },
 
         .heart_gold,
         .soul_silver,
-        => for (game.ptrs.wild_pokemons.hgss) |wild_mons, i| {
+        => for (game.ptrs.wild_pokemons.hgss) |wild_mons, index| {
+            const i = @intCast(u16, index);
             // TODO: Get rid of inline for in favor of a function to call
             inline for ([_][]const u8{
                 "grass_morning",
                 "grass_day",
                 "grass_night",
             }) |area_name| {
-                try writer.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.grass_rate });
-                for (@field(wild_mons, area_name)) |species, j| {
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, j, wild_mons.grass_levels[j] });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, j, species });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .encounter_rate = wild_mons.grass_rate }) } });
+                for (@field(wild_mons, area_name)) |species, jndex| {
+                    const j = @intCast(u8, jndex);
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .min_level = wild_mons.grass_levels[j] } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .max_level = wild_mons.grass_levels[j] } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = j, .value = .{ .species = species.value() } } }) } });
                 }
             }
 
@@ -619,11 +746,12 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
                 "good_rod",
                 "super_rod",
             }) |area_name, j| {
-                try writer.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.sea_rates[j] });
-                for (@field(wild_mons, area_name)) |sea, k| {
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, sea.min_level });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, sea.max_level });
-                    try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, sea.species });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .encounter_rate = wild_mons.sea_rates[j] }) } });
+                for (@field(wild_mons, area_name)) |sea, kndex| {
+                    const k = @intCast(u8, kndex);
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .min_level = sea.min_level } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .max_level = sea.max_level } } }) } });
+                    try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .species = sea.species.value() } } }) } });
                 }
             }
 
@@ -633,275 +761,265 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
         else => unreachable,
     }
 
-    for (game.ptrs.static_pokemons) |static_mon, i| {
-        try writer.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species });
-        try writer.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level });
+    for (game.ptrs.static_pokemons) |static_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .species = static_mon.species.value() } } });
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, static_mon.level.value()) } } });
     }
 
-    for (game.ptrs.given_pokemons) |given_mon, i| {
-        try writer.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species });
-        try writer.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level });
+    for (game.ptrs.given_pokemons) |given_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .species = given_mon.species.value() } } });
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, given_mon.level.value()) } } });
     }
 
-    for (game.ptrs.pokeball_items) |given_item, i| {
-        try writer.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item });
-        try writer.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount });
+    for (game.ptrs.pokeball_items) |given_item, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .item = given_item.item.value() } } });
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .amount = given_item.amount.value() } } });
     }
 
-    try outputGen4StringTable(writer, 0, "pokemons", "name", game.owned.strings.pokemon_names);
-    try outputGen4StringTable(writer, 0, "moves", "name", game.owned.strings.move_names);
-    try outputGen4StringTable(writer, 0, "moves", "description", game.owned.strings.move_descriptions);
-    try outputGen4StringTable(writer, 0, "abilities", "name", game.owned.strings.ability_names);
-    try outputGen4StringTable(writer, 0, "items", "name", game.owned.strings.item_names);
-    try outputGen4StringTable(writer, 0, "items", "description", game.owned.strings.item_descriptions);
-    try outputGen4StringTable(writer, 0, "types", "name", game.owned.strings.type_names);
+    try outputGen4StringTable(writer, 0, "pokemons", format.Pokemon, "name", game.owned.strings.pokemon_names);
+    try outputGen4StringTable(writer, 0, "moves", format.Move, "name", game.owned.strings.move_names);
+    try outputGen4StringTable(writer, 0, "moves", format.Move, "description", game.owned.strings.move_descriptions);
+    try outputGen4StringTable(writer, 0, "abilities", format.Ability, "name", game.owned.strings.ability_names);
+    try outputGen4StringTable(writer, 0, "items", format.Item, "name", game.owned.strings.item_names);
+    try outputGen4StringTable(writer, 0, "items", format.Item, "description", game.owned.strings.item_descriptions);
+    try outputGen4StringTable(writer, 0, "types", format.Type, "name", game.owned.strings.type_names);
 }
 
 fn outputGen4StringTable(
     writer: anytype,
     start: usize,
-    array_name: []const u8,
-    field_name: []const u8,
+    comptime array_name: []const u8,
+    comptime T: type,
+    comptime field_name: []const u8,
     table: gen4.StringTable,
 ) !void {
     var i: usize = 0;
     while (i < table.number_of_strings) : (i += 1)
-        try outputString(writer, array_name, i + start, field_name, table.getSpan(i + start));
+        try outputString(writer, array_name, i + start, T, field_name, table.getSpan(i + start));
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
-    try writer.print(".version={}\n", .{@tagName(game.info.version)});
-
     const header = nds_rom.header();
-    const null_index = mem.indexOfScalar(u8, &header.game_title, 0) orelse header.game_title.len;
-    try writer.print(".game_title={}\n", .{header.game_title[0..null_index]});
-    try writer.print(".gamecode={}\n", .{header.gamecode});
-    try writer.print(".instant_text=false\n", .{});
+    try format.write(writer, format.Game{ .version = game.info.version });
+    try format.write(writer, format.Game{ .game_title = header.game_title.span() });
+    try format.write(writer, format.Game{ .gamecode = &header.gamecode });
+    try format.write(writer, format.Game{ .instant_text = false });
 
-    for (game.ptrs.starters) |starter_ptrs, i| {
+    for (game.ptrs.starters) |starter_ptrs, index| {
+        const i = @intCast(u8, index);
         const first = starter_ptrs[0];
         for (starter_ptrs[1..]) |starter| {
             if (first != starter)
                 debug.warn("warning: all starter positions are not the same.\n", .{});
         }
 
-        try writer.print(".starters[{}]={}\n", .{ i, first });
+        try format.write(writer, format.Game{ .starters = .{ .index = i, .value = first.value() } });
     }
 
     for (game.ptrs.trainers) |trainer, index| {
-        const i = index + 1;
-        try writer.print(".trainers[{}].party_size={}\n", .{ i, trainer.party_size });
-        try writer.print(".trainers[{}].party_type={}\n", .{ i, @tagName(trainer.party_type) });
-        try writer.print(".trainers[{}].class={}\n", .{ i, trainer.class });
-        try writer.print(".trainers[{}].battle_type={}\n", .{ i, trainer.battle_type });
+        const i = @intCast(u16, index + 1);
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_size = trainer.party_size } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party_type = trainer.party_type } } });
+        try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .class = trainer.class } } });
 
-        for (trainer.items) |item, j| {
-            try writer.print(".trainers[{}].items[{}]={}\n", .{ i, j, item });
+        for (trainer.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
         }
-
-        try writer.print(".trainers[{}].ai={}\n", .{ i, trainer.ai });
-        try writer.print(".trainers[{}].is_healer={}\n", .{ i, trainer.healer });
-        try writer.print(".trainers[{}].cash={}\n", .{ i, trainer.cash });
-        try writer.print(".trainers[{}].post_battle_item={}\n", .{ i, trainer.post_battle_item });
 
         const parties = game.owned.trainer_parties;
         if (parties.len <= i)
             continue;
 
-        for (parties[i][0..trainer.party_size]) |member, j| {
-            try writer.print(".trainers[{}].party[{}].iv={}\n", .{ i, j, member.base.iv });
-            try writer.print(".trainers[{}].party[{}].gender={}\n", .{ i, j, member.base.gender_ability.gender });
-            try writer.print(".trainers[{}].party[{}].ability={}\n", .{ i, j, member.base.gender_ability.ability });
-            try writer.print(".trainers[{}].party[{}].level={}\n", .{ i, j, member.base.level });
-            try writer.print(".trainers[{}].party[{}].species={}\n", .{ i, j, member.base.species });
-            try writer.print(".trainers[{}].party[{}].form={}\n", .{ i, j, member.base.form });
-            try writer.print(".trainers[{}].party[{}].item={}\n", .{ i, j, member.item });
-            for (member.moves) |move, k| {
-                try writer.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ i, j, k, move });
+        for (parties[i][0..trainer.party_size]) |member, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .ability = member.base.gender_ability.ability } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .level = member.base.level } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .species = member.base.species.value() } } } } });
+            try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .item = member.item.value() } } } } });
+            for (member.moves) |move, kndex| {
+                const k = @intCast(u8, kndex);
+                try format.write(writer, format.Game{ .trainers = .{ .index = i, .value = .{ .party = .{ .index = j, .value = .{ .moves = .{ .index = k, .value = move.value() } } } } } });
             }
         }
     }
 
-    for (game.ptrs.moves) |move, i| {
-        try writer.print(".moves[{}].type={}\n", .{ i, move.@"type" });
-        try writer.print(".moves[{}].effect_category={}\n", .{ i, move.effect_category });
-        try writer.print(".moves[{}].category={}\n", .{ i, @tagName(move.category) });
-        try writer.print(".moves[{}].power={}\n", .{ i, move.power });
-        try writer.print(".moves[{}].accuracy={}\n", .{ i, move.accuracy });
-        try writer.print(".moves[{}].pp={}\n", .{ i, move.pp });
-        try writer.print(".moves[{}].priority={}\n", .{ i, move.priority });
-        try writer.print(".moves[{}].min_hits={}\n", .{ i, move.min_hits });
-        try writer.print(".moves[{}].max_hits={}\n", .{ i, move.max_hits });
-        try writer.print(".moves[{}].result_effect={}\n", .{ i, move.result_effect });
-        try writer.print(".moves[{}].effect_chance={}\n", .{ i, move.effect_chance });
-        try writer.print(".moves[{}].status={}\n", .{ i, move.status });
-        try writer.print(".moves[{}].min_turns={}\n", .{ i, move.min_turns });
-        try writer.print(".moves[{}].max_turns={}\n", .{ i, move.max_turns });
-        try writer.print(".moves[{}].crit={}\n", .{ i, move.crit });
-        try writer.print(".moves[{}].flinch={}\n", .{ i, move.flinch });
-        try writer.print(".moves[{}].effect={}\n", .{ i, move.effect });
-        try writer.print(".moves[{}].target_hp={}\n", .{ i, move.target_hp });
-        try writer.print(".moves[{}].user_hp={}\n", .{ i, move.user_hp });
-        try writer.print(".moves[{}].target={}\n", .{ i, move.target });
-
-        //const stats_affected = move.stats_affected;
-        //for (stats_affected) |stat_affected, j|
-        //    try writer.print(".moves[{}].stats_affected[{}]={}\n", .{ i, j, stat_affected });
-
-        //const stats_affected_magnetude = move.stats_affected_magnetude;
-        //for (stats_affected_magnetude) |stat_affected_magnetude, j|
-        //    try writer.print(".moves[{}].stats_affected_magnetude[{}]={}\n", .{ i, j, stat_affected_magnetude });
-
-        //const stats_affected_chance = move.stats_affected_chance;
-        //for (stats_affected_chance) |stat_affected_chance, j|
-        //    try writer.print(".moves[{}].stats_affected_chance[{}]={}\n", .{ i, j, stat_affected_chance });
+    for (game.ptrs.moves) |move, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .type = move.type } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .category = move.category } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .power = move.power } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .accuracy = move.accuracy } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .pp = move.pp } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .priority = move.priority } } });
+        try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .target = move.target } } });
     }
 
     const number_of_pokemons = 649;
+    for (game.ptrs.pokemons.fat) |_, index| {
+        const i = @intCast(u16, index);
+        const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .pokedex_entry = i } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .hp = pokemon.stats.hp } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .attack = pokemon.stats.attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .defense = pokemon.stats.defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .speed = pokemon.stats.speed } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_attack = pokemon.stats.sp_attack } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .sp_defense = pokemon.stats.sp_defense } } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .catch_rate = pokemon.catch_rate } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .gender_ratio = pokemon.gender_ratio } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_cycles = pokemon.egg_cycles } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .base_friendship = pokemon.base_friendship } } });
+        try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .growth_rate = pokemon.growth_rate } } });
 
-    {
-        var i: u32 = 0;
-        while (i < game.ptrs.pokemons.fat.len) : (i += 1) {
-            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = i }, gen5.BasePokemon);
-            try writer.print(".pokemons[{}].pokedex_entry={}\n", .{ i, i });
-            try writer.print(".pokemons[{}].stats.hp={}\n", .{ i, pokemon.stats.hp });
-            try writer.print(".pokemons[{}].stats.attack={}\n", .{ i, pokemon.stats.attack });
-            try writer.print(".pokemons[{}].stats.defense={}\n", .{ i, pokemon.stats.defense });
-            try writer.print(".pokemons[{}].stats.speed={}\n", .{ i, pokemon.stats.speed });
-            try writer.print(".pokemons[{}].stats.sp_attack={}\n", .{ i, pokemon.stats.sp_attack });
-            try writer.print(".pokemons[{}].stats.sp_defense={}\n", .{ i, pokemon.stats.sp_defense });
-
-            const types = pokemon.types;
-            for (types) |t, j|
-                try writer.print(".pokemons[{}].types[{}]={}\n", .{ i, j, t });
-
-            try writer.print(".pokemons[{}].catch_rate={}\n", .{ i, pokemon.catch_rate });
-
-            // TODO: Figure out if common.EvYield fits in these 3 bytes
-            // evs: [3]u8,
-
-            const items = pokemon.items;
-            for (items) |item, j|
-                try writer.print(".pokemons[{}].items[{}]={}\n", .{ i, j, item });
-
-            try writer.print(".pokemons[{}].gender_ratio={}\n", .{ i, pokemon.gender_ratio });
-            try writer.print(".pokemons[{}].egg_cycles={}\n", .{ i, pokemon.egg_cycles });
-            try writer.print(".pokemons[{}].base_friendship={}\n", .{ i, pokemon.base_friendship });
-            try writer.print(".pokemons[{}].growth_rate={}\n", .{ i, @tagName(pokemon.growth_rate) });
-
-            // HACK: For some reason, a release build segfaults here for Pokémons
-            //       with id above 'number_of_pokemons'. You would think this is
-            //       because of an index out of bounds during @tagName, but
-            //       common.EggGroup is a u4 enum and has a tag for all possible
-            //       values, so it really should not.
-            if (i < number_of_pokemons) {
-                for (pokemon.egg_groups) |group, j|
-                    try writer.print(".pokemons[{}].egg_groups[{}]={}\n", .{ i, j, @tagName(group) });
-            }
-
-            const abilities = pokemon.abilities;
-            for (abilities) |ability, j|
-                try writer.print(".pokemons[{}].abilities[{}]={}\n", .{ i, j, ability });
-
-            // TODO: The three fields below are kinda unknown
-            // flee_rate: u8,
-            // form_stats_start: [2]u8,
-            // form_sprites_start: [2]u8,
-            // form_count: u8,
-
-            //try writer.print(".pokemons[{}].color={}\n", .{ i, @tagName(pokemon.color.color) });
-            try writer.print(".pokemons[{}].flip={}\n", .{ i, pokemon.color.flip });
-            try writer.print(".pokemons[{}].height={}\n", .{ i, pokemon.height });
-            try writer.print(".pokemons[{}].weight={}\n", .{ i, pokemon.weight });
-
-            const machine_learnset = pokemon.machine_learnset;
-            var j: usize = 0;
-            while (j < game.ptrs.tms1.len + game.ptrs.tms2.len) : (j += 1)
-                try writer.print(".pokemons[{}].tms[{}]={}\n", .{ i, j, bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) });
-            while (j < game.ptrs.tms1.len + game.ptrs.tms2.len + game.ptrs.hms.len) : (j += 1)
-                try writer.print(".pokemons[{}].hms[{}]={}\n", .{ i, j - (game.ptrs.tms1.len + game.ptrs.tms2.len), bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) });
+        for (pokemon.types) |t, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .types = .{ .index = j, .value = t } } } });
         }
+        for (pokemon.items) |item, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
+        }
+        for (pokemon.abilities) |ability, jndex| {
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .abilities = .{ .index = j, .value = ability } } } });
+        }
+
+        // HACK: For some reason, a release build segfaults here for Pokémons
+        //       with id above 'number_of_pokemons'. You would think this is
+        //       because of an index out of bounds during @tagName, but
+        //       common.EggGroup is a u4 enum and has a tag for all possible
+        //       values, so it really should not.
+        if (i < number_of_pokemons) {
+            for (pokemon.egg_groups) |group, jndex| {
+                const j = @intCast(u8, jndex);
+                try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .egg_groups = .{ .index = j, .value = group } } } });
+            }
+        }
+
+        const machine_learnset = pokemon.machine_learnset;
+        var j: u8 = 0;
+        while (j < game.ptrs.tms1.len + game.ptrs.tms2.len) : (j += 1)
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .tms = .{ .index = j, .value = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) } } } });
+        while (j < game.ptrs.tms1.len + game.ptrs.tms2.len + game.ptrs.hms.len) : (j += 1)
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .hms = .{ .index = @intCast(u8, j - (game.ptrs.tms1.len + game.ptrs.tms2.len)), .value = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j)) } } } });
     }
 
-    for (game.ptrs.evolutions) |evos, i| {
-        for (evos.items) |evo, j| {
+    for (game.ptrs.evolutions) |evos, index| {
+        const i = @intCast(u8, index);
+        for (evos.items) |evo, jndex| {
             if (evo.method == .unused)
                 continue;
-            try writer.print(".pokemons[{}].evos[{}].method={}\n", .{ i, j, @tagName(evo.method) });
-            try writer.print(".pokemons[{}].evos[{}].param={}\n", .{ i, j, evo.param });
-            try writer.print(".pokemons[{}].evos[{}].target={}\n", .{ i, j, evo.target });
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{
+                .pokemons = .{
+                    .index = i,
+                    .value = .{
+                        .evos = .{
+                            .index = j,
+                            .value = .{
+                                .method = switch (evo.method) {
+                                    .unused => .unused,
+                                    .friend_ship => .friend_ship,
+                                    .level_up => .level_up,
+                                    .trade => .trade,
+                                    .trade_holding_item => .trade_holding_item,
+                                    .trade_with_pokemon => .trade_with_pokemon,
+                                    .use_item => .use_item,
+                                    .attack_gth_defense => .attack_gth_defense,
+                                    .attack_eql_defense => .attack_eql_defense,
+                                    .attack_lth_defense => .attack_lth_defense,
+                                    .personality_value1 => .personality_value1,
+                                    .personality_value2 => .personality_value2,
+                                    .level_up_may_spawn_pokemon => .level_up_may_spawn_pokemon,
+                                    .level_up_spawn_if_cond => .level_up_spawn_if_cond,
+                                    .beauty => .beauty,
+                                    .use_item_on_male => .use_item_on_male,
+                                    .use_item_on_female => .use_item_on_female,
+                                    .level_up_holding_item_during_daytime => .level_up_holding_item_during_daytime,
+                                    .level_up_holding_item_during_the_night => .level_up_holding_item_during_the_night,
+                                    .level_up_knowning_move => .level_up_knowning_move,
+                                    .level_up_with_other_pokemon_in_party => .level_up_with_other_pokemon_in_party,
+                                    .level_up_male => .level_up_male,
+                                    .level_up_female => .level_up_female,
+                                    .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
+                                    .level_up_near_moss_rock => .level_up_near_moss_rock,
+                                    .level_up_near_ice_rock => .level_up_near_ice_rock,
+                                    .unknown_0x02,
+                                    .unknown_0x03,
+                                    => unreachable,
+                                    _ => unreachable,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .param = evo.param.value() } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .evos = .{ .index = j, .value = .{ .target = evo.target.value() } } } } });
         }
     }
 
-    {
-        var i: usize = 0;
-        while (i < game.ptrs.level_up_moves.fat.len) : (i += 1) {
-            const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
-            const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
-            for (level_up_moves) |move, j| {
-                if (std.meta.eql(move, gen5.LevelUpMove.term))
-                    break;
-                try writer.print(".pokemons[{}].moves[{}].id={}\n", .{ i, j, move.id });
-                try writer.print(".pokemons[{}].moves[{}].level={}\n", .{ i, j, move.level });
-            }
+    for (game.ptrs.level_up_moves.fat) |_, index| {
+        const i = @intCast(u16, index);
+        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = i });
+        const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
+        for (level_up_moves) |move, jndex| {
+            if (std.meta.eql(move, gen5.LevelUpMove.term))
+                break;
+
+            const j = @intCast(u8, jndex);
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .id = move.id.value() } } } } });
+            try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .moves = .{ .index = j, .value = .{ .level = @intCast(u8, move.level.value()) } } } } });
         }
     }
 
-    for (game.ptrs.tms1) |tm, i|
-        try writer.print(".tms[{}]={}\n", .{ i, tm });
-    for (game.ptrs.tms2) |tm, i|
-        try writer.print(".tms[{}]={}\n", .{ i + game.ptrs.tms1.len, tm });
-    for (game.ptrs.hms) |hm, i|
-        try writer.print(".hms[{}]={}\n", .{ i, hm });
+    for (game.ptrs.tms1) |tm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .tms = .{ .index = i, .value = tm.value() } });
+    }
+    for (game.ptrs.tms2) |tm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .tms = .{ .index = @intCast(u8, i + game.ptrs.tms1.len), .value = tm.value() } });
+    }
+    for (game.ptrs.hms) |hm, index| {
+        const i = @intCast(u8, index);
+        try format.write(writer, format.Game{ .hms = .{ .index = i, .value = hm.value() } });
+    }
 
-    for (game.ptrs.items) |item, i| {
+    for (game.ptrs.items) |item, index| {
         // Price in gen5 is actually price * 10. I imagine they where trying to avoid
         // having price be more than a u16
-        try writer.print(".items[{}].price={}\n", .{ i, @as(u32, item.price.value()) * 10 });
-        try writer.print(".items[{}].battle_effect={}\n", .{ i, item.battle_effect });
-        try writer.print(".items[{}].gain={}\n", .{ i, item.gain });
-        try writer.print(".items[{}].berry={}\n", .{ i, item.berry });
-        try writer.print(".items[{}].fling_effect={}\n", .{ i, item.fling_effect });
-        try writer.print(".items[{}].fling_power={}\n", .{ i, item.fling_power });
-        try writer.print(".items[{}].natural_gift_power={}\n", .{ i, item.natural_gift_power });
-        try writer.print(".items[{}].flag={}\n", .{ i, item.flag });
-        try writer.print(".items[{}].pocket={}\n", .{ i, @tagName(item.pocket) });
-        try writer.print(".items[{}].type={}\n", .{ i, item.type });
-        try writer.print(".items[{}].category={}\n", .{ i, item.category });
-        //try writer.print(".items[{}].category2={}\n", .{ i, item.category2 });
-        //try writer.print(".items[{}].category3={}\n", .{ i, item.category3 });
-        try writer.print(".items[{}].index={}\n", .{ i, item.index });
-        try writer.print(".items[{}].anti_index={}\n", .{ i, item.anti_index });
-        //try writer.print(".items[{}].statboosts.hp={}\n", .{ i, item.statboosts.hp });
-        //try writer.print(".items[{}].statboosts.level={}\n", .{ i, item.statboosts.level });
-        //try writer.print(".items[{}].statboosts.evolution={}\n", .{ i, item.statboosts.evolution });
-        //try writer.print(".items[{}].statboosts.attack={}\n", .{ i, item.statboosts.attack });
-        //try writer.print(".items[{}].statboosts.defense={}\n", .{ i, item.statboosts.defense });
-        //try writer.print(".items[{}].statboosts.sp_attack={}\n", .{ i, item.statboosts.sp_attack });
-        //try writer.print(".items[{}].statboosts.sp_defense={}\n", .{ i, item.statboosts.sp_defense });
-        //try writer.print(".items[{}].statboosts.speed={}\n", .{ i, item.statboosts.speed });
-        //try writer.print(".items[{}].statboosts.accuracy={}\n", .{ i, item.statboosts.accuracy });
-        //try writer.print(".items[{}].statboosts.crit={}\n", .{ i, item.statboosts.crit });
-        //try writer.print(".items[{}].statboosts.pp={}\n", .{ i, item.statboosts.pp });
-        //try writer.print(".items[{}].statboosts.target={}\n", .{ i, item.statboosts.target });
-        //try writer.print(".items[{}].statboosts.target2={}\n", .{ i, item.statboosts.target2 });
-        try writer.print(".items[{}].ev_yield.hp={}\n", .{ i, item.ev_yield.hp });
-        try writer.print(".items[{}].ev_yield.attack={}\n", .{ i, item.ev_yield.attack });
-        try writer.print(".items[{}].ev_yield.defense={}\n", .{ i, item.ev_yield.defense });
-        try writer.print(".items[{}].ev_yield.speed={}\n", .{ i, item.ev_yield.speed });
-        try writer.print(".items[{}].ev_yield.sp_attack={}\n", .{ i, item.ev_yield.sp_attack });
-        try writer.print(".items[{}].ev_yield.sp_defense={}\n", .{ i, item.ev_yield.sp_defense });
-        try writer.print(".items[{}].hp_restore={}\n", .{ i, item.hp_restore });
-        try writer.print(".items[{}].pp_restore={}\n", .{ i, item.pp_restore });
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = @as(u32, item.price.value()) * 10 } } });
+        try format.write(writer, format.Game{
+            .items = .{
+                .index = i,
+                .value = .{
+                    .pocket = switch (item.pocket) {
+                        .items => .items,
+                        .tms_hms => .tms_hms,
+                        .key_items => .key_items,
+                        .balls => .poke_balls,
+                        _ => unreachable,
+                    },
+                },
+            },
+        });
     }
 
-    for (game.ptrs.map_headers) |map_header, i| {
-        try writer.print(".map[{}].music={}\n", .{ i, map_header.music });
-        try writer.print(".map[{}].battle_scene={}\n", .{ i, map_header.battle_scene });
+    for (game.ptrs.map_headers) |map_header, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .music = map_header.music.value() } } });
+        try format.write(writer, format.Game{ .maps = .{ .index = i, .value = .{ .battle_scene = map_header.battle_scene } } });
     }
 
-    for (game.ptrs.wild_pokemons.fat) |_, i| {
-        const wild_mons = try game.ptrs.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
+    for (game.ptrs.wild_pokemons.fat) |_, index| {
+        const i = @intCast(u16, index);
+        const wild_mons = try game.ptrs.wild_pokemons.fileAs(.{ .i = i }, gen5.WildPokemons);
         // TODO: Get rid of inline for in favor of a function to call
         inline for ([_][]const u8{
             "grass",
@@ -912,90 +1030,90 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
             "fishing",
             "ripple_fishing",
         }) |area_name, j| {
-            try writer.print(".wild_pokemons[{}].{}.encounter_rate={}\n", .{ i, area_name, wild_mons.rates[j] });
+            try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .encounter_rate = wild_mons.rates[j] }) } });
             const area = @field(wild_mons, area_name);
-            for (area) |wild, k| {
-                try writer.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ i, area_name, k, wild.species.species() });
-                try writer.print(".wild_pokemons[{}].{}.pokemons[{}].form={}\n", .{ i, area_name, k, wild.species.form() });
-                try writer.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ i, area_name, k, wild.min_level });
-                try writer.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ i, area_name, k, wild.max_level });
+            for (area) |wild, kndex| {
+                const k = @intCast(u8, kndex);
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .species = wild.species.species() } } }) } });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .min_level = wild.min_level } } }) } });
+                try format.write(writer, format.Game{ .wild_pokemons = .{ .index = i, .value = @unionInit(format.WildPokemons, area_name, .{ .pokemons = .{ .index = k, .value = .{ .max_level = wild.max_level } } }) } });
             }
         }
     }
 
-    for (game.ptrs.static_pokemons) |static_mon, i| {
-        try writer.print(".static_pokemons[{}].species={}\n", .{ i, static_mon.species });
-        try writer.print(".static_pokemons[{}].level={}\n", .{ i, static_mon.level });
+    for (game.ptrs.static_pokemons) |static_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .species = static_mon.species.value() } } });
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, static_mon.level.value()) } } });
     }
 
-    for (game.ptrs.given_pokemons) |given_mon, i| {
-        try writer.print(".given_pokemons[{}].species={}\n", .{ i, given_mon.species });
-        try writer.print(".given_pokemons[{}].level={}\n", .{ i, given_mon.level });
+    for (game.ptrs.given_pokemons) |given_mon, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .species = given_mon.species.value() } } });
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, given_mon.level.value()) } } });
     }
 
-    for (game.ptrs.pokeball_items) |given_item, i| {
-        try writer.print(".pokeball_items[{}].item={}\n", .{ i, given_item.item });
-        try writer.print(".pokeball_items[{}].amount={}\n", .{ i, given_item.amount });
+    for (game.ptrs.pokeball_items) |given_item, index| {
+        const i = @intCast(u16, index);
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .item = given_item.item.value() } } });
+        try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .amount = given_item.amount.value() } } });
     }
 
     if (game.ptrs.hidden_hollows) |hidden_hollows| {
-        for (hidden_hollows) |hollow, i| {
-            for (hollow.pokemons) |version, j| {
-                for (version) |group, k| {
-                    for (group.species) |_, g| {
-                        try writer.print(
-                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].species={}\n",
-                            .{ i, j, k, g, group.species[g] },
-                        );
-                        try writer.print(
-                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].gender={}\n",
-                            .{ i, j, k, g, group.genders[g] },
-                        );
-                        try writer.print(
-                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].form={}\n",
-                            .{ i, j, k, g, group.forms[g] },
-                        );
+        for (hidden_hollows) |hollow, index| {
+            const i = @intCast(u16, index);
+            for (hollow.pokemons) |version, jndex| {
+                const j = @intCast(u8, jndex);
+                for (version) |group, kndex| {
+                    const k = @intCast(u8, kndex);
+                    for (group.species) |_, gndex| {
+                        const g = @intCast(u8, gndex);
+                        try format.write(writer, format.Game{ .hidden_hollows = .{ .index = i, .value = .{ .versions = .{ .index = j, .value = .{ .groups = .{ .index = k, .value = .{ .pokemons = .{ .index = g, .value = .{ .species = group.species[g].value() } } } } } } } } });
                     }
                 }
             }
-            for (hollow.items) |item, j| {
-                try writer.print(".hidden_hollows[{}].items[{}]={}\n", .{ i, j, item });
+            for (hollow.items) |item, jndex| {
+                const j = @intCast(u8, jndex);
+                try format.write(writer, format.Game{ .hidden_hollows = .{ .index = i, .value = .{ .items = .{ .index = j, .value = item.value() } } } });
             }
         }
     }
 
-    try outputGen5StringTable(writer, 0, "pokemons", "name", game.owned.strings.pokemon_names);
-    try outputGen5StringTable(writer, 0, "pokedex", "category", game.owned.strings.pokedex_category_names);
-    try outputGen5StringTable(writer, 0, "moves", "name", game.owned.strings.move_names);
-    try outputGen5StringTable(writer, 0, "moves", "description", game.owned.strings.move_descriptions);
-    try outputGen5StringTable(writer, 0, "abilities", "name", game.owned.strings.ability_names);
-    try outputGen5StringTable(writer, 0, "items", "name", game.owned.strings.item_names);
-    try outputGen5StringTable(writer, 0, "items", "description", game.owned.strings.item_descriptions);
-    try outputGen5StringTable(writer, 0, "types", "name", game.owned.strings.type_names);
-    try outputGen5StringTable(writer, 1, "trainers", "name", game.owned.strings.trainer_names);
+    try outputGen5StringTable(writer, 0, "pokemons", format.Pokemon, "name", game.owned.strings.pokemon_names);
+    try outputGen5StringTable(writer, 0, "pokedex", format.Pokedex, "category", game.owned.strings.pokedex_category_names);
+    try outputGen5StringTable(writer, 0, "moves", format.Move, "name", game.owned.strings.move_names);
+    try outputGen5StringTable(writer, 0, "moves", format.Move, "description", game.owned.strings.move_descriptions);
+    try outputGen5StringTable(writer, 0, "abilities", format.Ability, "name", game.owned.strings.ability_names);
+    try outputGen5StringTable(writer, 0, "items", format.Item, "name", game.owned.strings.item_names);
+    try outputGen5StringTable(writer, 0, "items", format.Item, "description", game.owned.strings.item_descriptions);
+    try outputGen5StringTable(writer, 0, "types", format.Type, "name", game.owned.strings.type_names);
+    try outputGen5StringTable(writer, 1, "trainers", format.Trainer, "name", game.owned.strings.trainer_names);
 }
 
 fn outputGen5StringTable(
     writer: anytype,
     start: usize,
-    array_name: []const u8,
-    field_name: []const u8,
+    comptime array_name: []const u8,
+    comptime T: type,
+    comptime field_name: []const u8,
     table: gen5.StringTable,
 ) !void {
     for (table.keys[start..]) |_, i|
-        try outputString(writer, array_name, i + start, field_name, table.getSpan(i + start));
+        try outputString(writer, array_name, i + start, T, field_name, table.getSpan(i + start));
 }
 
 fn outputString(
     writer: anytype,
-    array_name: []const u8,
+    comptime array_name: []const u8,
     i: usize,
-    field_name: []const u8,
+    comptime T: type,
+    comptime field_name: []const u8,
     string: []const u8,
 ) !void {
-    try writer.print(".{}[{}].{}=", .{ array_name, i, field_name });
-    try escape.writeEscaped(writer, string, escape.zig_escapes);
-    try writer.writeAll("\n");
+    var buf: [mem.page_size]u8 = undefined;
+    var fbs = io.fixedBufferStream(&buf);
+    try escape.writeEscaped(fbs.writer(), string, escape.zig_escapes);
+    try format.write(writer, @unionInit(format.Game, array_name, .{ .index = 0, .value = @unionInit(T, field_name, fbs.getWritten()) }));
 }
 
 test "" {
