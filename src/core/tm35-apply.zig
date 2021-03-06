@@ -333,7 +333,7 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
                     if (items.index >= trainer.items.len)
                         return error.OutOfBound;
 
-                    trainer.items[trainers.index] = lu16.init(items.value);
+                    trainer.items[items.index] = lu16.init(items.value);
                 },
                 .party => |members| {
                     if (members.index >= party.size)
