@@ -1,4 +1,5 @@
 const std = @import("std");
+const util = @import("util");
 
 const common = @import("../common.zig");
 const gen3 = @import("../gen3.zig");
@@ -87,7 +88,7 @@ pub const TypeNameSection = Section([7]u8);
 pub const TextDelaySection = Section(u8);
 
 pub const Info = struct {
-    game_title: [12]u8,
+    game_title: util.TerminatedArray(12, u8, 0),
     gamecode: [4]u8,
     version: common.Version,
     software_version: u8,
@@ -130,7 +131,7 @@ pub const infos = [_]Info{
 };
 
 const emerald_us_info = Info{
-    .game_title = "POKEMON EMER".*,
+    .game_title = .{ .data = "POKEMON EMER".* },
     .gamecode = "BPEE".*,
     .version = .emerald,
     .software_version = 0,
@@ -223,7 +224,7 @@ const emerald_us_info = Info{
 };
 
 pub const fire_us_info = Info{
-    .game_title = "POKEMON FIRE".*,
+    .game_title = .{ .data = "POKEMON FIRE".* },
     .gamecode = "BPRE".*,
     .version = .fire_red,
     .software_version = 1,
@@ -316,7 +317,7 @@ pub const fire_us_info = Info{
 };
 
 pub const leaf_us_info = Info{
-    .game_title = "POKEMON LEAF".*,
+    .game_title = .{ .data = "POKEMON LEAF".* },
     .gamecode = "BPGE".*,
     .version = .leaf_green,
     .software_version = 1,
@@ -409,7 +410,7 @@ pub const leaf_us_info = Info{
 };
 
 pub const ruby_us_info = Info{
-    .game_title = "POKEMON RUBY".*,
+    .game_title = .{ .data = "POKEMON RUBY".* },
     .gamecode = "AXVE".*,
     .version = .ruby,
     .software_version = 1,
@@ -502,7 +503,7 @@ pub const ruby_us_info = Info{
 };
 
 pub const sapphire_us_info = Info{
-    .game_title = "POKEMON SAPP".*,
+    .game_title = .{ .data = "POKEMON SAPP".* },
     .gamecode = "AXPE".*,
     .version = .sapphire,
     .software_version = 1,

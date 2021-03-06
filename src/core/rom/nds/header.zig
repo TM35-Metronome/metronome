@@ -27,7 +27,7 @@ test "nds.crc_modbus" {
 
 // http://problemkaputt.de/gbatek.htm#dscartridgeheader
 pub const Header = extern struct {
-    game_title: [11:0]u8,
+    game_title: util.TerminatedArray(12, u8, 0),
     gamecode: [4]u8,
     makercode: [2]u8,
 
@@ -208,7 +208,7 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        if (!algorithm.all(u8, &header.game_title, notLower))
+        if (!algorithm.all(u8, header.game_title.span(), notLower))
             return error.InvalidGameTitle;
         if (!algorithm.all(u8, &header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;

@@ -8,11 +8,11 @@ const gen3 = @import("gen3.zig");
 const rom = @import("rom.zig");
 
 const debug = std.debug;
+const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
-const fs = std.fs;
 const testing = std.testing;
 
 const exit = util.exit;
@@ -147,7 +147,7 @@ fn getOffsets(
     data: []u8,
     version: common.Version,
     gamecode: [4]u8,
-    game_title: [12]u8,
+    game_title: util.TerminatedArray(12, u8, 0),
     software_version: u8,
 ) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons

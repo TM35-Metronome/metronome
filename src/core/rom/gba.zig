@@ -11,7 +11,7 @@ const algorithm = util.algorithm;
 pub const Header = extern struct {
     rom_entry_point: [4]u8,
     nintendo_logo: [156]u8,
-    game_title: [12]u8,
+    game_title: util.TerminatedArray(12, u8, 0),
     gamecode: [4]u8,
     makercode: [2]u8,
 
@@ -31,7 +31,7 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        if (!algorithm.all(u8, &header.game_title, notLower))
+        if (!algorithm.all(u8, header.game_title.span(), notLower))
             return error.InvalidGameTitle;
         if (!algorithm.all(u8, &header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;

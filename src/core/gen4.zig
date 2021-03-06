@@ -18,9 +18,9 @@ const mem = std.mem;
 
 const nds = rom.nds;
 
+const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
-const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
@@ -81,13 +81,6 @@ pub const MoveTutor = extern struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
     }
-};
-
-pub const PartyType = packed enum(u8) {
-    none = 0b00,
-    item = 0b10,
-    moves = 0b01,
-    both = 0b11,
 };
 
 pub const PartyMemberBase = extern struct {
@@ -159,7 +152,7 @@ pub fn HgSsPlatMember(comptime T: type) type {
 }
 
 pub const Trainer = extern struct {
-    party_type: PartyType,
+    party_type: common.PartyType,
     class: u8,
     battle_type: u8, // TODO: This should probably be an enum
     party_size: u8,

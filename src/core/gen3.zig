@@ -2,11 +2,11 @@ const common = @import("common.zig");
 const rom = @import("rom.zig");
 const std = @import("std");
 
+const fs = std.fs;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const fs = std.fs;
 
 const gba = rom.gba;
 
@@ -72,7 +72,7 @@ pub const Gender = packed enum(u1) {
 };
 
 pub const Trainer = extern struct {
-    party_type: PartyType,
+    party_type: common.PartyType,
     class: u8,
     encounter_music: packed struct {
         music: u7,
@@ -107,28 +107,12 @@ pub const Trainer = extern struct {
         };
     }
 
-    pub fn partyLen(trainer: Trainer) u32 {
+    pub fn partyLen(trainer: Trainer) u8 {
         return switch (trainer.party_type) {
-            .none => trainer.party.none.len(),
-            .item => trainer.party.item.len(),
-            .moves => trainer.party.moves.len(),
-            .both => trainer.party.both.len(),
-        };
-    }
-};
-
-pub const PartyType = packed enum(u8) {
-    none = 0b00,
-    item = 0b10,
-    moves = 0b01,
-    both = 0b11,
-
-    pub fn memberSize(party_type: PartyType) usize {
-        return switch (party_type) {
-            .none => @sizeOf(PartyMemberNone),
-            .item => @sizeOf(PartyMemberItem),
-            .moves => @sizeOf(PartyMemberMoves),
-            .both => @sizeOf(PartyMemberBoth),
+            .none => @intCast(u8, trainer.party.none.len()),
+            .item => @intCast(u8, trainer.party.item.len()),
+            .moves => @intCast(u8, trainer.party.moves.len()),
+            .both => @intCast(u8, trainer.party.both.len()),
         };
     }
 };
@@ -138,6 +122,15 @@ pub const Party = packed union {
     item: Slice([]PartyMemberItem),
     moves: Slice([]PartyMemberMoves),
     both: Slice([]PartyMemberBoth),
+
+    pub fn memberSize(party_type: common.PartyType) usize {
+        return switch (party_type) {
+            .none => @sizeOf(PartyMemberNone),
+            .item => @sizeOf(PartyMemberItem),
+            .moves => @sizeOf(PartyMemberMoves),
+            .both => @sizeOf(PartyMemberBoth),
+        };
+    }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -589,7 +582,7 @@ pub const Game = struct {
     pub fn identify(reader: anytype) !offsets.Info {
         const header = try reader.readStruct(gba.Header);
         for (offsets.infos) |info| {
-            if (!mem.eql(u8, &info.game_title, &header.game_title))
+            if (!mem.eql(u8, info.game_title.span(), header.game_title.span()))
                 continue;
             if (!mem.eql(u8, &info.gamecode, &header.gamecode))
                 continue;
@@ -815,7 +808,7 @@ pub const Game = struct {
             const trainer = &trainers[i];
             const party_bytes = try trainer.partyBytes(game.data);
             const party_type = trainer.party_type;
-            const party_size = party.size * party_type.memberSize();
+            const party_size = party.size * Party.memberSize(party_type);
 
             if (party_size == 0) {
                 const p = &trainer.party.none;

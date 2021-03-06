@@ -15,9 +15,9 @@ const unicode = std.unicode;
 
 const nds = rom.nds;
 
+const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
-const lu128 = rom.int.lu128;
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
@@ -63,13 +63,6 @@ pub const BasePokemon = extern struct {
     comptime {
         debug.assert(@sizeOf(@This()) == 56);
     }
-};
-
-pub const PartyType = packed enum(u8) {
-    none = 0b00,
-    item = 0b10,
-    moves = 0b01,
-    both = 0b11,
 };
 
 pub const PartyMemberBase = extern struct {
@@ -131,7 +124,7 @@ pub const PartyMemberBoth = extern struct {
 };
 
 pub const Trainer = extern struct {
-    party_type: PartyType,
+    party_type: common.PartyType,
     class: u8,
     battle_type: u8, // TODO: This should probably be an enum
     party_size: u8,

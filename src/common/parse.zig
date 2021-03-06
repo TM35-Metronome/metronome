@@ -17,84 +17,21 @@ pub usingnamespace @import("mecha");
 //! IDENTIFIER <- [A-Za-z0-9_]+
 //!
 
-fn structure(str: []const u8, ptr: anytype, comptime converters: anytype) !void {
-    const fields = @typeInfo(@typeInfo(@TypeOf(ptr)).Pointer.child).Struct.fields;
-    inline for (fields) |field_info| {
-        const Field = field_info.field_type;
-        const f = &@field(ptr, field_info.name);
-        if (field(field_info.name)(str)) |ff|
-            return anyT(ff.rest, f, converters);
-    }
-
-    return error.FoundNoField;
-}
-
-fn slice(str: []const u8, s: anytype, comptime converters: anytype) !void {
-    const ii = index(str) orelse return error.FoundNoIndex;
-    if (ii.value >= s.len)
-        return error.IndexOutOfBound;
-    return anyT(ii.rest, &s[ii.value], converters);
-}
-
-pub fn anyT(str: []const u8, ptr: anytype, comptime converters: anytype) !void {
-    const T = @typeInfo(@TypeOf(ptr)).Pointer.child;
-    comptime var i = 0;
-    inline while (i < converters.len) : (i += 1) {
-        const conv = converters[i];
-        const Return = @typeInfo(@typeInfo(@TypeOf(conv)).Fn.return_type.?).Optional.child;
-        if (T == Return) {
-            const v = value(T, conv)(str) orelse return error.FoundNoValue;
-            ptr.* = v.value;
-            return;
-        }
-    } else switch (@typeInfo(T)) {
-        .Struct => return structure(str, ptr, converters),
-        .Array => |a| return slice(str, ptr, converters),
-        .Pointer => |s| return slice(str, ptr.*, converters),
-        else => @compileError("No converter for '" ++ @typeName(T) ++ "'"),
-    }
-    unreachable;
-}
-
-test "anyT" {
-    const S = struct {
-        a: u8,
-        b: u16,
-        c: [2]u8,
-    };
-    var s: S = undefined;
-    const converters = comptime .{
-        toInt(u8, 10),
-        toInt(u16, 10),
-    };
-
-    try anyT(".a=2", &s, converters);
-    try anyT(".b=4", &s, converters);
-    try anyT(".c[0]=6", &s, converters);
-    try anyT(".c[1]=8", &s, converters);
-    testing.expectError(error.IndexOutOfBound, anyT(".c[2]=8", &s, converters));
-    testing.expectError(error.FoundNoField, anyT("d=8", &s, converters));
-    testing.expectEqual(@as(u8, 2), s.a);
-    testing.expectEqual(@as(u16, 4), s.b);
-    testing.expectEqual(@as(u16, 6), s.c[0]);
-    testing.expectEqual(@as(u16, 8), s.c[1]);
-}
-
 pub const strv = value([]const u8, struct {
-    fn func(str: []const u8) ?[]const u8 {
+    fn func(_: *mem.Allocator, str: []const u8) Error![]const u8 {
         return str;
     }
 }.func);
-pub const u4v = value(u4, toInt(u4, 10));
-pub const u6v = value(u6, toInt(u6, 10));
-pub const u7v = value(u7, toInt(u7, 10));
-pub const u8v = value(u8, toInt(u8, 10));
+pub const boolv = value(bool, toBool);
 pub const u10v = value(u10, toInt(u10, 10));
 pub const u16v = value(u16, toInt(u16, 10));
 pub const u32v = value(u32, toInt(u32, 10));
+pub const u4v = value(u4, toInt(u4, 10));
 pub const u64v = value(u64, toInt(u64, 10));
+pub const u6v = value(u6, toInt(u6, 10));
+pub const u7v = value(u7, toInt(u7, 10));
+pub const u8v = value(u8, toInt(u8, 10));
 pub const usizev = value(usize, toInt(usize, 10));
-pub const boolv = value(bool, toBool);
 
 pub fn enumv(comptime Enum: type) Parser(Enum) {
     return comptime value(Enum, toEnum(Enum));
@@ -104,18 +41,18 @@ pub fn field(comptime str: []const u8) Parser(void) {
     return string("." ++ str);
 }
 
-pub fn value(comptime T: type, comptime conv: fn ([]const u8) ?T) Parser(T) {
-    return comptime convert(T, conv, combine(.{ char('='), any }));
+pub fn value(comptime T: type, comptime conv: fn (*mem.Allocator, []const u8) Error!T) Parser(T) {
+    return comptime convert(T, conv, combine(.{ ascii.char('='), rest }));
 }
 
-pub const index: Parser(usize) = combine(.{ char('['), int(usize, 10), char(']') });
-pub const anyField: Parser([]const u8) = combine(.{ char('.'), ident });
+pub const anyField: Parser([]const u8) = combine(.{ ascii.char('.'), ident });
+pub const index: Parser(usize) = combine(.{ ascii.char('['), int(usize, 10), ascii.char(']') });
 
-pub const ident: Parser([]const u8) = manyRange(1, math.maxInt(usize), oneOf(.{
-    range('_', '_'),
-    alpha,
-    digit(10),
-}));
+pub const ident: Parser([]const u8) = many(oneOf(.{
+    ascii.range('_', '_'),
+    ascii.alpha,
+    ascii.digit(10),
+}), .{ .collect = false, .min = 1 });
 
 pub const MutParser = struct {
     str: []const u8,
@@ -124,7 +61,7 @@ pub const MutParser = struct {
         @setEvalBranchQuota(100000);
         break :blk ParserResult(@TypeOf(parser));
     } {
-        const v = parser(p.str) orelse return error.ParseError;
+        const v = parser(undefined, p.str) catch return error.ParseError;
         p.str = v.rest;
         return v.value;
     }
