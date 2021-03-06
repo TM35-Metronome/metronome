@@ -509,7 +509,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.moves) |move, index| {
-        const i = @intCast(u8, index);
+        const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .category = move.category } } });
         try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .power = move.power } } });
         try format.write(writer, format.Game{ .moves = .{ .index = i, .value = .{ .type = move.type } } });
@@ -518,7 +518,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.pokemons) |pokemon, index| {
-        const i = @intCast(u8, index);
+        const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .hp = pokemon.stats.hp } } } });
         try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .attack = pokemon.stats.attack } } } });
         try format.write(writer, format.Game{ .pokemons = .{ .index = i, .value = .{ .stats = .{ .defense = pokemon.stats.defense } } } });
@@ -565,12 +565,12 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.species_to_national_dex) |dex_entry, index| {
-        const i = @intCast(u8, index);
+        const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .pokemons = .{ .index = i + 1, .value = .{ .pokedex_entry = dex_entry.value() } } });
     }
 
     for (game.ptrs.evolutions) |evos, index| {
-        const i = @intCast(u8, index);
+        const i = @intCast(u16, index);
         for (evos.items) |evo, jndex| {
             if (evo.method == .unused)
                 continue;
@@ -779,26 +779,27 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
         try format.write(writer, format.Game{ .pokeball_items = .{ .index = i, .value = .{ .amount = given_item.amount.value() } } });
     }
 
-    try outputGen4StringTable(writer, 0, "pokemons", format.Pokemon, "name", game.owned.strings.pokemon_names);
-    try outputGen4StringTable(writer, 0, "moves", format.Move, "name", game.owned.strings.move_names);
-    try outputGen4StringTable(writer, 0, "moves", format.Move, "description", game.owned.strings.move_descriptions);
-    try outputGen4StringTable(writer, 0, "abilities", format.Ability, "name", game.owned.strings.ability_names);
-    try outputGen4StringTable(writer, 0, "items", format.Item, "name", game.owned.strings.item_names);
-    try outputGen4StringTable(writer, 0, "items", format.Item, "description", game.owned.strings.item_descriptions);
-    try outputGen4StringTable(writer, 0, "types", format.Type, "name", game.owned.strings.type_names);
+    try outputGen4StringTable(writer, "pokemons", u16, 0, format.Pokemon, "name", game.owned.strings.pokemon_names);
+    try outputGen4StringTable(writer, "moves", u16, 0, format.Move, "name", game.owned.strings.move_names);
+    try outputGen4StringTable(writer, "moves", u16, 0, format.Move, "description", game.owned.strings.move_descriptions);
+    try outputGen4StringTable(writer, "abilities", u16, 0, format.Ability, "name", game.owned.strings.ability_names);
+    try outputGen4StringTable(writer, "items", u16, 0, format.Item, "name", game.owned.strings.item_names);
+    try outputGen4StringTable(writer, "items", u16, 0, format.Item, "description", game.owned.strings.item_descriptions);
+    try outputGen4StringTable(writer, "types", u8, 0, format.Type, "name", game.owned.strings.type_names);
 }
 
 fn outputGen4StringTable(
     writer: anytype,
-    start: usize,
     comptime array_name: []const u8,
+    comptime Index: type,
+    start: Index,
     comptime T: type,
     comptime field_name: []const u8,
     table: gen4.StringTable,
 ) !void {
-    var i: usize = 0;
+    var i: Index = 0;
     while (i < table.number_of_strings) : (i += 1)
-        try outputString(writer, array_name, i + start, T, field_name, table.getSpan(i + start));
+        try outputString(writer, array_name, Index, i + start, T, field_name, table.getSpan(i + start));
 }
 
 fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
@@ -812,8 +813,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
         const i = @intCast(u8, index);
         const first = starter_ptrs[0];
         for (starter_ptrs[1..]) |starter| {
-            if (first != starter)
-                debug.warn("warning: all starter positions are not the same.\n", .{});
+            if (first.value() != starter.value())
+                debug.warn("warning: all starter positions are not the same. {} {}\n", .{ first.value(), starter.value() });
         }
 
         try format.write(writer, format.Game{ .starters = .{ .index = i, .value = first.value() } });
@@ -909,7 +910,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.evolutions) |evos, index| {
-        const i = @intCast(u8, index);
+        const i = @intCast(u16, index);
         for (evos.items) |evo, jndex| {
             if (evo.method == .unused)
                 continue;
@@ -948,9 +949,8 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
                                     .level_up_in_special_magnetic_field => .level_up_in_special_magnetic_field,
                                     .level_up_near_moss_rock => .level_up_near_moss_rock,
                                     .level_up_near_ice_rock => .level_up_near_ice_rock,
-                                    .unknown_0x02,
-                                    .unknown_0x03,
-                                    => unreachable,
+                                    .unknown_0x02 => .unknown_0x02,
+                                    .unknown_0x03 => .unknown_0x03,
                                     _ => unreachable,
                                 },
                             },
@@ -1044,13 +1044,13 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
     for (game.ptrs.static_pokemons) |static_mon, index| {
         const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .species = static_mon.species.value() } } });
-        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, static_mon.level.value()) } } });
+        try format.write(writer, format.Game{ .static_pokemons = .{ .index = i, .value = .{ .level = static_mon.level.value() } } });
     }
 
     for (game.ptrs.given_pokemons) |given_mon, index| {
         const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .species = given_mon.species.value() } } });
-        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .level = @intCast(u8, given_mon.level.value()) } } });
+        try format.write(writer, format.Game{ .given_pokemons = .{ .index = i, .value = .{ .level = given_mon.level.value() } } });
     }
 
     for (game.ptrs.pokeball_items) |given_item, index| {
@@ -1079,33 +1079,35 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    try outputGen5StringTable(writer, 0, "pokemons", format.Pokemon, "name", game.owned.strings.pokemon_names);
-    try outputGen5StringTable(writer, 0, "pokedex", format.Pokedex, "category", game.owned.strings.pokedex_category_names);
-    try outputGen5StringTable(writer, 0, "moves", format.Move, "name", game.owned.strings.move_names);
-    try outputGen5StringTable(writer, 0, "moves", format.Move, "description", game.owned.strings.move_descriptions);
-    try outputGen5StringTable(writer, 0, "abilities", format.Ability, "name", game.owned.strings.ability_names);
-    try outputGen5StringTable(writer, 0, "items", format.Item, "name", game.owned.strings.item_names);
-    try outputGen5StringTable(writer, 0, "items", format.Item, "description", game.owned.strings.item_descriptions);
-    try outputGen5StringTable(writer, 0, "types", format.Type, "name", game.owned.strings.type_names);
-    try outputGen5StringTable(writer, 1, "trainers", format.Trainer, "name", game.owned.strings.trainer_names);
+    try outputGen5StringTable(writer, "pokemons", u16, 0, format.Pokemon, "name", game.owned.strings.pokemon_names);
+    try outputGen5StringTable(writer, "pokedex", u16, 0, format.Pokedex, "category", game.owned.strings.pokedex_category_names);
+    try outputGen5StringTable(writer, "moves", u16, 0, format.Move, "name", game.owned.strings.move_names);
+    try outputGen5StringTable(writer, "moves", u16, 0, format.Move, "description", game.owned.strings.move_descriptions);
+    try outputGen5StringTable(writer, "abilities", u16, 0, format.Ability, "name", game.owned.strings.ability_names);
+    try outputGen5StringTable(writer, "items", u16, 0, format.Item, "name", game.owned.strings.item_names);
+    try outputGen5StringTable(writer, "items", u16, 0, format.Item, "description", game.owned.strings.item_descriptions);
+    try outputGen5StringTable(writer, "types", u8, 0, format.Type, "name", game.owned.strings.type_names);
+    try outputGen5StringTable(writer, "trainers", u16, 1, format.Trainer, "name", game.owned.strings.trainer_names);
 }
 
 fn outputGen5StringTable(
     writer: anytype,
-    start: usize,
     comptime array_name: []const u8,
+    comptime Index: type,
+    start: Index,
     comptime T: type,
     comptime field_name: []const u8,
     table: gen5.StringTable,
 ) !void {
     for (table.keys[start..]) |_, i|
-        try outputString(writer, array_name, i + start, T, field_name, table.getSpan(i + start));
+        try outputString(writer, array_name, Index, @intCast(Index, i + start), T, field_name, table.getSpan(i + start));
 }
 
 fn outputString(
     writer: anytype,
     comptime array_name: []const u8,
-    i: usize,
+    comptime Index: type,
+    i: Index,
     comptime T: type,
     comptime field_name: []const u8,
     string: []const u8,
@@ -1113,7 +1115,7 @@ fn outputString(
     var buf: [mem.page_size]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     try escape.writeEscaped(fbs.writer(), string, escape.zig_escapes);
-    try format.write(writer, @unionInit(format.Game, array_name, .{ .index = 0, .value = @unionInit(T, field_name, fbs.getWritten()) }));
+    try format.write(writer, @unionInit(format.Game, array_name, .{ .index = i, .value = @unionInit(T, field_name, fbs.getWritten()) }));
 }
 
 test "" {

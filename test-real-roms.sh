@@ -1,16 +1,8 @@
-#!/bin/sh -ex
-
-program="${0##*/}"
-usage() {
-    echo "Usage: "
-}
+#!/bin/sh -e
 
 while [ -n "$1" ]; do
     case $1 in
-        --) shift; break ;;
-        -h|--help) usage; exit 0 ;;
-        -r|--run) run='yes' ;;
-        -*) usage; exit 1 ;;
+        -r | --run) run='yes' ;;
         *) break ;;
     esac
     shift
@@ -24,9 +16,9 @@ for release in $(printf "false\ntrue\n"); do
     zig build build-core "-Drelease=$release"
     for rom in $@; do
         echo "$rom" >&2
-        zig-cache/bin/tm35-load "$rom" > "$expect"
-        zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" < "$expect"
-        zig-cache/bin/tm35-load "$rom_dest" > "$found"
+        zig-cache/bin/tm35-load "$rom" >"$expect"
+        zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" <"$expect"
+        zig-cache/bin/tm35-load "$rom_dest" >"$found"
         diff -q "$expect" "$found"
 
         sed -i -E \
@@ -36,12 +28,12 @@ for release in $(printf "false\ntrue\n"); do
             -e "s/\.text_delays\[([0-9]*)\]=.*/.text_delays[\1]=0/" \
             "$expect"
 
-        zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" < "$expect"
-        zig-cache/bin/tm35-load "$rom_dest" > "$found"
+        zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" <"$expect"
+        zig-cache/bin/tm35-load "$rom_dest" >"$found"
 
         # Instant text is a field that will always be false when
         # loading a rom, so we revert the fact that we set it to true.
-        sed -i -E  "s/\.instant_text=.*/.instant_text=false/" "$expect"
+        sed -i -E "s/\.instant_text=.*/.instant_text=false/" "$expect"
         diff -q "$expect" "$found"
 
         if ! [ -z "$run" ]; then

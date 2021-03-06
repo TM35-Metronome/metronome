@@ -371,12 +371,12 @@ pub const WildPokemon = union(enum) {
 
 pub const StaticPokemon = union(enum) {
     species: u16,
-    level: u8,
+    level: u16,
 };
 
 pub const GivenPokemon = union(enum) {
     species: u16,
-    level: u8,
+    level: u16,
 };
 
 pub const PokeballItem = union(enum) {
