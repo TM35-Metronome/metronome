@@ -189,6 +189,10 @@ pub const Header = extern struct {
 
     signature_across_header_entries: [0x80]u8,
 
+    comptime {
+        debug.assert(@sizeOf(Header) == 4096);
+    }
+
     pub const Arm = extern struct {
         offset: lu32,
         entry_address: lu32,
