@@ -673,7 +673,7 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
             const static_mon = game.static_pokemons[pokemons.index];
             switch (pokemons.value) {
                 .species => |species| static_mon.species.* = lu16.init(species),
-                .level => |level| static_mon.level.* = level,
+                .level => |level| static_mon.level.* = try math.cast(u8, level),
             }
         },
         .given_pokemons => |pokemons| {
@@ -683,7 +683,7 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
             const given_mon = game.given_pokemons[pokemons.index];
             switch (pokemons.value) {
                 .species => |species| given_mon.species.* = lu16.init(species),
-                .level => |level| given_mon.level.* = level,
+                .level => |level| given_mon.level.* = try math.cast(u8, level),
             }
         },
         .pokeball_items => |items| {
@@ -813,13 +813,20 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
             }
         },
         .items => |items| {
+            switch (items.value) {
+                .description => |description| return applyGen4String(game.owned.strings.item_descriptions, items.index, description),
+                .name => |name| return applyGen4String(game.owned.strings.item_names, items.index, name),
+                .price,
+                .pocket,
+                => {},
+            }
+
             if (items.index >= game.ptrs.items.len)
                 return error.IndexOutOfBound;
 
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
-                .description => |description| try applyGen4String(game.owned.strings.item_descriptions, items.index, description),
-                .name => |name| try applyGen4String(game.owned.strings.item_names, items.index, name),
+                .description, .name => unreachable,
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
                 .pocket => |pocket| item.pocket = switch (pocket) {
                     .items => .items,
@@ -1049,7 +1056,7 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
                 .heart_gold,
                 .soul_silver,
                 => {
-                    if (pokemons.index >= wild_pokemons.dppt.len)
+                    if (pokemons.index >= wild_pokemons.hgss.len)
                         return error.IndexOutOfBound;
 
                     const wilds = &wild_pokemons.hgss[pokemons.index];
@@ -1327,7 +1334,7 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
                 .moves => |moves| {
-                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, moves.index) });
+                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = pokemons.index });
                     const rem = bytes.len % @sizeOf(gen5.LevelUpMove);
                     const lvl_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes[0 .. bytes.len - rem]);
 
@@ -1341,10 +1348,10 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                     }
                 },
                 .evos => |evos| {
-                    if (evos.index >= game.ptrs.evolutions.len)
+                    if (pokemons.index >= game.ptrs.evolutions.len)
                         return error.Error;
 
-                    const evolutions = &game.ptrs.evolutions[evos.index].items;
+                    const evolutions = &game.ptrs.evolutions[pokemons.index].items;
                     if (evos.index >= evolutions.len)
                         return error.IndexOutOfBound;
 
@@ -1491,6 +1498,7 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
             const map_header = &game.ptrs.map_headers[maps.index];
             switch (maps.value) {
                 .music => |music| map_header.music = lu16.init(music),
+                .battle_scene => |battle_scene| map_header.battle_scene = battle_scene,
                 .allow_cycling,
                 .allow_escaping,
                 .allow_running,
@@ -1499,7 +1507,6 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                 .cave,
                 .type,
                 .escape_rope,
-                .battle_scene,
                 => return error.ParserFailed,
             }
         },
