@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -68,7 +69,7 @@ pub fn main2(
         parseLine(allocator, strings, &data, hms, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
-            error.ParseError,
+            error.ParserFailed,
             => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
@@ -107,70 +108,45 @@ fn parseLine(
     hms: bool,
     str: []const u8,
 ) !void {
-    const sw = util.parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-
-    var p = parse.MutParser{ .str = str };
-    switch (m(try p.parse(parse.anyField))) {
-        c("tms") => {
-            _ = try data.tms.put(
-                allocator,
-                try p.parse(parse.index),
-                try p.parse(parse.usizev),
-            );
+    switch (try format.parse(allocator, str)) {
+        .tms => |tms| {
+            _ = try data.tms.put(allocator, tms.index, tms.value);
             return;
         },
-        c("hms") => if (hms) {
-            _ = try data.hms.put(
-                allocator,
-                try p.parse(parse.index),
-                try p.parse(parse.usizev),
-            );
+        .hms => |ms| if (hms) {
+            _ = try data.hms.put(allocator, ms.index, ms.value);
             return;
         } else {
-            return error.ParseError;
+            return error.ParserFailed;
         },
-        c("moves") => {
-            const index = try p.parse(parse.index);
-            const move = try data.moves.getOrPutValue(allocator, index, Move{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("description") => {
-                    const desc = try escape.unEscape(
-                        allocator,
-                        try p.parse(parse.strv),
-                        escape.zig_escapes,
-                    );
+        .moves => |moves| {
+            const move = try data.moves.getOrPutValue(allocator, moves.index, Move{});
+            switch (moves.value) {
+                .description => |description| {
+                    const desc = try escape.unEscape(allocator, description, escape.zig_escapes);
                     move.description = try Utf8.init(desc);
                 },
                 else => {},
             }
-            return error.ParseError;
+            return error.ParserFailed;
         },
-        c("items") => {
-            const index = try p.parse(parse.index);
-            const item = try data.items.getOrPutValue(allocator, index, Item{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("pocket") => item.pocket = try strings.put(try p.parse(parse.strv)),
-                c("name") => {
-                    const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
+        .items => |items| {
+            const item = try data.items.getOrPutValue(allocator, items.index, Item{});
+            switch (items.value) {
+                .pocket => |pocket| item.pocket = pocket,
+                .name => |_name| {
+                    const name = try mem.dupe(allocator, u8, _name);
                     item.name = try Utf8.init(name);
                 },
-                c("description") => {
-                    const desc = try escape.unEscape(
-                        allocator,
-                        try p.parse(parse.strv),
-                        escape.zig_escapes,
-                    );
+                .description => |description| {
+                    const desc = try escape.unEscape(allocator, description, escape.zig_escapes);
                     item.description = try Utf8.init(desc);
                 },
                 else => {},
             }
-            return error.ParseError;
+            return error.ParserFailed;
         },
-        else => return error.ParseError,
+        else => return error.ParserFailed,
     }
     unreachable;
 }
@@ -201,10 +177,9 @@ fn randomize(allocator: *mem.Allocator, strings: *util.container.StringCache(.{}
     //       by some amount and hope it is enough for all strings.
     max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
-    const tms_hms_pocket = try strings.put("tms_hms");
     for (data.items.values()) |*item, i| {
         const id = data.items.at(i).key;
-        if (item.pocket != tms_hms_pocket)
+        if (item.pocket != .tms_hms)
             continue;
 
         const is_tm = mem.startsWith(u8, item.name.bytes, "TM");
@@ -238,9 +213,9 @@ fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
     return Utf8.initUnchecked(str.bytes[0..it.i]);
 }
 
+const Items = util.container.IntMap.Unmanaged(usize, Item);
 const Machines = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
-const Items = util.container.IntMap.Unmanaged(usize, Item);
 
 const Data = struct {
     items: Items = Items{},
@@ -250,7 +225,7 @@ const Data = struct {
 };
 
 const Item = struct {
-    pocket: usize = math.maxInt(usize),
+    pocket: format.Pocket = .none,
     name: Utf8 = Utf8.init("") catch unreachable,
     description: Utf8 = Utf8.init("") catch unreachable,
 };

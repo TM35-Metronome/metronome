@@ -17,7 +17,6 @@ pub const bit = @import("bit.zig");
 pub const container = @import("container.zig");
 pub const escape = @import("escape.zig");
 pub const exit = @import("exit.zig");
-pub const parse = @import("parse.zig");
 pub const read = @import("read.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
@@ -28,7 +27,6 @@ test "" {
     _ = container;
     _ = escape;
     _ = exit;
-    _ = parse;
     _ = read;
     _ = testing;
     _ = unicode;

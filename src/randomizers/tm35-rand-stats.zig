@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -60,7 +61,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, &pokemons, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -72,7 +73,7 @@ pub fn main2(
         const pokemon_i = pokemons.at(i).key;
         for (pokemon.stats) |stat, k| {
             const stat_name = @tagName(@intToEnum(Pokemon.Stat, @intCast(u3, k)));
-            if (pokemon.output[i])
+            if (pokemon.output[k])
                 stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
@@ -80,37 +81,76 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {
-    const sw = util.parse.Swhash(8);
-    const m = sw.match;
-    const c = sw.case;
-    var p = parse.MutParser{ .str = str };
-
-    try p.parse(comptime parse.field("pokemons"));
-    const index = try p.parse(parse.index);
-    switch (m(try p.parse(parse.anyField))) {
-        c("stats") => {
-            const pokemon = try pokemons.getOrPutValue(allocator, index, Pokemon{});
-            inline for (@typeInfo(Pokemon.Stat).Enum.fields) |stat| {
-                const i = @enumToInt(@field(Pokemon.Stat, stat.name));
-                if (p.parse(comptime parse.field(stat.name))) |_| {
-                    pokemon.stats[i] = try p.parse(parse.u8v);
-                    pokemon.output[i] = true;
-                    return;
-                } else |_| {}
-            }
-            return error.ParseError;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokemons => |mons| switch (mons.value) {
+            .stats => |stats| {
+                const pokemon = try pokemons.getOrPutValue(allocator, mons.index, Pokemon{});
+                switch (stats) {
+                    .hp => |hp| pokemon.stats[0] = hp,
+                    .attack => |attack| pokemon.stats[1] = attack,
+                    .defense => |defense| pokemon.stats[2] = defense,
+                    .speed => |speed| pokemon.stats[3] = speed,
+                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
+                }
+                for (pokemon.stats) |s, i|
+                    pokemon.output[i] = s != 0;
+                return;
+            },
+            .evos => |evos| switch (evos.value) {
+                .target => |evo_from_i| {
+                    const evo_from = try pokemons.getOrPutValue(allocator, evo_from_i, Pokemon{});
+                    _ = try evo_from.evolves_from.put(allocator, mons.index);
+                    return error.ParserFailed;
+                },
+                .method,
+                .param,
+                => return error.ParserFailed,
+            },
+            .types,
+            .catch_rate,
+            .base_exp_yield,
+            .ev_yield,
+            .items,
+            .gender_ratio,
+            .egg_cycles,
+            .base_friendship,
+            .growth_rate,
+            .egg_groups,
+            .abilities,
+            .color,
+            .moves,
+            .tms,
+            .hms,
+            .name,
+            .pokedex_entry,
+            => return error.ParserFailed,
         },
-        c("evos") => {
-            _ = try p.parse(parse.index);
-            _ = try p.parse(comptime parse.field("target"));
-            const evo_from_i = try p.parse(parse.usizev);
-
-            const evo_from = try pokemons.getOrPutValue(allocator, evo_from_i, Pokemon{});
-            _ = try evo_from.evolves_from.put(allocator, index);
-            return error.ParseError;
-        },
-        else => return error.ParseError,
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .starters,
+        .text_delays,
+        .trainers,
+        .moves,
+        .abilities,
+        .types,
+        .tms,
+        .hms,
+        .items,
+        .pokedex,
+        .maps,
+        .wild_pokemons,
+        .static_pokemons,
+        .given_pokemons,
+        .pokeball_items,
+        .hidden_hollows,
+        .text,
+        => return error.ParserFailed,
     }
+
     unreachable;
 }
 
@@ -234,8 +274,8 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Evos = util.container.IntSet.Unmanaged(usize);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 
 const Pokemon = struct {
     stats: [stats]u8 = [_]u8{0} ** stats,

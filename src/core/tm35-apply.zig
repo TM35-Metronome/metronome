@@ -140,11 +140,18 @@ pub fn main2(
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
-        (switch (game) {
-            .gen3 => |*gen3_game| applyGen3(gen3_game, line),
-            .gen4 => |*gen4_game| applyGen4(gen4_game.*, line),
-            .gen5 => |*gen5_game| applyGen5(gen5_game.*, line),
-        }) catch |err| {
+        const res: anyerror!void = blk: {
+            const parsed = format.parse(allocator, line) catch |err| switch (err) {
+                error.OutOfMemory => return exit.allocErr(stdio.err),
+                error.ParserFailed => break :blk err,
+            };
+            break :blk switch (game) {
+                .gen3 => |*gen3_game| applyGen3(gen3_game, parsed),
+                .gen4 => |*gen4_game| applyGen4(gen4_game.*, parsed),
+                .gen5 => |*gen5_game| applyGen5(gen5_game.*, parsed),
+            };
+        };
+        res catch |err| {
             stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
             stdio.err.print("{}\n", .{line}) catch {};
             if (abort_on_first_warning)
@@ -290,8 +297,7 @@ pub const converters = .{
     toInt(u64, .Little),
 };
 
-fn applyGen3(game: *gen3.Game, str: []const u8) !void {
-    const parsed = try format.parse(str);
+fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
     switch (parsed) {
         .version => |version| {
             if (version != game.version)
@@ -539,6 +545,7 @@ fn applyGen3(game: *gen3.Game, str: []const u8) !void {
             const item = &game.items[items.index];
             switch (items.value) {
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .name => |name| try gen3.encodings.encode(.en_us, name, &item.name),
                 .description => |description| {
                     const desc_small = try item.description.toSliceZ(game.data);
@@ -729,9 +736,8 @@ fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !v
     }
 }
 
-fn applyGen4(game: gen4.Game, str: []const u8) !void {
+fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
     const header = game.rom.header();
-    const parsed = try format.parse(str);
     switch (parsed) {
         .version => |version| {
             if (version != game.info.version)
@@ -817,6 +823,7 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
                 .description => |description| return applyGen4String(game.owned.strings.item_descriptions, items.index, description),
                 .name => |name| return applyGen4String(game.owned.strings.item_names, items.index, name),
                 .price,
+                .battle_effect,
                 .pocket,
                 => {},
             }
@@ -828,6 +835,7 @@ fn applyGen4(game: gen4.Game, str: []const u8) !void {
             switch (items.value) {
                 .description, .name => unreachable,
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .pocket => |pocket| item.pocket = switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,
@@ -1208,9 +1216,8 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
         buf[writer.context.pos] = 0;
 }
 
-fn applyGen5(game: gen5.Game, str: []const u8) !void {
+fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
     const header = game.rom.header();
-    const parsed = try format.parse(str);
     switch (parsed) {
         .version => |version| {
             if (version != game.info.version)
@@ -1420,6 +1427,8 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
 
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
+                .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
+                .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .description => |description| try applyGen5String(game.owned.strings.item_descriptions, items.index, description),
                 .name => |name| {
                     const item_names = game.owned.strings.item_names;
@@ -1439,7 +1448,6 @@ fn applyGen5(game: gen5.Game, str: []const u8) !void {
                     ) catch {};
                     try applyGen5String(item_names, items.index, name);
                 },
-                .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
                 .pocket => |pocket| item.pocket = switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,

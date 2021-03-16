@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,7 +15,6 @@ const rand = std.rand;
 const testing = std.testing;
 
 const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -84,7 +84,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, strings, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -117,12 +117,6 @@ pub fn main2(
                             .{ hi, vi, gi, pi, data.hollow_mons.get(si).?.* },
                         ) catch |err| return exit.stdoutErr(stdio.err, err);
                     }
-                    if (pokemon.form) |_| {
-                        stdio.out.print(
-                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].form=0\n",
-                            .{ hi, vi, gi, pi },
-                        ) catch |err| return exit.stdoutErr(stdio.err, err);
-                    }
                 }
             }
         }
@@ -136,95 +130,117 @@ fn parseLine(
     data: *Data,
     str: []const u8,
 ) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-    var p = parse.MutParser{ .str = str };
-
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokedex") => {
-            const index = try p.parse(parse.index);
-            _ = try data.pokedex.put(allocator, index);
-            return error.ParseError;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokedex => |pokedex| {
+            _ = try data.pokedex.put(allocator, pokedex.index);
+            return error.ParserFailed;
         },
-        c("pokemons") => {
-            const index = try p.parse(parse.index);
-            const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("stats") => switch (m(try p.parse(parse.anyField))) {
-                    c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
-                    c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
-                    c("defense") => pokemon.stats[2] = try p.parse(parse.u8v),
-                    c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
-                    c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
-                    c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return error.ParseError,
+        .pokemons => |pokemons| {
+            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            switch (pokemons.value) {
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats[0] = hp,
+                    .attack => |attack| pokemon.stats[1] = attack,
+                    .defense => |defense| pokemon.stats[2] = defense,
+                    .speed => |speed| pokemon.stats[3] = speed,
+                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
                 },
-                c("types") => {
-                    _ = try p.parse(parse.index);
-                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
-                },
-                c("growth_rate") => pokemon.growth_rate = try strings.put(try p.parse(parse.strv)),
-                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
-                c("gender_ratio") => pokemon.gender_ratio = try p.parse(parse.usizev),
-                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
-                c("egg_groups") => {
+                .types => |types| _ = try pokemon.types.put(allocator, types.value),
+                .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
+                .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
+                .egg_groups => |groups| {
                     // TODO: Should we save both egg groups?
-                    if ((try p.parse(parse.index)) == 0) {
-                        const group = try p.parse(parse.strv);
-                        pokemon.egg_group = try strings.put(group);
+                    if (groups.index == 0)
+                        pokemon.egg_group = groups.value;
+                },
+                .evos => |evos| switch (evos.value) {
+                    .target => |target| _ = try pokemon.evos.put(allocator, target),
+                    .method,
+                    .param,
+                    => return error.ParserFailed,
+                },
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .egg_cycles,
+                .base_friendship,
+                .abilities,
+                .color,
+                .moves,
+                .tms,
+                .hms,
+                .name,
+                => return error.ParserFailed,
+            }
+            return error.ParserFailed;
+        },
+        .static_pokemons => |pokemons| switch (pokemons.value) {
+            .species => |species| {
+                _ = try data.static_mons.put(allocator, pokemons.index, species);
+                return;
+            },
+            .level => return error.ParserFailed,
+        },
+        .given_pokemons => |pokemons| switch (pokemons.value) {
+            .species => |species| {
+                _ = try data.given_mons.put(allocator, pokemons.index, species);
+                return;
+            },
+            .level => return error.ParserFailed,
+        },
+        .hidden_hollows => |hollows| {
+            const versions = try data.hidden_hollows.getOrPutValue(allocator, hollows.index, HollowVersions{});
+
+            switch (hollows.value) {
+                .versions => |version| {
+                    const groups = try versions.getOrPutValue(allocator, version.index, HollowGroups{});
+
+                    switch (version.value) {
+                        .groups => |group| {
+                            const pokemons = try groups.getOrPutValue(allocator, group.index, HollowPokemons{});
+
+                            switch (group.value) {
+                                .pokemons => |mon| {
+                                    const pokemon = try pokemons.getOrPutValue(allocator, mon.index, HollowMon{});
+
+                                    switch (mon.value) {
+                                        .species => |species| {
+                                            const index = data.hollow_mons.count();
+                                            _ = try data.hollow_mons.put(allocator, index, species);
+                                            pokemon.species_index = index;
+                                        },
+                                    }
+                                    return;
+                                },
+                            }
+                        },
                     }
                 },
-                c("evos") => {
-                    _ = try p.parse(parse.index);
-                    _ = try p.parse(comptime parse.field("target"));
-                    _ = try pokemon.evos.put(allocator, try p.parse(parse.usizev));
-                },
-                else => return error.ParseError,
+                .items => return error.ParserFailed,
             }
-            return error.ParseError;
         },
-        c("static_pokemons") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("species"));
-            _ = try data.static_mons.put(allocator, index, try p.parse(parse.usizev));
-            return;
-        },
-        c("given_pokemons") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("species"));
-            _ = try data.given_mons.put(allocator, index, try p.parse(parse.usizev));
-            return;
-        },
-        c("hidden_hollows") => {
-            const hindex = try p.parse(parse.index);
-            const versions = try data.hidden_hollows.getOrPutValue(allocator, hindex, HollowVersions{});
-
-            try p.parse(comptime parse.field("versions"));
-            const vindex = try p.parse(parse.index);
-            const groups = try versions.getOrPutValue(allocator, vindex, HollowGroups{});
-
-            try p.parse(comptime parse.field("groups"));
-            const gindex = try p.parse(parse.index);
-            const pokemons = try groups.getOrPutValue(allocator, gindex, HollowPokemons{});
-
-            try p.parse(comptime parse.field("pokemons"));
-            const pindex = try p.parse(parse.index);
-            const pokemon = try pokemons.getOrPutValue(allocator, pindex, HollowMon{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("species") => {
-                    const index = data.hollow_mons.count();
-                    _ = try data.hollow_mons.put(allocator, index, try p.parse(parse.usizev));
-                    pokemon.species_index = index;
-                },
-                c("form") => pokemon.form = try p.parse(parse.usizev),
-                else => return error.ParseError,
-            }
-            return;
-        },
-        else => return error.ParseError,
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .starters,
+        .text_delays,
+        .trainers,
+        .moves,
+        .abilities,
+        .types,
+        .tms,
+        .hms,
+        .items,
+        .maps,
+        .wild_pokemons,
+        .pokeball_items,
+        .text,
+        => return error.ParserFailed,
     }
     unreachable;
 }
@@ -375,8 +391,8 @@ fn randomize(
 
                         // Legendaries are generally in the "slow" to "medium_slow"
                         // growth rating
-                        rating.* += @as(isize, @boolToInt(pokemon.growth_rate == slow or
-                            pokemon.growth_rate == medium_slow));
+                        rating.* += @as(isize, @boolToInt(pokemon.growth_rate == .slow or
+                            pokemon.growth_rate == .medium_slow));
 
                         // They generally have a catch rate of 45 or less
                         rating.* += @as(isize, @boolToInt(pokemon.catch_rate <= 45));
@@ -386,7 +402,7 @@ fn randomize(
                         rating.* += @as(isize, @boolToInt(pokemon.gender_ratio == 255));
 
                         // Most are part of the "undiscovered" egg group
-                        rating.* += @as(isize, @boolToInt(pokemon.egg_group == undiscovered));
+                        rating.* += @as(isize, @boolToInt(pokemon.egg_group == .undiscovered));
 
                         // And they don't evolve from anything. Subtract
                         // score from this Pokemons evolutions.
@@ -473,15 +489,15 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Set = util.container.IntSet.Unmanaged(usize);
 const SpeciesByType = util.container.IntMap.Unmanaged(usize, Set);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const StaticMons = util.container.IntMap.Unmanaged(usize, usize);
 
-const HollowPokemons = util.container.IntMap.Unmanaged(usize, HollowMon);
-const HollowGroups = util.container.IntMap.Unmanaged(usize, HollowPokemons);
-const HollowVersions = util.container.IntMap.Unmanaged(usize, HollowGroups);
 const HiddenHollows = util.container.IntMap.Unmanaged(usize, HollowVersions);
+const HollowGroups = util.container.IntMap.Unmanaged(usize, HollowPokemons);
+const HollowPokemons = util.container.IntMap.Unmanaged(usize, HollowMon);
+const HollowVersions = util.container.IntMap.Unmanaged(usize, HollowGroups);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -534,16 +550,15 @@ const Data = struct {
 
 const HollowMon = struct {
     species_index: ?usize = null,
-    form: ?usize = null,
 };
 
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
     pokedex_entry: usize = math.maxInt(usize),
     catch_rate: usize = 1,
-    growth_rate: usize = math.maxInt(usize),
+    growth_rate: format.GrowthRate = .fast,
     gender_ratio: usize = math.maxInt(usize),
-    egg_group: usize = math.maxInt(usize),
+    egg_group: format.EggGroup = .invalid,
     types: Set = Set{},
     evos: Set = Set{},
 };
@@ -561,7 +576,7 @@ test "tm35-rand-static" {
             comptime egg_groups: []const u8,
             comptime evo: ?[]const u8,
         ) []const u8 {
-            return ".pokedex[" ++ id ++ "].field=" ++ id ++ "\n" ++
+            return ".pokedex[" ++ id ++ "].height=0\n" ++
                 ".pokemons[" ++ id ++ "].pokedex_entry=" ++ id ++ "\n" ++
                 ".pokemons[" ++ id ++ "].stats.hp=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].stats.attack=" ++ stat ++ "\n" ++

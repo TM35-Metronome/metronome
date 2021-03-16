@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -16,7 +17,6 @@ const unicode = std.unicode;
 
 const escape = util.escape;
 const exit = util.exit;
-const parse = util.parse;
 
 const Utf8 = util.unicode.Utf8View;
 
@@ -71,15 +71,13 @@ pub fn main2(
     const seed = util.getSeed(stdio.err, usage, args) catch return 1;
     const replace_cheap = args.flag("--replace-cheap-items");
 
-    const unknown_method = strings.put("????") catch return exit.allocErr(stdio.err);
-
     var fifo = util.read.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, strings, &data, unknown_method, replace_cheap, line) catch |err| switch (err) {
+        parseLine(allocator, strings, &data, replace_cheap, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
-            error.ParseError,
+            error.ParserFailed,
             => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
@@ -123,102 +121,102 @@ fn parseLine(
     allocator: *mem.Allocator,
     strings: *util.StringCache,
     data: *Data,
-    unknown_method: usize,
     replace_cheap: bool,
     str: []const u8,
 ) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-
-    var p = parse.MutParser{ .str = str };
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokedex") => {
-            const index = try p.parse(parse.index);
-            _ = try data.pokedex.put(allocator, index);
-            return error.ParseError;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokedex => |pokedex| {
+            _ = try data.pokedex.put(allocator, pokedex.index);
+            return error.ParserFailed;
         },
-        c("pokemons") => {
-            const index = try p.parse(parse.index);
-            const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
-                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
-                c("base_friendship") => pokemon.base_friendship = try p.parse(parse.usizev),
-                c("growth_rate") => pokemon.growth_rate = try strings.put(try p.parse(parse.strv)),
-                c("stats") => switch (m(try p.parse(parse.anyField))) {
-                    c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
-                    c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
-                    c("defense") => pokemon.stats[2] = try p.parse(parse.u8v),
-                    c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
-                    c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
-                    c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return error.ParseError,
+        .pokemons => |pokemons| {
+            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            switch (pokemons.value) {
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
+                .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
+                .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats[0] = hp,
+                    .attack => |attack| pokemon.stats[1] = attack,
+                    .defense => |defense| pokemon.stats[2] = defense,
+                    .speed => |speed| pokemon.stats[3] = speed,
+                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
                 },
-                c("types") => {
-                    _ = try p.parse(parse.index);
-                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
-                },
-                c("abilities") => {
-                    _ = try p.parse(parse.index);
-                    _ = try pokemon.abilities.put(allocator, try p.parse(parse.usizev));
-                },
-                c("egg_groups") => {
-                    _ = try p.parse(parse.index);
-                    _ = try pokemon.egg_groups.put(allocator, try strings.put(try p.parse(parse.strv)));
-                },
-                c("evos") => {
-                    const evo_index = try p.parse(parse.index);
-                    data.max_evolutions = math.max(data.max_evolutions, evo_index + 1);
-
-                    const evo = try pokemon.evos.getOrPutValue(allocator, evo_index, Evolution{
-                        .method = unknown_method,
-                    });
-                    switch (m(try p.parse(parse.anyField))) {
-                        c("target") => evo.target = try p.parse(parse.usizev),
-                        c("param") => evo.item = try p.parse(parse.usizev),
-                        c("method") => evo.method = try strings.put(try p.parse(parse.strv)),
-                        else => {},
+                .types => |types| _ = try pokemon.types.put(allocator, types.value),
+                .abilities => |abilities| _ = try pokemon.abilities.put(allocator, abilities.value),
+                .egg_groups => |egg_groups| _ = try pokemon.egg_groups.put(allocator, @enumToInt(egg_groups.value)),
+                .evos => |evos| {
+                    data.max_evolutions = math.max(data.max_evolutions, evos.index + 1);
+                    const evo = try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{});
+                    switch (evos.value) {
+                        .target => |target| evo.target = target,
+                        .param => |param| evo.item = param,
+                        .method => |method| evo.method = method,
                     }
+                },
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .gender_ratio,
+                .egg_cycles,
+                .color,
+                .moves,
+                .tms,
+                .hms,
+                .name,
+                => return error.ParserFailed,
+            }
+            return;
+        },
+        .items => |items| {
+            const item = try data.items.getOrPutValue(allocator, items.index, Item{});
+            switch (items.value) {
+                .name => |name| {
+                    item.name = try Utf8.init(try mem.dupe(allocator, u8, name));
                     return;
                 },
-                else => return error.ParseError,
+                .description => |desc| {
+                    item.description = try Utf8.init(try mem.dupe(allocator, u8, desc));
+                    return;
+                },
+                .price => |price| {
+                    item.price = price;
+                    return error.ParserFailed;
+                },
+                .battle_effect,
+                .pocket,
+                => return error.ParserFailed,
             }
-            return error.ParseError;
         },
-        c("items") => {
-            const index = try p.parse(parse.index);
-            const item = try data.items.getOrPutValue(allocator, index, Item{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("name") => {
-                    const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
-                    item.name = try Utf8.init(name);
-                },
-                c("description") => {
-                    const desc = try escape.unEscape(
-                        allocator,
-                        try p.parse(parse.strv),
-                        escape.zig_escapes,
-                    );
-                    item.description = try Utf8.init(desc);
-                },
-                c("price") => {
-                    item.price = try p.parse(parse.usizev);
-                    return error.ParseError;
-                },
-                else => return error.ParseError,
-            }
-            return;
+        .pokeball_items => |items| switch (items.value) {
+            .item => |item| if (replace_cheap) {
+                _ = try data.pokeball_items.put(allocator, items.index, item);
+                return;
+            } else return error.ParserFailed,
+            .amount => return error.ParserFailed,
         },
-        c("pokeball_items") => if (replace_cheap) {
-            const index = try p.parse(parse.index);
-            _ = try p.parse(comptime parse.field("item"));
-            _ = try data.pokeball_items.put(allocator, index, try p.parse(parse.usizev));
-            return;
-        },
-        else => return error.ParseError,
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .starters,
+        .text_delays,
+        .trainers,
+        .moves,
+        .abilities,
+        .types,
+        .tms,
+        .hms,
+        .maps,
+        .wild_pokemons,
+        .static_pokemons,
+        .given_pokemons,
+        .hidden_hollows,
+        .text,
+        => return error.ParserFailed,
     }
     unreachable;
 }
@@ -230,14 +228,13 @@ fn randomize(
     seed: usize,
 ) !void {
     const random = &rand.DefaultPrng.init(seed).random;
-    const use_item_method = try strings.put("use_item");
 
     // First, let's find items that are used for evolving Pokémons.
     // We will use these items as our stones.
     var stones = Set{};
     for (data.pokemons.values()) |*pokemon| {
         for (pokemon.evos.values()) |evo| {
-            if (evo.method == use_item_method)
+            if (evo.method == .use_item)
                 _ = try stones.put(allocator, evo.item);
         }
 
@@ -585,7 +582,7 @@ fn randomize(
                         };
                         const number = switch (stone) {
                             stat_stone => sum(&pokemon.stats),
-                            growth_stone => pokemon.growth_rate,
+                            growth_stone => @enumToInt(pokemon.growth_rate),
                             buddy_stone => pokemon.base_friendship,
                             else => unreachable,
                         };
@@ -605,7 +602,7 @@ fn randomize(
                 };
 
                 _ = try pokemon.evos.put(allocator, stone, Evolution{
-                    .method = use_item_method,
+                    .method = .use_item,
                     .item = item_id,
                     .target = pick,
                 });
@@ -613,6 +610,7 @@ fn randomize(
         }
     }
 
+    // Replace cheap pokeball items with random stones.
     const number_of_stones = math.min(math.min(stones.count(), stone_strings.len), data.max_evolutions);
     for (data.pokeball_items.values()) |*item_id| {
         const item = data.items.get(item_id.*) orelse continue;
@@ -674,7 +672,7 @@ fn friendshipFilter(pokemon: Pokemon, buf: []usize) []const usize {
 }
 
 fn growthRateFilter(pokemon: Pokemon, buf: []usize) []const usize {
-    buf[0] = pokemon.growth_rate;
+    buf[0] = @enumToInt(pokemon.growth_rate);
     return buf[0..1];
 }
 
@@ -703,12 +701,12 @@ fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []usize) []const
     return buf[0..i];
 }
 
-const Set = util.container.IntSet.Unmanaged(usize);
-const PokemonBy = util.container.IntMap.Unmanaged(usize, Set);
-const Items = util.container.IntMap.Unmanaged(usize, Item);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
+const Items = util.container.IntMap.Unmanaged(usize, Item);
 const PokeballItems = util.container.IntMap.Unmanaged(usize, usize);
+const PokemonBy = util.container.IntMap.Unmanaged(usize, Set);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Set = util.container.IntSet.Unmanaged(usize);
 
 const Data = struct {
     max_evolutions: usize = 0,
@@ -736,7 +734,7 @@ const Data = struct {
 const Pokemon = struct {
     evos: Evolutions = Evolutions{},
     stats: [6]u8 = [_]u8{0} ** 6,
-    growth_rate: usize = math.maxInt(usize),
+    growth_rate: format.GrowthRate = .fast,
     base_friendship: usize = 0,
     catch_rate: usize = 1,
     pokedex_entry: usize = math.maxInt(usize),
@@ -752,7 +750,7 @@ const Item = struct {
 };
 
 const Evolution = struct {
-    method: usize,
+    method: format.Evolution.Method = .unused,
     item: usize = 0,
     target: usize = 0,
 };

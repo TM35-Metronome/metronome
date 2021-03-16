@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,7 +15,6 @@ const rand = std.rand;
 const testing = std.testing;
 
 const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -63,7 +63,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -77,31 +77,70 @@ pub fn main2(
             const evo_i = pokemon.evos.at(j).key;
             if (evo.param) |param|
                 stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param }) catch |err| return exit.stdoutErr(stdio.err, err);
-            if (evo.method) |method|
-                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, method }) catch |err| return exit.stdoutErr(stdio.err, err);
+            if (evo.method != .unused)
+                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, @tagName(evo.method) }) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
     return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-    var p = parse.MutParser{ .str = str };
-
-    try p.parse(comptime parse.field("pokemons"));
-    const poke_index = try p.parse(parse.index);
-    const pokemon = try data.pokemons.getOrPutValue(allocator, poke_index, Pokemon{});
-
-    try p.parse(comptime parse.field("evos"));
-    const evo_index = try p.parse(parse.index);
-    const evo = try pokemon.evos.getOrPutValue(allocator, evo_index, Evolution{});
-
-    switch (m(try p.parse(parse.anyField))) {
-        c("param") => evo.param = try p.parse(parse.usizev),
-        c("method") => evo.method = try mem.dupe(allocator, u8, try p.parse(parse.strv)),
-        else => return error.ParseError,
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokemons => |pokemons| {
+            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            switch (pokemons.value) {
+                .evos => |evos| {
+                    const evo = try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{});
+                    switch (evos.value) {
+                        .param => |param| evo.param = param,
+                        .method => |method| evo.method = method,
+                        .target => return error.ParserFailed,
+                    }
+                },
+                .stats,
+                .types,
+                .catch_rate,
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .gender_ratio,
+                .egg_cycles,
+                .base_friendship,
+                .growth_rate,
+                .egg_groups,
+                .abilities,
+                .color,
+                .moves,
+                .tms,
+                .hms,
+                .name,
+                .pokedex_entry,
+                => return error.ParserFailed,
+            }
+        },
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .starters,
+        .text_delays,
+        .trainers,
+        .moves,
+        .abilities,
+        .types,
+        .tms,
+        .hms,
+        .items,
+        .pokedex,
+        .maps,
+        .wild_pokemons,
+        .static_pokemons,
+        .given_pokemons,
+        .pokeball_items,
+        .hidden_hollows,
+        .text,
+        => return error.ParserFailed,
     }
 }
 
@@ -112,16 +151,18 @@ fn removeTradeEvolutions(data: Data) void {
     var has_level_up_party = false;
     for (data.pokemons.values()) |pokemon| {
         for (pokemon.evos.values()) |evo| {
-            const method = evo.method orelse continue;
-            has_level_up = has_level_up or mem.eql(u8, method, "level_up");
-            has_level_up_holding = has_level_up_holding or mem.eql(u8, method, "level_up_holding_item_during_daytime");
-            has_level_up_party = has_level_up_party or mem.eql(u8, method, "level_up_with_other_pokemon_in_party");
+            if (evo.method == .unused)
+                continue;
+            has_level_up = has_level_up or evo.method == .level_up;
+            has_level_up_holding = has_level_up_holding or evo.method == .level_up_holding_item_during_daytime;
+            has_level_up_party = has_level_up_party or evo.method == .level_up_with_other_pokemon_in_party;
         }
     }
 
-    const trade_method_replace: ?[]const u8 = if (has_level_up) "level_up" else null;
-    const trade_method_holding_replace = if (has_level_up_holding) "level_up_holding_item_during_daytime" else trade_method_replace;
-    const trade_method_pokemon_replace = if (has_level_up_party) "level_up_with_other_pokemon_in_party" else trade_method_replace;
+    const M = format.Evolution.Method;
+    const trade_method_replace: ?M = if (has_level_up) .level_up else null;
+    const trade_method_holding_replace: ?M = if (has_level_up_holding) .level_up_holding_item_during_daytime else trade_method_replace;
+    const trade_method_pokemon_replace: ?M = if (has_level_up_party) .level_up_with_other_pokemon_in_party else trade_method_replace;
 
     const trade_param_replace: ?usize = if (has_level_up) @as(usize, 36) else null;
     const trade_param_holding_replace: ?usize = if (has_level_up_holding) null else trade_param_replace;
@@ -129,24 +170,58 @@ fn removeTradeEvolutions(data: Data) void {
 
     for (data.pokemons.values()) |pokemon| {
         for (pokemon.evos.values()) |*evo| {
-            const method = evo.method orelse continue;
+            if (evo.method == .unused)
+                continue;
+            const method = evo.method;
             const param = evo.param;
-            if (mem.eql(u8, method, "trade")) {
-                evo.method = trade_method_replace orelse method;
-                evo.param = trade_param_replace orelse param;
-            } else if (mem.eql(u8, method, "trade_holding_item")) {
-                evo.method = trade_method_holding_replace orelse method;
-                evo.param = trade_param_holding_replace orelse param;
-            } else if (mem.eql(u8, method, "trade_with_pokemon")) {
-                evo.method = trade_method_pokemon_replace orelse method;
-                evo.param = trade_param_pokemon_replace orelse param;
+            switch (evo.method) {
+                .trade => {
+                    evo.method = trade_method_replace orelse method;
+                    evo.param = trade_param_replace orelse param;
+                },
+                .trade_holding_item => {
+                    evo.method = trade_method_holding_replace orelse method;
+                    evo.param = trade_param_holding_replace orelse param;
+                },
+                .trade_with_pokemon => {
+                    evo.method = trade_method_pokemon_replace orelse method;
+                    evo.param = trade_param_pokemon_replace orelse param;
+                },
+                .attack_eql_defense,
+                .attack_gth_defense,
+                .attack_lth_defense,
+                .beauty,
+                .friend_ship,
+                .friend_ship_during_day,
+                .friend_ship_during_night,
+                .level_up,
+                .level_up_female,
+                .level_up_holding_item_during_daytime,
+                .level_up_holding_item_during_the_night,
+                .level_up_in_special_magnetic_field,
+                .level_up_knowning_move,
+                .level_up_male,
+                .level_up_may_spawn_pokemon,
+                .level_up_near_ice_rock,
+                .level_up_near_moss_rock,
+                .level_up_spawn_if_cond,
+                .level_up_with_other_pokemon_in_party,
+                .personality_value1,
+                .personality_value2,
+                .unknown_0x02,
+                .unknown_0x03,
+                .unused,
+                .use_item,
+                .use_item_on_female,
+                .use_item_on_male,
+                => {},
             }
         }
     }
 }
 
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 
 const Data = struct {
     pokemons: Pokemons = Pokemons{},
@@ -158,7 +233,7 @@ const Pokemon = struct {
 
 const Evolution = struct {
     param: ?usize = null,
-    method: ?[]const u8 = null,
+    method: format.Evolution.Method = .unused,
 };
 
 test "tm35-no-trade-evolutions" {
