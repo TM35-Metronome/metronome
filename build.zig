@@ -10,8 +10,8 @@ const RunStep = std.build.RunStep;
 const Step = std.build.Step;
 const Target = std.build.Target;
 
-const src_folder = "src";
 const lib_folder = "lib";
+const src_folder = "src";
 const tools_folder = "tools";
 
 const tool_exes = [_][]const u8{
@@ -41,7 +41,7 @@ const randomizer_exes = [_][]const u8{
 };
 
 const other_exes = [_][]const u8{
-    "tm35-generate-site",
+    // "tm35-generate-site",
     "tm35-misc",
     "tm35-no-trade-evolutions",
 };
@@ -76,12 +76,21 @@ const util_pkg = Pkg{
         mecha_pkg,
     },
 };
+const format_pkg = Pkg{
+    .name = "format",
+    .path = src_folder ++ "/core/format.zig",
+    .dependencies = &[_]Pkg{
+        mecha_pkg,
+        util_pkg,
+    },
+};
 
 const pkgs = [_]Pkg{
     clap_pkg,
     crc_pkg,
     mecha_pkg,
     util_pkg,
+    format_pkg,
 };
 
 pub fn build(b: *Builder) void {

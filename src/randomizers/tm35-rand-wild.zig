@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,7 +15,6 @@ const rand = std.rand;
 const testing = std.testing;
 
 const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -58,7 +58,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(&data, strings, allocator, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -69,18 +69,16 @@ pub fn main2(
     for (data.wild_pokemons.values()) |zone, i| {
         const zone_i = data.wild_pokemons.at(i).key;
 
-        for (zone.wild_areas.values()) |area, j| {
-            const area_id = zone.wild_areas.at(j).key;
-            const area_name = strings.get(area_id);
-
+        for (zone.wild_areas) |area, j| {
+            const area_id = @intToEnum(@TagType(format.WildPokemons), @intCast(u5, j));
             for (area.pokemons.values()) |*pokemon, k| {
                 const poke_i = area.pokemons.at(k).key;
                 if (pokemon.min_level) |l|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.max_level) |l|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ zone_i, area_name, poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
                 if (pokemon.species) |s|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ zone_i, area_name, poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ zone_i, @tagName(area_id), poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
             }
         }
     }
@@ -94,65 +92,90 @@ fn parseLine(
     allocator: *mem.Allocator,
     str: []const u8,
 ) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-    var p = parse.MutParser{ .str = str };
-
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokedex") => {
-            const index = try p.parse(parse.index);
-            _ = try data.pokedex.put(allocator, index);
-            return error.ParseError;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokedex => |pokedex| {
+            _ = try data.pokedex.put(allocator, pokedex.index);
+            return error.ParserFailed;
         },
-        c("pokemons") => {
-            const index = try p.parse(parse.index);
-            const pokemon = try data.pokemons.getOrPutValue(allocator, index, Pokemon{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("catch_rate") => pokemon.catch_rate = try p.parse(parse.usizev),
-                c("pokedex_entry") => pokemon.pokedex_entry = try p.parse(parse.usizev),
-                c("stats") => switch (m(try p.parse(parse.anyField))) {
-                    c("hp") => pokemon.stats[0] = try p.parse(parse.u8v),
-                    c("attack") => pokemon.stats[1] = try p.parse(parse.u8v),
-                    c("defense") => pokemon.stats[2] = try p.parse(parse.u8v),
-                    c("speed") => pokemon.stats[3] = try p.parse(parse.u8v),
-                    c("sp_attack") => pokemon.stats[4] = try p.parse(parse.u8v),
-                    c("sp_defense") => pokemon.stats[5] = try p.parse(parse.u8v),
-                    else => return error.ParseError,
+        .pokemons => |pokemons| {
+            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            switch (pokemons.value) {
+                .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
+                .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
+                .stats => |stats| switch (stats) {
+                    .hp => |hp| pokemon.stats[0] = hp,
+                    .attack => |attack| pokemon.stats[1] = attack,
+                    .defense => |defense| pokemon.stats[2] = defense,
+                    .speed => |speed| pokemon.stats[3] = speed,
+                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
+                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
                 },
-                // TODO: We're not using type information for anything yet
-                c("types") => {
-                    _ = try p.parse(parse.index);
-                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
+                .types,
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .gender_ratio,
+                .egg_cycles,
+                .base_friendship,
+                .growth_rate,
+                .egg_groups,
+                .abilities,
+                .color,
+                .evos,
+                .moves,
+                .tms,
+                .hms,
+                .name,
+                => return error.ParserFailed,
+            }
+            return error.ParserFailed;
+        },
+        .wild_pokemons => |wild_areas| {
+            const zone = try data.wild_pokemons.getOrPutValue(allocator, wild_areas.index, Zone{});
+            const area = &zone.wild_areas[@enumToInt(wild_areas.value)];
+            const wild_area = switch (wild_areas.value) {
+                .grass,
+                .grass_morning,
+                .grass_day,
+                .grass_night,
+                .dark_grass,
+                .rustling_grass,
+                .land,
+                .surf,
+                .ripple_surf,
+                .rock_smash,
+                .fishing,
+                .ripple_fishing,
+                .swarm_replace,
+                .day_replace,
+                .night_replace,
+                .radar_replace,
+                .unknown_replace,
+                .gba_replace,
+                .sea_unknown,
+                .old_rod,
+                .good_rod,
+                .super_rod,
+                => |*res| res,
+            };
+
+            switch (wild_area.*) {
+                .pokemons => |pokemons| {
+                    const pokemon = try area.pokemons.getOrPutValue(allocator, pokemons.index, WildPokemon{});
+
+                    // TODO: We're not using min/max level for anything yet
+                    switch (pokemons.value) {
+                        .min_level => |min_level| pokemon.min_level = min_level,
+                        .max_level => |max_level| pokemon.max_level = max_level,
+                        .species => |species| pokemon.species = species,
+                    }
+                    return;
                 },
-                else => return error.ParseError,
+                .encounter_rate => return error.ParserFailed,
             }
-            return error.ParseError;
         },
-        c("wild_pokemons") => {
-            const zone_index = try p.parse(parse.index);
-            const zone = try data.wild_pokemons.getOrPutValue(allocator, zone_index, Zone{});
-            const area_name = try p.parse(parse.anyField);
-
-            const area_id = try strings.put(area_name);
-            const area = try zone.wild_areas.getOrPutValue(allocator, area_id, WildArea{});
-
-            try p.parse(comptime parse.field("pokemons"));
-            const poke_index = try p.parse(parse.index);
-            const pokemon = try area.pokemons.getOrPutValue(allocator, poke_index, WildPokemon{});
-
-            // TODO: We're not using min/max level for anything yet
-            switch (m(try p.parse(parse.anyField))) {
-                c("min_level") => pokemon.min_level = try p.parse(parse.u8v),
-                c("max_level") => pokemon.max_level = try p.parse(parse.u8v),
-                c("species") => pokemon.species = try p.parse(parse.usizev),
-                else => return error.ParseError,
-            }
-
-            return;
-        },
-        else => return error.ParseError,
+        else => return error.ParserFailed,
     }
     unreachable;
 }
@@ -165,7 +188,7 @@ fn randomize(data: Data, allocator: *mem.Allocator, seed: u64, simular_total_sta
     const species_max = species.count();
 
     for (data.wild_pokemons.values()) |zone| {
-        for (zone.wild_areas.values()) |area| {
+        for (zone.wild_areas) |area| {
             for (area.pokemons.values()) |*wild_pokemon| {
                 const old_species = wild_pokemon.species orelse continue;
 
@@ -221,11 +244,13 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const Set = util.container.IntSet.Unmanaged(usize);
+const number_of_areas = @typeInfo(format.WildPokemons).Union.fields.len;
+
 const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Zones = util.container.IntMap.Unmanaged(usize, Zone);
-const WildAreas = util.container.IntMap.Unmanaged(usize, WildArea);
+const Set = util.container.IntSet.Unmanaged(usize);
+const WildAreas = [number_of_areas]WildArea;
 const WildPokemons = util.container.IntMap.Unmanaged(usize, WildPokemon);
+const Zones = util.container.IntMap.Unmanaged(usize, Zone);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -249,7 +274,7 @@ const Data = struct {
 };
 
 const Zone = struct {
-    wild_areas: WildAreas = WildAreas{},
+    wild_areas: WildAreas = [_]WildArea{WildArea{}} ** number_of_areas,
 };
 
 const WildArea = struct {
@@ -265,7 +290,6 @@ const WildPokemon = struct {
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
     catch_rate: usize = 1,
-    types: Set = Set{},
     pokedex_entry: usize = math.maxInt(usize),
 };
 
@@ -351,16 +375,16 @@ test "tm35-rand-wild" {
         \\.pokemons[9].stats.sp_attack=28
         \\.pokemons[9].stats.sp_defense=28
         \\.pokemons[9].catch_rate=0
-        \\.pokedex[0].field
-        \\.pokedex[1].field
-        \\.pokedex[2].field
-        \\.pokedex[3].field
-        \\.pokedex[4].field
-        \\.pokedex[5].field
-        \\.pokedex[6].field
-        \\.pokedex[7].field
-        \\.pokedex[8].field
-        \\.pokedex[9].field
+        \\.pokedex[0].height=0
+        \\.pokedex[1].height=0
+        \\.pokedex[2].height=0
+        \\.pokedex[3].height=0
+        \\.pokedex[4].height=0
+        \\.pokedex[5].height=0
+        \\.pokedex[6].height=0
+        \\.pokedex[7].height=0
+        \\.pokedex[8].height=0
+        \\.pokedex[9].height=0
         \\
     ;
 

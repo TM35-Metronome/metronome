@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -13,7 +14,6 @@ const rand = std.rand;
 const testing = std.testing;
 
 const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -73,7 +73,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -109,66 +109,72 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const sw = util.parse.Swhash(8);
-    const m = sw.match;
-    const c = sw.case;
-
-    var p = parse.MutParser{ .str = str };
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokemons") => {
-            const pokemon_index = try p.parse(parse.index);
-            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemon_index, Pokemon{});
-
-            const field = try p.parse(parse.anyField);
-            const index = try p.parse(parse.index);
-            switch (m(field)) {
-                c("tms") => {
-                    _ = try pokemon.tms.put(allocator, index);
-                    if (try p.parse(parse.boolv))
-                        _ = try pokemon.tms_learned.put(allocator, index);
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokemons => |pokemons| {
+            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            switch (pokemons.value) {
+                .tms => |tms| {
+                    _ = try pokemon.tms.put(allocator, tms.index);
+                    if (tms.value)
+                        _ = try pokemon.tms_learned.put(allocator, tms.index);
                     return;
                 },
-                c("hms") => {
-                    _ = try pokemon.hms.put(allocator, index);
-                    if (try p.parse(parse.boolv))
-                        _ = try pokemon.hms_learned.put(allocator, index);
+                .hms => |hms| {
+                    _ = try pokemon.hms.put(allocator, hms.index);
+                    if (hms.value)
+                        _ = try pokemon.hms_learned.put(allocator, hms.index);
                     return;
                 },
-                c("types") => {
-                    _ = try pokemon.types.put(allocator, try p.parse(parse.usizev));
-                    return error.ParseError;
+                .types => |types| {
+                    _ = try pokemon.types.put(allocator, types.value);
+                    return error.ParserFailed;
                 },
-                else => return error.ParseError,
+                .stats,
+                .catch_rate,
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .gender_ratio,
+                .egg_cycles,
+                .base_friendship,
+                .growth_rate,
+                .egg_groups,
+                .abilities,
+                .color,
+                .evos,
+                .moves,
+                .name,
+                .pokedex_entry,
+                => return error.ParserFailed,
             }
         },
-        c("moves") => {
-            const index = try p.parse(parse.index);
-            const move = try data.moves.getOrPutValue(allocator, index, Move{});
-
-            switch (m(try p.parse(parse.anyField))) {
-                c("power") => move.power = try p.parse(parse.usizev),
-                c("type") => move.type = try p.parse(parse.usizev),
-                else => {},
+        .moves => |moves| {
+            const move = try data.moves.getOrPutValue(allocator, moves.index, Move{});
+            switch (moves.value) {
+                .power => |power| move.power = power,
+                .type => |_type| move.type = _type,
+                .name,
+                .description,
+                .effect,
+                .accuracy,
+                .pp,
+                .target,
+                .priority,
+                .category,
+                => {},
             }
-            return error.ParseError;
+            return error.ParserFailed;
         },
-        c("tms") => {
-            _ = try data.tms.put(
-                allocator,
-                try p.parse(parse.index),
-                try p.parse(parse.usizev),
-            );
-            return error.ParseError;
+        .tms => |tms| {
+            _ = try data.tms.put(allocator, tms.index, tms.value);
+            return error.ParserFailed;
         },
-        c("hms") => {
-            _ = try data.hms.put(
-                allocator,
-                try p.parse(parse.index),
-                try p.parse(parse.usizev),
-            );
-            return error.ParseError;
+        .hms => |hms| {
+            _ = try data.hms.put(allocator, hms.index, hms.value);
+            return error.ParserFailed;
         },
-        else => return error.ParseError,
+        else => return error.ParserFailed,
     }
     unreachable;
 }
@@ -223,9 +229,9 @@ fn randomizeMachinesLearned(
     }
 }
 
-const Set = util.container.IntSet.Unmanaged(usize);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
 const Machines = util.container.IntMap.Unmanaged(usize, usize);
+const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Set = util.container.IntSet.Unmanaged(usize);
 //const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 

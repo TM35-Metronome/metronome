@@ -327,6 +327,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     for (game.items) |item, index| {
         const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = item.price.value() } } });
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .battle_effect = item.battle_effect } } });
 
         const pocket = switch (game.version) {
             .ruby, .sapphire, .emerald => try format.write(writer, format.Game{
@@ -655,6 +656,7 @@ fn outputGen4Data(nds_rom: nds.Rom, game: gen4.Game, writer: anytype) !void {
     for (game.ptrs.items) |item, index| {
         const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = item.price.value() } } });
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .battle_effect = item.battle_effect } } });
         try format.write(writer, format.Game{
             .items = .{
                 .index = i,
@@ -995,6 +997,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
         // having price be more than a u16
         const i = @intCast(u16, index);
         try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .price = @as(u32, item.price.value()) * 10 } } });
+        try format.write(writer, format.Game{ .items = .{ .index = i, .value = .{ .battle_effect = item.battle_effect } } });
         try format.write(writer, format.Game{
             .items = .{
                 .index = i,

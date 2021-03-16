@@ -1,5 +1,6 @@
 const common = @import("common.zig");
 const std = @import("std");
+const util = @import("util");
 
 const math = std.math;
 const mem = std.mem;
@@ -30,11 +31,11 @@ fn toUnionField(
     }.conv;
 }
 
-pub fn parse(str: []const u8) !Game {
-    const allocator = std.testing.failing_allocator;
-    const res = (comptime parser(Game))(allocator, str) catch |err| switch (err) {
-        error.OutOfMemory => unreachable,
-        else => return err,
+pub fn parse(arena: *mem.Allocator, str: []const u8) !Game {
+    const res = (comptime parser(Game))(arena, str) catch |err| switch (err) {
+        error.OtherError => unreachable,
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ParserFailed => return error.ParserFailed,
     };
     return res.value;
 }
@@ -42,54 +43,72 @@ pub fn parse(str: []const u8) !Game {
 pub fn parser(comptime T: type) Parser(T) {
     @setEvalBranchQuota(100000000);
     const Res = Result(T);
-    switch (@typeInfo(T)) {
-        .Int => return combine(.{ ascii.char('='), int(T, 10), eos }),
-        .Enum => return combine(.{ ascii.char('='), enumeration(T), eos }),
-        .Bool => return convert(bool, toBool, combine(.{ ascii.char('='), rest })),
-        .Union => |info| {
-            var children: [info.fields.len]Parser(T) = undefined;
-            for (info.fields) |f, i| {
-                const child_parser = parser(f.field_type);
-                const field_parser = combine(.{ string("." ++ f.name), child_parser });
-                children[i] = map(T, toUnionField(T, f.field_type, f.name), field_parser);
-            }
+    if (isArray(T)) {
+        return map(T, toStruct(T), combine(.{
+            ascii.char('['),
+            int(T.Index, 10),
+            ascii.char(']'),
+            parser(T.Value),
+        }));
+    } else switch (T) {
+        []const u8 => {
+            // With no '\\' we can assume that string does not need to be unescaped, so we
+            // can avoid doing an allocation.
+            const text = combine(.{ many(ascii.not(ascii.char('\\')), .{ .collect = false }), eos });
+            const escaped_text = convert([]const u8, struct {
+                fn conv(allocator: *mem.Allocator, str: []const u8) Error![]const u8 {
+                    return util.escape.unEscape(allocator, str, util.escape.zig_escapes);
+                }
+            }.conv, rest);
 
-            return oneOf(children);
+            return combine(.{
+                ascii.char('='),
+                oneOf(.{ text, escaped_text }),
+            });
         },
-        else => switch (T) {
-            []const u8 => return combine(.{ ascii.char('='), rest }),
-            else => if (isArray(T)) {
-                return map(T, toStruct(T), combine(.{
-                    ascii.char('['),
-                    int(T.Index, 10),
-                    ascii.char(']'),
-                    parser(T.Value),
-                }));
-            } else @compileError("'" ++ @typeName(T) ++ "' is not supported"),
+        else => switch (@typeInfo(T)) {
+            .Int => return combine(.{ ascii.char('='), int(T, 10), eos }),
+            .Enum => return combine(.{ ascii.char('='), enumeration(T), eos }),
+            .Bool => return convert(bool, toBool, combine(.{ ascii.char('='), rest })),
+            .Union => |info| {
+                var children: [info.fields.len]Parser(T) = undefined;
+                for (info.fields) |f, i| {
+                    const child_parser = parser(f.field_type);
+                    const field_parser = combine(.{ string("." ++ f.name), child_parser });
+                    children[i] = map(T, toUnionField(T, f.field_type, f.name), field_parser);
+                }
+
+                return oneOf(children);
+            },
+            else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
         },
     }
 }
 
 pub fn write(writer: anytype, value: anytype) !void {
     const T = @TypeOf(value);
-    switch (@typeInfo(T)) {
-        .Bool, .Int => try writer.print("={}\n", .{value}),
-        .Enum => try writer.print("={}\n", .{@tagName(value)}),
-        .Union => |info| {
-            const Tag = @TagType(T);
-            inline for (info.fields) |field| {
-                if (@field(Tag, field.name) == value) {
-                    try writer.print(".{s}", .{field.name});
-                    try write(writer, @field(value, field.name));
-                }
-            }
+    if (comptime isArray(T)) {
+        try writer.print("[{}]", .{value.index});
+        try write(writer, value.value);
+    } else switch (T) {
+        []const u8 => {
+            try writer.writeAll("=");
+            try util.escape.writeEscaped(writer, value, util.escape.zig_escapes);
+            try writer.writeAll("\n");
         },
-        else => switch (T) {
-            []const u8 => try writer.print("={s}\n", .{value}),
-            else => if (comptime isArray(T)) {
-                try writer.print("[{}]", .{value.index});
-                try write(writer, value.value);
-            } else @compileError("'" ++ @typeName(T) ++ "' is not supported"),
+        else => switch (@typeInfo(T)) {
+            .Bool, .Int => try writer.print("={}\n", .{value}),
+            .Enum => try writer.print("={}\n", .{@tagName(value)}),
+            .Union => |info| {
+                const Tag = @TagType(T);
+                inline for (info.fields) |field| {
+                    if (@field(Tag, field.name) == value) {
+                        try writer.print(".{s}", .{field.name});
+                        try write(writer, @field(value, field.name));
+                    }
+                }
+            },
+            else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
         },
     }
 }
@@ -155,8 +174,14 @@ test "parse" {
     expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
 }
 
+pub const Color = common.ColorKind;
+pub const EggGroup = common.EggGroup;
+pub const GrowthRate = common.GrowthRate;
+pub const PartyType = common.PartyType;
+pub const Version = common.Version;
+
 pub const Game = union(enum) {
-    version: common.Version,
+    version: Version,
     game_title: []const u8,
     gamecode: []const u8,
     instant_text: bool,
@@ -180,15 +205,13 @@ pub const Game = union(enum) {
     text: Array(u16, []const u8),
 };
 
-pub const Gender = enum { male, female };
-
 pub const Trainer = union(enum) {
     class: u8,
     encounter_music: u8,
     trainer_picture: u8,
     name: []const u8,
     items: Array(u8, u16),
-    party_type: common.PartyType,
+    party_type: PartyType,
     party_size: u8,
     party: Array(u8, PartyMember),
 };
@@ -211,37 +234,36 @@ pub const Move = union(enum) {
     pp: u8,
     target: u8,
     priority: u8,
-    category: common.MoveCategory,
+    category: Category,
+
+    pub const Category = common.MoveCategory;
 };
 
+pub fn Stats(comptime T: type) type {
+    return union(enum) {
+        hp: T,
+        attack: T,
+        defense: T,
+        speed: T,
+        sp_attack: T,
+        sp_defense: T,
+    };
+}
+
 pub const Pokemon = union(enum) {
-    stats: union(enum) {
-        hp: u8,
-        attack: u8,
-        defense: u8,
-        speed: u8,
-        sp_attack: u8,
-        sp_defense: u8,
-    },
+    stats: Stats(u8),
     types: Array(u8, u8),
     catch_rate: u8,
     base_exp_yield: u8,
-    ev_yield: union(enum) {
-        hp: u2,
-        attack: u2,
-        defense: u2,
-        speed: u2,
-        sp_attack: u2,
-        sp_defense: u2,
-    },
+    ev_yield: Stats(u2),
     items: Array(u8, u16),
     gender_ratio: u8,
     egg_cycles: u8,
     base_friendship: u8,
-    growth_rate: common.GrowthRate,
-    egg_groups: Array(u8, common.EggGroup),
+    growth_rate: GrowthRate,
+    egg_groups: Array(u8, EggGroup),
     abilities: Array(u8, u8),
-    color: common.ColorKind,
+    color: Color,
     evos: Array(u8, Evolution),
     moves: Array(u8, LevelUpMove),
     tms: Array(u8, bool),
@@ -251,7 +273,11 @@ pub const Pokemon = union(enum) {
 };
 
 pub const Evolution = union(enum) {
-    method: enum {
+    method: Method,
+    param: u16,
+    target: u16,
+
+    pub const Method = enum {
         attack_eql_defense,
         attack_gth_defense,
         attack_lth_defense,
@@ -282,9 +308,7 @@ pub const Evolution = union(enum) {
         use_item,
         use_item_on_female,
         use_item_on_male,
-    },
-    param: u16,
-    target: u16,
+    };
 };
 
 pub const LevelUpMove = union(enum) {
@@ -300,18 +324,21 @@ pub const Type = union(enum) {
     name: []const u8,
 };
 
+pub const Pocket = enum {
+    none,
+    items,
+    key_items,
+    poke_balls,
+    tms_hms,
+    berries,
+};
+
 pub const Item = union(enum) {
     name: []const u8,
     description: []const u8,
     price: u32,
-    pocket: enum {
-        none,
-        items,
-        key_items,
-        poke_balls,
-        tms_hms,
-        berries,
-    },
+    battle_effect: u8,
+    pocket: Pocket,
 };
 
 pub const Pokedex = union(enum) {

@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -16,7 +17,6 @@ const unicode = std.unicode;
 
 const escape = util.escape;
 const exit = util.exit;
-const parse = util.parse;
 
 const Utf8 = util.unicode.Utf8View;
 
@@ -59,7 +59,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -91,48 +91,81 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-
-    var p = parse.MutParser{ .str = str };
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokemons") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("name"));
-            const name = try p.parse(parse.strv);
-            _ = try data.pokemons.put(allocator, index, try mem.dupe(allocator, u8, name));
-            return;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokemons => |pokemons| switch (pokemons.value) {
+            .name => |name| {
+                _ = try data.pokemons.put(allocator, pokemons.index, try mem.dupe(allocator, u8, name));
+                return;
+            },
+            .stats,
+            .types,
+            .catch_rate,
+            .base_exp_yield,
+            .ev_yield,
+            .items,
+            .gender_ratio,
+            .egg_cycles,
+            .base_friendship,
+            .growth_rate,
+            .egg_groups,
+            .abilities,
+            .color,
+            .evos,
+            .moves,
+            .tms,
+            .hms,
+            .pokedex_entry,
+            => return error.ParserFailed,
         },
-        c("trainers") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("name"));
-            const name = try p.parse(parse.strv);
-            _ = try data.trainers.put(allocator, index, try mem.dupe(allocator, u8, name));
-            return;
+        .trainers => |trainers| switch (trainers.value) {
+            .name => |name| {
+                _ = try data.trainers.put(allocator, trainers.index, try mem.dupe(allocator, u8, name));
+                return;
+            },
+            .class,
+            .encounter_music,
+            .trainer_picture,
+            .items,
+            .party_type,
+            .party_size,
+            .party,
+            => return error.ParserFailed,
         },
-        c("moves") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("name"));
-            const name = try p.parse(parse.strv);
-            _ = try data.moves.put(allocator, index, try mem.dupe(allocator, u8, name));
-            return;
+        .moves => |moves| switch (moves.value) {
+            .name => |name| {
+                _ = try data.moves.put(allocator, moves.index, try mem.dupe(allocator, u8, name));
+                return;
+            },
+            .description,
+            .effect,
+            .power,
+            .type,
+            .accuracy,
+            .pp,
+            .target,
+            .priority,
+            .category,
+            => return error.ParserFailed,
         },
-        c("abilities") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("name"));
-            const name = try p.parse(parse.strv);
-            _ = try data.abilities.put(allocator, index, try mem.dupe(allocator, u8, name));
-            return;
+        .abilities => |abilities| switch (abilities.value) {
+            .name => |name| {
+                _ = try data.abilities.put(allocator, abilities.index, try mem.dupe(allocator, u8, name));
+                return;
+            },
         },
-        c("items") => {
-            const index = try p.parse(parse.index);
-            try p.parse(comptime parse.field("name"));
-            const name = try mem.dupe(allocator, u8, try p.parse(parse.strv));
-            _ = try data.item_names.put(allocator, index, try mem.dupe(allocator, u8, name));
-            return;
+        .items => |items| switch (items.value) {
+            .name => |name| {
+                _ = try data.item_names.put(allocator, items.index, try mem.dupe(allocator, u8, name));
+                return;
+            },
+            .battle_effect,
+            .description,
+            .price,
+            .pocket,
+            => return error.ParserFailed,
         },
-        else => return error.ParseError,
+        else => return error.ParserFailed,
     }
     unreachable;
 }

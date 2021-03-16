@@ -6,6 +6,41 @@ const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
+pub const Escape = struct {
+    unescaped: []const u8,
+    escaped: []const u8,
+};
+
+/// A writer that escapes the bytes written to it.
+pub fn EscapingStream(comptime escapes: []const Escape, comptime InnerWriter) type {
+    return struct {
+        writer: InnerWriter,
+
+        pub const Error = InnerWriter.Error;
+        pub const Writer = io.Writer(*@This(), Error, write);
+    };
+}
+
+pub const Replacement = struct {
+    find: []const u8,
+    replace: []const u8,
+};
+
+pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime InnerWriter: type) type {
+    return struct {
+        writer: InnerWriter,
+
+        pub const Error = InnerWriter.Error;
+        pub const Writer = io.Writer(*@This(), Error, write);
+
+        pub fn writer(self: *Self) Writer {
+            return .{ .context = self };
+        }
+
+        pub fn write(self: *Self, bytes: []const u8) Error!usize {}
+    };
+}
+
 const chars = blk: {
     var res: [255]u8 = undefined;
     for (res) |*char, i|

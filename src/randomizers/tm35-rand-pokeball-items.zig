@@ -1,4 +1,5 @@
 const clap = @import("clap");
+const format = @import("format");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,7 +15,6 @@ const rand = std.rand;
 const testing = std.testing;
 
 const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -61,7 +61,7 @@ pub fn main2(
     while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, strings, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParseError => stdio.out.print("{}\n", .{line}) catch |err2| {
+            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
             },
         };
@@ -89,30 +89,28 @@ fn parseLine(
     data: *Data,
     str: []const u8,
 ) !void {
-    const sw = parse.Swhash(16);
-    const m = sw.match;
-    const c = sw.case;
-    var p = parse.MutParser{ .str = str };
-
-    switch (m(try p.parse(parse.anyField))) {
-        c("pokeball_items") => {
-            const ball_index = try p.parse(parse.index);
-            _ = try p.parse(comptime parse.field("item"));
-            const ball_item = try p.parse(parse.usizev);
-            _ = try data.pokeballs.put(allocator, ball_index, ball_item);
-            return;
+    const parsed = try format.parse(allocator, str);
+    switch (parsed) {
+        .pokeball_items => |items| switch (items.value) {
+            .item => |item| {
+                _ = try data.pokeballs.put(allocator, items.index, item);
+                return;
+            },
+            .amount => return error.ParserFailed,
         },
-        c("items") => {
-            const index = try p.parse(parse.index);
-            const item = try data.items.getOrPutValue(allocator, index, Item{});
-            switch (m(try p.parse(parse.anyField))) {
-                c("pocket") => item.pocket = try strings.put(try p.parse(parse.strv)),
-                c("price") => item.price = try p.parse(parse.usizev),
-                else => return error.ParseError,
+        .items => |items| {
+            const item = try data.items.getOrPutValue(allocator, items.index, Item{});
+            switch (items.value) {
+                .pocket => |pocket| item.pocket = pocket,
+                .price => |price| item.price = price,
+                .name,
+                .description,
+                .battle_effect,
+                => return error.ParserFailed,
             }
-            return error.ParseError;
+            return error.ParserFailed;
         },
-        else => return error.ParseError,
+        else => return error.ParserFailed,
     }
     unreachable;
 }
@@ -128,25 +126,24 @@ fn randomize(
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    var pocket_blacklist_buffer: [2]usize = undefined;
-    const pocket_blacklist = blk: {
-        var list = std.ArrayList(usize).fromOwnedSlice(std.testing.failing_allocator, &pocket_blacklist_buffer);
-        list.resize(0) catch unreachable;
-        if (!include_tms_hms)
-            list.append(try strings.put("tms_hms")) catch unreachable;
-        if (!include_key_items)
-            list.append(try strings.put("key_items")) catch unreachable;
-        break :blk list.items;
+    var z: usize = 0;
+    var pocket_blacklist_buffer: [2]format.Pocket = undefined;
+    var pocket_blacklist = std.ArrayListUnmanaged(format.Pocket){
+        .items = pocket_blacklist_buffer[z..z],
+        .capacity = pocket_blacklist_buffer.len,
     };
+    if (!include_tms_hms)
+        pocket_blacklist.appendAssumeCapacity(.tms_hms);
+    if (!include_key_items)
+        pocket_blacklist.appendAssumeCapacity(.key_items);
 
-    const items_pocket = try strings.put("items");
-    const pick_from = try data.getItems(allocator, items_pocket, pocket_blacklist);
+    const pick_from = try data.getItems(allocator, pocket_blacklist.items);
     const max = pick_from.count();
 
     outer: for (data.pokeballs.values()) |*ball, i| {
         const key = data.pokeballs.at(i).key;
         const item = data.items.get(key) orelse continue;
-        for (pocket_blacklist) |blacklisted_pocket| {
+        for (pocket_blacklist.items) |blacklisted_pocket| {
             if (item.pocket == blacklisted_pocket)
                 continue :outer;
         }
@@ -155,15 +152,19 @@ fn randomize(
     }
 }
 
-const Set = util.container.IntSet.Unmanaged(usize);
-const Pokeballs = util.container.IntMap.Unmanaged(usize, usize);
 const Items = util.container.IntMap.Unmanaged(usize, Item);
+const Pokeballs = util.container.IntMap.Unmanaged(usize, usize);
+const Set = util.container.IntSet.Unmanaged(usize);
 
 const Data = struct {
     pokeballs: Pokeballs = Pokeballs{},
     items: Items = Items{},
 
-    fn getItems(d: *Data, allocator: *mem.Allocator, items_pocket: usize, pocket_blacklist: []const usize) !Set {
+    fn getItems(
+        d: *Data,
+        allocator: *mem.Allocator,
+        pocket_blacklist: []const format.Pocket,
+    ) !Set {
         var res = Set{};
         errdefer res.deinit(allocator);
 
@@ -173,7 +174,7 @@ const Data = struct {
                     continue :outer;
                 // Assume that items in the 'items' pocket with price 0 is
                 // none useful or invalid items.
-                if (item.price == 0 and item.pocket == items_pocket)
+                if (item.price == 0 and item.pocket == .items)
                     continue :outer;
             }
 
@@ -185,7 +186,7 @@ const Data = struct {
 };
 
 const Item = struct {
-    pocket: usize = math.maxInt(usize),
+    pocket: format.Pocket = .none,
     price: usize = 1,
 };
 
