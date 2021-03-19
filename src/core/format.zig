@@ -119,8 +119,7 @@ pub fn write(writer: anytype, value: anytype) !void {
     } else switch (T) {
         []const u8 => {
             try writer.writeAll("=");
-            var escaping_writer = util.escape.default.escapingWriter(writer);
-            try escaping_writer.writer().writeAll(value);
+            try util.escape.default.escapeWrite(writer, value);
             try writer.writeAll("\n");
         },
         else => switch (@typeInfo(T)) {
