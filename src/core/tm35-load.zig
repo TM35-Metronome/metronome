@@ -1115,10 +1115,7 @@ fn outputString(
     comptime field_name: []const u8,
     string: []const u8,
 ) !void {
-    var buf: [mem.page_size]u8 = undefined;
-    var fbs = io.fixedBufferStream(&buf);
-    try escape.writeEscaped(fbs.writer(), string, escape.zig_escapes);
-    try format.write(writer, @unionInit(format.Game, array_name, .{ .index = i, .value = @unionInit(T, field_name, fbs.getWritten()) }));
+    try format.write(writer, @unionInit(format.Game, array_name, .{ .index = i, .value = @unionInit(T, field_name, string) }));
 }
 
 test "" {
