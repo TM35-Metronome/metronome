@@ -2,6 +2,7 @@ const common = @import("common.zig");
 const std = @import("std");
 const util = @import("util");
 
+const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
@@ -57,7 +58,7 @@ pub fn parser(comptime T: type) Parser(T) {
             const text = combine(.{ many(ascii.not(ascii.char('\\')), .{ .collect = false }), eos });
             const escaped_text = convert([]const u8, struct {
                 fn conv(allocator: *mem.Allocator, str: []const u8) Error![]const u8 {
-                    return util.escape.unEscape(allocator, str, util.escape.zig_escapes);
+                    return try util.escape.default.unescapeAlloc(allocator, str);
                 }
             }.conv, rest);
 
@@ -70,16 +71,41 @@ pub fn parser(comptime T: type) Parser(T) {
             .Int => return combine(.{ ascii.char('='), int(T, 10), eos }),
             .Enum => return combine(.{ ascii.char('='), enumeration(T), eos }),
             .Bool => return convert(bool, toBool, combine(.{ ascii.char('='), rest })),
-            .Union => |info| {
-                var children: [info.fields.len]Parser(T) = undefined;
-                for (info.fields) |f, i| {
-                    const child_parser = parser(f.field_type);
-                    const field_parser = combine(.{ string("." ++ f.name), child_parser });
-                    children[i] = map(T, toUnionField(T, f.field_type, f.name), field_parser);
-                }
+            .Union => |info| return struct {
+                fn p(allocator: *mem.Allocator, str: []const u8) Error!Result(T) {
+                    // Ensure that fields are sorted, so that the largest field name
+                    // is matched on first.
+                    const fields = comptime blk: {
+                        const Field = struct {
+                            name: []const u8,
+                            index: usize,
+                        };
 
-                return oneOf(children);
-            },
+                        var res: [info.fields.len]Field = undefined;
+                        for (info.fields) |f, i|
+                            res[i] = .{ .name = f.name, .index = i };
+
+                        std.sort.sort(Field, &res, {}, struct {
+                            fn len(_: void, a: Field, b: Field) bool {
+                                return a.name.len > b.name.len;
+                            }
+                        }.len);
+                        break :blk res;
+                    };
+
+                    inline for (fields) |f, i| {
+                        if (mem.startsWith(u8, str, "." ++ f.name)) {
+                            const after_field = str[f.name.len + 1 ..];
+                            const FieldT = info.fields[f.index].field_type;
+                            const to_union = comptime toUnionField(T, FieldT, f.name);
+                            const field_parser = comptime map(T, to_union, parser(FieldT));
+                            return field_parser(allocator, after_field);
+                        }
+                    }
+
+                    return error.ParserFailed;
+                }
+            }.p,
             else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
         },
     }
@@ -93,12 +119,13 @@ pub fn write(writer: anytype, value: anytype) !void {
     } else switch (T) {
         []const u8 => {
             try writer.writeAll("=");
-            try util.escape.writeEscaped(writer, value, util.escape.zig_escapes);
+            var escaping_writer = util.escape.default.escapingWriter(writer);
+            try escaping_writer.writer().writeAll(value);
             try writer.writeAll("\n");
         },
         else => switch (@typeInfo(T)) {
             .Bool, .Int => try writer.print("={}\n", .{value}),
-            .Enum => try writer.print("={}\n", .{@tagName(value)}),
+            .Enum => try write(writer, @tagName(value)),
             .Union => |info| {
                 const Tag = @TagType(T);
                 inline for (info.fields) |field| {

@@ -105,9 +105,10 @@ pub fn main2(
         if (item.name.bytes.len != 0)
             stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name.bytes }) catch |err| return exit.stdoutErr(stdio.err, err);
         if (item.description.bytes.len != 0) {
-            stdio.out.print(".items[{}].description=", .{item_id}) catch |err| return exit.stdoutErr(stdio.err, err);
-            escape.writeEscaped(stdio.out, item.description.bytes, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
-            stdio.out.writeAll("\n") catch |err| return exit.stdoutErr(stdio.err, err);
+            format.write(
+                stdio.out,
+                format.Game{ .items = .{ .index = item_id, .value = .{ .description = item.description.bytes } } },
+            ) catch |err| return exit.stdoutErr(stdio.err, err);
         }
     }
     for (data.pokeball_items.values()) |item, i| {
@@ -518,7 +519,7 @@ fn randomize(
 
     const num_pokemons = species.count();
     for (species.span()) |s_range| {
-        var pokemon_id: usize = s_range.start;
+        var pokemon_id = s_range.start;
         while (pokemon_id <= s_range.end) : (pokemon_id += 1) {
             const pokemon = data.pokemons.get(pokemon_id).?;
 
@@ -601,7 +602,7 @@ fn randomize(
                     else => unreachable,
                 };
 
-                _ = try pokemon.evos.put(allocator, stone, Evolution{
+                _ = try pokemon.evos.put(allocator, @intCast(u16, stone), Evolution{
                     .method = .use_item,
                     .item = item_id,
                     .target = pick,
@@ -621,8 +622,8 @@ fn randomize(
     }
 }
 
-fn sum(buf: []const u8) usize {
-    var res: usize = 0;
+fn sum(buf: []const u8) u16 {
+    var res: u16 = 0;
     for (buf) |item|
         res += item;
 
@@ -644,12 +645,12 @@ fn filterBy(
     allocator: *mem.Allocator,
     species: Set,
     pokemons: Pokemons,
-    filter: fn (Pokemon, []usize) []const usize,
+    filter: fn (Pokemon, []u16) []const u16,
 ) !PokemonBy {
-    var buf: [16]usize = undefined;
+    var buf: [16]u16 = undefined;
     var pokemons_by = PokemonBy{};
     for (species.span()) |s_range| {
-        var id: usize = s_range.start;
+        var id = s_range.start;
         while (id <= s_range.end) : (id += 1) {
             const pokemon = pokemons.get(id).?;
             for (filter(pokemon.*, &buf)) |key| {
@@ -661,34 +662,34 @@ fn filterBy(
     return pokemons_by;
 }
 
-fn statsFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn statsFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     buf[0] = sum(&pokemon.stats);
     return buf[0..1];
 }
 
-fn friendshipFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn friendshipFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     buf[0] = pokemon.base_friendship;
     return buf[0..1];
 }
 
-fn growthRateFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn growthRateFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     buf[0] = @enumToInt(pokemon.growth_rate);
     return buf[0..1];
 }
 
-fn typeFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn typeFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     return setFilter("types", pokemon, buf);
 }
 
-fn abilityFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn abilityFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     return setFilter("abilities", pokemon, buf);
 }
 
-fn eggGroupFilter(pokemon: Pokemon, buf: []usize) []const usize {
+fn eggGroupFilter(pokemon: Pokemon, buf: []u16) []const u16 {
     return setFilter("egg_groups", pokemon, buf);
 }
 
-fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []usize) []const usize {
+fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []u16) []const u16 {
     var i: usize = 0;
     for (@field(pokemon, field).span()) |range| {
         var j = range.start;
@@ -701,12 +702,12 @@ fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []usize) []const
     return buf[0..i];
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
-const Items = util.container.IntMap.Unmanaged(usize, Item);
-const PokeballItems = util.container.IntMap.Unmanaged(usize, usize);
-const PokemonBy = util.container.IntMap.Unmanaged(usize, Set);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Set = util.container.IntSet.Unmanaged(usize);
+const Evolutions = util.container.IntMap.Unmanaged(u16, Evolution);
+const Items = util.container.IntMap.Unmanaged(u16, Item);
+const PokeballItems = util.container.IntMap.Unmanaged(u16, u16);
+const PokemonBy = util.container.IntMap.Unmanaged(u16, Set);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Set = util.container.IntSet.Unmanaged(u16);
 
 const Data = struct {
     max_evolutions: usize = 0,
@@ -735,9 +736,9 @@ const Pokemon = struct {
     evos: Evolutions = Evolutions{},
     stats: [6]u8 = [_]u8{0} ** 6,
     growth_rate: format.GrowthRate = .fast,
-    base_friendship: usize = 0,
-    catch_rate: usize = 1,
-    pokedex_entry: usize = math.maxInt(usize),
+    base_friendship: u16 = 0,
+    catch_rate: u16 = 1,
+    pokedex_entry: u16 = math.maxInt(u16),
     abilities: Set = Set{},
     types: Set = Set{},
     egg_groups: Set = Set{},
@@ -751,8 +752,8 @@ const Item = struct {
 
 const Evolution = struct {
     method: format.Evolution.Method = .unused,
-    item: usize = 0,
-    target: usize = 0,
+    item: u16 = 0,
+    target: u16 = 0,
 };
 
 test "tm35-random stones" {

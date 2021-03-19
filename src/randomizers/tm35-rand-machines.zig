@@ -91,11 +91,11 @@ pub fn main2(
         }) catch |err| return exit.stdoutErr(stdio.err, err);
     }
     for (data.items.values()) |item, i| {
-        stdio.out.print(".items[{}].description=", .{
-            data.items.at(i).key,
-        }) catch |err| return exit.stdoutErr(stdio.err, err);
-        escape.writeEscaped(stdio.out, item.description.bytes, escape.zig_escapes) catch |err| return exit.stdoutErr(stdio.err, err);
-        stdio.out.writeAll("\n") catch |err| return exit.stdoutErr(stdio.err, err);
+        const index = data.items.at(i).key;
+        format.write(
+            stdio.out,
+            format.Game{ .items = .{ .index = index, .value = .{ .description = item.description.bytes } } },
+        ) catch |err| return exit.stdoutErr(stdio.err, err);
     }
 
     return 0;
@@ -122,8 +122,8 @@ fn parseLine(
         .moves => |moves| {
             const move = try data.moves.getOrPutValue(allocator, moves.index, Move{});
             switch (moves.value) {
-                .description => |description| {
-                    const desc = try escape.unEscape(allocator, description, escape.zig_escapes);
+                .description => |_desc| {
+                    const desc = try mem.dupe(allocator, u8, _desc);
                     move.description = try Utf8.init(desc);
                 },
                 else => {},
@@ -138,8 +138,8 @@ fn parseLine(
                     const name = try mem.dupe(allocator, u8, _name);
                     item.name = try Utf8.init(name);
                 },
-                .description => |description| {
-                    const desc = try escape.unEscape(allocator, description, escape.zig_escapes);
+                .description => |_desc| {
+                    const desc = try mem.dupe(allocator, u8, _desc);
                     item.description = try Utf8.init(desc);
                 },
                 else => {},
@@ -213,7 +213,7 @@ fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
     return Utf8.initUnchecked(str.bytes[0..it.i]);
 }
 
-const Items = util.container.IntMap.Unmanaged(usize, Item);
+const Items = util.container.IntMap.Unmanaged(u16, Item);
 const Machines = util.container.IntMap.Unmanaged(usize, usize);
 const Moves = util.container.IntMap.Unmanaged(usize, Move);
 

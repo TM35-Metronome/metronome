@@ -27,10 +27,10 @@ const bug_message = "Hi user. You have just hit a bug/limitation in the program.
     "If you care about this program, please report this to the issue tracker here: " ++
     "https://github.com/TM35-Metronome/metronome/issues/new";
 
+const WINDOW_HEIGHT = 600;
+const WINDOW_WIDTH = 800;
 const fps = 60;
 const frame_time = time.ns_per_s / fps;
-const WINDOW_WIDTH = 800;
-const WINDOW_HEIGHT = 600;
 
 usingnamespace switch (std.Target.current.os.tag) {
     .windows => struct {
@@ -772,17 +772,11 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
 
 fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8, out: []const u8) !void {
     const escapes = switch (std.Target.current.os.tag) {
-        .linux => blk: {
-            var res: [255][]const u8 = undefined;
-            mem.copy([]const u8, res[0..], &escape.default_escapes);
-            res['\''] = "'\\''";
-            break :blk res;
+        .linux => [_]escape.Escape{
+            .{ .escaped = "'\\''", .unescaped = "\'" },
         },
-        .windows => blk: {
-            var res: [255][]const u8 = undefined;
-            mem.copy([]const u8, res[0..], &escape.default_escapes);
-            res['"'] = "\"";
-            break :blk res;
+        .windows => [_]escape.Escape{
+            .{ .escaped = "\\\"", .unescaped = "\"" },
         },
         else => @compileError("Unsupported os"),
     };
@@ -792,10 +786,13 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
         else => @compileError("Unsupported os"),
     };
 
+    var escaping_writer = escape.generate(&escapes).escapingWriter(writer);
     try writer.writeAll(quotes);
-    try escape.writeEscaped(writer, exes.load.toSliceConst(), escapes);
+    try escaping_writer.writer().writeAll(exes.load.toSliceConst());
+    try escaping_writer.finish();
     try writer.writeAll(quotes ++ " " ++ quotes);
-    try escape.writeEscaped(writer, in, escapes);
+    try escaping_writer.writer().writeAll(in);
+    try escaping_writer.finish();
     try writer.writeAll(quotes ++ " | ");
 
     for (settings.order) |order| {
@@ -805,7 +802,8 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
             continue;
 
         try writer.writeAll(quotes);
-        try escape.writeEscaped(writer, command.path, escapes);
+        try escaping_writer.writer().writeAll(command.path);
+        try escaping_writer.finish();
         try writer.writeAll(quotes);
 
         for (command.params) |param, i| {
@@ -817,11 +815,13 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
 
             try writer.writeAll(" " ++ quotes);
             try writer.writeAll(param_pre);
-            try escape.writeEscaped(writer, param_name, escapes);
+            try escaping_writer.writer().writeAll(param_name);
+            try escaping_writer.finish();
             try writer.writeAll(quotes);
             if (param.takes_value != .None) {
                 try writer.writeAll(" " ++ quotes);
-                try escape.writeEscaped(writer, arg.toSliceConst(), escapes);
+                try escaping_writer.writer().writeAll(arg.toSliceConst());
+                try escaping_writer.finish();
                 try writer.writeAll(quotes);
             }
         }
@@ -830,11 +830,14 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
     }
 
     try writer.writeAll(quotes);
-    try escape.writeEscaped(writer, exes.apply.toSliceConst(), escapes);
+    try escaping_writer.writer().writeAll(exes.apply.toSliceConst());
+    try escaping_writer.finish();
     try writer.writeAll(quotes ++ " --replace --output " ++ quotes);
-    try escape.writeEscaped(writer, out, escapes);
+    try escaping_writer.writer().writeAll(out);
+    try escaping_writer.finish();
     try writer.writeAll(quotes ++ " " ++ quotes);
-    try escape.writeEscaped(writer, in, escapes);
+    try escaping_writer.writer().writeAll(in);
+    try escaping_writer.finish();
     try writer.writeAll(quotes);
     try writer.writeAll("\n");
 }
@@ -949,14 +952,10 @@ const Settings = struct {
         }
     }
 
-    const escapes = blk: {
-        var res: [255][]const u8 = undefined;
-        mem.copy([]const u8, &res, &escape.default_escapes);
-        res['\n'] = "\\n";
-        res['\\'] = "\\\\";
-        res[','] = "\\,";
-        break :blk res;
+    const csv_escapes = escape.default_escapes ++ [_]escape.Escape{
+        .{ .escaped = "\\,", .unescaped = "," },
     };
+    const csv_escape = escape.generate(csv_escapes);
 
     fn save(settings: Settings, exes: Exes, writer: anytype) !void {
         for (settings.order) |o| {
@@ -965,7 +964,7 @@ const Settings = struct {
 
             const command = exes.commands[o];
             const args = settings.commands_args[o];
-            try escape.writeEscaped(writer, path.basename(command.path), escapes);
+            try csv_escape.escapeWrite(writer, path.basename(command.path));
             for (args) |arg, i| {
                 const param = command.params[i];
                 if (arg.len == 0)
@@ -975,10 +974,10 @@ const Settings = struct {
                 const param_pre = if (param.names.long) |_| "--" else "-";
                 const param_name = if (param.names.long) |long| long else @as(*const [1]u8, &param.names.short.?)[0..];
                 try writer.writeAll(param_pre);
-                try escape.writeEscaped(writer, param_name, escapes);
+                try csv_escape.escapeWrite(writer, param_name);
                 if (param.takes_value != .None) {
                     try writer.writeAll(",");
-                    try escape.writeEscaped(writer, arg.toSliceConst(), escapes);
+                    try csv_escape.escapeWrite(writer, arg.toSliceConst());
                 }
             }
             try writer.writeAll("\n");
@@ -989,16 +988,13 @@ const Settings = struct {
         settings.reset(exes);
 
         const EscapedSplitterArgIterator = struct {
-            const Error = io.FixedBufferStream([]u8).WriteError;
             separator: escape.EscapedSplitter,
-            buf: [100]u8 = undefined,
+            buf: [mem.page_size]u8 = undefined,
 
-            pub fn next(iter: *@This()) Error!?[]const u8 {
+            pub fn next(iter: *@This()) mem.Allocator.Error!?[]const u8 {
                 const n = iter.separator.next() orelse return null;
-                var fbs = io.fixedBufferStream(&iter.buf);
-                try escape.writeUnEscaped(fbs.writer(), n, escapes);
-
-                return fbs.getWritten();
+                var fba = std.heap.FixedBufferAllocator.init(&iter.buf);
+                return try csv_escape.unescapeAlloc(&fba.allocator, n);
             }
         };
 
@@ -1073,9 +1069,9 @@ const extension = switch (std.Target.current.os.tag) {
     .windows => ".exe",
     else => @compileError("Unsupported os"),
 };
-const program_name = "tm35-randomizer";
 const command_file_name = "commands";
-const default_commands = //
+const program_name = "tm35-randomizer";
+const default_commands =
     "tm35-rand-machines" ++ extension ++ "\n" ++
     "tm35-rand-learned-moves" ++ extension ++ "\n" ++
     "tm35-rand-stats" ++ extension ++ "\n" ++

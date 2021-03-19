@@ -1,144 +1,332 @@
 const std = @import("std");
 
+const ascii = std.ascii;
 const debug = std.debug;
+const fmt = std.fmt;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
-pub const Escape = struct {
-    unescaped: []const u8,
-    escaped: []const u8,
+pub const default_escapes = blk: {
+    @setEvalBranchQuota(1000000);
+    var res: []const Escape = &[_]Escape{};
+    var i: u8 = 0;
+    while (i <= math.maxInt(u7)) : (i += 1) {
+        switch (i) {
+            '\\' => res = res ++ [_]Escape{.{ .escaped = "\\\\", .unescaped = "\\" }},
+            '\n' => res = res ++ [_]Escape{.{ .escaped = "\\n", .unescaped = "\n" }},
+            '\r' => res = res ++ [_]Escape{.{ .escaped = "\\r", .unescaped = "\r" }},
+            '\t' => res = res ++ [_]Escape{.{ .escaped = "\\t", .unescaped = "\t" }},
+            else => {
+                if (ascii.isPrint(i))
+                    continue;
+
+                const escaped = fmt.comptimePrint("\\x{x:02}", .{i});
+                res = res ++ [_]Escape{.{ .escaped = escaped, .unescaped = &[_]u8{i} }};
+            },
+        }
+    }
+    break :blk res;
 };
 
-/// A writer that escapes the bytes written to it.
-pub fn EscapingStream(comptime escapes: []const Escape, comptime InnerWriter) type {
-    return struct {
-        writer: InnerWriter,
+pub const default = generate(default_escapes);
 
-        pub const Error = InnerWriter.Error;
-        pub const Writer = io.Writer(*@This(), Error, write);
+pub const Escape = struct {
+    escaped: []const u8,
+    unescaped: []const u8,
+};
+
+pub fn generate(comptime escapes: []const Escape) type {
+    const find_replace_escaped = blk: {
+        var res: []const Replacement = &[_]Replacement{};
+        for (escapes) |esc|
+            res = res ++ [_]Replacement{.{ .find = esc.escaped, .replace = esc.unescaped }};
+        break :blk res;
+    };
+
+    const find_replace_unescaped = blk: {
+        var res: []const Replacement = &[_]Replacement{};
+        for (escapes) |esc|
+            res = res ++ [_]Replacement{.{ .find = esc.unescaped, .replace = esc.escaped }};
+        break :blk res;
+    };
+
+    return struct {
+        pub fn EscapingWriter(comptime ChildWriter: type) type {
+            return ReplacingWriter(find_replace_unescaped, ChildWriter);
+        }
+
+        pub fn escapingWriter(child_writer: anytype) EscapingWriter(@TypeOf(child_writer)) {
+            return .{ .child_writer = child_writer };
+        }
+
+        pub fn UnescapingWriter(comptime ChildWriter: type) type {
+            return ReplacingWriter(find_replace_escaped, ChildWriter);
+        }
+
+        pub fn unescapingWriter(child_writer: anytype) UnescapingWriter(@TypeOf(child_writer)) {
+            return .{ .child_writer = child_writer };
+        }
+
+        pub fn EscapingReader(comptime ChildReader: type) type {
+            return ReplacingReader(find_replace_unescaped, ChildReader);
+        }
+
+        pub fn escapingReader(child_reader: anytype) EscapingReader(@TypeOf(child_reader)) {
+            return .{ .child_reader = child_reader };
+        }
+
+        pub fn UnescapingReader(comptime ChildReader: type) type {
+            return ReplacingReader(find_replace_escaped, ChildReader);
+        }
+
+        pub fn unescapingReader(child_reader: anytype) EscapingReader(@TypeOf(child_reader)) {
+            return .{ .child_reader = child_reader };
+        }
+
+        pub fn escapeWrite(writer: anytype, str: []const u8) !void {
+            var esc = escapingWriter(writer);
+            try esc.writer().writeAll(str);
+            try esc.finish();
+        }
+
+        pub fn escapeAlloc(allocator: *mem.Allocator, str: []const u8) ![]u8 {
+            var res = std.ArrayList(u8).init(allocator);
+            try escapeWrite(res.writer(), str);
+            return res.toOwnedSlice();
+        }
+
+        pub fn unescapeWrite(writer: anytype, str: []const u8) !void {
+            var esc = unescapingWriter(writer);
+            try esc.writer().writeAll(str);
+            try esc.finish();
+        }
+
+        pub fn unescapeAlloc(allocator: *mem.Allocator, str: []const u8) ![]u8 {
+            var res = std.ArrayList(u8).init(allocator);
+            try unescapeWrite(res.writer(), str);
+            return res.toOwnedSlice();
+        }
     };
 }
 
 pub const Replacement = struct {
     find: []const u8,
     replace: []const u8,
+
+    fn findLessThan(ctx: void, a: Replacement, b: Replacement) bool {
+        return mem.lessThan(u8, a.find, b.find);
+    }
 };
 
-pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime InnerWriter: type) type {
-    return struct {
-        writer: InnerWriter,
+fn startsWith(comptime replacements: []const Replacement, buf: []const u8) ?usize {
+    inline for (replacements) |rep, i| {
+        if (mem.startsWith(u8, buf, rep.find))
+            return i;
+    }
+    return null;
+}
 
-        pub const Error = InnerWriter.Error;
-        pub const Writer = io.Writer(*@This(), Error, write);
+const State = struct {
+    index: usize = 0,
+    start: usize = 0,
+    end: usize,
+};
 
-        pub fn writer(self: *Self) Writer {
-            return .{ .context = self };
-        }
+/// replacements must be sorted.
+fn transion(comptime replacements: []const Replacement, byte: u8, state: State) ?State {
+    const start = for (replacements[state.start..state.end]) |rep, i| {
+        const rest = rep.find[state.index..];
+        if (rest.len != 0 and rest[0] == byte)
+            break state.start + i;
+    } else return null;
 
-        pub fn write(self: *Self, bytes: []const u8) Error!usize {}
+    const end = for (replacements[start..state.end]) |rep, i| {
+        const rest = rep.find[state.index..];
+        if (rest.len == 0 or rest[0] != byte)
+            break start + i;
+    } else state.end;
+
+    return State{
+        .start = start,
+        .end = end,
+        .index = state.index + 1,
     };
 }
 
-const chars = blk: {
-    var res: [255]u8 = undefined;
-    for (res) |*char, i|
-        char.* = @intCast(u8, i);
-
-    break :blk res;
-};
-
-pub const default_escapes = blk: {
-    var res: [255][]const u8 = undefined;
-    for (res) |*slice, i|
-        slice.* = @as(*const [1]u8, &chars[i])[0..];
-
-    break :blk res;
-};
-
-pub const zig_escapes = comptime blk: {
-    var res: [255][]const u8 = undefined;
-    mem.copy([]const u8, res[0..], &default_escapes);
-    res['\r'] = "\\r";
-    res['\n'] = "\\n";
-    res['\\'] = "\\\\";
-    break :blk res;
-};
-
-pub fn writeEscaped(writer: anytype, buf: []const u8, escapes: [255][]const u8) !void {
-    for (buf) |char| {
-        try writer.writeAll(escapes[char]);
-    }
+test "transion" {
+    const replacements = [_]Replacement{
+        .{ .find = "bar", .replace = "baz" },
+        .{ .find = "baz", .replace = "stuff" },
+        .{ .find = "foo", .replace = "bar" },
+    };
+    testing.expect(isSorted(&replacements));
+    testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
+    testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
+    testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
+    testing.expectEqual(@as(?State, State{ .index = 3, .start = 1, .end = 2 }), transion(&replacements, 'z', .{ .index = 2, .start = 0, .end = 2 }));
 }
 
-pub fn escape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]const u8) ![]u8 {
-    var res = std.ArrayList(u8).init(allocator);
-    errdefer res.deinit();
+pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
+    @setEvalBranchQuota(1000000);
+    var replacements_sorted = replacements[0..replacements.len].*;
+    std.sort.sort(Replacement, &replacements_sorted, {}, Replacement.findLessThan);
 
-    try res.ensureCapacity(buf.len);
-    try writeEscape(res.writer(), buf, escapes);
-    return res.toOwnedSlice();
-}
+    return struct {
+        child_writer: ChildWriter,
+        state: State = .{ .end = replacements.len },
 
-test "writeEscaped" {
-    var comma_escape = default_escapes;
-    comma_escape[','] = "\\,";
+        pub const Error = ChildWriter.Error;
+        pub const Writer = io.Writer(*@This(), Error, write);
 
-    testWriteEscaped(comma_escape, "abc", "abc");
-    testWriteEscaped(comma_escape, "a,bc", "a\\,bc");
-    testWriteEscaped(comma_escape, "a,b,c", "a\\,b\\,c");
-    testWriteEscaped(comma_escape, "a,,b,,c", "a\\,\\,b\\,\\,c");
-    testWriteEscaped(comma_escape, "a\\,,b,,c", "a\\\\,\\,b\\,\\,c");
-}
-
-fn testWriteEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
-    var buf: [1024]u8 = undefined;
-    var fbs = io.fixedBufferStream(&buf);
-    writeEscaped(fbs.writer(), str, escapes) catch unreachable;
-    testing.expectEqualStrings(expect, fbs.getWritten());
-}
-
-pub fn writeUnEscaped(writer: anytype, buf: []const u8, escapes: [255][]const u8) !void {
-    var index: usize = 0;
-    outer: while (index < buf.len) {
-        for (escapes) |esc, c| {
-            if (mem.startsWith(u8, buf[index..], esc)) {
-                index += esc.len;
-                try writer.writeAll(@as(*const [1]u8, &@intCast(u8, c)));
-                continue :outer;
-            }
+        pub fn writer(self: *@This()) Writer {
+            return .{ .context = self };
         }
 
-        try writer.writeAll(buf[index .. index + 1]);
-        index += 1;
-    }
+        pub fn write(self: *@This(), bytes: []const u8) Error!usize {
+            var i: usize = 0;
+            while (i < bytes.len) {
+                if (transion(&replacements_sorted, bytes[i], self.state)) |new| {
+                    self.state = new;
+                    i += 1;
+                } else if (self.state.index == 0) {
+                    try self.child_writer.writeByte(bytes[i]);
+                    self.state = .{ .end = replacements_sorted.len };
+                    i += 1;
+                } else {
+                    try self.finish();
+                }
+            }
+
+            return bytes.len;
+        }
+
+        pub fn finish(self: *@This()) Error!void {
+            defer self.state = .{ .end = replacements_sorted.len };
+            if (self.state.index == 0)
+                return;
+
+            const curr = replacements_sorted[self.state.start];
+            if (curr.find.len == self.state.index) {
+                try self.child_writer.writeAll(curr.replace);
+            } else {
+                try self.child_writer.writeAll(curr.find[0..self.state.index]);
+            }
+        }
+    };
 }
 
-pub fn unEscape(allocator: *mem.Allocator, buf: []const u8, escapes: [255][]const u8) ![]u8 {
-    var res = std.ArrayList(u8).init(allocator);
-    errdefer res.deinit();
-
-    try res.ensureCapacity(buf.len);
-    try writeUnEscaped(res.writer(), buf, escapes);
-    return res.toOwnedSlice();
+pub fn replacingWriter(
+    comptime replacements: []const Replacement,
+    child_writer: anytype,
+) ReplacingWriter(replacements, @TypeOf(child_writer)) {
+    return .{ .child_writer = child_writer };
 }
 
-test "writeUnEscaped" {
-    var comma_escape = default_escapes;
-    comma_escape[','] = "\\,";
+pub fn ReplacingReader(comptime replacements: []const Replacement, comptime ChildReader: type) type {
+    return struct {
+        const longest_find = blk: {
+            var res: usize = 0;
+            for (replacements) |r|
+                res = math.max(r.find.len, res);
+            break :blk res;
+        };
 
-    testWriteUnEscaped(comma_escape, "abc", "abc");
-    testWriteUnEscaped(comma_escape, "a\\,bc", "a,bc");
-    testWriteUnEscaped(comma_escape, "a\\,b\\,c", "a,b,c");
-    testWriteUnEscaped(comma_escape, "a\\,,b\\,\\,c", "a,,b,,c");
+        child_reader: ChildReader,
+        buf: [mem.page_size]u8 = undefined,
+        start: usize = 0,
+        end: usize = 0,
+        leftovers: []const u8 = "",
+
+        pub const Error = ChildReader.Error;
+        pub const Reader = io.Reader(*@This(), Error, read);
+
+        pub fn reader(self: *@This()) Reader {
+            return .{ .context = self };
+        }
+
+        pub fn read(self: *@This(), dest: []u8) Error!usize {
+            const rest = self.buf[self.start..self.end];
+            if (rest.len < longest_find) {
+                mem.copy(u8, &self.buf, rest);
+                self.end -= self.start;
+                self.start = 0;
+                self.end += try self.child_reader.read(self.buf[self.start..]);
+            }
+
+            var fbs = io.fixedBufferStream(dest);
+
+            // We might have leftovers from a replacement that didn't
+            // quite finish. We need to make sure that gets written now.
+            const l = fbs.write(self.leftovers) catch 0;
+            self.leftovers = self.leftovers[l..];
+            if (self.leftovers.len != 0)
+                return l;
+
+            var i: usize = self.start;
+            while (i < self.end) {
+                if (startsWith(replacements, self.buf[i..self.end])) |rep| {
+                    self.start += fbs.write(self.buf[self.start..i]) catch 0;
+                    if (self.start != i)
+                        break;
+
+                    const replace = replacements[rep].replace;
+                    const res = fbs.write(replace) catch 0;
+                    if (replace.len != res) {
+                        self.leftovers = replace[res..];
+                        break;
+                    }
+
+                    i += replacements[rep].find.len;
+                    self.start = i;
+                } else {
+                    i += 1;
+                }
+            }
+
+            self.start += fbs.write(self.buf[self.start..i]) catch 0;
+            return fbs.getWritten().len;
+        }
+    };
 }
 
-fn testWriteUnEscaped(escapes: [255][]const u8, str: []const u8, expect: []const u8) void {
-    var buf: [1024]u8 = undefined;
+pub fn replacingReader(
+    comptime replacements: []const Replacement,
+    child_reader: anytype,
+) ReplacingReader(replacements, @TypeOf(child_reader)) {
+    return .{ .child_reader = child_reader };
+}
+
+fn testReplacingStreams(comptime replacements: []const Replacement, input: []const u8, expect: []const u8) void {
+    var buf: [mem.page_size]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
-    writeUnEscaped(fbs.writer(), str, escapes) catch unreachable;
+    var replacing_writer = replacingWriter(replacements, fbs.writer());
+    replacing_writer.writer().writeAll(input) catch unreachable;
+    replacing_writer.finish() catch unreachable;
     testing.expectEqualStrings(expect, fbs.getWritten());
+
+    var fbs2 = io.fixedBufferStream(input);
+    var replacing_reader = replacingReader(replacements, fbs2.reader());
+    const res = replacing_reader.reader().readAll(&buf) catch unreachable;
+    testing.expectEqualStrings(expect, buf[0..res]);
+}
+
+test "replacingWriter" {
+    const replacements = [_]Replacement{
+        .{ .find = "baz", .replace = "stuff" },
+        .{ .find = "foo", .replace = "bar" },
+        .{ .find = "bar", .replace = "baz" },
+    };
+
+    testReplacingStreams(&replacements, "abcd", "abcd");
+    testReplacingStreams(&replacements, "abfoocd", "abbarcd");
+    testReplacingStreams(&replacements, "abbarcd", "abbazcd");
+    testReplacingStreams(&replacements, "abbazcd", "abstuffcd");
+    testReplacingStreams(&replacements, "foobarbaz", "barbazstuff");
+    testReplacingStreams(&replacements, "bazbarfoo", "stuffbazbar");
+    testReplacingStreams(&replacements, "baz bar foo", "stuff baz bar");
 }
 
 pub fn splitEscaped(buffer: []const u8, esc: []const u8, delimiter: []const u8) EscapedSplitter {
