@@ -162,7 +162,6 @@ test "transion" {
         .{ .find = "baz", .replace = "stuff" },
         .{ .find = "foo", .replace = "bar" },
     };
-    testing.expect(isSorted(&replacements));
     testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
     testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
     testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
