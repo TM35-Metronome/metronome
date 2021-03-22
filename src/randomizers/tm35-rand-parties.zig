@@ -83,7 +83,6 @@ const PartySizeMethod = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -139,7 +138,7 @@ pub fn main2(
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, strings, &data, line) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
@@ -147,7 +146,7 @@ pub fn main2(
         };
     }
 
-    randomize(allocator, strings, &data, .{
+    randomize(allocator, &data, .{
         .seed = seed,
         .types = types,
         .items = items,
@@ -180,12 +179,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(
-    allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
-    data: *Data,
-    str: []const u8,
-) !void {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parse(allocator, str);
     switch (parsed) {
         .pokedex => |pokedex| {
@@ -295,12 +289,7 @@ const Options = struct {
     party_size_max: usize,
 };
 
-fn randomize(
-    allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
-    data: *Data,
-    opt: Options,
-) !void {
+fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
     var random_adapt = rand.DefaultPrng.init(opt.seed);
     const random = &random_adapt.random;
     var simular = std.ArrayList(usize).init(allocator);

@@ -54,7 +54,6 @@ const Preference = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -66,7 +65,7 @@ pub fn main2(
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, strings, &data, hms, line) catch |err| switch (err) {
+        parseLine(allocator, &data, hms, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
             error.ParserFailed,
@@ -76,7 +75,7 @@ pub fn main2(
         };
     }
 
-    randomize(allocator, strings, &data, seed) catch return exit.allocErr(stdio.err);
+    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
 
     for (data.tms.values()) |tm, i| {
         stdio.out.print(".tms[{}]={}\n", .{
@@ -103,7 +102,6 @@ pub fn main2(
 
 fn parseLine(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     data: *Data,
     hms: bool,
     str: []const u8,
@@ -151,7 +149,7 @@ fn parseLine(
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, strings: *util.container.StringCache(.{}), data: *Data, seed: u64) !void {
+fn randomize(allocator: *mem.Allocator, data: *Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.values()) |*tm|

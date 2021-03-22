@@ -4,6 +4,9 @@ const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
 
+// TODO: None of these containers are used in this project anymore. Consider
+//       removing/moving them.
+
 pub fn CloneFn(comptime T: type) type {
     return fn (*mem.Allocator, T) mem.Allocator.Error!T;
 }
