@@ -1,8 +1,15 @@
 const std = @import("std");
 
+const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
+
+pub const bufsize = mem.page_size * 2;
+
+pub fn bufferedWriter(underlying_stream: anytype) io.BufferedWriter(bufsize, @TypeOf(underlying_stream)) {
+    return .{ .unbuffered_writer = underlying_stream };
+}
 
 pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
     return std.fifo.LinearFifo(u8, buffer_type);
@@ -26,14 +33,13 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
 ///};
 ///return buffer.items;
 ///```
-pub fn line(reader: anytype, fifo: anytype) !?[]const u8 {
+pub fn readUntil(reader: anytype, fifo: anytype, byte: u8) !?[]const u8 {
     while (true) {
         const buf = fifo.readableSlice(0);
-        if (mem.indexOfScalar(u8, buf, '\n')) |index| {
+        if (mem.indexOfScalar(u8, buf, byte)) |index| {
             defer fifo.head += index + 1;
             defer fifo.count -= index + 1;
-            const res = buf[0..index];
-            return res[0 .. index - @boolToInt(mem.endsWith(u8, res, "\r"))];
+            return buf[0..index];
         }
 
         const new_buf = blk: {
@@ -41,7 +47,7 @@ pub fn line(reader: anytype, fifo: anytype) !?[]const u8 {
             const slice = fifo.writableSlice(0);
             if (slice.len != 0)
                 break :blk slice;
-            break :blk try fifo.writableWithSize(math.max(1024, fifo.buf.len));
+            break :blk try fifo.writableWithSize(math.max(bufsize, fifo.buf.len));
         };
 
         const num = try reader.read(new_buf);
@@ -56,6 +62,11 @@ pub fn line(reader: anytype, fifo: anytype) !?[]const u8 {
             return null;
         }
     }
+}
+
+pub fn readLine(reader: anytype, fifo: anytype) !?[]const u8 {
+    const res = (try readUntil(reader, fifo, '\n')) orelse return null;
+    return res[0 .. res.len - @boolToInt(mem.endsWith(u8, res, "\r"))];
 }
 
 test "readLine" {

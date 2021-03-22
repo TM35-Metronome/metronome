@@ -55,9 +55,9 @@ pub fn main2(
 ) u8 {
     const out = args.option("--output") orelse "site.html";
 
-    var fifo = util.read.Fifo(.Dynamic).init(allocator);
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var obj = Object{};
-    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, strings, &obj, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
         };
