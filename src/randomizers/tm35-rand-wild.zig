@@ -53,9 +53,9 @@ pub fn main2(
     const seed = util.getSeed(stdio.err, usage, args) catch return 1;
     const simular_total_stats = args.flag("--simular-total-stats");
 
-    var fifo = util.read.Fifo(.Dynamic).init(allocator);
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(&data, strings, allocator, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {

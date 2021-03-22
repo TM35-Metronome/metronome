@@ -7,7 +7,6 @@ const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
-const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
@@ -17,7 +16,7 @@ pub const bit = @import("bit.zig");
 pub const container = @import("container.zig");
 pub const escape = @import("escape.zig");
 pub const exit = @import("exit.zig");
-pub const read = @import("read.zig");
+pub const io = @import("io.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
 
@@ -27,7 +26,7 @@ test "" {
     _ = container;
     _ = escape;
     _ = exit;
-    _ = read;
+    _ = io;
     _ = testing;
     _ = unicode;
 }
@@ -100,8 +99,8 @@ pub fn generateMain(
 }
 
 pub const StdIo = struct {
-    pub const In = io.BufferedReader(4096, fs.File.Reader);
-    pub const Out = io.BufferedWriter(4096, fs.File.Writer);
+    pub const In = fs.File;
+    pub const Out = std.io.BufferedWriter(io.bufsize, fs.File.Writer);
 
     in: In,
     out: Out,
@@ -130,9 +129,9 @@ pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
 
 pub fn getStdIo() StdIo {
     return StdIo{
-        .in = io.bufferedReader(io.getStdIn().reader()),
-        .out = io.bufferedWriter(io.getStdOut().writer()),
-        .err = io.bufferedWriter(io.getStdErr().writer()),
+        .in = std.io.getStdIn(),
+        .out = io.bufferedWriter(std.io.getStdOut().writer()),
+        .err = io.bufferedWriter(std.io.getStdErr().writer()),
     };
 }
 

@@ -137,9 +137,9 @@ pub fn main2(
     if (patch != .none)
         old_bytes.appendSlice(game.data()) catch return exit.allocErr(stdio.err);
 
-    var fifo = util.read.Fifo(.Dynamic).init(allocator);
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
-    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
+    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
         const res: anyerror!void = blk: {
             const parsed = format.parse(allocator, line) catch |err| switch (err) {
                 error.OutOfMemory => return exit.allocErr(stdio.err),

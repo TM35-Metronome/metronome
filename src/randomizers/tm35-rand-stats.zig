@@ -56,9 +56,9 @@ pub fn main2(
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
-    var fifo = util.read.Fifo(.Dynamic).init(allocator);
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var pokemons = Pokemons{};
-    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(allocator, &pokemons, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {

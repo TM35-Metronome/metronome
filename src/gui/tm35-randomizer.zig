@@ -1011,8 +1011,8 @@ const Settings = struct {
         };
 
         var order_i: usize = 0;
-        var fifo = util.read.Fifo(.{ .Static = 1024 * 2 }).init();
-        while (try util.read.line(reader, &fifo)) |line| {
+        var fifo = util.io.Fifo(.{ .Static = 1024 * 2 }).init();
+        while (try util.io.readLine(reader, &fifo)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = helpers.findCommandIndex(exes, name) orelse continue;
@@ -1142,9 +1142,9 @@ const Exes = struct {
         defer res.deinit();
         defer freeCommands(allocator, res.items);
 
-        var fifo = util.read.Fifo(.Dynamic).init(allocator);
+        var fifo = util.io.Fifo(.Dynamic).init(allocator);
         defer fifo.deinit();
-        while (try util.read.line(command_file.reader(), &fifo)) |line| {
+        while (try util.io.readLine(command_file.reader(), &fifo)) |line| {
             if (fs.path.isAbsolute(line)) {
                 const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
                 try res.append(command);

@@ -100,7 +100,7 @@ pub fn main2(
         }
     }
 
-    var fifo = util.read.Fifo(.Dynamic).init(allocator);
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     const opt = Options{
         .fast_text = fast_text,
         .biking = biking.?,
@@ -110,7 +110,7 @@ pub fn main2(
         .trainer_scale = trainer_scale catch unreachable,
         .wild_scale = wild_scale catch unreachable,
     };
-    while (util.read.line(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
         parseLine(stdio.out, allocator, opt, line) catch |err| switch (err) {
             error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
