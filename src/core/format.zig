@@ -229,6 +229,78 @@ pub const Game = union(enum) {
     pokeball_items: Array(u16, PokeballItem),
     hidden_hollows: Array(u16, HiddenHollow),
     text: Array(u16, []const u8),
+
+    pub fn starter(index: u8, value: u16) Game {
+        return .{ .starters = .{ .index = index, .value = value } };
+    }
+
+    pub fn text_delay(index: u8, value: u8) Game {
+        return .{ .text_delays = .{ .index = index, .value = value } };
+    }
+
+    pub fn trainer(index: u16, value: Trainer) Game {
+        return .{ .trainers = .{ .index = index, .value = value } };
+    }
+
+    pub fn move(index: u16, value: Move) Game {
+        return .{ .moves = .{ .index = index, .value = value } };
+    }
+
+    pub fn pokemon(index: u16, value: Pokemon) Game {
+        return .{ .pokemons = .{ .index = index, .value = value } };
+    }
+
+    pub fn abilitie(index: u16, value: Ability) Game {
+        return .{ .abilities = .{ .index = index, .value = value } };
+    }
+
+    pub fn typ(index: u8, value: Type) Game {
+        return .{ .types = .{ .index = index, .value = value } };
+    }
+
+    pub fn tm(index: u8, value: u16) Game {
+        return .{ .tms = .{ .index = index, .value = value } };
+    }
+
+    pub fn hm(index: u8, value: u16) Game {
+        return .{ .hms = .{ .index = index, .value = value } };
+    }
+
+    pub fn item(index: u16, value: Item) Game {
+        return .{ .items = .{ .index = index, .value = value } };
+    }
+
+    pub fn pokede(index: u16, value: Pokedex) Game {
+        return .{ .pokedes = .{ .index = index, .value = value } };
+    }
+
+    pub fn map(index: u16, value: Map) Game {
+        return .{ .maps = .{ .index = index, .value = value } };
+    }
+
+    pub fn wild_pokemon(index: u16, value: WildPokemons) Game {
+        return .{ .wild_pokemons = .{ .index = index, .value = value } };
+    }
+
+    pub fn static_pokemon(index: u16, value: StaticPokemon) Game {
+        return .{ .static_pokemons = .{ .index = index, .value = value } };
+    }
+
+    pub fn given_pokemon(index: u16, value: GivenPokemon) Game {
+        return .{ .given_pokemons = .{ .index = index, .value = value } };
+    }
+
+    pub fn pokeball_item(index: u16, value: PokeballItem) Game {
+        return .{ .pokeball_items = .{ .index = index, .value = value } };
+    }
+
+    pub fn hidden_hollow(index: u16, value: HiddenHollow) Game {
+        return .{ .hidden_hollows = .{ .index = index, .value = value } };
+    }
+
+    pub fn tex(index: u16, value: []const u8) Game {
+        return .{ .texs = .{ .index = index, .value = value } };
+    }
 };
 
 pub const Trainer = union(enum) {
