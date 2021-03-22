@@ -45,8 +45,6 @@ pub fn getSeed(stderr: anytype, usage: anytype, args: anytype) !u64 {
     }
 }
 
-pub const StringCache = container.StringCache(.{});
-
 pub fn generateMain(
     version: []const u8,
     comptime main2: anytype,
@@ -82,10 +80,8 @@ pub fn generateMain(
                 return 0;
             }
 
-            var strings = StringCache{ .allocator = &arena.allocator };
             const res = main2(
                 &arena.allocator,
-                &strings,
                 StdIo.In.Reader,
                 StdIo.Out.Writer,
                 stdio,

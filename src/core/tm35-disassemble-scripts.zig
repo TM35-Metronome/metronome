@@ -16,10 +16,10 @@ const mem = std.mem;
 
 const exit = util.exit;
 
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
 const li16 = rom.int.li16;
 const li32 = rom.int.li32;
+const lu16 = rom.int.lu16;
+const lu32 = rom.int.lu32;
 
 const nds = rom.nds;
 
@@ -45,7 +45,6 @@ fn usage(writer: anytype) !void {
 
 pub fn main2(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),

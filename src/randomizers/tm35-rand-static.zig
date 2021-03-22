@@ -58,7 +58,6 @@ const Type = enum {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -82,7 +81,7 @@ pub fn main2(
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, strings, &data, line) catch |err| switch (err) {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
                 return exit.stdoutErr(stdio.err, err2);
@@ -92,7 +91,6 @@ pub fn main2(
 
     randomize(
         allocator,
-        strings,
         data,
         seed,
         method,
@@ -124,12 +122,7 @@ pub fn main2(
     return 0;
 }
 
-fn parseLine(
-    allocator: *mem.Allocator,
-    strings: *util.StringCache,
-    data: *Data,
-    str: []const u8,
-) !void {
+fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parse(allocator, str);
     switch (parsed) {
         .pokedex => |pokedex| {
@@ -247,7 +240,6 @@ fn parseLine(
 
 fn randomize(
     allocator: *mem.Allocator,
-    strings: *util.StringCache,
     data: Data,
     seed: u64,
     method: Method,
@@ -378,10 +370,6 @@ fn randomize(
                 // First, lets give each Pokemon a "legendary rating" which
                 // is a measure as to how many "legendary" criteria this
                 // Pokemon fits into. This rating can be negative.
-                const slow = try strings.put("slow");
-                const medium_slow = try strings.put("medium_slow");
-                const undiscovered = try strings.put("undiscovered");
-
                 var ratings = util.container.IntMap.Unmanaged(usize, isize){};
                 for (species.span()) |range| {
                     var _species = range.start;

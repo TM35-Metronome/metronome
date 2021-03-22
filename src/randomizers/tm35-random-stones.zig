@@ -62,7 +62,6 @@ fn usage(writer: anytype) !void {
 ///       or move the Arena into this function?
 pub fn main2(
     allocator: *mem.Allocator,
-    strings: *util.container.StringCache(.{}),
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
@@ -74,7 +73,7 @@ pub fn main2(
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
     while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
-        parseLine(allocator, strings, &data, replace_cheap, line) catch |err| switch (err) {
+        parseLine(allocator, &data, replace_cheap, line) catch |err| switch (err) {
             error.OutOfMemory => return exit.allocErr(stdio.err),
             error.InvalidUtf8,
             error.ParserFailed,
@@ -84,12 +83,7 @@ pub fn main2(
         };
     }
 
-    randomize(
-        allocator,
-        strings,
-        &data,
-        seed,
-    ) catch return exit.allocErr(stdio.err);
+    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
 
     for (data.pokemons.values()) |pokemon, i| {
         const pokemon_id = data.pokemons.at(i).key;
@@ -120,7 +114,6 @@ pub fn main2(
 
 fn parseLine(
     allocator: *mem.Allocator,
-    strings: *util.StringCache,
     data: *Data,
     replace_cheap: bool,
     str: []const u8,
@@ -222,12 +215,7 @@ fn parseLine(
     unreachable;
 }
 
-fn randomize(
-    allocator: *mem.Allocator,
-    strings: *util.StringCache,
-    data: *Data,
-    seed: usize,
-) !void {
+fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
     const random = &rand.DefaultPrng.init(seed).random;
 
     // First, let's find items that are used for evolving Pokémons.
