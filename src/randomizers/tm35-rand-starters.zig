@@ -8,13 +8,12 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 
@@ -49,13 +48,12 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const evolutions = if (args.option("--evolutions")) |evos|
         fmt.parseUnsigned(usize, evos, 10) catch |err| {
-            stdio.err.print("'{}' could not be parsed as a number to --evolutions: {}\n", .{ evos, err }) catch {};
-            usage(stdio.err) catch {};
-            return 1;
+            log.err("'{}' could not be parsed as a number to --evolutions: {}\n", .{ evos, err });
+            return error.InvalidArgument;
         }
     else
         0;
@@ -64,16 +62,14 @@ pub fn main2(
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    const species = data.pokedexPokemons(allocator) catch return exit.allocErr(stdio.err);
+    const species = try data.pokedexPokemons(allocator);
     const random = &rand.DefaultPrng.init(seed).random;
     const pick_from = blk: {
         var res = Set{};
@@ -86,11 +82,11 @@ pub fn main2(
                 if (countEvos(data, pokemon) < evolutions)
                     continue;
 
-                _ = res.put(allocator, pokemon) catch return exit.allocErr(stdio.err);
+                _ = try res.put(allocator, pokemon);
             }
         }
         if (res.count() == 0)
-            _ = res.put(allocator, 0) catch return exit.allocErr(stdio.err);
+            _ = try res.put(allocator, 0);
 
         break :blk res;
     };
@@ -101,10 +97,9 @@ pub fn main2(
         while (i <= range.end) : (i += 1) {
             const index = random.intRangeLessThan(usize, 0, pick_from.count());
             const res = pick_from.at(index);
-            stdio.out.print(".starters[{}]={}\n", .{ i, res }) catch |err| return exit.stdoutErr(stdio.err, err);
+            try stdio.out.print(".starters[{}]={}\n", .{ i, res });
         }
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

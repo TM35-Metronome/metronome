@@ -8,13 +8,12 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 
@@ -59,7 +58,7 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";
     const running_arg = args.option("--allow-running") orelse "unchanged";
     const exp_scale_arg = args.option("--exp-yield-scaling") orelse "1.0";
@@ -80,9 +79,8 @@ pub fn main2(
         .{ .arg = "--allow-running", .value = running_arg, .check = running },
     }) |arg| {
         if (arg.check == null) {
-            stdio.err.print("Invalid value for {}: {}\n", .{ arg.arg, arg.value }) catch {};
-            usage(stdio.err) catch {};
-            return 1;
+            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            return error.InvalidArgument;
         }
     }
 
@@ -93,9 +91,8 @@ pub fn main2(
         .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
-            stdio.err.print("Invalid value for {}: {}\n", .{ arg.arg, arg.value }) catch {};
-            usage(stdio.err) catch {};
-            return 1;
+            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            return error.InvalidArgument;
         }
     }
 
@@ -109,16 +106,12 @@ pub fn main2(
         .trainer_scale = trainer_scale catch unreachable,
         .wild_scale = wild_scale catch unreachable,
     };
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(stdio.out, allocator, opt, line) catch |err| switch (err) {
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
-            else => return exit.stdoutErr(stdio.err, err),
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            else => return err,
         };
     }
-
-    return 0;
 }
 
 const Options = struct {

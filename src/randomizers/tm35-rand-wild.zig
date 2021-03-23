@@ -14,8 +14,6 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const exit = util.exit;
-
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -48,22 +46,20 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const simular_total_stats = args.flag("--simular-total-stats");
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(&data, allocator, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(data, allocator, seed, simular_total_stats) catch |err| return exit.randErr(stdio.err, err);
+    try randomize(data, allocator, seed, simular_total_stats);
 
     for (data.wild_pokemons.values()) |zone, i| {
         const zone_i = data.wild_pokemons.at(i).key;
@@ -73,16 +69,14 @@ pub fn main2(
             for (area.pokemons.values()) |*pokemon, k| {
                 const poke_i = area.pokemons.at(k).key;
                 if (pokemon.min_level) |l|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    try stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].min_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l });
                 if (pokemon.max_level) |l|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    try stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].max_level={}\n", .{ zone_i, @tagName(area_id), poke_i, l });
                 if (pokemon.species) |s|
-                    stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ zone_i, @tagName(area_id), poke_i, s }) catch |err| return exit.stdoutErr(stdio.err, err);
+                    try stdio.out.print(".wild_pokemons[{}].{}.pokemons[{}].species={}\n", .{ zone_i, @tagName(area_id), poke_i, s });
             }
         }
     }
-
-    return 0;
 }
 
 fn parseLine(data: *Data, allocator: *mem.Allocator, str: []const u8) !void {

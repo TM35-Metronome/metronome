@@ -8,13 +8,12 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 
@@ -87,8 +86,8 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const items_arg = args.option("--items") orelse "none";
     const moves_arg = args.option("--moves") orelse "none";
     const party_size_max_arg = args.option("--party-size-max") orelse "6";
@@ -100,53 +99,45 @@ pub fn main2(
     const party_size_min = fmt.parseUnsigned(usize, party_size_min_arg, 10);
     const party_size_max = fmt.parseUnsigned(usize, party_size_max_arg, 10);
     const types = std.meta.stringToEnum(TypesOption, types_arg) orelse {
-        stdio.err.print("--types does not support '{}'\n", .{types_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--types does not support '{}'\n", .{types_arg});
+        return error.InvalidArgument;
     };
     const items = std.meta.stringToEnum(ItemOption, items_arg) orelse {
-        stdio.err.print("--items does not support '{}'\n", .{items_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--items does not support '{}'\n", .{items_arg});
+        return error.InvalidArgument;
     };
     const moves = std.meta.stringToEnum(MoveOption, moves_arg) orelse {
-        stdio.err.print("--moves does not support '{}'\n", .{moves_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--moves does not support '{}'\n", .{moves_arg});
+        return error.InvalidArgument;
     };
     const stats = std.meta.stringToEnum(StatsOption, stats_arg) orelse {
-        stdio.err.print("--stats does not support '{}'\n", .{stats_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--stats does not support '{}'\n", .{stats_arg});
+        return error.InvalidArgument;
     };
     const party_size_method = std.meta.stringToEnum(PartySizeMethod, party_size_method_arg) orelse {
-        stdio.err.print("--party-size-pick-method does not support '{}'\n", .{party_size_method_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--party-size-pick-method does not support '{}'\n", .{party_size_method_arg});
+        return error.InvalidArgument;
     };
     for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!usize }{
         .{ .arg = "--party-size-min", .value = party_size_min_arg, .check = party_size_min },
         .{ .arg = "--party-size-max", .value = party_size_max_arg, .check = party_size_max },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
-            stdio.err.print("Invalid value for {}: {}\n", .{ arg.arg, arg.value }) catch {};
-            usage(stdio.err) catch {};
-            return 1;
+            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            return error.InvalidArgument;
         }
     }
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(allocator, &data, .{
+    try randomize(allocator, &data, .{
         .seed = seed,
         .types = types,
         .items = items,
@@ -155,28 +146,27 @@ pub fn main2(
         .party_size_method = party_size_method,
         .party_size_min = party_size_min catch unreachable,
         .party_size_max = party_size_max catch unreachable,
-    }) catch |err| return exit.randErr(stdio.err, err);
+    });
 
     for (data.trainers.values()) |trainer, i| {
         const trainer_i = data.trainers.at(i).key;
         const party_type = @tagName(trainer.party_type);
 
-        stdio.out.print(".trainers[{}].party_size={}\n", .{ trainer_i, trainer.party_size }) catch |err| return exit.stdoutErr(stdio.err, err);
-        stdio.out.print(".trainers[{}].party_type={}\n", .{ trainer_i, party_type }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".trainers[{}].party_size={}\n", .{ trainer_i, trainer.party_size });
+        try stdio.out.print(".trainers[{}].party_type={}\n", .{ trainer_i, party_type });
         for (trainer.party.values()[0..trainer.party_size]) |member, j| {
             if (member.species) |s|
-                stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, j, s }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, j, s });
             if (member.level) |l|
-                stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, j, l }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, j, l });
             if (member.item) |item|
-                stdio.out.print(".trainers[{}].party[{}].item={}\n", .{ trainer_i, j, item }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".trainers[{}].party[{}].item={}\n", .{ trainer_i, j, item });
             for (member.moves.values()) |move, k| {
                 const move_i = member.moves.at(k).key;
-                stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, j, move_i, move }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, j, move_i, move });
             }
         }
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

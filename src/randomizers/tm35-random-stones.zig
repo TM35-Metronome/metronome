@@ -66,50 +66,47 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const replace_cheap = args.flag("--replace-cheap-items");
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, replace_cheap, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
+            error.OutOfMemory => return err,
             error.InvalidUtf8,
             error.ParserFailed,
-            => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
+    try randomize(allocator, &data, seed);
 
     for (data.pokemons.values()) |pokemon, i| {
         const pokemon_id = data.pokemons.at(i).key;
         for (pokemon.evos.values()) |evo, j| {
             const evo_id = pokemon.evos.at(j).key;
-            stdio.out.print(".pokemons[{}].evos[{}].method=use_item\n", .{ pokemon_id, evo_id }) catch |err| return exit.stdoutErr(stdio.err, err);
-            stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_id, evo_id, evo.item }) catch |err| return exit.stdoutErr(stdio.err, err);
-            stdio.out.print(".pokemons[{}].evos[{}].target={}\n", .{ pokemon_id, evo_id, evo.target }) catch |err| return exit.stdoutErr(stdio.err, err);
+            try stdio.out.print(".pokemons[{}].evos[{}].method=use_item\n", .{ pokemon_id, evo_id });
+            try stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_id, evo_id, evo.item });
+            try stdio.out.print(".pokemons[{}].evos[{}].target={}\n", .{ pokemon_id, evo_id, evo.target });
         }
     }
     for (data.items.values()) |item, i| {
         const item_id = data.items.at(i).key;
         if (item.name.bytes.len != 0)
-            stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name.bytes }) catch |err| return exit.stdoutErr(stdio.err, err);
+            try stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name.bytes });
         if (item.description.bytes.len != 0) {
-            format.write(
+            try format.write(
                 stdio.out,
                 format.Game{ .items = .{ .index = item_id, .value = .{ .description = item.description.bytes } } },
-            ) catch |err| return exit.stdoutErr(stdio.err, err);
+            );
         }
     }
     for (data.pokeball_items.values()) |item, i| {
         const ball_id = data.pokeball_items.at(i).key;
-        stdio.out.print(".pokeball_items[{}].item={}\n", .{ ball_id, item }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".pokeball_items[{}].item={}\n", .{ ball_id, item });
     }
-    return 0;
 }
 
 fn parseLine(

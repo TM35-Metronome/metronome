@@ -14,8 +14,6 @@ const os = std.os;
 
 const path = fs.path;
 
-const exit = util.exit;
-
 const nds = rom.nds;
 
 const Param = clap.Param(clap.Help);
@@ -53,54 +51,48 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     const cwd = fs.cwd();
     const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.writeAll("No file provided\n") catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
     const out = args.option("--output") orelse blk: {
-        const res = fmt.allocPrint(allocator, "{}.output", .{path.basename(file_name)});
-        break :blk res catch return exit.allocErr(stdio.err);
+        break :blk try fmt.allocPrint(allocator, "{}.output", .{path.basename(file_name)});
     };
 
-    var rom_file = cwd.openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
+    const rom_file = try cwd.openFile(file_name, .{});
     defer rom_file.close();
-    var nds_rom = nds.Rom.fromFile(rom_file, allocator) catch |err| return exit.readErr(stdio.err, file_name, err);
+    var nds_rom = try nds.Rom.fromFile(rom_file, allocator);
 
-    cwd.makePath(out) catch |err| return exit.makePathErr(stdio.err, out, err);
+    try cwd.makePath(out);
 
     // All dir instances should actually be `const`, but `Dir.close` takes mutable pointer, so we can't
     // actually do that...
-    var out_dir = cwd.openDir(out, .{}) catch |err| return exit.openErr(stdio.err, out, err);
+    var out_dir = try cwd.openDir(out, .{});
     defer out_dir.close();
 
-    out_dir.makeDir("arm9_overlays") catch |err| return exit.makePathErr(stdio.err, "arm9_overlays", err);
-    out_dir.makeDir("arm7_overlays") catch |err| return exit.makePathErr(stdio.err, "arm7_overlays", err);
-    out_dir.makeDir("root") catch |err| return exit.makePathErr(stdio.err, "root", err);
+    try out_dir.makeDir("arm9_overlays");
+    try out_dir.makeDir("arm7_overlays");
+    try out_dir.makeDir("root");
 
-    var arm9_overlays_dir = out_dir.openDir("arm9_overlays", .{}) catch |err| return exit.openErr(stdio.err, "arm9_overlays", err);
+    var arm9_overlays_dir = try out_dir.openDir("arm9_overlays", .{});
     defer arm9_overlays_dir.close();
-    var arm7_overlays_dir = out_dir.openDir("arm7_overlays", .{}) catch |err| return exit.openErr(stdio.err, "arm7_overlays", err);
+    var arm7_overlays_dir = try out_dir.openDir("arm7_overlays", .{});
     defer arm7_overlays_dir.close();
-    var root_dir = out_dir.openDir("root", .{}) catch |err| return exit.openErr(stdio.err, "root", err);
+    var root_dir = try out_dir.openDir("root", .{});
     defer root_dir.close();
 
-    out_dir.writeFile("arm9", nds_rom.arm9()) catch |err| return exit.writeErr(stdio.err, "arm9", err);
-    out_dir.writeFile("arm7", nds_rom.arm7()) catch |err| return exit.writeErr(stdio.err, "arm7", err);
-    out_dir.writeFile("nitro_footer", nds_rom.nitroFooter()) catch |err| return exit.writeErr(stdio.err, "nitro_footer", err);
+    try out_dir.writeFile("arm9", nds_rom.arm9());
+    try out_dir.writeFile("arm7", nds_rom.arm7());
+    try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
     if (nds_rom.banner()) |banner|
-        out_dir.writeFile("banner", mem.asBytes(banner)) catch |err| return exit.writeErr(stdio.err, "banner", err);
+        try out_dir.writeFile("banner", mem.asBytes(banner));
 
     const file_system = nds_rom.fileSystem();
-    writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable()) catch |err| return exit.writeErr(stdio.err, "arm9 overlays", err);
-    writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable()) catch |err| return exit.writeErr(stdio.err, "arm7 overlays", err);
+    try writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable());
+    try writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable());
 
-    writeFs(root_dir, file_system, nds.fs.root) catch |err| return exit.writeErr(stdio.err, "root file system", err);
-    return 0;
+    try writeFs(root_dir, file_system, nds.fs.root);
 }
 
 fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!void {

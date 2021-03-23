@@ -14,8 +14,6 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const exit = util.exit;
-
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -56,15 +54,13 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
@@ -75,12 +71,11 @@ pub fn main2(
         for (pokemon.evos.values()) |evo, j| {
             const evo_i = pokemon.evos.at(j).key;
             if (evo.param) |param|
-                stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param });
             if (evo.method != .unused)
-                stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, @tagName(evo.method) }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, @tagName(evo.method) });
         }
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

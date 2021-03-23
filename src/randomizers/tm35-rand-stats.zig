@@ -8,14 +8,12 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
-const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
 
@@ -50,19 +48,17 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var pokemons = Pokemons{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &pokemons, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
@@ -73,10 +69,9 @@ pub fn main2(
         for (pokemon.stats) |stat, k| {
             const stat_name = @tagName(@intToEnum(Pokemon.Stat, @intCast(u3, k)));
             if (pokemon.output[k])
-                stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat }) catch |err| return exit.stdoutErr(stdio.err, err);
+                try stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat });
         }
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {

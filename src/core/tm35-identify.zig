@@ -50,15 +50,11 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.writeAll("No file provided\n") catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
-    const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
+    const file = try fs.cwd().openFile(file_name, .{});
     const reader = file.reader();
     defer file.close();
 
@@ -67,18 +63,18 @@ pub fn main2(
         gen4.Game,
         gen5.Game,
     }) |Game| {
-        file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
+        try file.seekTo(0);
         if (Game.identify(reader)) |info| {
-            stdio.out.print("Version: Pokémon {}\nGamecode: {}\n", .{
+            try stdio.out.print("Version: Pokémon {}\nGamecode: {}\n", .{
                 info.version.humanString(),
                 info.gamecode,
-            }) catch |err| return exit.stdoutErr(stdio.err, err);
-            return 0;
+            });
+            return;
         } else |err| switch (err) {
             error.UnknownGame => {},
-            else => return exit.readErr(stdio.err, file_name, err),
+            else => return err,
         }
     }
 
-    return exit.err(stdio.err, "File is not a Pokémon rom.", .{});
+    return error.InvalidRom;
 }

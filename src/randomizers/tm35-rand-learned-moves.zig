@@ -8,12 +8,11 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 
@@ -52,59 +51,54 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const pref = if (args.option("--preference")) |pref|
         if (mem.eql(u8, pref, "random"))
             Preference.random
         else if (mem.eql(u8, pref, "stab"))
             Preference.stab
         else {
-            stdio.err.print("--preference does not support '{}'\n", .{pref}) catch {};
-            usage(stdio.err) catch {};
-            return 1;
+            log.err("--preference does not support '{}'\n", .{pref});
+            return error.InvalidArgument;
         }
     else
         Preference.random;
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(allocator, data, seed, pref) catch return exit.allocErr(stdio.err);
+    try randomize(allocator, data, seed, pref);
 
     for (data.pokemons.values()) |*pokemon, i| {
         const pokemon_index = data.pokemons.at(i).key;
         for (pokemon.tms.span()) |range| {
             var tm = range.start;
             while (tm <= range.end) : (tm += 1) {
-                stdio.out.print(".pokemons[{}].tms[{}]={}\n", .{
+                try stdio.out.print(".pokemons[{}].tms[{}]={}\n", .{
                     pokemon_index,
                     tm,
                     pokemon.tms_learned.exists(tm),
-                }) catch |err| return exit.stdoutErr(stdio.err, err);
+                });
             }
         }
         for (pokemon.hms.span()) |range| {
             var hm = range.start;
             while (hm <= range.end) : (hm += 1) {
-                stdio.out.print(".pokemons[{}].hms[{}]={}\n", .{
+                try stdio.out.print(".pokemons[{}].hms[{}]={}\n", .{
                     pokemon_index,
                     hm,
                     pokemon.hms_learned.exists(hm),
-                }) catch |err| return exit.stdoutErr(stdio.err, err);
+                });
             }
         }
     }
-
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

@@ -58,46 +58,42 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const hms = args.flag("--hms");
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, hms, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
+            error.OutOfMemory => return err,
             error.InvalidUtf8,
             error.ParserFailed,
-            => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
+    try randomize(allocator, &data, seed);
 
     for (data.tms.values()) |tm, i| {
-        stdio.out.print(".tms[{}]={}\n", .{
+        try stdio.out.print(".tms[{}]={}\n", .{
             data.tms.at(i).key,
             tm,
-        }) catch |err| return exit.stdoutErr(stdio.err, err);
+        });
     }
     for (data.hms.values()) |hm, i| {
-        stdio.out.print(".hms[{}]={}\n", .{
+        try stdio.out.print(".hms[{}]={}\n", .{
             data.hms.at(i).key,
             hm,
-        }) catch |err| return exit.stdoutErr(stdio.err, err);
+        });
     }
     for (data.items.values()) |item, i| {
         const index = data.items.at(i).key;
-        format.write(
+        try format.write(
             stdio.out,
             format.Game{ .items = .{ .index = index, .value = .{ .description = item.description.bytes } } },
-        ) catch |err| return exit.stdoutErr(stdio.err, err);
+        );
     }
-
-    return 0;
 }
 
 fn parseLine(

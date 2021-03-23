@@ -15,8 +15,6 @@ const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
 
-const exit = util.exit;
-
 const gba = rom.gba;
 const offsets = gen3.offsets;
 
@@ -54,21 +52,18 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     for (args.positionals()) |file_name, i| {
-        const data = fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize)) catch |err| return exit.readErr(stdio.err, file_name, err);
+        const data = try fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize));
         defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
-            return exit.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, error.FileToSmall });
+            return error.FileToSmall;
 
         const header = mem.bytesAsSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = getVersion(&header.gamecode) catch |err| return exit.err(stdio.err, "'{}' is not a gen3 Pokémon game: {}\n", .{ file_name, err });
-        const info_err = getOffsets(data, version, header.gamecode, header.game_title, header.software_version);
-        const info = info_err catch |err| return exit.err(stdio.err, "Failed to get offsets from '{}': {}\n", .{ file_name, err });
-        outputInfo(stdio.out, i, info) catch |err| return exit.stdoutErr(stdio.err, err);
+        const version = try getVersion(&header.gamecode);
+        const info = try getOffsets(data, version, header.gamecode, header.game_title, header.software_version);
+        try outputInfo(stdio.out, i, info);
     }
-
-    return 0;
 }
 
 fn outputInfo(writer: anytype, i: usize, info: offsets.Info) !void {
