@@ -26,7 +26,6 @@ const lu32 = rom.int.lu32;
 
 const bit = util.bit;
 const escape = util.escape;
-const exit = util.exit;
 
 const Game = format.Game;
 

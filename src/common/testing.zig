@@ -4,8 +4,8 @@ const util = @import("util.zig");
 
 const debug = std.debug;
 const heap = std.heap;
-const mem = std.mem;
 const io = std.io;
+const mem = std.mem;
 const testing = std.testing;
 
 pub fn testProgram(
@@ -17,33 +17,27 @@ pub fn testProgram(
 ) void {
     var alloc_buf: [1024 * 50]u8 = undefined;
     var out_buf: [1024 * 10]u8 = undefined;
-    var err_buf: [1024]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&alloc_buf);
-    var strings = util.container.StringCache(.{}){ .allocator = &fba.allocator };
-    var stdin = io.bufferedReader(io.fixedBufferStream(in).reader());
+    var stdin = io.fixedBufferStream(in);
     var stdout = io.fixedBufferStream(&out_buf);
-    var stderr = io.fixedBufferStream(&err_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
     const clap_args = clap.parseEx(clap.Help, params, &fba.allocator, &arg_iter, null) catch unreachable;
 
     const StdIo = util.CustomStdIoStreams(
-        io.BufferedReader(4096, std.io.FixedBufferStream([]const u8).Reader).Reader,
+        std.io.FixedBufferStream([]const u8).Reader,
         io.FixedBufferStream([]u8).Writer,
     );
 
     const res = main(
         &fba.allocator,
-        &strings,
         StdIo.Reader,
         StdIo.Writer,
         StdIo{
             .in = stdin.reader(),
             .out = stdout.writer(),
-            .err = stderr.writer(),
         },
         clap_args,
     );
-    testing.expectEqual(@as(u8, 0), res);
-    testing.expectEqualStrings("", stderr.getWritten());
+    testing.expectEqual(@as(anyerror!void, {}), res);
     testing.expectEqualStrings(out, stdout.getWritten());
 }

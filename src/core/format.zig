@@ -179,12 +179,12 @@ pub fn isArray(comptime T: type) bool {
 
 test "parse" {
     const allocator = testing.failing_allocator;
-    const p1 = comptime parser(u8);
+    const p1 = comptime parser(u8, false);
     expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0"));
     expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1"));
     expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111"));
 
-    const p2 = comptime parser(u32);
+    const p2 = comptime parser(u32, false);
     expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0"));
     expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1"));
     expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010"));
@@ -194,13 +194,13 @@ test "parse" {
         b: u16,
         c: u32,
     };
-    const p3 = comptime parser(U1);
+    const p3 = comptime parser(U1, false);
     expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0"));
     expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1"));
     expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010"));
 
     const A1 = Array(u8, u8);
-    const p4 = comptime parser(A1);
+    const p4 = comptime parser(A1, false);
     expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0"));
     expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2"));
     expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33"));
@@ -212,7 +212,7 @@ test "parse" {
         }),
         b: u16,
     };
-    const p5 = comptime parser(U2);
+    const p5 = comptime parser(U2, false);
     expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
     expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
     expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));

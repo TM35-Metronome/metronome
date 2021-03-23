@@ -93,11 +93,11 @@ test "readLine" {
 
 fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     var fbs = std.io.fixedBufferStream(str);
-    var fifo = std.fifo.LinearFifo(u8, .{ .Static = 3 }).init();
+    var fifo = Fifo(.{ .Static = 3 }).init();
 
     for (lines) |expected_line| {
-        const actual_line = (try line(fbs.reader(), &fifo)).?;
+        const actual_line = (try readLine(fbs.reader(), &fifo)).?;
         testing.expectEqualStrings(expected_line, actual_line);
     }
-    testing.expectEqual(@as(?[]const u8, null), try line(fbs.reader(), &fifo));
+    testing.expectEqual(@as(?[]const u8, null), try readLine(fbs.reader(), &fifo));
 }
