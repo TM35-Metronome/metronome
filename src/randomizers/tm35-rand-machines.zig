@@ -102,7 +102,7 @@ fn parseLine(
     hms: bool,
     str: []const u8,
 ) !void {
-    switch (try format.parse(allocator, str)) {
+    switch (try format.parseEscape(allocator, str)) {
         .tms => |tms| {
             _ = try data.tms.put(allocator, tms.index, tms.value);
             return;
@@ -140,7 +140,25 @@ fn parseLine(
             }
             return error.ParserFailed;
         },
-        else => return error.ParserFailed,
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .starters,
+        .text_delays,
+        .trainers,
+        .pokemons,
+        .abilities,
+        .types,
+        .pokedex,
+        .maps,
+        .wild_pokemons,
+        .static_pokemons,
+        .given_pokemons,
+        .pokeball_items,
+        .hidden_hollows,
+        .text,
+        => return error.ParserFailed,
     }
     unreachable;
 }

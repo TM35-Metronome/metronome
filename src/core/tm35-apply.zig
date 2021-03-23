@@ -134,7 +134,7 @@ pub fn main2(
     var line_num: usize = 1;
     while (try util.io.readLine(stdio.in, &fifo)) |line| : (line_num += 1) {
         const res: anyerror!void = blk: {
-            const parsed = format.parse(allocator, line) catch |err| switch (err) {
+            const parsed = format.parseEscape(allocator, line) catch |err| switch (err) {
                 error.OutOfMemory => return err,
                 error.ParserFailed => break :blk err,
             };

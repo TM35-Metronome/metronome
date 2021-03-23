@@ -103,7 +103,7 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parse(allocator, str);
+    const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try data.pokedex.put(allocator, pokedex.index);
@@ -151,7 +151,26 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
             }
             return error.ParserFailed;
         },
-        else => return error.ParserFailed,
+        .version,
+        .game_title,
+        .gamecode,
+        .instant_text,
+        .text_delays,
+        .trainers,
+        .moves,
+        .abilities,
+        .types,
+        .tms,
+        .hms,
+        .items,
+        .maps,
+        .wild_pokemons,
+        .static_pokemons,
+        .given_pokemons,
+        .pokeball_items,
+        .hidden_hollows,
+        .text,
+        => return error.ParserFailed,
     }
     unreachable;
 }

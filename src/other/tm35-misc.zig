@@ -125,7 +125,7 @@ const Options = struct {
 };
 
 fn parseLine(out: anytype, allocator: *mem.Allocator, opt: Options, str: []const u8) !void {
-    const parsed = try format.parse(allocator, str);
+    const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .instant_text => |_| if (opt.fast_text) {
             return out.writeAll(".instant_text=true\n");
