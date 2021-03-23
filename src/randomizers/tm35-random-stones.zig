@@ -115,7 +115,7 @@ fn parseLine(
     replace_cheap: bool,
     str: []const u8,
 ) !void {
-    const parsed = try format.parse(allocator, str);
+    const parsed = try format.parseEscape(allocator, str);
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try data.pokedex.put(allocator, pokedex.index);

@@ -75,7 +75,7 @@ pub fn main2(
 }
 
 fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {
-    const parsed = try format.parse(allocator, str);
+    const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokemons => |mons| switch (mons.value) {
             .stats => |stats| {

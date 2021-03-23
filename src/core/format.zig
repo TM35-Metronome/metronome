@@ -32,8 +32,8 @@ fn toUnionField(
     }.conv;
 }
 
-pub fn parse(arena: *mem.Allocator, str: []const u8) !Game {
-    const res = (comptime parser(Game))(arena, str) catch |err| switch (err) {
+pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
+    const res = (comptime parser(Game, true))(arena, str) catch |err| switch (err) {
         error.OtherError => unreachable,
         error.OutOfMemory => return error.OutOfMemory,
         error.ParserFailed => return error.ParserFailed,
@@ -41,7 +41,16 @@ pub fn parse(arena: *mem.Allocator, str: []const u8) !Game {
     return res.value;
 }
 
-pub fn parser(comptime T: type) Parser(T) {
+pub fn parseNoEscape(str: []const u8) !Game {
+    var fba = std.heap.FixedBufferAllocator.init("");
+    const res = (comptime parser(Game, true))(&fba.allocator, str) catch |err| switch (err) {
+        error.OtherError, error.OutOfMemory => unreachable,
+        error.ParserFailed => return error.ParserFailed,
+    };
+    return res.value;
+}
+
+fn parser(comptime T: type, comptime do_escape: bool) Parser(T) {
     @setEvalBranchQuota(100000000);
     const Res = Result(T);
     if (isArray(T)) {
@@ -49,10 +58,10 @@ pub fn parser(comptime T: type) Parser(T) {
             ascii.char('['),
             int(T.Index, 10),
             ascii.char(']'),
-            parser(T.Value),
+            parser(T.Value, do_escape),
         }));
     } else switch (T) {
-        []const u8 => {
+        []const u8 => if (do_escape) {
             // With no '\\' we can assume that string does not need to be unescaped, so we
             // can avoid doing an allocation.
             const text = combine(.{ many(ascii.not(ascii.char('\\')), .{ .collect = false }), eos });
@@ -65,6 +74,11 @@ pub fn parser(comptime T: type) Parser(T) {
             return combine(.{
                 ascii.char('='),
                 oneOf(.{ text, escaped_text }),
+            });
+        } else {
+            return combine(.{
+                ascii.char('='),
+                rest,
             });
         },
         else => switch (@typeInfo(T)) {
@@ -93,12 +107,16 @@ pub fn parser(comptime T: type) Parser(T) {
                         break :blk res;
                     };
 
+                    if (!mem.startsWith(u8, str, "."))
+                        return error.ParserFailed;
+
+                    const str_after_dot = str[1..];
                     inline for (fields) |f, i| {
-                        if (mem.startsWith(u8, str, "." ++ f.name)) {
-                            const after_field = str[f.name.len + 1 ..];
+                        if (mem.startsWith(u8, str_after_dot, f.name)) {
+                            const after_field = str_after_dot[f.name.len..];
                             const FieldT = info.fields[f.index].field_type;
                             const to_union = comptime toUnionField(T, FieldT, f.name);
-                            const field_parser = comptime map(T, to_union, parser(FieldT));
+                            const field_parser = comptime map(T, to_union, parser(FieldT, do_escape));
                             return field_parser(allocator, after_field);
                         }
                     }
