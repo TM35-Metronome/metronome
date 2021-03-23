@@ -8,13 +8,12 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 
@@ -62,44 +61,40 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const type_arg = args.option("--types") orelse "random";
     const types = std.meta.stringToEnum(Type, type_arg) orelse {
-        stdio.err.print("--types does not support '{}'\n", .{type_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--types does not support '{}'\n", .{type_arg});
+        return error.InvalidArgument;
     };
 
     const method_arg = args.option("--method") orelse "random";
     const method = std.meta.stringToEnum(Method, method_arg) orelse {
-        stdio.err.print("--method does not support '{}'\n", .{method_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--method does not support '{}'\n", .{method_arg});
+        return error.InvalidArgument;
     };
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(
+    try randomize(
         allocator,
         data,
         seed,
         method,
         types,
-    ) catch |err| return exit.randErr(stdio.err, err);
+    );
 
     for (data.static_mons.values()) |static, i| {
         const static_i = data.static_mons.at(i).key;
-        stdio.out.print(".static_pokemons[{}].species={}\n", .{ static_i, static }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".static_pokemons[{}].species={}\n", .{ static_i, static });
     }
     for (data.hidden_hollows.values()) |hollow, i| {
         const hi = data.hidden_hollows.at(i).key;
@@ -110,16 +105,15 @@ pub fn main2(
                 for (group.values()) |pokemon, g| {
                     const pi = version.at(g).key;
                     if (pokemon.species_index) |si| {
-                        stdio.out.print(
+                        try stdio.out.print(
                             ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].species={}\n",
                             .{ hi, vi, gi, pi, data.hollow_mons.get(si).?.* },
-                        ) catch |err| return exit.stdoutErr(stdio.err, err);
+                        );
                     }
                 }
             }
         }
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

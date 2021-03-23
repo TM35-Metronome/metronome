@@ -15,6 +15,7 @@ const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 
@@ -25,7 +26,6 @@ const nds = rom.nds;
 
 const bit = util.bit;
 const escape = util.escape;
-const exit = util.exit;
 
 const li16 = rom.int.li16;
 const lu128 = rom.int.lu128;
@@ -75,43 +75,37 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.writeAll("No file provided\n") catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
     const patch_arg = args.option("--patch") orelse "none";
     const patch = std.meta.stringToEnum(PatchOption, patch_arg) orelse {
-        stdio.err.print("--patch does not support '{}'\n", .{patch_arg}) catch {};
-        usage(stdio.err) catch {};
-        return 1;
+        log.err("--patch does not support '{}'\n", .{patch_arg});
+        return error.InvalidArgument;
     };
 
     const no_output = args.flag("--no-output");
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
-        const res = fmt.allocPrint(allocator, "{}.modified", .{path.basename(file_name)});
-        break :blk res catch |err| return exit.allocErr(stdio.err);
+        break :blk try fmt.allocPrint(allocator, "{}.modified", .{path.basename(file_name)});
     };
 
     var nds_rom: nds.Rom = undefined;
     var game: Game = blk: {
-        const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
+        const file = try fs.cwd().openFile(file_name, .{});
         defer file.close();
 
         const gen3_error = if (gen3.Game.fromFile(file, allocator)) |game| {
             break :blk Game{ .gen3 = game };
         } else |err| err;
 
-        file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
+        try file.seekTo(0);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
-            stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
-            stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
-            return 1;
+            log.err("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error });
+            log.err("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+            return error.InvalidRom;
         };
 
         const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
@@ -122,10 +116,10 @@ pub fn main2(
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
-        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", .{file_name}) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error }) catch {};
-        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error }) catch {};
-        return 1;
+        log.err("Successfully loaded '{}' as a nds rom.\n", .{file_name});
+        log.err("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error });
+        log.err("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        return error.InvalidRom;
     };
     defer game.deinit();
 
@@ -134,14 +128,14 @@ pub fn main2(
     var old_bytes = std.ArrayList(u8).init(allocator);
     defer old_bytes.deinit();
     if (patch != .none)
-        old_bytes.appendSlice(game.data()) catch return exit.allocErr(stdio.err);
+        try old_bytes.appendSlice(game.data());
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var line_num: usize = 1;
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| : (line_num += 1) {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| : (line_num += 1) {
         const res: anyerror!void = blk: {
             const parsed = format.parse(allocator, line) catch |err| switch (err) {
-                error.OutOfMemory => return exit.allocErr(stdio.err),
+                error.OutOfMemory => return err,
                 error.ParserFailed => break :blk err,
             };
             break :blk switch (game) {
@@ -151,14 +145,14 @@ pub fn main2(
             };
         };
         res catch |err| {
-            stdio.err.print("(stdin):{}:1: warning: {}\n", .{ line_num, @errorName(err) }) catch {};
-            stdio.err.print("{}\n", .{line}) catch {};
+            log.info("(stdin):{}:1: {}\n", .{ line_num, @errorName(err) });
+            log.info("{}\n", .{line});
             if (abort_on_first_warning)
-                return 1;
+                return error.ParserFailed;
             continue;
         };
         if (patch == .live)
-            game.apply() catch return exit.allocErr(stdio.err);
+            try game.apply();
 
         if (patch == .live) {
             var it = common.PatchIterator{
@@ -166,18 +160,18 @@ pub fn main2(
                 .new = game.data(),
             };
             while (it.next()) |p| {
-                stdio.out.print("[{}]={x}\n", .{
+                try stdio.out.print("[{}]={x}\n", .{
                     p.offset,
                     p.replacement,
-                }) catch |err| return exit.stdoutErr(stdio.err, err);
+                });
 
-                old_bytes.resize(math.max(
+                try old_bytes.resize(math.max(
                     old_bytes.items.len,
                     p.offset + p.replacement.len,
-                )) catch return exit.allocErr(stdio.err);
+                ));
                 common.patch(old_bytes.items, &[_]common.Patch{p});
             }
-            stdio.out.context.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+            try stdio.out.context.flush();
         }
     }
 
@@ -187,29 +181,25 @@ pub fn main2(
             .new = game.data(),
         };
         while (it.next()) |p| {
-            stdio.out.print("[{}]={x}\n", .{
+            try stdio.out.print("[{}]={x}\n", .{
                 p.offset,
                 p.replacement,
-            }) catch |err| return exit.stdoutErr(stdio.err, err);
+            });
         }
     }
 
     if (no_output)
-        return 0;
+        return;
 
-    const out_file = fs.cwd().createFile(out, .{
+    const out_file = try fs.cwd().createFile(out, .{
         .exclusive = !replace,
         .truncate = false,
-    }) catch |err| return exit.createErr(stdio.err, out, err);
-    const writer = out_file.writer();
-
-    game.apply() catch |err| return exit.err(stdio.err, "apply error: {}\n", .{err});
-    game.write(writer) catch |err| return exit.writeErr(stdio.err, out, err);
+    });
+    try game.apply();
+    try game.write(out_file.writer());
 
     const len = game.data().len;
-    out_file.setEndPos(len) catch |err| return exit.writeErr(stdio.err, out, err);
-
-    return 0;
+    try out_file.setEndPos(len);
 }
 
 const Game = union(enum) {

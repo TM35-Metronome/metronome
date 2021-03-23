@@ -13,6 +13,7 @@ const debug = std.debug;
 const fs = std.fs;
 const heap = std.heap;
 const io = std.io;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const unicode = std.unicode;
@@ -54,46 +55,41 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
+) anyerror!void {
     const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else {
-        stdio.err.writeAll("No file provided\n") catch {};
-        usage(stdio.err) catch {};
-        return 1;
-    };
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
-    const file = fs.cwd().openFile(file_name, .{}) catch |err| return exit.openErr(stdio.err, file_name, err);
+    const file = try fs.cwd().openFile(file_name, .{});
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
         defer game.deinit();
-        outputGen3Data(game.*, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
-        return 0;
+        try outputGen3Data(game.*, stdio.out);
+        return;
     } else |err| err;
 
-    file.seekTo(0) catch |err| return exit.readErr(stdio.err, file_name, err);
+    try file.seekTo(0);
     if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen4Data(nds_rom.*, game.*, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
-            return 0;
+            try outputGen4Data(nds_rom.*, game.*, stdio.out);
+            return;
         } else |err| err;
 
-        _ = gen5.Game.fromRom(allocator, nds_rom) catch unreachable;
         const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
-            outputGen5Data(nds_rom.*, game.*, stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
-            return 0;
+            try outputGen5Data(nds_rom.*, game.*, stdio.out);
+            return;
         } else |err| err;
 
-        stdio.err.print("Successfully loaded '{}' as a nds rom.\n", .{file_name}) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error }) catch {};
-        stdio.err.print("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error }) catch {};
-        return 1;
+        log.info("Successfully loaded '{}' as a nds rom.\n", .{file_name});
+        log.err("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error });
+        log.err("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        return gen5_error;
     } else |nds_error| {
-        stdio.err.print("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error }) catch {};
-        stdio.err.print("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error }) catch {};
-        return 1;
+        log.err("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error });
+        log.err("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+        return nds_error;
     }
 }
 

@@ -38,7 +38,6 @@ const mem = std.mem;
 pub fn main() !void {
     var stdio_buf = util.getStdIo();
     const stdio = stdio_buf.streams();
-    defer stdio_buf.err.flush() catch {};
     defer stdio_buf.out.flush() catch {};
 
     var arena = heap.ArenaAllocator.init(heap.page_allocator);

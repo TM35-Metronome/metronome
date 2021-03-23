@@ -50,35 +50,32 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     const include_tms_hms = args.flag("--include-tms-hms");
     const include_key_items = args.flag("--include-key-items");
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(
+    try randomize(
         allocator,
         &data,
         seed,
         include_tms_hms,
         include_key_items,
-    ) catch |err| return exit.randErr(stdio.err, err);
+    );
 
     for (data.pokeballs.values()) |ball, i| {
         const key = data.pokeballs.at(i).key;
-        stdio.out.print(".pokeball_items[{}].item={}\n", .{ key, ball }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".pokeball_items[{}].item={}\n", .{ key, ball });
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

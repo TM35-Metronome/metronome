@@ -51,42 +51,39 @@ pub fn main2(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
-) u8 {
-    const seed = util.getSeed(stdio.err, usage, args) catch return 1;
+) anyerror!void {
+    const seed = try util.getSeed(args);
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (util.io.readLine(stdio.in, &fifo) catch |err| return exit.stdinErr(stdio.err, err)) |line| {
+    while (try util.io.readLine(stdio.in, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return exit.allocErr(stdio.err),
-            error.ParserFailed => stdio.out.print("{}\n", .{line}) catch |err2| {
-                return exit.stdoutErr(stdio.err, err2);
-            },
+            error.OutOfMemory => return err,
+            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
         };
     }
 
-    randomize(allocator, &data, seed) catch return exit.allocErr(stdio.err);
+    try randomize(allocator, &data, seed);
 
     for (data.pokemons.values()) |name, i| {
         const id = data.pokemons.at(i).key;
-        stdio.out.print(".pokemons[{}].name={}\n", .{ id, name }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".pokemons[{}].name={}\n", .{ id, name });
     }
     for (data.trainers.values()) |name, i| {
         const id = data.trainers.at(i).key;
-        stdio.out.print(".trainers[{}].name={}\n", .{ id, name }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".trainers[{}].name={}\n", .{ id, name });
     }
     for (data.moves.values()) |name, i| {
         const id = data.moves.at(i).key;
-        stdio.out.print(".moves[{}].name={}\n", .{ id, name }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".moves[{}].name={}\n", .{ id, name });
     }
     for (data.abilities.values()) |name, i| {
         const id = data.abilities.at(i).key;
-        stdio.out.print(".abilities[{}].name={}\n", .{ id, name }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".abilities[{}].name={}\n", .{ id, name });
     }
     for (data.item_names.values()) |name, i| {
         const id = data.item_names.at(i).key;
-        stdio.out.print(".items[{}].name={}\n", .{ id, name }) catch |err| return exit.stdoutErr(stdio.err, err);
+        try stdio.out.print(".items[{}].name={}\n", .{ id, name });
     }
-    return 0;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {

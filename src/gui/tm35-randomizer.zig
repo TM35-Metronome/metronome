@@ -16,7 +16,6 @@ const process = std.process;
 const time = std.time;
 
 const escape = util.escape;
-const exit = util.exit;
 
 const path = fs.path;
 
@@ -43,7 +42,7 @@ usingnamespace switch (std.Target.current.os.tag) {
 const border_group = c.NK_WINDOW_BORDER | c.NK_WINDOW_NO_SCROLLBAR;
 const border_title_group = border_group | c.NK_WINDOW_TITLE;
 
-pub fn main() u8 {
+pub fn main() anyerror!void {
     // HACK: I don't want to show a console to the user.
     //       Here is someone explaing what to pass to the C compiler to make that happen:
     //       https://stackoverflow.com/a/9619254
@@ -58,12 +57,11 @@ pub fn main() u8 {
     const allocator = heap.c_allocator;
     var stdio_buf = util.getStdIo();
     const stdio = stdio_buf.streams();
-    defer stdio_buf.err.flush() catch {};
 
     // Set up essetial state for the program to run. If any of these
     // fail, the only thing we can do is exit.
-    var timer = time.Timer.start() catch |err| return exit.err(stdio.err, "Could not create timer: {}\n", .{err});
-    const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return exit.err(stdio.err, "Could not create nuklear context\n", .{});
+    var timer = try time.Timer.start();
+    const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return error.CouldNotInitNuklear;
     defer c.nkDeinit(ctx);
 
     {
@@ -146,7 +144,7 @@ pub fn main() u8 {
     while (true) {
         timer.reset();
         if (c.nkInput(ctx) == 0)
-            return 0;
+            return;
 
         const window_rect = nk.rect(0, 0, @intToFloat(f32, c.width), @intToFloat(f32, c.height));
         if (nk.begin(ctx, "", window_rect, c.NK_WINDOW_NO_SCROLLBAR)) {
@@ -176,15 +174,13 @@ pub fn main() u8 {
                 drawOptions(ctx, &popups, exes, settings, selected);
             }
 
-            drawPopups(ctx, &popups) catch return 1;
+            try drawPopups(ctx, &popups);
         }
         c.nk_end(ctx);
 
         c.nkRender(ctx);
         time.sleep(math.sub(u64, frame_time, timer.read()) catch 0);
     }
-
-    return 0;
 }
 
 pub fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {

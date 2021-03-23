@@ -7,6 +7,7 @@ const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
+const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
@@ -15,7 +16,6 @@ pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
 pub const container = @import("container.zig");
 pub const escape = @import("escape.zig");
-pub const exit = @import("exit.zig");
 pub const io = @import("io.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
@@ -25,17 +25,15 @@ test "" {
     _ = bit;
     _ = container;
     _ = escape;
-    _ = exit;
     _ = io;
     _ = testing;
     _ = unicode;
 }
 
-pub fn getSeed(stderr: anytype, usage: anytype, args: anytype) !u64 {
+pub fn getSeed(args: anytype) !u64 {
     if (args.option("--seed")) |seed| {
         return fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            stderr.print("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err }) catch {};
-            usage(stderr) catch {};
+            log.err("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
             return error.InvalidSeed;
         };
     } else {
@@ -50,12 +48,11 @@ pub fn generateMain(
     comptime main2: anytype,
     comptime params: []const clap.Param(clap.Help),
     comptime usage: anytype,
-) fn () u8 {
+) fn () anyerror!void {
     return struct {
-        fn main() u8 {
+        fn main() anyerror!void {
             var stdio_buf = getStdIo();
             const stdio = stdio_buf.streams();
-            defer stdio_buf.err.flush() catch {};
 
             // No need to deinit arena. The program will exit when this function
             // ends and all the memory will be freed by the os. This saves a bit
@@ -63,21 +60,23 @@ pub fn generateMain(
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
             var args = clap.parse(clap.Help, params, &arena.allocator, &diag) catch |err| {
-                diag.report(stdio.err, err) catch {};
-                usage(stdio.err) catch {};
-                return 1;
+                var stderr = io.bufferedWriter(std.io.getStdErr().writer());
+                diag.report(stderr.writer(), err) catch {};
+                usage(stderr.writer()) catch {};
+                stderr.flush() catch {};
+                return error.InvalidArgument;
             };
 
             if (args.flag("--help")) {
-                usage(stdio.out) catch |err| return exit.stdoutErr(stdio.err, err);
-                stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
-                return 0;
+                try usage(stdio.out);
+                try stdio_buf.out.flush();
+                return;
             }
 
             if (args.flag("--version")) {
-                stdio.out.print("{}\n", .{version}) catch |err| return exit.stdoutErr(stdio.err, err);
-                stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
-                return 0;
+                try stdio.out.print("{}\n", .{version});
+                try stdio_buf.out.flush();
+                return;
             }
 
             const res = main2(
@@ -88,7 +87,7 @@ pub fn generateMain(
                 args,
             );
 
-            stdio_buf.out.flush() catch |err| return exit.stdoutErr(stdio.err, err);
+            try stdio_buf.out.flush();
             return res;
         }
     }.main;
@@ -100,13 +99,11 @@ pub const StdIo = struct {
 
     in: In,
     out: Out,
-    err: Out,
 
     pub fn streams(stdio: *StdIo) StdIoStreams {
         return StdIoStreams{
             .in = stdio.in.reader(),
             .out = stdio.out.writer(),
-            .err = stdio.err.writer(),
         };
     }
 };
@@ -119,7 +116,6 @@ pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
 
         in: Reader,
         out: Writer,
-        err: Writer,
     };
 }
 
@@ -127,7 +123,6 @@ pub fn getStdIo() StdIo {
     return StdIo{
         .in = std.io.getStdIn(),
         .out = io.bufferedWriter(std.io.getStdOut().writer()),
-        .err = io.bufferedWriter(std.io.getStdErr().writer()),
     };
 }
 
