@@ -1,8 +1,10 @@
-const std = @import("std");
 const rom = @import("../rom.zig");
+const std = @import("std");
 
 const io = std.io;
 const mem = std.mem;
+
+// TODO: Replace with Replacing/Escaping streams
 
 pub const all = [_]rom.encoding.Char{
     .{ "\\x0000", "\x00\x00" },
@@ -1150,7 +1152,7 @@ pub const all = [_]rom.encoding.Char{
     .{ "험", "\xBA\x0C" },
     .{ "활", "\xE0\x0C" },
     .{ "힐", "\x2A\x0D" },
-    .{ "\\n", "\x00\xE0" },
+    .{ "\n", "\x00\xE0" },
     .{ "\\p", "\xBC\x25" },
     .{ "\\l", "\xBD\x25" },
 };

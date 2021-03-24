@@ -1,9 +1,11 @@
-const std = @import("std");
 const gen3 = @import("../gen3.zig");
 const rom = @import("../rom.zig");
+const std = @import("std");
 
 const io = std.io;
 const mem = std.mem;
+
+// TODO: Replace with Replacing/Escaping streams
 
 pub const en_us = [_]rom.encoding.Char{
     .{ " ", "\x00" },
@@ -178,7 +180,7 @@ pub const en_us = [_]rom.encoding.Char{
     .{ "{MAXIE}", "\xFD\x0B" },
     .{ "{KYOGRE}", "\xFD\x0C" },
     .{ "{GROUdON}", "\xFD\x0D" },
-    .{ "\\n", "\xFE" },
+    .{ "\n", "\xFE" },
     .{ "$", "\xFF" },
 };
 

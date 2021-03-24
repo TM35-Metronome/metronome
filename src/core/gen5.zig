@@ -1103,9 +1103,6 @@ pub const Game = struct {
 
     /// Applies all decrypted strings to the game.
     fn applyStrings(game: Game) !void {
-        // First, we construct an array of all tables we have decrypted. We do
-        // this to avoid code duplication in many cases. This table type erases
-        // the tables.
         const allocator = game.allocator;
         const info = game.info;
         const file_system = game.rom.fileSystem();
