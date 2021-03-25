@@ -60,46 +60,61 @@ pub fn main2(
 
     const pick_lowest = args.flag("--pick-lowest-evolution");
 
+    const random = &rand.DefaultPrng.init(seed).random;
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    const pick_from = try getStartersToPickFrom(allocator, random, data, pick_lowest, evolutions);
+    try outputData(stdio.out, random, data, pick_from);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    const species = try data.pokedexPokemons(allocator);
-    const random = &rand.DefaultPrng.init(seed).random;
-    const pick_from = blk: {
-        var res = Set{};
-        for (species.span()) |range| {
-            var pokemon: usize = range.start;
-            while (pokemon <= range.end) : (pokemon += 1) {
-                // Only pick lowest evo pokemon if pick_lowest is true
-                if (pick_lowest and data.evolves_from.get(pokemon) != null)
-                    continue;
-                if (countEvos(data, pokemon) < evolutions)
-                    continue;
-
-                _ = try res.put(allocator, pokemon);
-            }
-        }
-        if (res.count() == 0)
-            _ = try res.put(allocator, 0);
-
-        break :blk res;
-    };
-
+fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
     const ranges = data.starters.span();
     for (ranges) |range| {
-        var i: usize = range.start;
+        var i: u16 = range.start;
         while (i <= range.end) : (i += 1) {
             const index = random.intRangeLessThan(usize, 0, pick_from.count());
             const res = pick_from.at(index);
-            try stdio.out.print(".starters[{}]={}\n", .{ i, res });
+            try format.write(writer, format.Game.starter(@intCast(u8, i), res));
         }
     }
+}
+
+fn getStartersToPickFrom(
+    allocator: *mem.Allocator,
+    random: *rand.Random,
+    data: Data,
+    pick_lowest: bool,
+    evolutions: usize,
+) !Set {
+    const species = try data.pokedexPokemons(allocator);
+    var res = Set{};
+    for (species.span()) |range| {
+        var pokemon: u16 = range.start;
+        while (pokemon <= range.end) : (pokemon += 1) {
+            // Only pick lowest evo pokemon if pick_lowest is true
+            if (pick_lowest and data.evolves_from.get(pokemon) != null)
+                continue;
+            if (countEvos(data, pokemon) < evolutions)
+                continue;
+
+            _ = try res.put(allocator, pokemon);
+        }
+    }
+    if (res.count() == 0)
+        _ = try res.put(allocator, 0);
+
+    return res;
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
@@ -175,7 +190,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     unreachable;
 }
 
-fn countEvos(data: Data, pokemon: usize) usize {
+fn countEvos(data: Data, pokemon: u16) usize {
     var res: usize = 0;
     const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
 
@@ -191,9 +206,9 @@ fn countEvos(data: Data, pokemon: usize) usize {
     return res;
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(usize, Set);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Set = util.container.IntSet.Unmanaged(usize);
+const Evolutions = util.container.IntMap.Unmanaged(u16, Set);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Set = util.container.IntSet.Unmanaged(u16);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -219,7 +234,7 @@ const Data = struct {
 };
 
 const Pokemon = struct {
-    pokedex_entry: usize = math.maxInt(usize),
+    pokedex_entry: u16 = math.maxInt(u16),
     catch_rate: usize = 1,
 };
 

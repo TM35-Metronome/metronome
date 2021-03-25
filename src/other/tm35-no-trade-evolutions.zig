@@ -55,25 +55,32 @@ pub fn main2(
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) anyerror!void {
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    removeTradeEvolutions(data);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    removeTradeEvolutions(data);
-
+fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |pokemon, i| {
-        const pokemon_i = data.pokemons.at(i).key;
+        const pid = data.pokemons.at(i).key;
         for (pokemon.evos.values()) |evo, j| {
-            const evo_i = pokemon.evos.at(j).key;
+            const eid = pokemon.evos.at(j).key;
             if (evo.param) |param|
-                try stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_i, evo_i, param });
+                try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .param = param })));
             if (evo.method != .unused)
-                try stdio.out.print(".pokemons[{}].evos[{}].method={}\n", .{ pokemon_i, evo_i, @tagName(evo.method) });
+                try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .method = evo.method })));
         }
     }
 }
@@ -158,9 +165,9 @@ fn removeTradeEvolutions(data: Data) void {
     const trade_method_holding_replace: ?M = if (has_level_up_holding) .level_up_holding_item_during_daytime else trade_method_replace;
     const trade_method_pokemon_replace: ?M = if (has_level_up_party) .level_up_with_other_pokemon_in_party else trade_method_replace;
 
-    const trade_param_replace: ?usize = if (has_level_up) @as(usize, 36) else null;
-    const trade_param_holding_replace: ?usize = if (has_level_up_holding) null else trade_param_replace;
-    const trade_param_pokemon_replace: ?usize = if (has_level_up_party) null else trade_param_replace;
+    const trade_param_replace: ?u16 = if (has_level_up) @as(usize, 36) else null;
+    const trade_param_holding_replace: ?u16 = if (has_level_up_holding) null else trade_param_replace;
+    const trade_param_pokemon_replace: ?u16 = if (has_level_up_party) null else trade_param_replace;
 
     for (data.pokemons.values()) |pokemon| {
         for (pokemon.evos.values()) |*evo| {
@@ -214,8 +221,8 @@ fn removeTradeEvolutions(data: Data) void {
     }
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(usize, Evolution);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Evolutions = util.container.IntMap.Unmanaged(u8, Evolution);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
 
 const Data = struct {
     pokemons: Pokemons = Pokemons{},
@@ -226,7 +233,7 @@ const Pokemon = struct {
 };
 
 const Evolution = struct {
-    param: ?usize = null,
+    param: ?u16 = null,
     method: format.Evolution.Method = .unused,
 };
 

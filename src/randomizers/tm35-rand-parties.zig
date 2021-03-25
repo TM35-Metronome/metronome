@@ -96,8 +96,8 @@ pub fn main2(
     const stats_arg = args.option("--stats") orelse "random";
     const types_arg = args.option("--types") orelse "random";
 
-    const party_size_min = fmt.parseUnsigned(usize, party_size_min_arg, 10);
-    const party_size_max = fmt.parseUnsigned(usize, party_size_max_arg, 10);
+    const party_size_min = fmt.parseUnsigned(u8, party_size_min_arg, 10);
+    const party_size_max = fmt.parseUnsigned(u8, party_size_max_arg, 10);
     const types = std.meta.stringToEnum(TypesOption, types_arg) orelse {
         log.err("--types does not support '{}'\n", .{types_arg});
         return error.InvalidArgument;
@@ -118,7 +118,7 @@ pub fn main2(
         log.err("--party-size-pick-method does not support '{}'\n", .{party_size_method_arg});
         return error.InvalidArgument;
     };
-    for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!usize }{
+    for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!u8 }{
         .{ .arg = "--party-size-min", .value = party_size_min_arg, .check = party_size_min },
         .{ .arg = "--party-size-max", .value = party_size_max_arg, .check = party_size_max },
     }) |arg| {
@@ -128,16 +128,8 @@ pub fn main2(
         }
     }
 
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
-        };
-    }
-
-    try randomize(allocator, &data, .{
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    try randomize(allocator, data, .{
         .seed = seed,
         .types = types,
         .items = items,
@@ -147,23 +139,43 @@ pub fn main2(
         .party_size_min = party_size_min catch unreachable,
         .party_size_max = party_size_max catch unreachable,
     });
+    try outputData(stdio.out, data);
+}
 
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
+    var data = Data{};
+    while (try util.io.readLine(reader, &fifo)) |line| {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParserFailed => try writer.print("{}\n", .{line}),
+        };
+    }
+    return data;
+}
+
+fn outputData(writer: anytype, data: Data) !void {
     for (data.trainers.values()) |trainer, i| {
-        const trainer_i = data.trainers.at(i).key;
-        const party_type = @tagName(trainer.party_type);
+        const tid = data.trainers.at(i).key;
 
-        try stdio.out.print(".trainers[{}].party_size={}\n", .{ trainer_i, trainer.party_size });
-        try stdio.out.print(".trainers[{}].party_type={}\n", .{ trainer_i, party_type });
+        try format.write(writer, format.Game.trainer(tid, .{ .party_size = trainer.party_size }));
+        try format.write(writer, format.Game.trainer(tid, .{ .party_type = trainer.party_type }));
         for (trainer.party.values()[0..trainer.party_size]) |member, j| {
+            const pi = trainer.party.at(j).key;
             if (member.species) |s|
-                try stdio.out.print(".trainers[{}].party[{}].species={}\n", .{ trainer_i, j, s });
+                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .species = s })));
             if (member.level) |l|
-                try stdio.out.print(".trainers[{}].party[{}].level={}\n", .{ trainer_i, j, l });
+                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .level = l })));
             if (member.item) |item|
-                try stdio.out.print(".trainers[{}].party[{}].item={}\n", .{ trainer_i, j, item });
+                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .item = item })));
             for (member.moves.values()) |move, k| {
-                const move_i = member.moves.at(k).key;
-                try stdio.out.print(".trainers[{}].party[{}].moves[{}]={}\n", .{ trainer_i, j, move_i, move });
+                const mi = member.moves.at(k).key;
+                try format.write(writer, format.Game.trainer(
+                    tid,
+                    format.Trainer.partyMember(pi, .{
+                        .moves = .{ .index = mi, .value = move },
+                    }),
+                ));
             }
         }
     }
@@ -292,14 +304,14 @@ const Options = struct {
     moves: MoveOption,
     stats: StatsOption,
     party_size_method: PartySizeMethod,
-    party_size_min: usize,
-    party_size_max: usize,
+    party_size_min: u8,
+    party_size_max: u8,
 };
 
-fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
+fn randomize(allocator: *mem.Allocator, data: Data, opt: Options) !void {
     var random_adapt = rand.DefaultPrng.init(opt.seed);
     const random = &random_adapt.random;
-    var simular = std.ArrayList(usize).init(allocator);
+    var simular = std.ArrayList(u16).init(allocator);
 
     const species = try data.pokedexPokemons(allocator);
     const species_by_type = try data.speciesByType(allocator, species);
@@ -350,7 +362,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
         trainer.party_size = switch (opt.party_size_method) {
             .unchanged => math.clamp(trainer.party_size, opt.party_size_min, opt.party_size_max),
             .minimum => opt.party_size_min,
-            .random => random.intRangeAtMost(usize, opt.party_size_min, opt.party_size_max),
+            .random => random.intRangeAtMost(u8, opt.party_size_min, opt.party_size_max),
         };
 
         const wants_moves = switch (opt.moves) {
@@ -385,10 +397,10 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
             },
         };
 
-        var j: usize = 0;
+        var j: u8 = 0;
         while (j < trainer.party_size) : (j += 1) {
             const member = try trainer.party.getOrPutValue(allocator, j, PartyMember{
-                .level = average_level,
+                .level = @intCast(u8, average_level),
             });
             const old_species = member.species;
 
@@ -434,7 +446,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                     var min = @intCast(i64, total_stats);
                     var max = min;
 
-                    simular.resize(0) catch unreachable;
+                    simular.shrinkRetainingCapacity(0);
                     while (simular.items.len < 25) : ({
                         min -= 5;
                         max += 5;
@@ -461,7 +473,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                 .random => data.held_items.at(random.intRangeLessThan(usize, 0, data.held_items.count())),
             };
 
-            var k: usize = 0;
+            var k: u8 = 0;
             while (wants_moves and opt.moves != .unchanged and (k < 4 or k < member.moves.count())) : (k += 1) {
                 const move = try member.moves.getOrPutValue(allocator, k, 0);
                 const curr_moves = member.moves.values()[0..k];
@@ -474,7 +486,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                         const member_lvl = member.level orelse math.maxInt(u8);
                         const lvl_up_moves = pokemon.lvl_up_moves.values();
 
-                        var m_best: ?usize = null;
+                        var m_best: ?u16 = null;
                         for (lvl_up_moves) |lvl_up_move| {
                             const lvl_move_id = lvl_up_move.id orelse continue;
                             const lvl_move = data.moves.get(lvl_move_id) orelse continue;
@@ -492,7 +504,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                             const prev_move_r = RelativeMove.from(pokemon.*, prev_move.*);
 
                             if (!this_move_r.lessThan(prev_move_r)) {
-                                if (mem.indexOfScalar(usize, curr_moves, lvl_move_id) == null)
+                                if (mem.indexOfScalar(u16, curr_moves, lvl_move_id) == null)
                                     m_best = lvl_move_id;
                             }
                         }
@@ -502,7 +514,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                     .random => while (data.moves.count() - 1 > k) {
                         const pick = random.intRangeLessThan(usize, 1, data.moves.count());
                         const picked_move = data.moves.at(pick).key;
-                        if (mem.indexOfScalar(usize, curr_moves, picked_move) == null)
+                        if (mem.indexOfScalar(u16, curr_moves, picked_move) == null)
                             break picked_move;
                     } else 0,
                     .random_learnable => blk: {
@@ -516,14 +528,13 @@ fn randomize(allocator: *mem.Allocator, data: *Data, opt: Options) !void {
                             const pick = random.intRangeLessThan(usize, 0, lvl_up_moves.len);
                             const picked_move = lvl_up_moves[pick].id orelse continue;
 
-                            if (mem.indexOfScalar(usize, curr_moves, picked_move) == null)
+                            if (mem.indexOfScalar(u16, curr_moves, picked_move) == null)
                                 break :blk picked_move;
                         }
 
                         break :blk 0;
                     },
                 };
-                var z = move;
             }
         }
     }
@@ -561,14 +572,14 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const LvlUpMoves = util.container.IntMap.Unmanaged(usize, LvlUpMove);
-const MemberMoves = util.container.IntMap.Unmanaged(usize, usize);
-const Moves = util.container.IntMap.Unmanaged(usize, Move);
-const Party = util.container.IntMap.Unmanaged(usize, PartyMember);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Set = util.container.IntSet.Unmanaged(usize);
-const SpeciesByType = util.container.IntMap.Unmanaged(usize, Set);
-const Trainers = util.container.IntMap.Unmanaged(usize, Trainer);
+const LvlUpMoves = util.container.IntMap.Unmanaged(u16, LvlUpMove);
+const MemberMoves = util.container.IntMap.Unmanaged(u8, u16);
+const Moves = util.container.IntMap.Unmanaged(u16, Move);
+const Party = util.container.IntMap.Unmanaged(u8, PartyMember);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Set = util.container.IntSet.Unmanaged(u16);
+const SpeciesByType = util.container.IntMap.Unmanaged(u16, Set);
+const Trainers = util.container.IntMap.Unmanaged(u16, Trainer);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -620,28 +631,28 @@ const Data = struct {
 };
 
 const Trainer = struct {
-    party_size: usize = 0,
+    party_size: u8 = 0,
     party_type: format.PartyType = .none,
     party: Party = Party{},
 };
 
 const PartyMember = struct {
-    species: ?usize = null,
-    item: ?usize = null,
-    level: ?u16 = null,
+    species: ?u16 = null,
+    item: ?u16 = null,
+    level: ?u8 = null,
     moves: MemberMoves = MemberMoves{},
 };
 
 const LvlUpMove = struct {
     level: ?u16 = null,
-    id: ?usize = null,
+    id: ?u16 = null,
 };
 
 const Move = struct {
     power: ?u8 = null,
     accuracy: ?u8 = null,
     pp: ?u8 = null,
-    type: ?usize = null,
+    type: ?u16 = null,
 };
 
 // Represents a moves power in relation to the pokemon who uses it
@@ -654,7 +665,7 @@ const RelativeMove = struct {
         return RelativeMove{
             .power = blk: {
                 const power = @intToFloat(f32, m.power orelse 0);
-                const is_stab = p.types.exists(m.type orelse math.maxInt(usize));
+                const is_stab = p.types.exists(m.type orelse math.maxInt(u16));
                 const stab = 1.0 + 0.5 * @intToFloat(f32, @boolToInt(is_stab));
                 break :blk math.cast(u8, @floatToInt(u64, power * stab)) catch math.maxInt(u8);
             },
@@ -681,7 +692,7 @@ const Pokemon = struct {
     types: Set = Set{},
     lvl_up_moves: LvlUpMoves = LvlUpMoves{},
     catch_rate: usize = 1,
-    pokedex_entry: usize = math.maxInt(usize),
+    pokedex_entry: u16 = math.maxInt(u16),
 };
 
 test "tm35-rand-parties" {
@@ -898,50 +909,43 @@ test "tm35-rand-parties" {
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=random" }, test_string, result_prefix ++
-        \\.trainers[0].party_size=2
+        \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=0
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].moves[0]=1
-        \\.trainers[0].party[1].species=2
-        \\.trainers[0].party[1].level=5
-        \\.trainers[0].party[1].moves[0]=1
-        \\.trainers[1].party_size=6
+        \\.trainers[1].party_size=4
         \\.trainers[1].party_type=none
-        \\.trainers[1].party[0].species=2
+        \\.trainers[1].party[0].species=6
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].moves[0]=2
-        \\.trainers[1].party[1].species=3
+        \\.trainers[1].party[1].species=2
         \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].moves[0]=2
-        \\.trainers[1].party[2].species=1
+        \\.trainers[1].party[2].species=3
         \\.trainers[1].party[2].level=5
-        \\.trainers[1].party[3].species=0
+        \\.trainers[1].party[3].species=1
         \\.trainers[1].party[3].level=5
-        \\.trainers[1].party[4].species=6
-        \\.trainers[1].party[4].level=5
-        \\.trainers[1].party[5].species=3
-        \\.trainers[1].party[5].level=5
-        \\.trainers[2].party_size=2
+        \\.trainers[2].party_size=4
         \\.trainers[2].party_type=none
-        \\.trainers[2].party[0].species=2
+        \\.trainers[2].party[0].species=0
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].moves[0]=3
-        \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[1].species=3
         \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].moves[0]=3
-        \\.trainers[3].party_size=4
+        \\.trainers[2].party[2].species=1
+        \\.trainers[2].party[2].level=5
+        \\.trainers[2].party[3].species=2
+        \\.trainers[2].party[3].level=5
+        \\.trainers[3].party_size=2
         \\.trainers[3].party_type=none
-        \\.trainers[3].party[0].species=2
+        \\.trainers[3].party[0].species=0
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].moves[0]=4
-        \\.trainers[3].party[1].species=1
+        \\.trainers[3].party[1].species=2
         \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].moves[0]=4
-        \\.trainers[3].party[2].species=1
-        \\.trainers[3].party[2].level=5
-        \\.trainers[3].party[3].species=1
-        \\.trainers[3].party[3].level=5
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--items=unchanged" }, test_string, result_prefix ++

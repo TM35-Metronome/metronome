@@ -290,7 +290,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         try gen3.encodings.decode(.en_us, &name, fbs.writer());
         const decoded_name = fbs.getWritten();
 
-        try format.write(writer, Game.abilitie(i, .{ .name = decoded_name }));
+        try format.write(writer, Game.ability(i, .{ .name = decoded_name }));
     }
 
     for (game.move_names) |name, index| {

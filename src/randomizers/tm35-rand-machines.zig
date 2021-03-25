@@ -62,36 +62,35 @@ pub fn main2(
     const seed = try util.getSeed(args);
     const hms = args.flag("--hms");
 
+    const data = try handleInput(allocator, stdio.in, stdio.out, hms);
+    try randomize(allocator, data, seed);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype, hms: bool) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, hms, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
             error.InvalidUtf8,
             error.ParserFailed,
-            => try stdio.out.print("{}\n", .{line}),
+            => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    try randomize(allocator, &data, seed);
-
-    for (data.tms.values()) |tm, i| {
-        try stdio.out.print(".tms[{}]={}\n", .{
-            data.tms.at(i).key,
-            tm,
-        });
-    }
-    for (data.hms.values()) |hm, i| {
-        try stdio.out.print(".hms[{}]={}\n", .{
-            data.hms.at(i).key,
-            hm,
-        });
-    }
+fn outputData(writer: anytype, data: Data) !void {
+    for (data.tms.values()) |tm, i|
+        try format.write(writer, format.Game.tm(data.tms.at(i).key, tm));
+    for (data.hms.values()) |hm, i|
+        try format.write(writer, format.Game.hm(data.hms.at(i).key, hm));
     for (data.items.values()) |item, i| {
         const index = data.items.at(i).key;
         try format.write(
-            stdio.out,
-            format.Game{ .items = .{ .index = index, .value = .{ .description = item.description.bytes } } },
+            writer,
+            format.Game.item(index, .{ .description = item.description.bytes }),
         );
     }
 }
@@ -163,7 +162,7 @@ fn parseLine(
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: *Data, seed: u64) !void {
+fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.values()) |*tm|
@@ -197,7 +196,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: u64) !void {
         const is_tm = mem.startsWith(u8, item.name.bytes, "TM");
         const is_hm = mem.startsWith(u8, item.name.bytes, "HM");
         if (is_tm or is_hm) {
-            const number = fmt.parseUnsigned(usize, item.name.bytes[2..], 10) catch continue;
+            const number = fmt.parseUnsigned(u8, item.name.bytes[2..], 10) catch continue;
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
             const move = data.moves.get(move_id.*) orelse continue;
@@ -226,8 +225,8 @@ fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
 }
 
 const Items = util.container.IntMap.Unmanaged(u16, Item);
-const Machines = util.container.IntMap.Unmanaged(usize, usize);
-const Moves = util.container.IntMap.Unmanaged(usize, Move);
+const Machines = util.container.IntMap.Unmanaged(u8, u16);
+const Moves = util.container.IntMap.Unmanaged(u16, Move);
 
 const Data = struct {
     items: Items = Items{},

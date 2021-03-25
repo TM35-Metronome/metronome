@@ -20,18 +20,6 @@ pub usingnamespace @import("mecha");
 //! IDENTIFIER <- [A-Za-z0-9_]+
 //!
 
-fn toUnionField(
-    comptime T: type,
-    comptime field_type: type,
-    comptime field_name: []const u8,
-) fn (field_type) T {
-    return struct {
-        fn conv(c: field_type) T {
-            return @unionInit(T, field_name, c);
-        }
-    }.conv;
-}
-
 pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
     const res = (comptime parser(Game, true))(arena, str) catch |err| switch (err) {
         error.OtherError => unreachable,
@@ -48,6 +36,18 @@ pub fn parseNoEscape(str: []const u8) !Game {
         error.ParserFailed => return error.ParserFailed,
     };
     return res.value;
+}
+
+fn toUnionField(
+    comptime T: type,
+    comptime field_type: type,
+    comptime field_name: []const u8,
+) fn (field_type) T {
+    return struct {
+        fn conv(c: field_type) T {
+            return @unionInit(T, field_name, c);
+        }
+    }.conv;
 }
 
 fn parser(comptime T: type, comptime do_escape: bool) Parser(T) {
@@ -268,7 +268,7 @@ pub const Game = union(enum) {
         return .{ .pokemons = .{ .index = index, .value = value } };
     }
 
-    pub fn abilitie(index: u16, value: Ability) Game {
+    pub fn ability(index: u16, value: Ability) Game {
         return .{ .abilities = .{ .index = index, .value = value } };
     }
 
@@ -315,10 +315,6 @@ pub const Game = union(enum) {
     pub fn hidden_hollow(index: u16, value: HiddenHollow) Game {
         return .{ .hidden_hollows = .{ .index = index, .value = value } };
     }
-
-    pub fn tex(index: u16, value: []const u8) Game {
-        return .{ .texs = .{ .index = index, .value = value } };
-    }
 };
 
 pub const Trainer = union(enum) {
@@ -330,6 +326,10 @@ pub const Trainer = union(enum) {
     party_type: PartyType,
     party_size: u8,
     party: Array(u8, PartyMember),
+
+    pub fn partyMember(i: u8, member: PartyMember) Trainer {
+        return .{ .party = .{ .index = i, .value = member } };
+    }
 };
 
 pub const PartyMember = union(enum) {
@@ -367,25 +367,29 @@ pub fn Stats(comptime T: type) type {
 }
 
 pub const Pokemon = union(enum) {
+    name: []const u8,
     stats: Stats(u8),
-    types: Array(u8, u8),
-    catch_rate: u8,
-    base_exp_yield: u8,
     ev_yield: Stats(u2),
-    items: Array(u8, u16),
-    gender_ratio: u8,
-    egg_cycles: u8,
+    base_exp_yield: u8,
     base_friendship: u8,
+    catch_rate: u8,
+    egg_cycles: u8,
+    gender_ratio: u8,
+    pokedex_entry: u16,
     growth_rate: GrowthRate,
-    egg_groups: Array(u8, EggGroup),
-    abilities: Array(u8, u8),
     color: Color,
+    abilities: Array(u8, u8),
+    egg_groups: Array(u8, EggGroup),
     evos: Array(u8, Evolution),
+    hms: Array(u8, bool),
+    items: Array(u8, u16),
     moves: Array(u8, LevelUpMove),
     tms: Array(u8, bool),
-    hms: Array(u8, bool),
-    name: []const u8,
-    pokedex_entry: u16,
+    types: Array(u8, u8),
+
+    pub fn evo(i: u8, evolution: Evolution) Pokemon {
+        return .{ .evos = .{ .index = i, .value = evolution } };
+    }
 };
 
 pub const Evolution = union(enum) {
@@ -499,6 +503,15 @@ pub const WildPokemons = union(enum) {
     old_rod: WildArea,
     good_rod: WildArea,
     super_rod: WildArea,
+
+    pub fn init(tag: @TagType(WildPokemons), area: WildArea) WildPokemons {
+        const Tag = @TagType(WildPokemons);
+        inline for (@typeInfo(Tag).Enum.fields) |field| {
+            if (@field(Tag, field.name) == tag)
+                return @unionInit(WildPokemons, field.name, area);
+        }
+        unreachable;
+    }
 };
 
 pub const WildArea = union(enum) {
@@ -536,4 +549,23 @@ pub const HiddenHollow = union(enum) {
         }),
     }),
     items: Array(u8, u16),
+
+    pub fn pokemon(vi: u8, gi: u8, pi: u8, species: u16) HiddenHollow {
+        return .{
+            .versions = .{
+                .index = vi,
+                .value = .{
+                    .groups = .{
+                        .index = gi,
+                        .value = .{
+                            .pokemons = .{
+                                .index = pi,
+                                .value = .{ .species = species },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
 };
