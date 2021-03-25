@@ -1231,7 +1231,7 @@ pub const Game = struct {
 
         for (scripts.fat) |fat, script_i| {
             const script_data = scripts.data[fat.start.value()..fat.end.value()];
-            defer script_offsets.resize(0) catch unreachable;
+            defer script_offsets.shrinkRetainingCapacity(0);
 
             for (script.getScriptOffsets(script_data)) |relative_offset, i| {
                 const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);

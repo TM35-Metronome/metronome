@@ -55,26 +55,33 @@ pub fn main2(
     const include_tms_hms = args.flag("--include-tms-hms");
     const include_key_items = args.flag("--include-key-items");
 
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
-        };
-    }
-
+    const data = try handleInput(allocator, stdio.in, stdio.out);
     try randomize(
         allocator,
-        &data,
+        data,
         seed,
         include_tms_hms,
         include_key_items,
     );
+    try outputData(stdio.out, data);
+}
 
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
+    var data = Data{};
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
+    while (try util.io.readLine(reader, &fifo)) |line| {
+        parseLine(allocator, &data, line) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.ParserFailed => try writer.print("{}\n", .{line}),
+        };
+    }
+    return data;
+}
+
+fn outputData(writer: anytype, data: Data) !void {
     for (data.pokeballs.values()) |ball, i| {
         const key = data.pokeballs.at(i).key;
-        try stdio.out.print(".pokeball_items[{}].item={}\n", .{ key, ball });
+        try format.write(writer, format.Game.pokeball_item(key, .{ .item = ball }));
     }
 }
 
@@ -127,7 +134,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 
 fn randomize(
     allocator: *mem.Allocator,
-    data: *Data,
+    data: Data,
     seed: u64,
     include_tms_hms: bool,
     include_key_items: bool,
@@ -161,16 +168,16 @@ fn randomize(
     }
 }
 
-const Items = util.container.IntMap.Unmanaged(usize, Item);
-const Pokeballs = util.container.IntMap.Unmanaged(usize, usize);
-const Set = util.container.IntSet.Unmanaged(usize);
+const Items = util.container.IntMap.Unmanaged(u16, Item);
+const Pokeballs = util.container.IntMap.Unmanaged(u16, u16);
+const Set = util.container.IntSet.Unmanaged(u16);
 
 const Data = struct {
     pokeballs: Pokeballs = Pokeballs{},
     items: Items = Items{},
 
     fn getItems(
-        d: *Data,
+        d: Data,
         allocator: *mem.Allocator,
         pocket_blacklist: []const format.Pocket,
     ) !Set {

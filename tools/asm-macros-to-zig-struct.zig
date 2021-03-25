@@ -133,8 +133,6 @@ pub fn main() !void {
                 continue :curr_line;
             },
         };
-
-        line_buf.resize(0) catch unreachable;
     }
 
     try stdio.out.writeAll(

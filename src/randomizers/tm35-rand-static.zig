@@ -75,26 +75,28 @@ pub fn main2(
         return error.InvalidArgument;
     };
 
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    try randomize(allocator, data, seed, method, types);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
 
-    try randomize(
-        allocator,
-        data,
-        seed,
-        method,
-        types,
-    );
+    return data;
+}
 
+fn outputData(writer: anytype, data: Data) !void {
     for (data.static_mons.values()) |static, i| {
         const static_i = data.static_mons.at(i).key;
-        try stdio.out.print(".static_pokemons[{}].species={}\n", .{ static_i, static });
+        try format.write(writer, format.Game.static_pokemon(static_i, .{ .species = static }));
     }
     for (data.hidden_hollows.values()) |hollow, i| {
         const hi = data.hidden_hollows.at(i).key;
@@ -105,10 +107,15 @@ pub fn main2(
                 for (group.values()) |pokemon, g| {
                     const pi = version.at(g).key;
                     if (pokemon.species_index) |si| {
-                        try stdio.out.print(
-                            ".hidden_hollows[{}].versions[{}].groups[{}].pokemons[{}].species={}\n",
-                            .{ hi, vi, gi, pi, data.hollow_mons.get(si).?.* },
-                        );
+                        try format.write(writer, format.Game.hidden_hollow(
+                            hi,
+                            format.HiddenHollow.pokemon(
+                                vi,
+                                gi,
+                                pi,
+                                data.hollow_mons.get(si).?.*,
+                            ),
+                        ));
                     }
                 }
             }
@@ -196,7 +203,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 
                                     switch (mon.value) {
                                         .species => |species| {
-                                            const index = data.hollow_mons.count();
+                                            const index = @intCast(u16, data.hollow_mons.count());
                                             _ = try data.hollow_mons.put(allocator, index, species);
                                             pokemon.species_index = index;
                                         },
@@ -282,9 +289,9 @@ fn randomize(
                     .same => try data.getSpeciesByType(allocator, &species),
                 };
 
-                var simular = std.ArrayList(usize).init(allocator);
+                var simular = std.ArrayList(u16).init(allocator);
                 for (static_mons.values()) |*static| {
-                    defer simular.resize(0) catch unreachable;
+                    defer simular.shrinkRetainingCapacity(0);
 
                     // If the static Pokémon does not exist in the data
                     // we received, then there is no way for us to compare
@@ -364,7 +371,7 @@ fn randomize(
                 // First, lets give each Pokemon a "legendary rating" which
                 // is a measure as to how many "legendary" criteria this
                 // Pokemon fits into. This rating can be negative.
-                var ratings = util.container.IntMap.Unmanaged(usize, isize){};
+                var ratings = util.container.IntMap.Unmanaged(u16, isize){};
                 for (species.span()) |range| {
                     var _species = range.start;
                     while (_species <= range.end) : (_species += 1) {
@@ -471,15 +478,15 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Set = util.container.IntSet.Unmanaged(usize);
-const SpeciesByType = util.container.IntMap.Unmanaged(usize, Set);
-const StaticMons = util.container.IntMap.Unmanaged(usize, usize);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Set = util.container.IntSet.Unmanaged(u16);
+const SpeciesByType = util.container.IntMap.Unmanaged(u16, Set);
+const StaticMons = util.container.IntMap.Unmanaged(u16, u16);
 
-const HiddenHollows = util.container.IntMap.Unmanaged(usize, HollowVersions);
-const HollowGroups = util.container.IntMap.Unmanaged(usize, HollowPokemons);
-const HollowPokemons = util.container.IntMap.Unmanaged(usize, HollowMon);
-const HollowVersions = util.container.IntMap.Unmanaged(usize, HollowGroups);
+const HiddenHollows = util.container.IntMap.Unmanaged(u16, HollowVersions);
+const HollowGroups = util.container.IntMap.Unmanaged(u8, HollowPokemons);
+const HollowPokemons = util.container.IntMap.Unmanaged(u16, HollowMon);
+const HollowVersions = util.container.IntMap.Unmanaged(u16, HollowGroups);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -531,12 +538,12 @@ const Data = struct {
 };
 
 const HollowMon = struct {
-    species_index: ?usize = null,
+    species_index: ?u16 = null,
 };
 
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
-    pokedex_entry: usize = math.maxInt(usize),
+    pokedex_entry: u16 = math.maxInt(u16),
     catch_rate: usize = 1,
     growth_rate: format.GrowthRate = .fast,
     gender_ratio: usize = math.maxInt(usize),

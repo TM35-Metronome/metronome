@@ -65,37 +65,46 @@ pub fn main2(
     else
         Preference.random;
 
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    try randomize(allocator, data, seed, pref);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    try randomize(allocator, data, seed, pref);
-
-    for (data.pokemons.values()) |*pokemon, i| {
+fn outputData(writer: anytype, data: Data) !void {
+    for (data.pokemons.values()) |pokemon, i| {
         const pokemon_index = data.pokemons.at(i).key;
         for (pokemon.tms.span()) |range| {
             var tm = range.start;
             while (tm <= range.end) : (tm += 1) {
-                try stdio.out.print(".pokemons[{}].tms[{}]={}\n", .{
-                    pokemon_index,
-                    tm,
-                    pokemon.tms_learned.exists(tm),
-                });
+                try format.write(writer, format.Game.pokemon(pokemon_index, .{
+                    .tms = .{
+                        .index = tm,
+                        .value = pokemon.tms_learned.exists(tm),
+                    },
+                }));
             }
         }
         for (pokemon.hms.span()) |range| {
             var hm = range.start;
             while (hm <= range.end) : (hm += 1) {
-                try stdio.out.print(".pokemons[{}].hms[{}]={}\n", .{
-                    pokemon_index,
-                    hm,
-                    pokemon.hms_learned.exists(hm),
-                });
+                try format.write(writer, format.Game.pokemon(pokemon_index, .{
+                    .hms = .{
+                        .index = hm,
+                        .value = pokemon.hms_learned.exists(hm),
+                    },
+                }));
             }
         }
     }
@@ -189,8 +198,8 @@ fn randomizeMachinesLearned(
     random: *rand.Random,
     pref: Preference,
     machines: Machines,
-    have: Set,
-    learned: *Set,
+    have: SetU8,
+    learned: *SetU8,
 ) !void {
     for (have.span()) |range| {
         var machine = range.start;
@@ -222,11 +231,12 @@ fn randomizeMachinesLearned(
     }
 }
 
-const Machines = util.container.IntMap.Unmanaged(usize, usize);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
-const Set = util.container.IntSet.Unmanaged(usize);
-//const LvlUpMoves = std.AutoHashMap(usize, LvlUpMove);
-const Moves = util.container.IntMap.Unmanaged(usize, Move);
+const Machines = util.container.IntMap.Unmanaged(u16, u16);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Set = util.container.IntSet.Unmanaged(u16);
+const SetU8 = util.container.IntSet.Unmanaged(u8);
+//const LvlUpMoves = std.AutoHashMap(u16, LvlUpMove);
+const Moves = util.container.IntMap.Unmanaged(u16, Move);
 
 const Data = struct {
     pokemons: Pokemons = Pokemons{},
@@ -237,10 +247,10 @@ const Data = struct {
 
 const Pokemon = struct {
     types: Set = Set{},
-    tms_learned: Set = Set{},
-    tms: Set = Set{},
-    hms_learned: Set = Set{},
-    hms: Set = Set{},
+    tms_learned: SetU8 = SetU8{},
+    tms: SetU8 = SetU8{},
+    hms_learned: SetU8 = SetU8{},
+    hms: SetU8 = SetU8{},
     //lvl_up_moves: LvlUpMoves
 };
 
@@ -250,8 +260,8 @@ const LvlUpMove = struct {
 };
 
 const Move = struct {
-    power: ?usize = null,
-    type: ?usize = null,
+    power: ?u8 = null,
+    type: ?u16 = null,
 };
 
 test "tm35-rand-learned-moves" {

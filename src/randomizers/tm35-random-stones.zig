@@ -70,42 +70,49 @@ pub fn main2(
     const seed = try util.getSeed(args);
     const replace_cheap = args.flag("--replace-cheap-items");
 
+    const data = try handleInput(allocator, stdio.in, stdio.out, replace_cheap);
+    try randomize(allocator, data, seed);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype, replace_cheap: bool) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, replace_cheap, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
             error.InvalidUtf8,
             error.ParserFailed,
-            => try stdio.out.print("{}\n", .{line}),
+            => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    try randomize(allocator, &data, seed);
-
+fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |pokemon, i| {
-        const pokemon_id = data.pokemons.at(i).key;
+        const pid = data.pokemons.at(i).key;
         for (pokemon.evos.values()) |evo, j| {
-            const evo_id = pokemon.evos.at(j).key;
-            try stdio.out.print(".pokemons[{}].evos[{}].method=use_item\n", .{ pokemon_id, evo_id });
-            try stdio.out.print(".pokemons[{}].evos[{}].param={}\n", .{ pokemon_id, evo_id, evo.item });
-            try stdio.out.print(".pokemons[{}].evos[{}].target={}\n", .{ pokemon_id, evo_id, evo.target });
+            const eid = pokemon.evos.at(j).key;
+            try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .method = .use_item })));
+            try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .param = evo.item })));
+            try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .target = evo.target })));
         }
     }
     for (data.items.values()) |item, i| {
-        const item_id = data.items.at(i).key;
+        const iid = data.items.at(i).key;
         if (item.name.bytes.len != 0)
-            try stdio.out.print(".items[{}].name={}\n", .{ item_id, item.name.bytes });
+            try format.write(writer, format.Game.item(iid, .{ .name = item.name.bytes }));
         if (item.description.bytes.len != 0) {
             try format.write(
-                stdio.out,
-                format.Game{ .items = .{ .index = item_id, .value = .{ .description = item.description.bytes } } },
+                writer,
+                format.Game.item(iid, .{ .description = item.description.bytes }),
             );
         }
     }
     for (data.pokeball_items.values()) |item, i| {
-        const ball_id = data.pokeball_items.at(i).key;
-        try stdio.out.print(".pokeball_items[{}].item={}\n", .{ ball_id, item });
+        const bid = data.pokeball_items.at(i).key;
+        try format.write(writer, format.Game.pokeball_item(bid, .{ .item = item }));
     }
 }
 
@@ -212,7 +219,7 @@ fn parseLine(
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
+fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
     const random = &rand.DefaultPrng.init(seed).random;
 
     // First, let's find items that are used for evolving Pokémons.
@@ -587,7 +594,7 @@ fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
                     else => unreachable,
                 };
 
-                _ = try pokemon.evos.put(allocator, @intCast(u16, stone), Evolution{
+                _ = try pokemon.evos.put(allocator, @intCast(u8, stone), Evolution{
                     .method = .use_item,
                     .item = item_id,
                     .target = pick,
@@ -687,7 +694,7 @@ fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []u16) []const u
     return buf[0..i];
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(u16, Evolution);
+const Evolutions = util.container.IntMap.Unmanaged(u8, Evolution);
 const Items = util.container.IntMap.Unmanaged(u16, Item);
 const PokeballItems = util.container.IntMap.Unmanaged(u16, u16);
 const PokemonBy = util.container.IntMap.Unmanaged(u16, Set);

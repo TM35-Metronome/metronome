@@ -53,23 +53,32 @@ pub fn main2(
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
+    const pokemons = try handleInput(allocator, stdio.in, stdio.out);
+    randomize(pokemons, seed, same_total_stats, follow_evos);
+    try outputData(stdio.out, pokemons);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Pokemons {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var pokemons = Pokemons{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &pokemons, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
+    return pokemons;
+}
 
-    randomize(pokemons, seed, same_total_stats, follow_evos);
-
+fn outputData(writer: anytype, pokemons: Pokemons) !void {
     for (pokemons.values()) |pokemon, i| {
-        const pokemon_i = pokemons.at(i).key;
-        for (pokemon.stats) |stat, k| {
-            const stat_name = @tagName(@intToEnum(Pokemon.Stat, @intCast(u3, k)));
-            if (pokemon.output[k])
-                try stdio.out.print(".pokemons[{}].stats.{}={}\n", .{ pokemon_i, stat_name, stat });
+        const pid = pokemons.at(i).key;
+        inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
+            if (pokemon.output[j]) {
+                try format.write(writer, format.Game.pokemon(pid, .{
+                    .stats = @unionInit(format.Stats(u8), field.name, pokemon.stats[j]),
+                }));
+            }
         }
     }
 }
@@ -268,23 +277,15 @@ fn sum(comptime T: type, buf: []const T) SumReturn(T) {
     return res;
 }
 
-const Evos = util.container.IntSet.Unmanaged(usize);
-const Pokemons = util.container.IntMap.Unmanaged(usize, Pokemon);
+const Evos = util.container.IntSet.Unmanaged(u16);
+const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
 
 const Pokemon = struct {
     stats: [stats]u8 = [_]u8{0} ** stats,
     output: [stats]bool = [_]bool{false} ** stats,
     evolves_from: Evos = Evos{},
 
-    const stats = @typeInfo(Stat).Enum.fields.len;
-    const Stat = enum {
-        hp = 0,
-        attack = 1,
-        defense = 2,
-        speed = 3,
-        sp_attack = 4,
-        sp_defense = 5,
-    };
+    const stats = @typeInfo(format.Stats(u8)).Union.fields.len;
 };
 
 test "tm35-rand-stats" {

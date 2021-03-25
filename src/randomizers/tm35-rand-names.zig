@@ -53,36 +53,44 @@ pub fn main2(
     args: anytype,
 ) anyerror!void {
     const seed = try util.getSeed(args);
+
+    const data = try handleInput(allocator, stdio.in, stdio.out);
+    try randomize(allocator, data, seed);
+    try outputData(stdio.out, data);
+}
+
+fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var data = Data{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
+    while (try util.io.readLine(reader, &fifo)) |line| {
         parseLine(allocator, &data, line) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
+            error.ParserFailed => try writer.print("{}\n", .{line}),
         };
     }
+    return data;
+}
 
-    try randomize(allocator, &data, seed);
-
+fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |name, i| {
         const id = data.pokemons.at(i).key;
-        try stdio.out.print(".pokemons[{}].name={}\n", .{ id, name });
+        try format.write(writer, format.Game.pokemon(id, .{ .name = name }));
     }
     for (data.trainers.values()) |name, i| {
         const id = data.trainers.at(i).key;
-        try stdio.out.print(".trainers[{}].name={}\n", .{ id, name });
+        try format.write(writer, format.Game.trainer(id, .{ .name = name }));
     }
     for (data.moves.values()) |name, i| {
         const id = data.moves.at(i).key;
-        try stdio.out.print(".moves[{}].name={}\n", .{ id, name });
+        try format.write(writer, format.Game.move(id, .{ .name = name }));
     }
     for (data.abilities.values()) |name, i| {
         const id = data.abilities.at(i).key;
-        try stdio.out.print(".abilities[{}].name={}\n", .{ id, name });
+        try format.write(writer, format.Game.ability(id, .{ .name = name }));
     }
     for (data.item_names.values()) |name, i| {
         const id = data.item_names.at(i).key;
-        try stdio.out.print(".items[{}].name={}\n", .{ id, name });
+        try format.write(writer, format.Game.item(id, .{ .name = name }));
     }
 }
 
@@ -183,15 +191,15 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: *Data, seed: usize) !void {
+fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
     const random = &rand.DefaultPrng.init(seed).random;
 
-    for ([_]*NameSet{
-        &data.pokemons,
-        &data.trainers,
-        &data.moves,
-        &data.abilities,
-        &data.item_names,
+    for ([_]NameSet{
+        data.pokemons,
+        data.trainers,
+        data.moves,
+        data.abilities,
+        data.item_names,
     }) |set| {
         var max: usize = 0;
         var pairs = CodepointPairs{};
@@ -250,7 +258,7 @@ const end_of_string = "\x00";
 const start_of_string = "\x01";
 
 const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
-const NameSet = util.container.IntMap.Unmanaged(usize, []const u8);
+const NameSet = util.container.IntMap.Unmanaged(u16, []const u8);
 
 const Data = struct {
     pokemons: NameSet = NameSet{},
