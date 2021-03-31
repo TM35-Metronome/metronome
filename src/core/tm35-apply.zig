@@ -373,22 +373,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const pokemon = &game.pokemons[pokemons.index];
             switch (pokemons.value) {
-                .stats => |stats| switch (stats) {
-                    .hp => |hp| pokemon.stats.hp = hp,
-                    .attack => |attack| pokemon.stats.attack = attack,
-                    .defense => |defense| pokemon.stats.defense = defense,
-                    .speed => |speed| pokemon.stats.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
-                },
-                .ev_yield => |ev_yield| switch (ev_yield) {
-                    .hp => |hp| pokemon.ev_yield.hp = hp,
-                    .attack => |attack| pokemon.ev_yield.attack = attack,
-                    .defense => |defense| pokemon.ev_yield.defense = defense,
-                    .speed => |speed| pokemon.ev_yield.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
-                },
+                .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -866,22 +852,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
             const pokemon = &game.ptrs.pokemons[pokemons.index];
             switch (pokemons.value) {
-                .stats => |stats| switch (stats) {
-                    .hp => |hp| pokemon.stats.hp = hp,
-                    .attack => |attack| pokemon.stats.attack = attack,
-                    .defense => |defense| pokemon.stats.defense = defense,
-                    .speed => |speed| pokemon.stats.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
-                },
-                .ev_yield => |ev_yield| switch (ev_yield) {
-                    .hp => |hp| pokemon.ev_yield.hp = hp,
-                    .attack => |attack| pokemon.ev_yield.attack = attack,
-                    .defense => |defense| pokemon.ev_yield.defense = defense,
-                    .speed => |speed| pokemon.ev_yield.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
-                },
+                .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -1275,22 +1247,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
             switch (pokemons.value) {
-                .stats => |stats| switch (stats) {
-                    .hp => |hp| pokemon.stats.hp = hp,
-                    .attack => |attack| pokemon.stats.attack = attack,
-                    .defense => |defense| pokemon.stats.defense = defense,
-                    .speed => |speed| pokemon.stats.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
-                },
-                .ev_yield => |ev_yield| switch (ev_yield) {
-                    .hp => |hp| pokemon.ev_yield.hp = hp,
-                    .attack => |attack| pokemon.ev_yield.attack = attack,
-                    .defense => |defense| pokemon.ev_yield.defense = defense,
-                    .speed => |speed| pokemon.ev_yield.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
-                },
+                .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;

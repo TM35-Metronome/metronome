@@ -131,6 +131,14 @@ pub const PartyType = packed enum(u8) {
     item = 0b10,
     moves = 0b01,
     both = 0b11,
+
+    pub fn haveItem(t: PartyType) bool {
+        return t == .item or t == .both;
+    }
+
+    pub fn haveMoves(t: PartyType) bool {
+        return t == .moves or t == .both;
+    }
 };
 
 pub const Stats = extern struct {

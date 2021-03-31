@@ -132,25 +132,34 @@ fn parser(comptime T: type, comptime do_escape: bool) Parser(T) {
 pub fn write(writer: anytype, value: anytype) !void {
     const T = @TypeOf(value);
     if (comptime isArray(T)) {
-        try writer.print("[{}]", .{value.index});
+        try writer.writeByte('[');
+        try fmt.formatInt(value.index, 10, false, .{}, writer);
+        try writer.writeByte(']');
         try write(writer, value.value);
     } else switch (T) {
         []const u8 => {
-            try writer.writeAll("=");
+            try writer.writeByte('=');
             try util.escape.default.escapeWrite(writer, value);
-            try writer.writeAll("\n");
+            try writer.writeByte('\n');
         },
         else => switch (@typeInfo(T)) {
-            .Bool, .Int => try writer.print("={}\n", .{value}),
+            .Bool => try writer.writeAll(if (value) "=true\n" else "=false\n"),
+            .Int => {
+                try writer.writeByte('=');
+                try fmt.formatInt(value, 10, false, .{}, writer);
+                try writer.writeByte('\n');
+            },
             .Enum => try write(writer, @tagName(value)),
             .Union => |info| {
                 const Tag = @TagType(T);
                 inline for (info.fields) |field| {
                     if (@field(Tag, field.name) == value) {
-                        try writer.print(".{s}", .{field.name});
+                        try writer.writeAll("." ++ field.name);
                         try write(writer, @field(value, field.name));
+                        return;
                     }
                 }
+                unreachable;
             },
             else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
         },
@@ -216,6 +225,34 @@ test "parse" {
     expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
     expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
     expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
+}
+
+/// Takes a struct pointer and a union and sets the structs field with
+/// the same name as the unions active tag to that tags value.
+/// All union field names must exist in the struct, and these union
+/// field types must be able to coirse to the struct fields type.
+pub fn setField(struct_ptr: anytype, union_val: anytype) void {
+    const Struct = @TypeOf(struct_ptr.*);
+    const Union = @TypeOf(union_val);
+
+    inline for (@typeInfo(Union).Union.fields) |field| {
+        if (union_val == @field(@TagType(Union), field.name)) {
+            @field(struct_ptr, field.name) = @field(union_val, field.name);
+            return;
+        }
+    }
+}
+
+fn getUnionValue(
+    val: anytype,
+) @TypeOf(&@field(val, @typeInfo(@TypeOf(val)).Union.fields[0].name)) {
+    const T = @TypeOf(val);
+    inline for (@typeInfo(T).Union.fields) |field| {
+        if (val == @field(@TagType(T), field.name)) {
+            return &@field(val, field.name);
+        }
+    }
+    unreachable;
 }
 
 pub const Color = common.ColorKind;
@@ -363,6 +400,10 @@ pub fn Stats(comptime T: type) type {
         speed: T,
         sp_attack: T,
         sp_defense: T,
+
+        pub fn value(stats: @This()) T {
+            return getUnionValue(stats).*;
+        }
     };
 }
 
@@ -511,6 +552,10 @@ pub const WildPokemons = union(enum) {
                 return @unionInit(WildPokemons, field.name, area);
         }
         unreachable;
+    }
+
+    pub fn value(pokemons: @This()) WildArea {
+        return getUnionValue(pokemons).*;
     }
 };
 

@@ -72,26 +72,16 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |name, i| {
-        const id = data.pokemons.at(i).key;
-        try format.write(writer, format.Game.pokemon(id, .{ .name = name }));
-    }
-    for (data.trainers.values()) |name, i| {
-        const id = data.trainers.at(i).key;
-        try format.write(writer, format.Game.trainer(id, .{ .name = name }));
-    }
-    for (data.moves.values()) |name, i| {
-        const id = data.moves.at(i).key;
-        try format.write(writer, format.Game.move(id, .{ .name = name }));
-    }
-    for (data.abilities.values()) |name, i| {
-        const id = data.abilities.at(i).key;
-        try format.write(writer, format.Game.ability(id, .{ .name = name }));
-    }
-    for (data.item_names.values()) |name, i| {
-        const id = data.item_names.at(i).key;
-        try format.write(writer, format.Game.item(id, .{ .name = name }));
-    }
+    for (data.pokemons.items()) |name|
+        try format.write(writer, format.Game.pokemon(name.key, .{ .name = name.value }));
+    for (data.trainers.items()) |name|
+        try format.write(writer, format.Game.trainer(name.key, .{ .name = name.value }));
+    for (data.moves.items()) |name|
+        try format.write(writer, format.Game.move(name.key, .{ .name = name.value }));
+    for (data.abilities.items()) |name|
+        try format.write(writer, format.Game.ability(name.key, .{ .name = name.value }));
+    for (data.item_names.items()) |name|
+        try format.write(writer, format.Game.item(name.key, .{ .name = name.value }));
 }
 
 fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
@@ -207,8 +197,8 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
         // Build our codepoint pair map. This map contains a mapping from C1 -> []C2+N,
         // where CX is a codepoint and N is the number of times C2 was seen after C1.
         // This map will be used to generate names later.
-        for (set.values()) |item| {
-            const view = unicode.Utf8View.init(item) catch continue;
+        for (set.items()) |item| {
+            const view = unicode.Utf8View.init(item.value) catch continue;
 
             var node = &(try pairs.getOrPutValue(allocator, start_of_string, Occurences{})).value;
             var it = view.iterator();
@@ -222,13 +212,13 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
             const occurance = try node.codepoints.getOrPutValue(allocator, end_of_string, 0);
             occurance.value += 1;
             node.total += 1;
-            max = math.max(max, item.len);
+            max = math.max(max, item.value.len);
         }
 
         // Generate our random names from our pair map. This is done by picking a C2
         // based on our current C1. C2 is chosen by using the occurnaces of C2 as weights
         // and picking at random from here.
-        for (set.values()) |*name| {
+        for (set.items()) |*name| {
             var new_name = std.ArrayList(u8).init(allocator);
             var node = pairs.get(start_of_string).?;
 
@@ -249,7 +239,7 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
                 node = pairs.get(pick).?;
             }
 
-            name.* = new_name.toOwnedSlice();
+            name.value = new_name.toOwnedSlice();
         }
     }
 }
@@ -258,7 +248,7 @@ const end_of_string = "\x00";
 const start_of_string = "\x01";
 
 const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
-const NameSet = util.container.IntMap.Unmanaged(u16, []const u8);
+const NameSet = std.AutoArrayHashMapUnmanaged(u16, []const u8);
 
 const Data = struct {
     pokemons: NameSet = NameSet{},

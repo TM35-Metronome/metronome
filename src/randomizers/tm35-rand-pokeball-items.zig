@@ -79,9 +79,8 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokeballs.values()) |ball, i| {
-        const key = data.pokeballs.at(i).key;
-        try format.write(writer, format.Game.pokeball_item(key, .{ .item = ball }));
+    for (data.pokeballs.items()) |ball| {
+        try format.write(writer, format.Game.pokeball_item(ball.key, .{ .item = ball.value }));
     }
 }
 
@@ -98,8 +97,8 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
         .items => |items| {
             const item = try data.items.getOrPutValue(allocator, items.index, Item{});
             switch (items.value) {
-                .pocket => |pocket| item.pocket = pocket,
-                .price => |price| item.price = price,
+                .pocket => |pocket| item.value.pocket = pocket,
+                .price => |price| item.value.price = price,
                 .name,
                 .description,
                 .battle_effect,
@@ -156,21 +155,20 @@ fn randomize(
     const pick_from = try data.getItems(allocator, pocket_blacklist.items);
     const max = pick_from.count();
 
-    outer: for (data.pokeballs.values()) |*ball, i| {
-        const key = data.pokeballs.at(i).key;
-        const item = data.items.get(key) orelse continue;
+    outer: for (data.pokeballs.items()) |*ball| {
+        const item = data.items.get(ball.key) orelse continue;
         for (pocket_blacklist.items) |blacklisted_pocket| {
             if (item.pocket == blacklisted_pocket)
                 continue :outer;
         }
 
-        ball.* = pick_from.at(random.intRangeLessThan(usize, 0, max));
+        ball.value = pick_from.items()[random.intRangeLessThan(usize, 0, max)].key;
     }
 }
 
-const Items = util.container.IntMap.Unmanaged(u16, Item);
-const Pokeballs = util.container.IntMap.Unmanaged(u16, u16);
-const Set = util.container.IntSet.Unmanaged(u16);
+const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
+const Pokeballs = std.AutoArrayHashMapUnmanaged(u16, u16);
+const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
     pokeballs: Pokeballs = Pokeballs{},
@@ -184,17 +182,18 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(allocator);
 
-        outer: for (d.items.values()) |item, i| {
+        outer: for (d.items.items()) |item| {
+            // Assume that items in the 'items' pocket with price 0 is
+            // none useful or invalid items.
+            if (item.value.price == 0 and item.value.pocket == .items)
+                continue;
+
             for (pocket_blacklist) |blacklisted_pocket| {
-                if (item.pocket == blacklisted_pocket)
-                    continue :outer;
-                // Assume that items in the 'items' pocket with price 0 is
-                // none useful or invalid items.
-                if (item.price == 0 and item.pocket == .items)
+                if (item.value.pocket == blacklisted_pocket)
                     continue :outer;
             }
 
-            _ = try res.put(allocator, d.items.at(i).key);
+            _ = try res.put(allocator, item.key, {});
         }
 
         return res;

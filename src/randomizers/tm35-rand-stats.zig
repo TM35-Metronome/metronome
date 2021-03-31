@@ -15,6 +15,8 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
+const algo = util.algorithm;
+
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -71,12 +73,15 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Pok
 }
 
 fn outputData(writer: anytype, pokemons: Pokemons) !void {
-    for (pokemons.values()) |pokemon, i| {
-        const pid = pokemons.at(i).key;
+    for (pokemons.items()) |pokemon| {
         inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
-            if (pokemon.output[j]) {
-                try format.write(writer, format.Game.pokemon(pid, .{
-                    .stats = @unionInit(format.Stats(u8), field.name, pokemon.stats[j]),
+            if (pokemon.value.output[j]) {
+                try format.write(writer, format.Game.pokemon(pokemon.key, .{
+                    .stats = @unionInit(
+                        format.Stats(u8),
+                        field.name,
+                        pokemon.value.stats[j],
+                    ),
                 }));
             }
         }
@@ -86,49 +91,50 @@ fn outputData(writer: anytype, pokemons: Pokemons) !void {
 fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {
     const parsed = try format.parseNoEscape(str);
     switch (parsed) {
-        .pokemons => |mons| switch (mons.value) {
-            .stats => |stats| {
-                const pokemon = try pokemons.getOrPutValue(allocator, mons.index, Pokemon{});
-                switch (stats) {
-                    .hp => |hp| pokemon.stats[0] = hp,
-                    .attack => |attack| pokemon.stats[1] = attack,
-                    .defense => |defense| pokemon.stats[2] = defense,
-                    .speed => |speed| pokemon.stats[3] = speed,
-                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
-                }
-                for (pokemon.stats) |s, i|
-                    pokemon.output[i] = s != 0;
-                return;
-            },
-            .evos => |evos| switch (evos.value) {
-                .target => |evo_from_i| {
-                    const evo_from = try pokemons.getOrPutValue(allocator, evo_from_i, Pokemon{});
-                    _ = try evo_from.evolves_from.put(allocator, mons.index);
-                    return error.ParserFailed;
+        .pokemons => |mons| {
+            const pokemon = &(try pokemons.getOrPutValue(allocator, mons.index, Pokemon{})).value;
+            switch (mons.value) {
+                .stats => |stats| {
+                    switch (stats) {
+                        .hp => |hp| pokemon.stats[0] = hp,
+                        .attack => |attack| pokemon.stats[1] = attack,
+                        .defense => |defense| pokemon.stats[2] = defense,
+                        .speed => |speed| pokemon.stats[3] = speed,
+                        .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
+                        .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
+                    }
+                    pokemon.output[@enumToInt(stats)] = true;
+                    return;
                 },
-                .method,
-                .param,
+                .evos => |evos| switch (evos.value) {
+                    .target => |target| {
+                        const evo_from = &(try pokemons.getOrPutValue(allocator, target, Pokemon{})).value;
+                        _ = try evo_from.evolves_from.put(allocator, mons.index, {});
+                        return error.ParserFailed;
+                    },
+                    .method,
+                    .param,
+                    => return error.ParserFailed,
+                },
+                .types,
+                .catch_rate,
+                .base_exp_yield,
+                .ev_yield,
+                .items,
+                .gender_ratio,
+                .egg_cycles,
+                .base_friendship,
+                .growth_rate,
+                .egg_groups,
+                .abilities,
+                .color,
+                .moves,
+                .tms,
+                .hms,
+                .name,
+                .pokedex_entry,
                 => return error.ParserFailed,
-            },
-            .types,
-            .catch_rate,
-            .base_exp_yield,
-            .ev_yield,
-            .items,
-            .gender_ratio,
-            .egg_cycles,
-            .base_friendship,
-            .growth_rate,
-            .egg_groups,
-            .abilities,
-            .color,
-            .moves,
-            .tms,
-            .hms,
-            .name,
-            .pokedex_entry,
-            => return error.ParserFailed,
+            }
         },
         .version,
         .game_title,
@@ -159,20 +165,20 @@ fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !v
 
 fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {
     var random = rand.DefaultPrng.init(seed);
-    for (pokemons.values()) |*pokemon| {
-        const old_total = sum(u8, &pokemon.stats);
-        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.stats.len * math.maxInt(u8));
+    for (pokemons.items()) |*pokemon| {
+        const old_total = algo.fold(&pokemon.value.stats, @as(usize, 0), algo.add);
+        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.value.stats.len * math.maxInt(u8));
         const new_total = if (same_total_stats) old_total else new_random_total;
 
-        randomWithinSum(&random.random, u8, &pokemon.stats, new_total);
+        var weights: [pokemon.value.stats.len]f32 = undefined;
+        randomWithinSum(&random.random, u8, &pokemon.value.stats, &weights, new_total);
     }
 
     if (!follow_evos)
         return;
 
-    for (pokemons.values()) |*pokemon, i| {
-        const curr = pokemons.at(i).key;
-        randomizeFromChildren(&random.random, pokemons, pokemon, same_total_stats, curr);
+    for (pokemons.items()) |*pokemon| {
+        randomizeFromChildren(&random.random, pokemons, &pokemon.value, same_total_stats, pokemon.key);
     }
 }
 
@@ -188,22 +194,19 @@ fn randomizeFromChildren(
 
     // Get the average stats of all the prevolutions
     var stats = [_]u64{0} ** Pokemon.stats;
-    for (pokemon.evolves_from.span()) |range| {
-        var prevolution = range.start;
-        while (prevolution <= range.end) : (prevolution += 1) {
-            // If prevolution == curr, then we have a cycle.
-            if (prevolution == curr)
-                continue;
+    for (pokemon.evolves_from.items()) |prevolution| {
+        // If prevolution == curr, then we have a cycle.
+        if (prevolution.key == curr)
+            continue;
 
-            // TODO: Can this ever happen???
-            //                                         VVVVVVVV
-            const p = pokemons.get(prevolution) orelse continue;
+        // TODO: Can this ever happen???
+        //                                             VVVVVVVV
+        const p = pokemons.getEntry(prevolution.key) orelse continue;
 
-            // We should randomize prevolution by the same rules.
-            randomizeFromChildren(random, pokemons, p, same_total_stats, curr);
-            for (p.stats) |stat, i|
-                stats[i] += stat;
-        }
+        // We should randomize prevolution by the same rules.
+        randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
+        for (p.value.stats) |stat, i|
+            stats[i] += stat;
     }
 
     // Average calculated here
@@ -212,73 +215,57 @@ fn randomizeFromChildren(
         stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch math.maxInt(u8);
     }
 
-    const old_total = sum(u8, &pokemon.stats);
-    const average_total = sum(u8, &average);
+    const old_total = algo.fold(&pokemon.stats, @as(usize, 0), algo.add);
+    const average_total = algo.fold(&average, @as(usize, 0), algo.add);
     const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
     pokemon.stats = average;
-    randomUntilSum(random, u8, &pokemon.stats, new_total);
+    var weights: [pokemon.stats.len]f32 = undefined;
+    randomUntilSum(random, u8, &pokemon.stats, &weights, new_total);
 
     // After this, the Pokémons stats should be equal or above the average
     for (average) |_, i|
         debug.assert(average[i] <= pokemon.stats[i]);
 }
 
-fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) void {
+fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: []f32, s: u64) void {
     mem.set(T, buf, 0);
-    randomUntilSum(random, T, buf, s);
+    randomUntilSum(random, T, buf, weight_buf, s);
 }
 
-fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, s: u64) void {
+fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: []f32, s: u64) void {
     // TODO: In this program, we will never pass buf.len > 6, so we can
     //       statically have this buffer. If this function is to be more
     //       general, we problably have to accept an allpocator.
-    var weight_buf: [10]f32 = undefined;
-    const weights: []const f32 = blk: {
+    const weights = blk: {
         for (buf) |_, i|
             weight_buf[i] = random.float(f32);
 
         break :blk weight_buf[0..buf.len];
     };
 
-    const curr = sum(T, buf);
+    const curr = algo.fold(buf, @as(usize, 0), algo.add);
     const max = math.min(s, buf.len * math.maxInt(T));
     if (max < curr)
         return;
 
     const missing = max - curr;
-    const total_weigth = sum(f32, weights);
+    const total_weigth = algo.fold(weights, @as(f64, 0), algo.add);
     for (buf) |*item, i| {
         const to_add_f = @intToFloat(f64, missing) * (weights[i] / total_weigth);
         const to_add_max = math.min(to_add_f, math.maxInt(u8));
         item.* = math.add(T, item.*, @floatToInt(u8, to_add_max)) catch math.maxInt(T);
     }
 
-    while (sum(T, buf) < max) {
+    while (algo.fold(buf, @as(usize, 0), algo.add) < max) {
         const index = random.intRangeLessThan(usize, 0, buf.len);
         buf[index] = math.add(T, buf[index], 1) catch buf[index];
     }
 }
 
-fn SumReturn(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .Int => u64,
-        .Float => f64,
-        else => unreachable,
-    };
-}
-
-fn sum(comptime T: type, buf: []const T) SumReturn(T) {
-    var res: SumReturn(T) = 0;
-    for (buf) |item|
-        res += item;
-
-    return res;
-}
-
-const Evos = util.container.IntSet.Unmanaged(u16);
-const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Evos = std.AutoArrayHashMapUnmanaged(u16, void);
+const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 
 const Pokemon = struct {
     stats: [stats]u8 = [_]u8{0} ** stats,

@@ -212,9 +212,9 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        if (!algorithm.all(u8, header.game_title.span(), notLower))
+        if (!algorithm.all(header.game_title.span(), notLower))
             return error.InvalidGameTitle;
-        if (!algorithm.all(u8, &header.gamecode, ascii.isUpper))
+        if (!algorithm.all(&header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is

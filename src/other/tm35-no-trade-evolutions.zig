@@ -73,10 +73,12 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |pokemon, i| {
-        const pid = data.pokemons.at(i).key;
-        for (pokemon.evos.values()) |evo, j| {
-            const eid = pokemon.evos.at(j).key;
+    for (data.pokemons.items()) |pokemon_kv| {
+        const pid = pokemon_kv.key;
+        const pokemon = pokemon_kv.value;
+        for (pokemon.evos.items()) |evo_kv| {
+            const eid = evo_kv.key;
+            const evo = evo_kv.value;
             if (evo.param) |param|
                 try format.write(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .param = param })));
             if (evo.method != .unused)
@@ -89,10 +91,10 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokemons => |pokemons| {
-            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon = &(try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
             switch (pokemons.value) {
                 .evos => |evos| {
-                    const evo = try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{});
+                    const evo = &(try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{})).value;
                     switch (evos.value) {
                         .param => |param| evo.param = param,
                         .method => |method| evo.method = method,
@@ -150,8 +152,9 @@ fn removeTradeEvolutions(data: Data) void {
     var has_level_up = false;
     var has_level_up_holding = false;
     var has_level_up_party = false;
-    for (data.pokemons.values()) |pokemon| {
-        for (pokemon.evos.values()) |evo| {
+    for (data.pokemons.items()) |pokemon| {
+        for (pokemon.value.evos.items()) |evo_kv| {
+            const evo = evo_kv.value;
             if (evo.method == .unused)
                 continue;
             has_level_up = has_level_up or evo.method == .level_up;
@@ -169,8 +172,9 @@ fn removeTradeEvolutions(data: Data) void {
     const trade_param_holding_replace: ?u16 = if (has_level_up_holding) null else trade_param_replace;
     const trade_param_pokemon_replace: ?u16 = if (has_level_up_party) null else trade_param_replace;
 
-    for (data.pokemons.values()) |pokemon| {
-        for (pokemon.evos.values()) |*evo| {
+    for (data.pokemons.items()) |pokemon_kv| {
+        for (pokemon_kv.value.evos.items()) |*evo_kv| {
+            const evo = &evo_kv.value;
             if (evo.method == .unused)
                 continue;
             const method = evo.method;
@@ -221,8 +225,8 @@ fn removeTradeEvolutions(data: Data) void {
     }
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(u8, Evolution);
-const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
+const Evolutions = std.AutoArrayHashMapUnmanaged(u8, Evolution);
+const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 
 const Data = struct {
     pokemons: Pokemons = Pokemons{},
