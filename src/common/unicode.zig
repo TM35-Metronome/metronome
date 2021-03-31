@@ -1,5 +1,7 @@
+const algo = @import("algorithm.zig");
 const std = @import("std");
 
+const ascii = std.ascii;
 const mem = std.mem;
 const unicode = std.unicode;
 
@@ -12,6 +14,14 @@ pub const Utf8View = struct {
         return Utf8View{
             .bytes = str,
             .len = try utf8Len(str),
+        };
+    }
+
+    pub fn initAscii(str: []const u8) Utf8View {
+        std.debug.assert(algo.all(str, ascii.isASCII));
+        return Utf8View{
+            .bytes = str,
+            .len = str.len,
         };
     }
 

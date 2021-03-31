@@ -15,6 +15,8 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
+const algo = util.algorithm;
+
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -94,29 +96,25 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.static_mons.values()) |static, i| {
-        const static_i = data.static_mons.at(i).key;
-        try format.write(writer, format.Game.static_pokemon(static_i, .{ .species = static }));
+    for (data.static_mons.items()) |static| {
+        try format.write(writer, format.Game.static_pokemon(static.key, .{
+            .species = static.value,
+        }));
     }
-    for (data.hidden_hollows.values()) |hollow, i| {
-        const hi = data.hidden_hollows.at(i).key;
-        for (hollow.values()) |version, j| {
-            const vi = version.at(j).key;
-            for (version.values()) |group, k| {
-                const gi = version.at(k).key;
-                for (group.values()) |pokemon, g| {
-                    const pi = version.at(g).key;
-                    if (pokemon.species_index) |si| {
-                        try format.write(writer, format.Game.hidden_hollow(
-                            hi,
-                            format.HiddenHollow.pokemon(
-                                vi,
-                                gi,
-                                pi,
-                                data.hollow_mons.get(si).?.*,
-                            ),
-                        ));
-                    }
+    for (data.hidden_hollows.items()) |hollow| {
+        for (hollow.value.items()) |version| {
+            for (version.value.items()) |group| {
+                for (group.value.items()) |pokemon| {
+                    const si = pokemon.value.species_index orelse continue;
+                    try format.write(writer, format.Game.hidden_hollow(
+                        hollow.key,
+                        format.HiddenHollow.pokemon(
+                            version.key,
+                            group.key,
+                            pokemon.key,
+                            data.hollow_mons.get(si).?,
+                        ),
+                    ));
                 }
             }
         }
@@ -127,21 +125,15 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokedex => |pokedex| {
-            _ = try data.pokedex.put(allocator, pokedex.index);
+            _ = try data.pokedex.put(allocator, pokedex.index, {});
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon_kv = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon = &pokemon_kv.value;
             switch (pokemons.value) {
-                .stats => |stats| switch (stats) {
-                    .hp => |hp| pokemon.stats[0] = hp,
-                    .attack => |attack| pokemon.stats[1] = attack,
-                    .defense => |defense| pokemon.stats[2] = defense,
-                    .speed => |speed| pokemon.stats[3] = speed,
-                    .sp_attack => |sp_attack| pokemon.stats[4] = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats[5] = sp_defense,
-                },
-                .types => |types| _ = try pokemon.types.put(allocator, types.value),
+                .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
@@ -152,7 +144,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
                         pokemon.egg_group = groups.value;
                 },
                 .evos => |evos| switch (evos.value) {
-                    .target => |target| _ = try pokemon.evos.put(allocator, target),
+                    .target => |target| _ = try pokemon.evos.put(allocator, target, {}),
                     .method,
                     .param,
                     => return error.ParserFailed,
@@ -187,20 +179,20 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
             .level => return error.ParserFailed,
         },
         .hidden_hollows => |hollows| {
-            const versions = try data.hidden_hollows.getOrPutValue(allocator, hollows.index, HollowVersions{});
-
+            const versions_kv = try data.hidden_hollows.getOrPutValue(allocator, hollows.index, HollowVersions{});
+            const versions = &versions_kv.value;
             switch (hollows.value) {
                 .versions => |version| {
-                    const groups = try versions.getOrPutValue(allocator, version.index, HollowGroups{});
-
+                    const groups_kv = try versions.getOrPutValue(allocator, version.index, HollowGroups{});
+                    const groups = &groups_kv.value;
                     switch (version.value) {
                         .groups => |group| {
-                            const pokemons = try groups.getOrPutValue(allocator, group.index, HollowPokemons{});
-
+                            const pokemons_kv = try groups.getOrPutValue(allocator, group.index, HollowPokemons{});
+                            const pokemons = &pokemons_kv.value;
                             switch (group.value) {
                                 .pokemons => |mon| {
-                                    const pokemon = try pokemons.getOrPutValue(allocator, mon.index, HollowMon{});
-
+                                    const pokemon_kv = try pokemons.getOrPutValue(allocator, mon.index, HollowMon{});
+                                    const pokemon = &pokemon_kv.value;
                                     switch (mon.value) {
                                         .species => |species| {
                                             const index = @intCast(u16, data.hollow_mons.count());
@@ -263,21 +255,21 @@ fn randomize(
                     if (max == 0)
                         return;
 
-                    for (static_mons.values()) |*static|
-                        static.* = species.at(random.intRangeLessThan(usize, 0, max));
+                    for (static_mons.items()) |*static|
+                        static.value = species.items()[random.intRangeLessThan(usize, 0, max)].key;
                 },
                 .same => {
                     const by_type = try data.getSpeciesByType(allocator, &species);
-                    for (static_mons.values()) |*static| {
-                        const pokemon = data.pokemons.get(static.*).?;
+                    for (static_mons.items()) |*static| {
+                        const pokemon = data.pokemons.get(static.value).?;
                         const type_max = pokemon.types.count();
                         if (type_max == 0)
                             continue;
 
-                        const t = pokemon.types.at(random.intRangeLessThan(usize, 0, type_max));
+                        const t = pokemon.types.items()[random.intRangeLessThan(usize, 0, type_max)].key;
                         const pokemons = by_type.get(t).?;
                         const max = pokemons.count();
-                        static.* = pokemons.at(random.intRangeLessThan(usize, 0, max));
+                        static.value = pokemons.items()[random.intRangeLessThan(usize, 0, max)].key;
                     }
                 },
             },
@@ -290,7 +282,7 @@ fn randomize(
                 };
 
                 var simular = std.ArrayList(u16).init(allocator);
-                for (static_mons.values()) |*static| {
+                for (static_mons.items()) |*static| {
                     defer simular.shrinkRetainingCapacity(0);
 
                     // If the static Pokémon does not exist in the data
@@ -298,9 +290,9 @@ fn randomize(
                     // its stats with other Pokémons. The only thing we can
                     // assume is that the Pokémon it currently is
                     // is simular/same as itself.
-                    const prev_pokemon = data.pokemons.get(static.*) orelse continue;
+                    const prev_pokemon = data.pokemons.get(static.value) orelse continue;
 
-                    var min = @intCast(i64, sum(u8, &prev_pokemon.stats));
+                    var min = @intCast(i64, algo.fold(&prev_pokemon.stats, @as(usize, 0), algo.add));
                     var max = min;
 
                     // For same-stats, we can just make this loop run once, which will
@@ -311,15 +303,12 @@ fn randomize(
                         max += 5;
                     }) {
                         switch (_type) {
-                            .random => for (species.span()) |range| {
-                                var s = range.start;
-                                while (s <= range.end) : (s += 1) {
-                                    const pokemon = data.pokemons.get(s).?;
+                            .random => for (species.items()) |s| {
+                                const pokemon = data.pokemons.get(s.key).?;
 
-                                    const total = @intCast(i64, sum(u8, &pokemon.stats));
-                                    if (min <= total and total <= max)
-                                        try simular.append(s);
-                                }
+                                const total = @intCast(i64, algo.fold(&pokemon.stats, @as(usize, 0), algo.add));
+                                if (min <= total and total <= max)
+                                    try simular.append(s.key);
                             },
                             .same => {
                                 // If this Pokémon has no type (for some reason), then we
@@ -329,23 +318,17 @@ fn randomize(
                                 // Pokémon.
                                 const type_max = prev_pokemon.types.count();
                                 if (type_max == 0) {
-                                    try simular.append(static.*);
+                                    try simular.append(static.value);
                                     break;
                                 }
-                                for (prev_pokemon.types.span()) |range| {
-                                    var t = range.start;
-                                    while (t <= range.end) : (t += 1) {
-                                        const pokemons_of_type = by_type.get(t).?;
-                                        for (pokemons_of_type.span()) |range2| {
-                                            var s = range2.start;
-                                            while (s <= range2.end) : (s += 1) {
-                                                const pokemon = data.pokemons.get(s).?;
+                                for (prev_pokemon.types.items()) |t| {
+                                    const pokemons_of_type = by_type.get(t.key).?;
+                                    for (pokemons_of_type.items()) |s| {
+                                        const pokemon = data.pokemons.get(s.key).?;
 
-                                                const total = @intCast(i64, sum(u8, &pokemon.stats));
-                                                if (min <= total and total <= max)
-                                                    try simular.append(s);
-                                            }
-                                        }
+                                        const total = @intCast(i64, algo.fold(&pokemon.stats, @as(usize, 0), algo.add));
+                                        if (min <= total and total <= max)
+                                            try simular.append(s.key);
                                     }
                                 }
                             },
@@ -353,7 +336,7 @@ fn randomize(
                     }
 
                     const pick_from = simular.items;
-                    static.* = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+                    static.value = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
                 }
             },
             .@"legendary-with-legendary" => {
@@ -371,58 +354,52 @@ fn randomize(
                 // First, lets give each Pokemon a "legendary rating" which
                 // is a measure as to how many "legendary" criteria this
                 // Pokemon fits into. This rating can be negative.
-                var ratings = util.container.IntMap.Unmanaged(u16, isize){};
-                for (species.span()) |range| {
-                    var _species = range.start;
-                    while (_species <= range.end) : (_species += 1) {
-                        const pokemon = data.pokemons.get(_species).?;
-                        const rating = try ratings.getOrPutValue(allocator, _species, 0);
+                var ratings = std.AutoArrayHashMapUnmanaged(u16, isize){};
+                for (species.items()) |s| {
+                    const pokemon = data.pokemons.get(s.key).?;
+                    const rating = &(try ratings.getOrPutValue(allocator, s.key, 0)).value;
 
-                        // Legendaries are generally in the "slow" to "medium_slow"
-                        // growth rating
-                        rating.* += @as(isize, @boolToInt(pokemon.growth_rate == .slow or
-                            pokemon.growth_rate == .medium_slow));
+                    // Legendaries are generally in the "slow" to "medium_slow"
+                    // growth rating
+                    rating.* += @as(isize, @boolToInt(pokemon.growth_rate == .slow or
+                        pokemon.growth_rate == .medium_slow));
 
-                        // They generally have a catch rate of 45 or less
-                        rating.* += @as(isize, @boolToInt(pokemon.catch_rate <= 45));
+                    // They generally have a catch rate of 45 or less
+                    rating.* += @as(isize, @boolToInt(pokemon.catch_rate <= 45));
 
-                        // They tend to not have a gender (255 in gender_ratio means
-                        // genderless).
-                        rating.* += @as(isize, @boolToInt(pokemon.gender_ratio == 255));
+                    // They tend to not have a gender (255 in gender_ratio means
+                    // genderless).
+                    rating.* += @as(isize, @boolToInt(pokemon.gender_ratio == 255));
 
-                        // Most are part of the "undiscovered" egg group
-                        rating.* += @as(isize, @boolToInt(pokemon.egg_group == .undiscovered));
+                    // Most are part of the "undiscovered" egg group
+                    rating.* += @as(isize, @boolToInt(pokemon.egg_group == .undiscovered));
 
-                        // And they don't evolve from anything. Subtract
-                        // score from this Pokemons evolutions.
-                        for (pokemon.evos.span()) |range2| {
-                            var evo = range2.start;
-                            while (evo <= range2.end) : (evo += 1) {
-                                const evo_rating = try ratings.getOrPutValue(allocator, evo, 0);
-                                evo_rating.* -= 10;
-                                rating.* -= 10;
-                            }
-                        }
+                    // And they don't evolve from anything. Subtract
+                    // score from this Pokemons evolutions.
+                    for (pokemon.evos.items()) |evo| {
+                        const evo_rating = &(try ratings.getOrPutValue(allocator, evo.key, 0)).value;
+                        evo_rating.* -= 10;
+                        rating.* -= 10;
                     }
                 }
 
                 const rating_to_be_legendary = blk: {
                     var res: isize = 0;
-                    for (ratings.values()) |rating|
-                        res = math.max(res, rating);
+                    for (ratings.items()) |rating|
+                        res = math.max(res, rating.value);
 
-                    // Not all legendaries match all criteria.
+                    // Not all legendaries match all criteria. Let's
+                    // allow for legendaries that miss on criteria.
                     break :blk res - 1;
                 };
 
                 var legendaries = Set{};
                 var rest = Set{};
-                for (ratings.values()) |rating, i| {
-                    const s = ratings.at(i).key;
-                    if (rating >= rating_to_be_legendary) {
-                        _ = try legendaries.put(allocator, s);
+                for (ratings.items()) |rating| {
+                    if (rating.value >= rating_to_be_legendary) {
+                        _ = try legendaries.put(allocator, rating.key, {});
                     } else {
-                        _ = try rest.put(allocator, s);
+                        _ = try rest.put(allocator, rating.key, {});
                     }
                 }
 
@@ -435,9 +412,9 @@ fn randomize(
                     .same => try data.getSpeciesByType(allocator, &rest),
                 };
 
-                for (static_mons.values()) |*static| {
-                    const pokemon = data.pokemons.get(static.*) orelse continue;
-                    const rating = (ratings.get(static.*) orelse continue).*;
+                for (static_mons.items()) |*static| {
+                    const pokemon = data.pokemons.get(static.value) orelse continue;
+                    const rating = ratings.get(static.value) orelse continue;
                     const pick_from = switch (_type) {
                         .random => if (rating >= rating_to_be_legendary) legendaries else rest,
                         .same => blk: {
@@ -446,47 +423,31 @@ fn randomize(
                                 continue;
 
                             const types = pokemon.types;
-                            const picked_type = types.at(random.intRangeLessThan(usize, 0, type_max));
+                            const picked_type = types.items()[random.intRangeLessThan(usize, 0, type_max)];
                             const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
-                            break :blk (pick_from_by_type.get(picked_type) orelse continue).*;
+                            break :blk pick_from_by_type.get(picked_type.key) orelse continue;
                         },
                     };
 
                     const max = pick_from.count();
                     if (max == 0)
                         continue;
-                    static.* = pick_from.at(random.intRangeLessThan(usize, 0, max));
+                    static.value = pick_from.items()[random.intRangeLessThan(usize, 0, max)].key;
                 }
             },
         }
     }
 }
 
-fn SumReturn(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .Int => u64,
-        .Float => f64,
-        else => unreachable,
-    };
-}
+const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
+const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+const SpeciesByType = std.AutoArrayHashMapUnmanaged(u16, Set);
+const StaticMons = std.AutoArrayHashMapUnmanaged(u16, u16);
 
-fn sum(comptime T: type, buf: []const T) SumReturn(T) {
-    var res: SumReturn(T) = 0;
-    for (buf) |item|
-        res += item;
-
-    return res;
-}
-
-const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
-const Set = util.container.IntSet.Unmanaged(u16);
-const SpeciesByType = util.container.IntMap.Unmanaged(u16, Set);
-const StaticMons = util.container.IntMap.Unmanaged(u16, u16);
-
-const HiddenHollows = util.container.IntMap.Unmanaged(u16, HollowVersions);
-const HollowGroups = util.container.IntMap.Unmanaged(u8, HollowPokemons);
-const HollowPokemons = util.container.IntMap.Unmanaged(u16, HollowMon);
-const HollowVersions = util.container.IntMap.Unmanaged(u16, HollowGroups);
+const HiddenHollows = std.AutoArrayHashMapUnmanaged(u16, HollowVersions);
+const HollowGroups = std.AutoArrayHashMapUnmanaged(u8, HollowPokemons);
+const HollowPokemons = std.AutoArrayHashMapUnmanaged(u8, HollowMon);
+const HollowVersions = std.AutoArrayHashMapUnmanaged(u8, HollowGroups);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -500,12 +461,12 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(allocator);
 
-        for (d.pokemons.values()) |pokemon, i| {
-            const s = d.pokemons.at(i).key;
-            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
+        for (d.pokemons.items()) |pokemon| {
+            if (pokemon.value.catch_rate == 0)
                 continue;
-
-            _ = try res.put(allocator, s);
+            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
+                continue;
+            _ = try res.put(allocator, pokemon.key, {});
         }
 
         return res;
@@ -514,22 +475,16 @@ const Data = struct {
     fn getSpeciesByType(d: Data, allocator: *mem.Allocator, _species: *const Set) !SpeciesByType {
         var res = SpeciesByType{};
         errdefer {
-            for (res.values()) |v|
-                v.deinit(allocator);
+            for (res.items()) |*v|
+                v.value.deinit(allocator);
             res.deinit(allocator);
         }
 
-        for (_species.span()) |range| {
-            var s = range.start;
-            while (s <= range.end) : (s += 1) {
-                const pokemon = d.pokemons.get(s) orelse continue;
-                for (pokemon.types.span()) |range2| {
-                    var t = range2.start;
-                    while (t <= range2.end) : (t += 1) {
-                        const set = try res.getOrPutValue(allocator, t, Set{});
-                        _ = try set.put(allocator, s);
-                    }
-                }
+        for (_species.items()) |s| {
+            const pokemon = d.pokemons.get(s.key) orelse continue;
+            for (pokemon.types.items()) |t| {
+                const set = try res.getOrPutValue(allocator, t.key, Set{});
+                _ = try set.value.put(allocator, s.key, {});
             }
         }
 
@@ -637,7 +592,7 @@ test "tm35-rand-static" {
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
         \\.static_pokemons[1].species=1
-        \\.static_pokemons[2].species=15
+        \\.static_pokemons[2].species=2
         \\.static_pokemons[3].species=3
         \\.static_pokemons[4].species=9
         \\.static_pokemons[5].species=21
@@ -653,12 +608,12 @@ test "tm35-rand-static" {
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=1
-        \\.static_pokemons[1].species=3
-        \\.static_pokemons[2].species=0
+        \\.static_pokemons[0].species=0
+        \\.static_pokemons[1].species=11
+        \\.static_pokemons[2].species=2
         \\.static_pokemons[3].species=1
         \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=18
+        \\.static_pokemons[5].species=7
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
@@ -672,11 +627,11 @@ test "tm35-rand-static" {
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
-        \\.static_pokemons[1].species=1
-        \\.static_pokemons[2].species=11
+        \\.static_pokemons[1].species=3
+        \\.static_pokemons[2].species=2
         \\.static_pokemons[3].species=3
         \\.static_pokemons[4].species=9
-        \\.static_pokemons[5].species=18
+        \\.static_pokemons[5].species=7
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
@@ -689,12 +644,12 @@ test "tm35-rand-static" {
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=2
-        \\.static_pokemons[1].species=2
+        \\.static_pokemons[0].species=6
+        \\.static_pokemons[1].species=3
         \\.static_pokemons[2].species=2
         \\.static_pokemons[3].species=3
         \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=15
+        \\.static_pokemons[5].species=20
         \\
     );
 }

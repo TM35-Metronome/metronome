@@ -31,9 +31,9 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        if (!algorithm.all(u8, header.game_title.span(), notLower))
+        if (!algorithm.all(header.game_title.span(), notLower))
             return error.InvalidGameTitle;
-        if (!algorithm.all(u8, &header.gamecode, ascii.isUpper))
+        if (!algorithm.all(&header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
@@ -44,9 +44,9 @@ pub const Header = extern struct {
         if (header.fixed_value != 0x96)
             return error.InvalidFixedValue;
 
-        if (!algorithm.all(u8, &header.reserved1, isZero))
+        if (!algorithm.all(&header.reserved1, isZero))
             return error.InvalidReserved1;
-        if (!algorithm.all(u8, &header.reserved2, isZero))
+        if (!algorithm.all(&header.reserved2, isZero))
             return error.InvalidReserved2;
     }
 

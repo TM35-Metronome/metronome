@@ -83,29 +83,16 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |pokemon, i| {
-        const pokemon_index = data.pokemons.at(i).key;
-        for (pokemon.tms.span()) |range| {
-            var tm = range.start;
-            while (tm <= range.end) : (tm += 1) {
-                try format.write(writer, format.Game.pokemon(pokemon_index, .{
-                    .tms = .{
-                        .index = tm,
-                        .value = pokemon.tms_learned.exists(tm),
-                    },
-                }));
-            }
+    for (data.pokemons.items()) |pokemon| {
+        for (pokemon.value.tms.items()) |tm| {
+            try format.write(writer, format.Game.pokemon(pokemon.key, .{
+                .tms = .{ .index = tm.key, .value = tm.value },
+            }));
         }
-        for (pokemon.hms.span()) |range| {
-            var hm = range.start;
-            while (hm <= range.end) : (hm += 1) {
-                try format.write(writer, format.Game.pokemon(pokemon_index, .{
-                    .hms = .{
-                        .index = hm,
-                        .value = pokemon.hms_learned.exists(hm),
-                    },
-                }));
-            }
+        for (pokemon.value.hms.items()) |hm| {
+            try format.write(writer, format.Game.pokemon(pokemon.key, .{
+                .hms = .{ .index = hm.key, .value = hm.value },
+            }));
         }
     }
 }
@@ -114,22 +101,13 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokemons => |pokemons| {
-            const pokemon = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon_entry = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon = &pokemon_entry.value;
             switch (pokemons.value) {
-                .tms => |tms| {
-                    _ = try pokemon.tms.put(allocator, tms.index);
-                    if (tms.value)
-                        _ = try pokemon.tms_learned.put(allocator, tms.index);
-                    return;
-                },
-                .hms => |hms| {
-                    _ = try pokemon.hms.put(allocator, hms.index);
-                    if (hms.value)
-                        _ = try pokemon.hms_learned.put(allocator, hms.index);
-                    return;
-                },
+                .tms => |tms| _ = try pokemon.tms.put(allocator, tms.index, tms.value),
+                .hms => |hms| _ = try pokemon.hms.put(allocator, hms.index, hms.value),
                 .types => |types| {
-                    _ = try pokemon.types.put(allocator, types.value);
+                    _ = try pokemon.types.put(allocator, types.value, {});
                     return error.ParserFailed;
                 },
                 .stats,
@@ -150,9 +128,11 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
                 .pokedex_entry,
                 => return error.ParserFailed,
             }
+            return;
         },
         .moves => |moves| {
-            const move = try data.moves.getOrPutValue(allocator, moves.index, Move{});
+            const move_entry = try data.moves.getOrPutValue(allocator, moves.index, Move{});
+            const move = &move_entry.value;
             switch (moves.value) {
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -184,10 +164,9 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 fn randomize(allocator: *mem.Allocator, data: Data, seed: u64, pref: Preference) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
-    for (data.pokemons.values()) |*pokemon, i| {
-        const pokemon_index = data.pokemons.at(i).key;
-        try randomizeMachinesLearned(allocator, data, pokemon.*, random, pref, data.tms, pokemon.tms, &pokemon.tms_learned);
-        try randomizeMachinesLearned(allocator, data, pokemon.*, random, pref, data.hms, pokemon.hms, &pokemon.hms_learned);
+    for (data.pokemons.items()) |pokemon| {
+        try randomizeMachinesLearned(allocator, data, pokemon.value, random, pref, data.tms, pokemon.value.tms);
+        try randomizeMachinesLearned(allocator, data, pokemon.value, random, pref, data.hms, pokemon.value.hms);
     }
 }
 
@@ -198,45 +177,35 @@ fn randomizeMachinesLearned(
     random: *rand.Random,
     pref: Preference,
     machines: Machines,
-    have: SetU8,
-    learned: *SetU8,
+    learned: MachinesLearned,
 ) !void {
-    for (have.span()) |range| {
-        var machine = range.start;
-        while (machine <= range.end) : (machine += 1) switch (pref) {
-            .random => if (random.boolean()) {
-                _ = try learned.put(allocator, machine);
-            } else {
-                _ = try learned.remove(allocator, machine);
-            },
+    for (learned.items()) |*learned_kv| {
+        switch (pref) {
+            .random => learned_kv.value = random.boolean(),
             .stab => {
                 const low_chance = 0.1;
                 const chance: f64 = blk: {
-                    const index = machines.get(machine) orelse break :blk low_chance;
-                    const move = data.moves.get(index.*) orelse break :blk low_chance;
+                    const index = machines.get(learned_kv.key) orelse break :blk low_chance;
+                    const move = data.moves.get(index) orelse break :blk low_chance;
                     const move_type = move.type orelse break :blk low_chance;
-                    if (!pokemon.types.exists(move_type))
+                    if (pokemon.types.get(move_type) == null)
                         break :blk low_chance;
 
                     // Yay the move is stab. Give it a higher chance.
                     break :blk @as(f64, 1.0 - low_chance);
                 };
 
-                if (random.float(f64) < chance)
-                    _ = try learned.put(allocator, machine)
-                else
-                    _ = try learned.remove(allocator, machine);
+                learned_kv.value = random.float(f64) < chance;
             },
-        };
+        }
     }
 }
 
-const Machines = util.container.IntMap.Unmanaged(u16, u16);
-const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
-const Set = util.container.IntSet.Unmanaged(u16);
-const SetU8 = util.container.IntSet.Unmanaged(u8);
-//const LvlUpMoves = std.AutoHashMap(u16, LvlUpMove);
-const Moves = util.container.IntMap.Unmanaged(u16, Move);
+const Machines = std.AutoArrayHashMapUnmanaged(u16, u16);
+const MachinesLearned = std.AutoArrayHashMapUnmanaged(u8, bool);
+const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
+const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
+const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
     pokemons: Pokemons = Pokemons{},
@@ -247,11 +216,8 @@ const Data = struct {
 
 const Pokemon = struct {
     types: Set = Set{},
-    tms_learned: SetU8 = SetU8{},
-    tms: SetU8 = SetU8{},
-    hms_learned: SetU8 = SetU8{},
-    hms: SetU8 = SetU8{},
-    //lvl_up_moves: LvlUpMoves
+    tms: MachinesLearned = MachinesLearned{},
+    hms: MachinesLearned = MachinesLearned{},
 };
 
 const LvlUpMove = struct {

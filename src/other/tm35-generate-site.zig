@@ -80,7 +80,7 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
         .tms => |tm| _ = try game.tms.put(allocator, tm.index, tm.value),
         .hms => |hm| _ = try game.hms.put(allocator, hm.index, hm.value),
         .trainers => |trainers| {
-            const trainer = try game.trainers.getOrPutValue(allocator, trainers.index, Trainer{});
+            const trainer = &(try game.trainers.getOrPutValue(allocator, trainers.index, Trainer{})).value;
             switch (trainers.value) {
                 .name => |name| trainer.name = try allocator.dupe(u8, name),
                 .class => |class| trainer.class = class,
@@ -90,7 +90,7 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
                 .party_size => |party_size| trainer.party_size = party_size,
                 .items => |items| _ = try trainer.items.put(allocator, items.index, items.value),
                 .party => |party| {
-                    const member = try trainer.party.getOrPutValue(allocator, party.index, PartyMember{});
+                    const member = &(try trainer.party.getOrPutValue(allocator, party.index, PartyMember{})).value;
                     switch (party.value) {
                         .ability => |ability| member.ability = ability,
                         .level => |level| member.level = level,
@@ -102,7 +102,7 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
             }
         },
         .moves => |moves| {
-            const move = try game.moves.getOrPutValue(allocator, moves.index, Move{});
+            const move = &(try game.moves.getOrPutValue(allocator, moves.index, Move{})).value;
             switch (moves.value) {
                 .name => |name| move.name = try allocator.dupe(u8, name),
                 .description => |description| move.description = try allocator.dupe(u8, description),
@@ -117,25 +117,11 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
             }
         },
         .pokemons => |pokemons| {
-            const pokemon = try game.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon = &(try game.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
             switch (pokemons.value) {
                 .name => |name| pokemon.name = try allocator.dupe(u8, name),
-                .stats => |stats| switch (stats) {
-                    .hp => |hp| pokemon.stats.hp = hp,
-                    .attack => |attack| pokemon.stats.attack = attack,
-                    .defense => |defense| pokemon.stats.defense = defense,
-                    .speed => |speed| pokemon.stats.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.stats.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.stats.sp_defense = sp_defense,
-                },
-                .ev_yield => |ev_yield| switch (ev_yield) {
-                    .hp => |hp| pokemon.ev_yield.hp = hp,
-                    .attack => |attack| pokemon.ev_yield.attack = attack,
-                    .defense => |defense| pokemon.ev_yield.defense = defense,
-                    .speed => |speed| pokemon.ev_yield.speed = speed,
-                    .sp_attack => |sp_attack| pokemon.ev_yield.sp_attack = sp_attack,
-                    .sp_defense => |sp_defense| pokemon.ev_yield.sp_defense = sp_defense,
-                },
+                .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
@@ -144,43 +130,40 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .color => |color| pokemon.color = color,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
-                .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.index, ability.value),
-                .egg_groups => |egg_group| _ = try pokemon.egg_groups.put(allocator, egg_group.index, egg_group.value),
-                .hms => |hm| _ = try pokemon.hms.put(allocator, hm.index, hm.value),
+                .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.value, {}),
+                .egg_groups => |egg_group| _ = try pokemon.egg_groups.put(allocator, egg_group.value, {}),
+                .hms => |hm| if (hm.value) {
+                    _ = try pokemon.hms.put(allocator, hm.index, {});
+                },
+                .tms => |tm| if (tm.value) {
+                    _ = try pokemon.tms.put(allocator, tm.index, {});
+                },
+                .types => |_type| _ = try pokemon.types.put(allocator, _type.value, {}),
                 .items => |item| _ = try pokemon.items.put(allocator, item.index, item.value),
-                .tms => |tm| _ = try pokemon.tms.put(allocator, tm.index, tm.value),
-                .types => |_type| _ = try pokemon.types.put(allocator, _type.index, _type.value),
                 .moves => |moves| {
-                    const move = try pokemon.moves.getOrPutValue(allocator, moves.index, LevelUpMove{});
-                    switch (moves.value) {
-                        .id => |id| move.id = id,
-                        .level => |level| move.level = level,
-                    }
+                    const move = &(try pokemon.moves.getOrPutValue(allocator, moves.index, LevelUpMove{})).value;
+                    format.setField(move, moves.value);
                 },
                 .evos => |evos| {
-                    const evo = try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{});
-                    switch (evos.value) {
-                        .method => |method| evo.method = method,
-                        .param => |param| evo.param = param,
-                        .target => |target| evo.target = target,
-                    }
+                    const evo = &(try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{})).value;
+                    format.setField(evo, evos.value);
                 },
             }
         },
         .abilities => |abilities| {
-            const ability = try game.abilities.getOrPutValue(allocator, abilities.index, Ability{});
+            const ability = &(try game.abilities.getOrPutValue(allocator, abilities.index, Ability{})).value;
             switch (abilities.value) {
                 .name => |name| ability.name = try allocator.dupe(u8, name),
             }
         },
         .types => |types| {
-            const _type = try game.types.getOrPutValue(allocator, types.index, Type{});
+            const _type = &(try game.types.getOrPutValue(allocator, types.index, Type{})).value;
             switch (types.value) {
                 .name => |name| _type.name = try allocator.dupe(u8, name),
             }
         },
         .items => |items| {
-            const item = try game.items.getOrPutValue(allocator, items.index, Item{});
+            const item = &(try game.items.getOrPutValue(allocator, items.index, Item{})).value;
             switch (items.value) {
                 .name => |name| item.name = try allocator.dupe(u8, name),
                 .description => |description| item.description = try allocator.dupe(u8, description),
@@ -190,7 +173,7 @@ fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
             }
         },
         .pokedex => |pokedex| {
-            const pokedex_entry = try game.pokedex.getOrPutValue(allocator, pokedex.index, Pokedex{});
+            const pokedex_entry = &(try game.pokedex.getOrPutValue(allocator, pokedex.index, Pokedex{})).value;
             switch (pokedex.value) {
                 .category => |category| pokedex_entry.category = try allocator.dupe(u8, category),
                 .height => |height| pokedex_entry.height = height,
@@ -270,43 +253,35 @@ fn generate(writer: anytype, game: Game) !void {
 
     try writer.writeAll("<h1>Starters</h1>\n");
     try writer.writeAll("<table>\n");
-    for (game.starters.values()) |starter| {
-        const starter_name = if (game.pokemons.get(starter)) |p| p.name else unknown;
+    for (game.starters.items()) |starter| {
+        const starter_name = if (game.pokemons.get(starter.value)) |p| p.name else unknown;
         try writer.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td></tr>", .{ starter, starter_name });
     }
     try writer.writeAll("</table>\n");
 
     try writer.writeAll("<h1>Pokedex</h1>\n");
     try writer.writeAll("<table>\n");
-    for (game.pokedex.values()) |dex, di| {
-        const dex_num = game.pokedex.at(di).key;
-
-        const pokemon = for (game.pokemons.values()) |pokemon, pi| {
-            const species = game.pokemons.at(pi).key;
-            if (pokemon.pokedex_entry == dex_num)
-                break .{ .name = pokemon.name, .species = species };
+    for (game.pokedex.items()) |dex| {
+        const pokemon = for (game.pokemons.items()) |pokemon| {
+            if (pokemon.value.pokedex_entry == dex.key)
+                break .{ .name = pokemon.value.name, .species = pokemon.key };
         } else continue;
 
-        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {}</a></td></tr>\n", .{ pokemon.species, dex_num, pokemon.name });
+        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {}</a></td></tr>\n", .{ pokemon.species, dex.key, pokemon.name });
     }
     try writer.writeAll("</table>\n");
 
     try writer.writeAll("<h1>Pokemons</h1>\n");
-    for (game.pokemons.values()) |pokemon, pi| {
-        const species = game.pokemons.at(pi).key;
+    for (game.pokemons.items()) |pokemon_kv| {
+        const species = pokemon_kv.key;
+        const pokemon = pokemon_kv.value;
         try writer.print("<h2 id=\"pokemon_{}\">#{} {}</h2>\n", .{ species, species, pokemon.name });
 
         try writer.writeAll("<table>\n");
         try writer.writeAll("<tr><td>Type:</td><td>");
-        outer: for (pokemon.types.values()) |t, ti| {
-            // Continue if we have already handle the type before
-            for (pokemon.types.values()[0..ti]) |prev| {
-                if (t == prev)
-                    continue :outer;
-            }
-
-            const type_name = humanize(if (game.types.get(t)) |ty| ty.name else unknown);
-            if (ti != 0)
+        for (pokemon.types.items()) |t, i| {
+            const type_name = humanize(if (game.types.get(t.key)) |ty| ty.name else unknown);
+            if (i != 0)
                 try writer.writeAll(" ");
 
             try writer.print("<a href=\"#type_{}\" class=\"type type_{}\"><b>{}</b></a>", .{ t, type_name, type_name });
@@ -314,39 +289,33 @@ fn generate(writer: anytype, game: Game) !void {
         try writer.writeAll("</td>\n");
 
         try writer.writeAll("<tr><td>Abilities:</td><td>");
-        for (pokemon.abilities.values()) |a, ai| {
-            if (a == 0)
+        for (pokemon.abilities.items()) |a, ai| {
+            if (a.key == 0)
                 continue;
             if (ai != 0)
                 try writer.writeAll(", ");
 
-            const ability_name = if (game.abilities.get(a)) |abil| abil.name else unknown;
+            const ability_name = if (game.abilities.get(a.key)) |abil| abil.name else unknown;
             try writer.print("<a href=\"#ability_{}\">{}</a>", .{ a, humanize(ability_name) });
         }
         try writer.writeAll("</td>\n");
 
         try writer.writeAll("<tr><td>Items:</td><td>");
-        for (pokemon.items.values()) |item, ii| {
-            if (ii != 0)
+        for (pokemon.items.items()) |item, i| {
+            if (i != 0)
                 try writer.writeAll(", ");
 
-            const item_name = if (game.items.get(item)) |it| it.name else unknown;
+            const item_name = if (game.items.get(item.key)) |it| it.name else unknown;
             try writer.print("<a href=\"#item_{}\">{}</a>", .{ item, humanize(item_name) });
         }
         try writer.writeAll("</td>\n");
 
         try writer.writeAll("<tr><td>Egg Groups:</td><td>");
-        outer: for (pokemon.egg_groups.values()) |egg_group, ei| {
-            // Continue if we have already handle the type before
-            for (pokemon.egg_groups.values()[0..ei]) |prev| {
-                if (egg_group == prev)
-                    continue :outer;
-            }
-
-            if (ei != 0)
+        for (pokemon.egg_groups.items()) |egg_group, i| {
+            if (i != 0)
                 try writer.writeAll(", ");
 
-            try writer.print("{}", .{humanize(@tagName(egg_group))});
+            try writer.print("{}", .{humanize(@tagName(egg_group.key))});
         }
         try writer.writeAll("</td>\n");
         try printSimpleFields(writer, pokemon);
@@ -355,7 +324,8 @@ fn generate(writer: anytype, game: Game) !void {
         try writer.writeAll("<details><summary><b>Evolutions</b></summary>\n");
         try writer.writeAll("<table>\n");
         try writer.writeAll("<tr><th>Evolution</th><th>Method</th></tr>\n");
-        for (pokemon.evos.values()) |evo| {
+        for (pokemon.evos.items()) |evo_kv| {
+            const evo = evo_kv.value;
             const target_name = humanize(if (game.pokemons.get(evo.target)) |p| p.name else unknown);
             const param_item_name = humanize(if (game.items.get(evo.param)) |i| i.name else unknown);
             const param_move_name = humanize(if (game.moves.get(evo.param)) |i| i.name else unknown);
@@ -431,23 +401,22 @@ fn generate(writer: anytype, game: Game) !void {
 
         try writer.writeAll("<details><summary><b>Learnset</b></summary>\n");
         try writer.writeAll("<table>\n");
-        for (pokemon.moves.values()) |move| {
+        for (pokemon.moves.items()) |move_kv| {
+            const move = move_kv.value;
             const move_name = humanize(if (game.moves.get(move.id)) |m| m.name else unknown);
             try writer.print("<tr><td>Lvl {}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ move.level, move.id, move_name });
         }
         try writer.writeAll("</table>\n");
 
         try writer.writeAll("<table>\n");
-        for ([_]Array(u8, bool){ pokemon.hms, pokemon.tms }) |machines, i| {
+        for ([_]Map(u8, void){ pokemon.hms, pokemon.tms }) |machines, i| {
             const prefix = if (i == 0) "TM" else "HM";
             const moves = if (i == 0) game.tms else game.hms;
 
-            for (machines.values()) |is_learned, index| {
-                if (is_learned)
-                    continue;
-                const id = machines.at(index).key;
+            for (machines.items()) |machine| {
+                const id = machine.key;
                 const move_id = moves.get(id) orelse continue;
-                const move_name = humanize(if (game.moves.get(move_id.*)) |m| m.name else unknown);
+                const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
                 try writer.print(
                     "<tr><td>{}{}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n",
                     .{ prefix, id + 1, move_id, move_name },
@@ -459,8 +428,9 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.writeAll("<h1>Moves</h1>\n");
-    for (game.moves.values()) |move, mi| {
-        const move_id = game.moves.at(mi).key;
+    for (game.moves.items()) |move_kv| {
+        const move_id = move_kv.key;
+        const move = move_kv.value;
         const move_name = humanize(move.name);
         try writer.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
         try writer.print("<p>{}</p>\n", .{move.description});
@@ -477,8 +447,9 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.writeAll("<h1>Items</h1>\n");
-    for (game.items.values()) |item, ii| {
-        const item_id = game.items.at(ii).key;
+    for (game.items.items()) |item_kv| {
+        const item_id = item_kv.key;
+        const item = item_kv.value;
         const item_name = humanize(item.name);
         try writer.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });
         try writer.print("<p>{}</p>\n", .{item.description});
@@ -542,19 +513,19 @@ fn writeHumanized(writer: anytype, str: []const u8) !void {
     }
 }
 
-const Array = util.container.IntMap.Unmanaged;
+const Map = std.AutoArrayHashMapUnmanaged;
 
 const Game = struct {
-    starters: Array(u8, u16) = Array(u8, u16){},
-    trainers: Array(u16, Trainer) = Array(u16, Trainer){},
-    moves: Array(u16, Move) = Array(u16, Move){},
-    pokemons: Array(u16, Pokemon) = Array(u16, Pokemon){},
-    abilities: Array(u16, Ability) = Array(u16, Ability){},
-    types: Array(u8, Type) = Array(u8, Type){},
-    tms: Array(u8, u16) = Array(u8, u16){},
-    hms: Array(u8, u16) = Array(u8, u16){},
-    items: Array(u16, Item) = Array(u16, Item){},
-    pokedex: Array(u16, Pokedex) = Array(u16, Pokedex){},
+    starters: Map(u8, u16) = Map(u8, u16){},
+    trainers: Map(u16, Trainer) = Map(u16, Trainer){},
+    moves: Map(u16, Move) = Map(u16, Move){},
+    pokemons: Map(u16, Pokemon) = Map(u16, Pokemon){},
+    abilities: Map(u16, Ability) = Map(u16, Ability){},
+    types: Map(u8, Type) = Map(u8, Type){},
+    tms: Map(u8, u16) = Map(u8, u16){},
+    hms: Map(u8, u16) = Map(u8, u16){},
+    items: Map(u16, Item) = Map(u16, Item){},
+    pokedex: Map(u16, Pokedex) = Map(u16, Pokedex){},
 };
 
 const Trainer = struct {
@@ -564,8 +535,8 @@ const Trainer = struct {
     name: []const u8 = "",
     party_type: format.PartyType = .none,
     party_size: u8 = 0,
-    party: Array(u8, PartyMember) = Array(u8, PartyMember){},
-    items: Array(u8, u16) = Array(u8, u16){},
+    party: Map(u8, PartyMember) = Map(u8, PartyMember){},
+    items: Map(u8, u16) = Map(u8, u16){},
 };
 
 const PartyMember = struct {
@@ -573,7 +544,7 @@ const PartyMember = struct {
     level: u8 = 0,
     species: u16 = 0,
     item: u16 = 0,
-    moves: Array(u8, u16) = Array(u8, u16){},
+    moves: Map(u8, u16) = Map(u8, u16){},
 };
 
 const Move = struct {
@@ -612,14 +583,14 @@ const Pokemon = struct {
     pokedex_entry: u16 = 0,
     growth_rate: format.GrowthRate = .medium_fast,
     color: format.Color = .blue,
-    tms: Array(u8, bool) = Array(u8, bool){},
-    hms: Array(u8, bool) = Array(u8, bool){},
-    types: Array(u8, u8) = Array(u8, u8){},
-    abilities: Array(u8, u8) = Array(u8, u8){},
-    items: Array(u8, u16) = Array(u8, u16){},
-    egg_groups: Array(u8, format.EggGroup) = Array(u8, format.EggGroup){},
-    evos: Array(u8, Evolution) = Array(u8, Evolution){},
-    moves: Array(u8, LevelUpMove) = Array(u8, LevelUpMove){},
+    tms: Map(u8, void) = Map(u8, void){},
+    hms: Map(u8, void) = Map(u8, void){},
+    types: Map(u8, void) = Map(u8, void){},
+    abilities: Map(u8, void) = Map(u8, void){},
+    items: Map(u8, u16) = Map(u8, u16){},
+    egg_groups: Map(format.EggGroup, void) = Map(format.EggGroup, void){},
+    evos: Map(u8, Evolution) = Map(u8, Evolution){},
+    moves: Map(u8, LevelUpMove) = Map(u8, LevelUpMove){},
 };
 
 const Evolution = struct {

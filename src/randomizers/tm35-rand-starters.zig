@@ -79,14 +79,10 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 }
 
 fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
-    const ranges = data.starters.span();
-    for (ranges) |range| {
-        var i: u16 = range.start;
-        while (i <= range.end) : (i += 1) {
-            const index = random.intRangeLessThan(usize, 0, pick_from.count());
-            const res = pick_from.at(index);
-            try format.write(writer, format.Game.starter(@intCast(u8, i), res));
-        }
+    for (data.starters.items()) |starter| {
+        const index = random.intRangeLessThan(usize, 0, pick_from.count());
+        const res = pick_from.items()[index].key;
+        try format.write(writer, format.Game.starter(@intCast(u8, starter.key), res));
     }
 }
 
@@ -99,20 +95,18 @@ fn getStartersToPickFrom(
 ) !Set {
     const species = try data.pokedexPokemons(allocator);
     var res = Set{};
-    for (species.span()) |range| {
-        var pokemon: u16 = range.start;
-        while (pokemon <= range.end) : (pokemon += 1) {
-            // Only pick lowest evo pokemon if pick_lowest is true
-            if (pick_lowest and data.evolves_from.get(pokemon) != null)
-                continue;
-            if (countEvos(data, pokemon) < evolutions)
-                continue;
+    for (species.items()) |pokemon_kv| {
+        const pokemon = pokemon_kv.key;
+        // Only pick lowest evo pokemon if pick_lowest is true
+        if (pick_lowest and data.evolves_from.get(pokemon) != null)
+            continue;
+        if (countEvos(data, pokemon) < evolutions)
+            continue;
 
-            _ = try res.put(allocator, pokemon);
-        }
+        _ = try res.put(allocator, pokemon, {});
     }
     if (res.count() == 0)
-        _ = try res.put(allocator, 0);
+        _ = try res.put(allocator, 0, {});
 
     return res;
 }
@@ -121,16 +115,17 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     const parsed = try format.parseNoEscape(str);
     switch (parsed) {
         .pokedex => |pokedex| {
-            _ = try data.pokedex.put(allocator, pokedex.index);
+            _ = try data.pokedex.put(allocator, pokedex.index, {});
             return error.ParserFailed;
         },
         .starters => |starters| {
-            _ = try data.starters.put(allocator, starters.index);
+            _ = try data.starters.put(allocator, starters.index, {});
             return;
         },
         .pokemons => |pokemons| {
             const evolves_from = pokemons.index;
-            const pokemon = try data.pokemons.getOrPutValue(allocator, evolves_from, Pokemon{});
+            const pokemon_entry = try data.pokemons.getOrPutValue(allocator, evolves_from, Pokemon{});
+            const pokemon = &pokemon_entry.value;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
@@ -139,8 +134,8 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
                         const from_set = try data.evolves_from.getOrPutValue(allocator, evolves_to, Set{});
                         const to_set = try data.evolves_to.getOrPutValue(allocator, evolves_from, Set{});
                         _ = try data.pokemons.getOrPutValue(allocator, evolves_to, Pokemon{});
-                        _ = try from_set.put(allocator, evolves_from);
-                        _ = try to_set.put(allocator, evolves_to);
+                        _ = try from_set.value.put(allocator, evolves_from, {});
+                        _ = try to_set.value.put(allocator, evolves_to, {});
                     },
                     .param,
                     .method,
@@ -195,20 +190,17 @@ fn countEvos(data: Data, pokemon: u16) usize {
     const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
 
     // TODO: We don't handle cycles here.
-    for (evolves_to.span()) |range| {
-        var evo = range.start;
-        while (evo <= range.end) : (evo += 1) {
-            const evos = countEvos(data, evo) + 1;
-            res = math.max(res, evos);
-        }
+    for (evolves_to.items()) |evo| {
+        const evos = countEvos(data, evo.key) + 1;
+        res = math.max(res, evos);
     }
 
     return res;
 }
 
-const Evolutions = util.container.IntMap.Unmanaged(u16, Set);
-const Pokemons = util.container.IntMap.Unmanaged(u16, Pokemon);
-const Set = util.container.IntSet.Unmanaged(u16);
+const Evolutions = std.AutoArrayHashMapUnmanaged(u16, Set);
+const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
+const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
     pokedex: Set = Set{},
@@ -221,12 +213,13 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(allocator);
 
-        for (d.pokemons.values()) |pokemon, i| {
-            const s = d.pokemons.at(i).key;
-            if (pokemon.catch_rate == 0 or !d.pokedex.exists(pokemon.pokedex_entry))
+        for (d.pokemons.items()) |pokemon| {
+            if (pokemon.value.catch_rate == 0)
+                continue;
+            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(allocator, s);
+            _ = try res.put(allocator, pokemon.key, {});
         }
 
         return res;

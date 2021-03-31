@@ -82,15 +82,14 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype, hms:
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.tms.values()) |tm, i|
-        try format.write(writer, format.Game.tm(data.tms.at(i).key, tm));
-    for (data.hms.values()) |hm, i|
-        try format.write(writer, format.Game.hm(data.hms.at(i).key, hm));
-    for (data.items.values()) |item, i| {
-        const index = data.items.at(i).key;
+    for (data.tms.items()) |tm|
+        try format.write(writer, format.Game.tm(tm.key, tm.value));
+    for (data.hms.items()) |hm|
+        try format.write(writer, format.Game.hm(hm.key, hm.value));
+    for (data.items.items()) |item| {
         try format.write(
             writer,
-            format.Game.item(index, .{ .description = item.description.bytes }),
+            format.Game.item(item.key, .{ .description = item.value.description.bytes }),
         );
     }
 }
@@ -117,7 +116,7 @@ fn parseLine(
             switch (moves.value) {
                 .description => |_desc| {
                     const desc = try mem.dupe(allocator, u8, _desc);
-                    move.description = try Utf8.init(desc);
+                    move.value.description = try Utf8.init(desc);
                 },
                 else => {},
             }
@@ -126,14 +125,14 @@ fn parseLine(
         .items => |items| {
             const item = try data.items.getOrPutValue(allocator, items.index, Item{});
             switch (items.value) {
-                .pocket => |pocket| item.pocket = pocket,
+                .pocket => |pocket| item.value.pocket = pocket,
                 .name => |_name| {
                     const name = try mem.dupe(allocator, u8, _name);
-                    item.name = try Utf8.init(name);
+                    item.value.name = try Utf8.init(name);
                 },
                 .description => |_desc| {
                     const desc = try mem.dupe(allocator, u8, _desc);
-                    item.description = try Utf8.init(desc);
+                    item.value.description = try Utf8.init(desc);
                 },
                 else => {},
             }
@@ -165,15 +164,15 @@ fn parseLine(
 fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
-    for (data.tms.values()) |*tm|
-        tm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
-    for (data.hms.values()) |*hm|
-        hm.* = data.moves.at(random.intRangeLessThan(usize, 0, data.moves.count())).key;
+    for (data.tms.items()) |*tm|
+        tm.value = data.moves.items()[random.intRangeLessThan(usize, 0, data.moves.count())].key;
+    for (data.hms.items()) |*hm|
+        hm.value = data.moves.items()[random.intRangeLessThan(usize, 0, data.moves.count())].key;
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;
-    for (data.items.values()) |item| {
-        var description = item.description;
+    for (data.items.items()) |item| {
+        var description = item.value.description;
         while (mem.indexOf(u8, description.bytes, "\n")) |index| {
             const line = Utf8.init(description.bytes[0..index]) catch unreachable;
             max_line_len = math.max(line.len, max_line_len);
@@ -188,20 +187,19 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
     //       by some amount and hope it is enough for all strings.
     max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
-    for (data.items.values()) |*item, i| {
-        const id = data.items.at(i).key;
-        if (item.pocket != .tms_hms)
+    for (data.items.items()) |*item, i| {
+        if (item.value.pocket != .tms_hms)
             continue;
 
-        const is_tm = mem.startsWith(u8, item.name.bytes, "TM");
-        const is_hm = mem.startsWith(u8, item.name.bytes, "HM");
+        const is_tm = mem.startsWith(u8, item.value.name.bytes, "TM");
+        const is_hm = mem.startsWith(u8, item.value.name.bytes, "HM");
         if (is_tm or is_hm) {
-            const number = fmt.parseUnsigned(u8, item.name.bytes[2..], 10) catch continue;
+            const number = fmt.parseUnsigned(u8, item.value.name.bytes[2..], 10) catch continue;
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
-            const move = data.moves.get(move_id.*) orelse continue;
+            const move = data.moves.get(move_id) orelse continue;
             const new_desc = try util.unicode.splitIntoLines(allocator, max_line_len, move.description);
-            item.description = new_desc.slice(0, item.description.len);
+            item.value.description = new_desc.slice(0, item.value.description.len);
         }
     }
 }
@@ -224,9 +222,9 @@ fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
     return Utf8.initUnchecked(str.bytes[0..it.i]);
 }
 
-const Items = util.container.IntMap.Unmanaged(u16, Item);
-const Machines = util.container.IntMap.Unmanaged(u8, u16);
-const Moves = util.container.IntMap.Unmanaged(u16, Move);
+const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
+const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
+const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 
 const Data = struct {
     items: Items = Items{},
