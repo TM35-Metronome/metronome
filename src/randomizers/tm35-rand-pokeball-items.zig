@@ -14,8 +14,6 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const exit = util.exit;
-
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -162,7 +160,7 @@ fn randomize(
                 continue :outer;
         }
 
-        ball.value = pick_from.items()[random.intRangeLessThan(usize, 0, max)].key;
+        ball.value = util.random.item(random, pick_from.items()).?.key;
     }
 }
 

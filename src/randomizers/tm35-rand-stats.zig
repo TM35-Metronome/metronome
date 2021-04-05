@@ -259,8 +259,8 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: 
     }
 
     while (algo.fold(buf, @as(usize, 0), algo.add) < max) {
-        const index = random.intRangeLessThan(usize, 0, buf.len);
-        buf[index] = math.add(T, buf[index], 1) catch buf[index];
+        const item = util.random.item(random, buf).?;
+        item.* = math.add(T, item.*, 1) catch item.*;
     }
 }
 

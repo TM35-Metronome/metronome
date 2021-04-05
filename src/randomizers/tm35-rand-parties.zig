@@ -137,21 +137,28 @@ pub fn main2(
     }
 
     const data = try handleInput(allocator, stdio.in, stdio.out);
+    const species = try data.pokedexPokemons(allocator);
     var ctx = Context{
         .allocator = allocator,
         .random = &rand.DefaultPrng.init(seed).random,
+
         .data = data,
+        .options = .{
+            .abilities = abilities,
+            .items = items,
+            .moves = moves,
+            .party_size_max = party_size_max catch unreachable,
+            .party_size_min = party_size_min catch unreachable,
+            .party_size_method = party_size_method,
+            .stats = stats,
+            .types = types,
+        },
+
+        .species = species,
+        .species_by_type = try data.speciesByType(allocator, species),
+        .stats = data.minMaxStats(species),
     };
-    try randomize(&ctx, .{
-        .abilities = abilities,
-        .items = items,
-        .moves = moves,
-        .party_size_max = party_size_max catch unreachable,
-        .party_size_method = party_size_method,
-        .party_size_min = party_size_min catch unreachable,
-        .stats = stats,
-        .types = types,
-    });
+    try randomize(&ctx);
     try outputData(stdio.out, data);
 }
 
@@ -314,7 +321,6 @@ const Options = struct {
     moves: MoveOption,
     party_size_max: u8,
     party_size_min: u8,
-
     party_size_method: PartySizeMethod,
     stats: StatsOption,
     types: ThemeOption,
@@ -323,83 +329,45 @@ const Options = struct {
 const Context = struct {
     allocator: *mem.Allocator,
     random: *rand.Random,
+
     data: Data,
+    options: Options,
+
+    // Precomputed data for later use
+    species: Set,
+    species_by_type: SpeciesBy,
+    stats: MinMax(u16),
+
+    // Containers we reuse often enough that keeping them around with
+    // their preallocated capacity is worth the hassel.
     simular: std.ArrayListUnmanaged(u16) = std.ArrayListUnmanaged(u16){},
 };
 
-fn randomize(ctx: *Context, opt: Options) !void {
-    const allocator = ctx.allocator;
-    const data = ctx.data;
-    const species = try data.pokedexPokemons(allocator);
-    const species_by_type = try data.speciesByType(allocator, species);
-    if (species_by_type.count() == 0) {
+fn randomize(ctx: *Context) !void {
+    if (ctx.species_by_type.count() == 0) {
         std.log.err("No types where found. Cannot randomize.", .{});
         return;
     }
 
-    var stats = MinMax(usize){
-        .min = math.maxInt(usize),
-        .max = 0,
-    };
-    for (species.items()) |s| {
-        const pokemon = data.pokemons.get(s.key) orelse continue;
-        const total_stats = algo.fold(&pokemon.stats, @as(usize, 0), algo.add);
-        stats.min = math.min(stats.max, total_stats);
-        stats.max = math.max(stats.max, total_stats);
-    }
-
-    for (data.trainers.items()) |*trainer| {
+    for (ctx.data.trainers.items()) |*trainer_kv| {
+        // Trainers with 0 party members are considered "invalid" trainers
+        // and will not be randomized.
+        if (trainer_kv.value.party_size == 0)
+            continue;
         try randomizeTrainer(
             ctx,
-            &trainer.value,
-            species_by_type,
-            stats,
-            opt,
+            &trainer_kv.value,
         );
     }
 }
 
-fn randomizeTrainer(
-    ctx: *Context,
-    trainer: *Trainer,
-    species_by_type: SpeciesBy,
-    stats: MinMax(usize),
-    opt: Options,
-) !void {
-    const allocator = ctx.allocator;
-    const data = ctx.data;
-    const random = ctx.random;
-    const types_count = species_by_type.count();
-    const theme = switch (opt.types) {
-        .themed => species_by_type.items()[random.intRangeLessThan(usize, 0, types_count)].key,
+fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
+    const theme = switch (ctx.options.types) {
+        .themed => util.random.item(ctx.random, ctx.species_by_type.items()).?.key,
         else => undefined,
     };
 
-    var stat_count: usize = 0;
-    var stat_total: usize = 0;
-    var level_count: u16 = 0;
-    var level_total: u16 = 0;
-    for (trainer.party.items()) |member| {
-        if (member.value.species) |_species| {
-            const pokemon = data.pokemons.get(_species) orelse continue;
-            stat_total += algo.fold(&pokemon.stats, @as(usize, 0), algo.add);
-            stat_count += 1;
-        }
-        if (member.value.level) |level| {
-            level_total += level;
-            level_count += 1;
-        }
-    }
-    const average_stats = if (stat_count != 0) stat_total / stat_count else null;
-    const average_level = if (level_count != 0) level_total / level_count else null;
-
-    trainer.party_size = switch (opt.party_size_method) {
-        .unchanged => math.clamp(trainer.party_size, opt.party_size_min, opt.party_size_max),
-        .minimum => opt.party_size_min,
-        .random => random.intRangeAtMost(u8, opt.party_size_min, opt.party_size_max),
-    };
-
-    const wants_moves = switch (opt.moves) {
+    const wants_moves = switch (ctx.options.moves) {
         .unchanged => trainer.party_type.haveMoves(),
         .none => false,
         .best,
@@ -408,10 +376,24 @@ fn randomizeTrainer(
         .random,
         => true,
     };
-    const wants_items = switch (opt.items) {
+    const wants_items = switch (ctx.options.items) {
         .unchanged => trainer.party_type.haveItem(),
         .none => false,
         .random => true,
+    };
+
+    trainer.party_size = switch (ctx.options.party_size_method) {
+        .unchanged => math.clamp(
+            trainer.party_size,
+            ctx.options.party_size_min,
+            ctx.options.party_size_max,
+        ),
+        .random => ctx.random.intRangeAtMost(
+            u8,
+            ctx.options.party_size_min,
+            ctx.options.party_size_max,
+        ),
+        .minimum => ctx.options.party_size_min,
     };
 
     trainer.party_type = switch (wants_moves) {
@@ -425,190 +407,178 @@ fn randomizeTrainer(
         },
     };
 
+    // Fill trainer party with more Pokémons until `party_size` have been
+    // reached. The Pokémons we fill the party with are Pokémons that are
+    // already in the party. This code assumes that at least 1 Pokémon
+    // is in the party, which is always true as we don't randomize trainers
+    // with a party size of 0.
+    const party_member_max = trainer.party.count();
+    var party_member: u8 = 0;
     var i: u8 = 0;
     while (i < trainer.party_size) : (i += 1) {
-        const member_entry = try trainer.party.getOrPutValue(allocator, i, PartyMember{
-            .level = @intCast(u8, average_level orelse 2),
-        });
-        try randomizePartyMember(
-            ctx,
-            &member_entry.value,
-            species_by_type,
-            theme,
-            average_level,
-            average_stats,
-            stats,
-            opt,
-            wants_moves,
-        );
+        const result = try trainer.party.getOrPut(ctx.allocator, i);
+        if (!result.found_existing) {
+            const member = trainer.party.items()[party_member].value;
+            result.entry.value = .{
+                .species = member.species,
+                .item = member.item,
+                .level = member.level,
+                .moves = try member.moves.clone(ctx.allocator),
+            };
+            party_member += 1;
+            party_member %= @intCast(u8, party_member_max);
+        }
+    }
+
+    for (trainer.party.items()[0..trainer.party_size]) |*member_kv| {
+        const member = &member_kv.value;
+        if (member.species) |old_species| {
+            member.species = try randomSpecies(
+                ctx,
+                theme,
+                old_species,
+                member.level orelse trainer.partyAverageLevel(),
+            );
+        }
+
+        member.item = switch (ctx.options.items) {
+            .none => null,
+            .unchanged => member.item,
+            .random => util.random.item(
+                ctx.random,
+                ctx.data.held_items.items(),
+            ).?.key,
+        };
+
+        var k: u8 = 0;
+        while (wants_moves and ctx.options.moves != .unchanged and
+            (k < 4 or k < member.moves.count())) : (k += 1)
+        {
+            const move = try member.moves.getOrPutValue(ctx.allocator, k, 0);
+            const curr_moves = member.moves.items()[0..k];
+            move.value = switch (ctx.options.moves) {
+                .none, .unchanged => unreachable,
+                .best, .best_for_level => blk: {
+                    // These null unwraps are ok, as we have already picked a
+                    // random pokemon, so none of these check should fail.
+                    const pokemon = ctx.data.pokemons.get(member.species.?).?;
+                    const member_lvl = member.level orelse math.maxInt(u8);
+                    const lvl_up_moves = pokemon.lvl_up_moves.items();
+
+                    var m_best: ?u16 = null;
+                    for (lvl_up_moves) |lvl_up_move_kv| {
+                        const lvl_up_move = lvl_up_move_kv.value;
+                        const lvl_move_id = lvl_up_move.id orelse continue;
+                        const lvl_move = ctx.data.moves.get(lvl_move_id) orelse continue;
+                        const lvl_move_lvl = lvl_up_move.level orelse 0;
+                        const lvl_move_r = RelativeMove.from(pokemon, lvl_move);
+
+                        if (ctx.options.moves == .best_for_level and member_lvl < lvl_move_lvl)
+                            continue;
+
+                        const this_move = ctx.data.moves.get(lvl_move_id) orelse continue;
+                        const this_move_r = RelativeMove.from(pokemon, this_move);
+
+                        const best = m_best orelse lvl_move_id;
+                        const prev_move = ctx.data.moves.get(best).?;
+                        const prev_move_r = RelativeMove.from(pokemon, prev_move);
+
+                        if (!this_move_r.lessThan(prev_move_r)) {
+                            if (!hasMove(curr_moves, lvl_move_id))
+                                m_best = lvl_move_id;
+                        }
+                    }
+
+                    break :blk m_best orelse 0;
+                },
+                .random => while (ctx.data.moves.count() - 1 > k) {
+                    const pick = util.random.item(ctx.random, ctx.data.moves.items()[1..]).?.key;
+                    if (!hasMove(curr_moves, pick))
+                        break pick;
+                } else 0,
+                .random_learnable => blk: {
+                    // These null unwraps are ok, as we have already picked a
+                    // random pokemon, so none of these check should fail.
+                    const pokemon = ctx.data.pokemons.get(member.species.?).?;
+                    const member_lvl = member.level orelse math.maxInt(u8);
+                    const lvl_up_moves = pokemon.lvl_up_moves.items();
+
+                    while (lvl_up_moves.len > k) {
+                        const pick = util.random.item(
+                            ctx.random,
+                            lvl_up_moves,
+                        ).?.value.id orelse continue;
+                        if (!hasMove(curr_moves, pick))
+                            break :blk pick;
+                    }
+
+                    break :blk 0;
+                },
+            };
+        }
     }
 }
 
-fn randomizePartyMember(
-    ctx: *Context,
-    member: *PartyMember,
-    species_by_type: SpeciesBy,
-    theme: u16,
-    average_level: ?u16,
-    average_stats: ?usize,
-    stats: MinMax(usize),
-    opt: Options,
-    wants_moves: bool,
-) !void {
-    const allocator = ctx.allocator;
-    const data = ctx.data;
-    const random = ctx.random;
-    const types_count = species_by_type.count();
-    const old_species = member.species;
-
-    const new_type = switch (opt.types) {
+fn randomSpecies(ctx: *Context, theme: u16, old_species: u16, level: u8) !u16 {
+    const pokemon = ctx.data.pokemons.get(old_species) orelse {
+        return util.random.item(ctx.random, ctx.species.items()).?.key;
+    };
+    const pick_from = switch (ctx.options.types) {
         .same => blk: {
-            const m_pokemon = if (old_species) |s| data.pokemons.get(s) else null;
-            const pokemon = m_pokemon orelse {
-                // If we can't find the prev Pokemons type, then the only thing we can
-                // do is chose a random one.
-                break :blk species_by_type.items()[random.intRangeLessThan(usize, 0, types_count)].key;
-            };
             const types = pokemon.types;
             if (types.count() == 0)
-                return;
+                return util.random.item(ctx.random, ctx.species.items()).?.key;
 
-            break :blk types.items()[random.intRangeLessThan(usize, 0, types.count())].key;
+            const t = util.random.item(ctx.random, types.items()).?.key;
+            break :blk ctx.species_by_type.get(t).?;
         },
-        .random => species_by_type.items()[random.intRangeLessThan(usize, 0, types_count)].key,
-        .themed => theme,
+        .random => util.random.item(
+            ctx.random,
+            ctx.species_by_type.items(),
+        ).?.value,
+        .themed => ctx.species_by_type.get(theme).?,
     };
 
-    const total_stats: ?usize = switch (opt.stats) {
-        .follow_level => blk: {
-            if (member.level) |level|
-                break :blk levelScaling(stats.min, stats.max, level);
-            if (average_level) |level|
-                break :blk levelScaling(stats.min, stats.max, level);
-            break :blk null;
-        },
-        .simular => blk: {
-            // If we don't know what the old Pokemon was, then we can't do similar_total_stats.
-            // We therefor just pick a random pokemon and continue.
-            const m_pokemon = if (old_species) |s| data.pokemons.get(s) else null;
-            if (m_pokemon) |p|
-                break :blk algo.fold(&p.stats, @as(usize, 0), algo.add);
-            if (average_stats) |res|
-                break :blk res;
-            break :blk null;
-        },
-        .random => null,
-    };
-
-    const pick_from = species_by_type.get(new_type).?;
-    member.species = if (total_stats) |total|
-        try randomSpeciesWithSimularTotalStats(
+    return switch (ctx.options.stats) {
+        .follow_level => try randomSpeciesWithSimularTotalStats(
             ctx,
             pick_from,
-            total,
-        )
-    else
-        pick_from.items()[random.intRangeLessThan(usize, 0, pick_from.count())].key;
-    member.item = switch (opt.items) {
-        .none => null,
-        .unchanged => member.item,
-        .random => data.held_items.items()[random.intRangeLessThan(usize, 0, data.held_items.count())].key,
+            levelScaling(ctx.stats.min, ctx.stats.max, level),
+        ),
+        .simular => try randomSpeciesWithSimularTotalStats(
+            ctx,
+            pick_from,
+            algo.fold(pokemon.stats, @as(u16, 0), algo.add),
+        ),
+        .random => util.random.item(ctx.random, pick_from.items()).?.key,
     };
-
-    var k: u8 = 0;
-    while (wants_moves and opt.moves != .unchanged and (k < 4 or k < member.moves.count())) : (k += 1) {
-        const move = try member.moves.getOrPutValue(allocator, k, 0);
-        const curr_moves = member.moves.items()[0..k];
-        move.value = switch (opt.moves) {
-            .none, .unchanged => unreachable,
-            .best, .best_for_level => blk: {
-                // These null unwraps are ok, as we have already picked a
-                // random pokemon, so none of these check should fail.
-                const pokemon = data.pokemons.get(member.species.?).?;
-                const member_lvl = member.level orelse math.maxInt(u8);
-                const lvl_up_moves = pokemon.lvl_up_moves.items();
-
-                var m_best: ?u16 = null;
-                for (lvl_up_moves) |lvl_up_move_kv| {
-                    const lvl_up_move = lvl_up_move_kv.value;
-                    const lvl_move_id = lvl_up_move.id orelse continue;
-                    const lvl_move = data.moves.get(lvl_move_id) orelse continue;
-                    const lvl_move_lvl = lvl_up_move.level orelse 0;
-                    const lvl_move_r = RelativeMove.from(pokemon, lvl_move);
-
-                    if (opt.moves == .best_for_level and member_lvl < lvl_move_lvl)
-                        continue;
-
-                    const this_move = data.moves.get(lvl_move_id) orelse continue;
-                    const this_move_r = RelativeMove.from(pokemon, this_move);
-
-                    const best = m_best orelse lvl_move_id;
-                    const prev_move = data.moves.get(best).?;
-                    const prev_move_r = RelativeMove.from(pokemon, prev_move);
-
-                    if (!this_move_r.lessThan(prev_move_r)) {
-                        if (!hasMove(curr_moves, lvl_move_id))
-                            m_best = lvl_move_id;
-                    }
-                }
-
-                break :blk m_best orelse 0;
-            },
-            .random => while (data.moves.count() - 1 > k) {
-                const pick = random.intRangeLessThan(usize, 1, data.moves.count());
-                const picked_move = data.moves.items()[pick].key;
-                if (!hasMove(curr_moves, picked_move))
-                    break picked_move;
-            } else 0,
-            .random_learnable => blk: {
-                // These null unwraps are ok, as we have already picked a
-                // random pokemon, so none of these check should fail.
-                const pokemon = data.pokemons.get(member.species.?).?;
-                const member_lvl = member.level orelse math.maxInt(u8);
-                const lvl_up_moves = pokemon.lvl_up_moves.items();
-
-                while (lvl_up_moves.len > k) {
-                    const pick = random.intRangeLessThan(usize, 0, lvl_up_moves.len);
-                    const picked_move = lvl_up_moves[pick].value.id orelse continue;
-                    if (!hasMove(curr_moves, picked_move))
-                        break :blk picked_move;
-                }
-
-                break :blk 0;
-            },
-        };
-    }
 }
 
 fn randomSpeciesWithSimularTotalStats(
     ctx: *Context,
     pick_from: Set,
-    total_stats: usize,
+    total_stats: u16,
 ) !u16 {
-    const allocator = ctx.allocator;
-    const data = ctx.data;
-    const random = ctx.random;
-    const simular = &ctx.simular;
-    var min = @intCast(i64, total_stats);
+    var min = @intCast(isize, total_stats);
     var max = min;
 
-    simular.shrinkRetainingCapacity(0);
-    while (simular.items.len < 25) : ({
+    ctx.simular.shrinkRetainingCapacity(0);
+    while (ctx.simular.items.len < 25) : ({
         min -= 5;
         max += 5;
     }) {
         for (pick_from.items()) |s| {
-            const p = data.pokemons.get(s.key).?;
-            const total = @intCast(i64, algo.fold(&p.stats, @as(usize, 0), algo.add));
+            const p = ctx.data.pokemons.get(s.key).?;
+            const total = @intCast(isize, algo.fold(&p.stats, @as(u16, 0), algo.add));
             if (min <= total and total <= max)
-                try simular.append(allocator, s.key);
+                try ctx.simular.append(ctx.allocator, s.key);
         }
     }
 
-    return simular.items[random.intRangeLessThan(usize, 0, simular.items.len)];
+    return util.random.item(ctx.random, ctx.simular.items).?.*;
 }
 
-fn levelScaling(min: usize, max: usize, level: usize) usize {
+fn levelScaling(min: u16, max: u16, level: u16) u16 {
     const fmin = @intToFloat(f64, min);
     const fmax = @intToFloat(f64, max);
     const diff = fmax - fmin;
@@ -621,7 +591,7 @@ fn levelScaling(min: usize, max: usize, level: usize) usize {
     const b = 0.02 * diff;
     const xp2 = math.pow(f64, x, 2);
     const res = a * xp2 + b * x + fmin;
-    return @floatToInt(usize, res);
+    return @floatToInt(u16, res);
 }
 
 fn hasMove(moves: []const MemberMoves.Entry, id: u16) bool {
@@ -658,12 +628,28 @@ const Data = struct {
         errdefer res.deinit(allocator);
 
         for (d.pokemons.items()) |pokemon| {
-            if (pokemon.value.catch_rate == 0 or d.pokedex.get(pokemon.value.pokedex_entry) == null)
+            if (pokemon.value.catch_rate == 0)
+                continue;
+            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
                 continue;
 
             _ = try res.put(allocator, pokemon.key, {});
         }
 
+        return res;
+    }
+
+    fn minMaxStats(d: Data, species: Set) MinMax(u16) {
+        var res = MinMax(u16){
+            .min = math.maxInt(u16),
+            .max = 0,
+        };
+        for (species.items()) |s| {
+            const pokemon = d.pokemons.get(s.key).?;
+            const total_stats = algo.fold(pokemon.stats, @as(u16, 0), algo.add);
+            res.min = math.min(res.max, total_stats);
+            res.max = math.max(res.max, total_stats);
+        }
         return res;
     }
 
@@ -712,6 +698,19 @@ const Trainer = struct {
     party_size: u8 = 0,
     party_type: format.PartyType = .none,
     party: Party = Party{},
+
+    fn partyAverageLevel(trainer: Trainer) u8 {
+        var count: u16 = 0;
+        var sum: u16 = 0;
+        for (trainer.party.items()) |member_kv| {
+            const member = member_kv.value;
+            sum += member.level orelse 0;
+            count += @boolToInt(member.level != null);
+        }
+        if (count == 0)
+            return 2;
+        return @intCast(u8, sum / count);
+    }
 };
 
 const PartyMember = struct {
@@ -908,6 +907,7 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[1].moves[0]=1
         \\.trainers[0].party[2].species=3
         \\.trainers[0].party[2].level=5
+        \\.trainers[0].party[2].moves[0]=1
         \\.trainers[1].party_size=3
         \\.trainers[1].party_type=none
         \\.trainers[1].party[0].species=1
@@ -918,6 +918,7 @@ test "tm35-rand-parties" {
         \\.trainers[1].party[1].moves[0]=2
         \\.trainers[1].party[2].species=7
         \\.trainers[1].party[2].level=5
+        \\.trainers[1].party[2].moves[0]=2
         \\.trainers[2].party_size=3
         \\.trainers[2].party_type=none
         \\.trainers[2].party[0].species=0
@@ -928,6 +929,7 @@ test "tm35-rand-parties" {
         \\.trainers[2].party[1].moves[0]=3
         \\.trainers[2].party[2].species=6
         \\.trainers[2].party[2].level=5
+        \\.trainers[2].party[2].moves[0]=3
         \\.trainers[3].party_size=3
         \\.trainers[3].party_type=none
         \\.trainers[3].party[0].species=2
@@ -938,6 +940,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\.trainers[3].party[2].species=0
         \\.trainers[3].party[2].level=5
+        \\.trainers[3].party[2].moves[0]=4
         \\
     );
     util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-max=1" }, test_string, result_prefix ++
@@ -1002,8 +1005,10 @@ test "tm35-rand-parties" {
         \\.trainers[1].party[1].moves[0]=2
         \\.trainers[1].party[2].species=6
         \\.trainers[1].party[2].level=5
+        \\.trainers[1].party[2].moves[0]=2
         \\.trainers[1].party[3].species=7
         \\.trainers[1].party[3].level=5
+        \\.trainers[1].party[3].moves[0]=2
         \\.trainers[2].party_size=4
         \\.trainers[2].party_type=none
         \\.trainers[2].party[0].species=0
@@ -1014,8 +1019,10 @@ test "tm35-rand-parties" {
         \\.trainers[2].party[1].moves[0]=3
         \\.trainers[2].party[2].species=7
         \\.trainers[2].party[2].level=5
+        \\.trainers[2].party[2].moves[0]=3
         \\.trainers[2].party[3].species=1
         \\.trainers[2].party[3].level=5
+        \\.trainers[2].party[3].moves[0]=3
         \\.trainers[3].party_size=2
         \\.trainers[3].party_type=none
         \\.trainers[3].party[0].species=0

@@ -256,7 +256,7 @@ fn randomize(
                         return;
 
                     for (static_mons.items()) |*static|
-                        static.value = species.items()[random.intRangeLessThan(usize, 0, max)].key;
+                        static.value = util.random.item(random, species.items()).?.key;
                 },
                 .same => {
                     const by_type = try data.getSpeciesByType(allocator, &species);
@@ -266,10 +266,10 @@ fn randomize(
                         if (type_max == 0)
                             continue;
 
-                        const t = pokemon.types.items()[random.intRangeLessThan(usize, 0, type_max)].key;
+                        const t = util.random.item(random, pokemon.types.items()).?.key;
                         const pokemons = by_type.get(t).?;
                         const max = pokemons.count();
-                        static.value = pokemons.items()[random.intRangeLessThan(usize, 0, max)].key;
+                        static.value = util.random.item(random, pokemons.items()).?.key;
                     }
                 },
             },
@@ -336,7 +336,7 @@ fn randomize(
                     }
 
                     const pick_from = simular.items;
-                    static.value = pick_from[random.intRangeLessThan(usize, 0, pick_from.len)];
+                    static.value = util.random.item(random, pick_from).?.*;
                 }
             },
             .@"legendary-with-legendary" => {
@@ -423,7 +423,7 @@ fn randomize(
                                 continue;
 
                             const types = pokemon.types;
-                            const picked_type = types.items()[random.intRangeLessThan(usize, 0, type_max)];
+                            const picked_type = util.random.item(random, types.items()).?;
                             const pick_from_by_type = if (rating >= rating_to_be_legendary) legendaries_by_type else rest_by_type;
                             break :blk pick_from_by_type.get(picked_type.key) orelse continue;
                         },
@@ -432,7 +432,7 @@ fn randomize(
                     const max = pick_from.count();
                     if (max == 0)
                         continue;
-                    static.value = pick_from.items()[random.intRangeLessThan(usize, 0, max)].key;
+                    static.value = util.random.item(random, pick_from.items()).?.key;
                 }
             },
         }

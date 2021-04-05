@@ -16,6 +16,8 @@ pub const algorithm = @import("algorithm.zig");
 pub const bit = @import("bit.zig");
 pub const escape = @import("escape.zig");
 pub const io = @import("io.zig");
+pub const random = @import("random.zig");
+pub const set = @import("set.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
 
@@ -24,6 +26,8 @@ test "" {
     _ = bit;
     _ = escape;
     _ = io;
+    _ = random;
+    _ = set;
     _ = testing;
     _ = unicode;
 }

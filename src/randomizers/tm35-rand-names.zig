@@ -15,9 +15,6 @@ const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
-const escape = util.escape;
-const exit = util.exit;
-
 const Utf8 = util.unicode.Utf8View;
 
 const Param = clap.Param(clap.Help);

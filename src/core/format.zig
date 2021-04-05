@@ -1,4 +1,5 @@
 const common = @import("common.zig");
+const mecha = @import("mecha");
 const std = @import("std");
 const util = @import("util");
 
@@ -6,8 +7,6 @@ const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
-
-pub usingnamespace @import("mecha");
 
 //! The tm35 format in 8 lines of cfg:
 //! Line <- Suffix* '=' .*
@@ -50,43 +49,52 @@ fn toUnionField(
     }.conv;
 }
 
-fn parser(comptime T: type, comptime do_escape: bool) Parser(T) {
+fn parser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
     @setEvalBranchQuota(100000000);
-    const Res = Result(T);
+    const Res = mecha.Result(T);
     if (isArray(T)) {
-        return map(T, toStruct(T), combine(.{
-            ascii.char('['),
-            int(T.Index, 10),
-            ascii.char(']'),
+        return mecha.map(T, mecha.toStruct(T), mecha.combine(.{
+            mecha.ascii.char('['),
+            mecha.int(T.Index, 10),
+            mecha.ascii.char(']'),
             parser(T.Value, do_escape),
         }));
     } else switch (T) {
         []const u8 => if (do_escape) {
             // With no '\\' we can assume that string does not need to be unescaped, so we
             // can avoid doing an allocation.
-            const text = combine(.{ many(ascii.not(ascii.char('\\')), .{ .collect = false }), eos });
-            const escaped_text = convert([]const u8, struct {
-                fn conv(allocator: *mem.Allocator, str: []const u8) Error![]const u8 {
+            const text = mecha.combine(.{
+                mecha.many(mecha.ascii.not(mecha.ascii.char('\\')), .{ .collect = false }),
+                mecha.eos,
+            });
+            const escaped_text = mecha.convert([]const u8, struct {
+                fn conv(allocator: *mem.Allocator, str: []const u8) mecha.Error![]const u8 {
                     return try util.escape.default.unescapeAlloc(allocator, str);
                 }
-            }.conv, rest);
+            }.conv, mecha.rest);
 
-            return combine(.{
-                ascii.char('='),
-                oneOf(.{ text, escaped_text }),
+            return mecha.combine(.{
+                mecha.ascii.char('='),
+                mecha.oneOf(.{ text, escaped_text }),
             });
         } else {
-            return combine(.{
-                ascii.char('='),
-                rest,
+            return mecha.combine(.{
+                mecha.ascii.char('='),
+                mecha.rest,
             });
         },
         else => switch (@typeInfo(T)) {
-            .Int => return combine(.{ ascii.char('='), int(T, 10), eos }),
-            .Enum => return combine(.{ ascii.char('='), enumeration(T), eos }),
-            .Bool => return convert(bool, toBool, combine(.{ ascii.char('='), rest })),
+            .Int => return mecha.combine(
+                .{ mecha.ascii.char('='), mecha.int(T, 10), mecha.eos },
+            ),
+            .Enum => return mecha.combine(
+                .{ mecha.ascii.char('='), mecha.enumeration(T), mecha.eos },
+            ),
+            .Bool => return mecha.convert(bool, mecha.toBool, mecha.combine(
+                .{ mecha.ascii.char('='), mecha.rest },
+            )),
             .Union => |info| return struct {
-                fn p(allocator: *mem.Allocator, str: []const u8) Error!Result(T) {
+                fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
                     // Ensure that fields are sorted, so that the largest field name
                     // is matched on first.
                     const fields = comptime blk: {
@@ -116,7 +124,7 @@ fn parser(comptime T: type, comptime do_escape: bool) Parser(T) {
                             const after_field = str_after_dot[f.name.len..];
                             const FieldT = info.fields[f.index].field_type;
                             const to_union = comptime toUnionField(T, FieldT, f.name);
-                            const field_parser = comptime map(T, to_union, parser(FieldT, do_escape));
+                            const field_parser = comptime mecha.map(T, to_union, parser(FieldT, do_escape));
                             return field_parser(allocator, after_field);
                         }
                     }
@@ -189,14 +197,14 @@ pub fn isArray(comptime T: type) bool {
 test "parse" {
     const allocator = testing.failing_allocator;
     const p1 = comptime parser(u8, false);
-    expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0"));
-    expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1"));
-    expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111"));
+    mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0"));
+    mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1"));
+    mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111"));
 
     const p2 = comptime parser(u32, false);
-    expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0"));
-    expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1"));
-    expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010"));
+    mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0"));
+    mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1"));
+    mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010"));
 
     const U1 = union(enum) {
         a: u8,
@@ -204,15 +212,15 @@ test "parse" {
         c: u32,
     };
     const p3 = comptime parser(U1, false);
-    expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0"));
-    expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1"));
-    expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010"));
+    mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0"));
+    mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1"));
+    mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010"));
 
     const A1 = Array(u8, u8);
     const p4 = comptime parser(A1, false);
-    expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0"));
-    expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2"));
-    expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33"));
+    mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0"));
+    mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2"));
+    mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33"));
 
     const U2 = union(enum) {
         a: Array(u32, union(enum) {
@@ -222,9 +230,9 @@ test "parse" {
         b: u16,
     };
     const p5 = comptime parser(U2, false);
-    expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
-    expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
-    expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
+    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
+    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
+    mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
 }
 
 /// Takes a struct pointer and a union and sets the structs field with
