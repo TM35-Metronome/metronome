@@ -167,8 +167,6 @@ fn randomize(data: Data, allocator: *mem.Allocator, seed: u64, simular_total_sta
     var simular = std.ArrayList(u16).init(allocator);
 
     const species = try data.pokedexPokemons(allocator);
-    const species_max = @intCast(u16, species.count());
-
     for (data.wild_pokemons.items()) |zone| {
         for (zone.value.wild_areas) |area| {
             for (area.pokemons.items()) |*wild_pokemon| {
@@ -178,7 +176,7 @@ fn randomize(data: Data, allocator: *mem.Allocator, seed: u64, simular_total_sta
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
                     const pokemon = data.pokemons.get(old_species) orelse {
-                        wild_pokemon.value.species = species.items()[random.intRangeLessThan(u16, 0, species_max)].key;
+                        wild_pokemon.value.species = util.random.item(random, species.items()).?.key;
                         break :blk;
                     };
 
@@ -198,9 +196,9 @@ fn randomize(data: Data, allocator: *mem.Allocator, seed: u64, simular_total_sta
                         }
                     }
 
-                    wild_pokemon.value.species = simular.items[random.intRangeLessThan(u16, 0, @intCast(u16, simular.items.len))];
+                    wild_pokemon.value.species = util.random.item(random, simular.items).?.*;
                 } else {
-                    wild_pokemon.value.species = species.items()[random.intRangeLessThan(u16, 0, species_max)].key;
+                    wild_pokemon.value.species = util.random.item(random, species.items()).?.key;
                 }
             }
         }
@@ -372,21 +370,21 @@ test "tm35-rand-wild" {
         \\
     ;
     util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.wild_pokemons[0].grass.pokemons[0].species=1
-        \\.wild_pokemons[0].grass.pokemons[1].species=6
-        \\.wild_pokemons[0].grass.pokemons[2].species=1
-        \\.wild_pokemons[0].grass.pokemons[3].species=5
-        \\.wild_pokemons[1].grass.pokemons[0].species=8
-        \\.wild_pokemons[1].grass.pokemons[1].species=4
-        \\.wild_pokemons[1].grass.pokemons[2].species=8
-        \\.wild_pokemons[1].grass.pokemons[3].species=8
-        \\.wild_pokemons[2].grass.pokemons[0].species=1
-        \\.wild_pokemons[2].grass.pokemons[1].species=2
-        \\.wild_pokemons[2].grass.pokemons[2].species=3
-        \\.wild_pokemons[2].grass.pokemons[3].species=2
-        \\.wild_pokemons[3].grass.pokemons[0].species=5
-        \\.wild_pokemons[3].grass.pokemons[1].species=4
-        \\.wild_pokemons[3].grass.pokemons[2].species=0
+        \\.wild_pokemons[0].grass.pokemons[0].species=2
+        \\.wild_pokemons[0].grass.pokemons[1].species=0
+        \\.wild_pokemons[0].grass.pokemons[2].species=0
+        \\.wild_pokemons[0].grass.pokemons[3].species=2
+        \\.wild_pokemons[1].grass.pokemons[0].species=3
+        \\.wild_pokemons[1].grass.pokemons[1].species=7
+        \\.wild_pokemons[1].grass.pokemons[2].species=1
+        \\.wild_pokemons[1].grass.pokemons[3].species=6
+        \\.wild_pokemons[2].grass.pokemons[0].species=6
+        \\.wild_pokemons[2].grass.pokemons[1].species=6
+        \\.wild_pokemons[2].grass.pokemons[2].species=8
+        \\.wild_pokemons[2].grass.pokemons[3].species=8
+        \\.wild_pokemons[3].grass.pokemons[0].species=0
+        \\.wild_pokemons[3].grass.pokemons[1].species=0
+        \\.wild_pokemons[3].grass.pokemons[2].species=4
         \\.wild_pokemons[3].grass.pokemons[3].species=7
         \\
     );
@@ -394,16 +392,16 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[0].grass.pokemons[0].species=0
         \\.wild_pokemons[0].grass.pokemons[1].species=0
         \\.wild_pokemons[0].grass.pokemons[2].species=0
-        \\.wild_pokemons[0].grass.pokemons[3].species=1
-        \\.wild_pokemons[1].grass.pokemons[0].species=1
-        \\.wild_pokemons[1].grass.pokemons[1].species=0
-        \\.wild_pokemons[1].grass.pokemons[2].species=1
-        \\.wild_pokemons[1].grass.pokemons[3].species=1
+        \\.wild_pokemons[0].grass.pokemons[3].species=0
+        \\.wild_pokemons[1].grass.pokemons[0].species=0
+        \\.wild_pokemons[1].grass.pokemons[1].species=1
+        \\.wild_pokemons[1].grass.pokemons[2].species=0
+        \\.wild_pokemons[1].grass.pokemons[3].species=0
         \\.wild_pokemons[2].grass.pokemons[0].species=0
         \\.wild_pokemons[2].grass.pokemons[1].species=0
-        \\.wild_pokemons[2].grass.pokemons[2].species=0
-        \\.wild_pokemons[2].grass.pokemons[3].species=0
-        \\.wild_pokemons[3].grass.pokemons[0].species=1
+        \\.wild_pokemons[2].grass.pokemons[2].species=1
+        \\.wild_pokemons[2].grass.pokemons[3].species=1
+        \\.wild_pokemons[3].grass.pokemons[0].species=0
         \\.wild_pokemons[3].grass.pokemons[1].species=0
         \\.wild_pokemons[3].grass.pokemons[2].species=0
         \\.wild_pokemons[3].grass.pokemons[3].species=1

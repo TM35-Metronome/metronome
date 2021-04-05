@@ -25,7 +25,6 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const bit = util.bit;
-const escape = util.escape;
 
 const li16 = rom.int.li16;
 const lu128 = rom.int.lu128;

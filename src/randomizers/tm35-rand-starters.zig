@@ -80,8 +80,7 @@ fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Dat
 
 fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
     for (data.starters.items()) |starter| {
-        const index = random.intRangeLessThan(usize, 0, pick_from.count());
-        const res = pick_from.items()[index].key;
+        const res = util.random.item(random, pick_from.items()).?.key;
         try format.write(writer, format.Game.starter(@intCast(u8, starter.key), res));
     }
 }

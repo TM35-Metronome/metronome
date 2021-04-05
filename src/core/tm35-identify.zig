@@ -22,8 +22,6 @@ const nds = rom.nds;
 const lu16 = rom.int.lu16;
 
 const bit = util.bit;
-const escape = util.escape;
-const exit = util.exit;
 
 const Param = clap.Param(clap.Help);
 

@@ -17,8 +17,6 @@ const unicode = std.unicode;
 
 const Utf8 = util.unicode.Utf8View;
 
-const escape = util.escape;
-const exit = util.exit;
 const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
@@ -165,9 +163,9 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.items()) |*tm|
-        tm.value = data.moves.items()[random.intRangeLessThan(usize, 0, data.moves.count())].key;
+        tm.value = util.random.item(random, data.moves.items()).?.key;
     for (data.hms.items()) |*hm|
-        hm.value = data.moves.items()[random.intRangeLessThan(usize, 0, data.moves.count())].key;
+        hm.value = util.random.item(random, data.moves.items()).?.key;
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;

@@ -501,7 +501,7 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
             const item_id = stones.items()[stone].key;
             const pick = switch (stone) {
                 chance_stone => while (num_pokemons > 1) {
-                    const pick = species.items()[random.intRangeLessThan(usize, 0, num_pokemons)].key;
+                    const pick = util.random.item(random, species.items()).?.key;
                     if (pick != pokemon_id)
                         break pick;
                 } else pokemon_id,
@@ -527,17 +527,17 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
                         // Assume that ability 0 means that there is no ability, and
                         // don't pick that.
                         skill_stone => while (set.count() != 1) {
-                            const pick = set.items()[random.intRangeLessThan(usize, 0, set.count())].key;
+                            const pick = util.random.item(random, set.items()).?.key;
                             if (pick != 0)
                                 break pick;
                         } else set.items()[0].key,
-                        form_stone, breed_stone => set.items()[random.intRangeLessThan(usize, 0, set.count())].key,
+                        form_stone, breed_stone => util.random.item(random, set.items()).?.key,
                         else => unreachable,
                     };
                     const pokemon_set = map.get(picked_id).?;
                     const pokemons = pokemon_set.count();
                     while (pokemons != 1) {
-                        const pick = pokemon_set.items()[random.intRangeLessThan(usize, 0, pokemons)].key;
+                        const pick = util.random.item(random, pokemon_set.items()).?.key;
                         if (pick != pokemon_id)
                             break :blk pick;
                     }
@@ -563,7 +563,7 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
                     const pokemon_set = map.get(number).?;
                     const pokemons = pokemon_set.count();
                     while (pokemons != 1) {
-                        const pick = pokemon_set.items()[random.intRangeLessThan(usize, 0, pokemons)].key;
+                        const pick = util.random.item(random, pokemon_set.items()).?.key;
                         if (pick != pokemon_id)
                             break :blk pick;
                     }
@@ -586,8 +586,7 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
         const item = data.items.get(item_id.value) orelse continue;
         if (item.price == 0 or item.price > 600)
             continue;
-        const pick = random.intRangeLessThan(usize, 0, number_of_stones);
-        item_id.value = stones.items()[pick].key;
+        item_id.value = util.random.item(random, stones.items()).?.key;
     }
 }
 
