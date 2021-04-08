@@ -155,6 +155,7 @@ pub fn main2(
         },
 
         .species = species,
+        .species_by_ability = try data.speciesByAbility(allocator, species),
         .species_by_type = try data.speciesByType(allocator, species),
         .stats = data.minMaxStats(species),
     };
@@ -215,8 +216,9 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
-                .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
                 .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
+                .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.index, ability.value),
                 .moves => |moves| {
                     const move = try pokemon.lvl_up_moves.getOrPutValue(allocator, moves.index, LvlUpMove{});
                     format.setField(&move.value, moves.value);
@@ -229,7 +231,6 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
                 .base_friendship,
                 .growth_rate,
                 .egg_groups,
-                .abilities,
                 .color,
                 .evos,
                 .tms,
@@ -250,8 +251,8 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
                         .species => |species| member.species = species,
                         .level => |level| member.level = level,
                         .item => |item| member.item = item,
+                        .ability => |ability| member.ability = ability,
                         .moves => |moves| _ = try member.moves.put(allocator, moves.index, moves.value),
-                        .ability => return error.ParserFailed,
                     }
                     return;
                 },
@@ -335,12 +336,14 @@ const Context = struct {
 
     // Precomputed data for later use
     species: Set,
+    species_by_ability: SpeciesBy,
     species_by_type: SpeciesBy,
     stats: MinMax(u16),
 
     // Containers we reuse often enough that keeping them around with
     // their preallocated capacity is worth the hassel.
     simular: std.ArrayListUnmanaged(u16) = std.ArrayListUnmanaged(u16){},
+    intersection: Set = Set{},
 };
 
 fn randomize(ctx: *Context) !void {
@@ -362,9 +365,15 @@ fn randomize(ctx: *Context) !void {
 }
 
 fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
-    const theme = switch (ctx.options.types) {
-        .themed => util.random.item(ctx.random, ctx.species_by_type.items()).?.key,
-        else => undefined,
+    const themes = Themes{
+        .type = switch (ctx.options.types) {
+            .themed => util.random.item(ctx.random, ctx.species_by_type.items()).?.key,
+            else => undefined,
+        },
+        .ability = switch (ctx.options.abilities) {
+            .themed => util.random.item(ctx.random, ctx.species_by_ability.items()).?.key,
+            else => undefined,
+        },
     };
 
     const wants_moves = switch (ctx.options.moves) {
@@ -434,12 +443,11 @@ fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
         const member = &member_kv.value;
 
         if (member.species) |old_species| {
-            member.species = try randomSpecies(
-                ctx,
-                theme,
-                old_species,
-                member.level orelse trainer.partyAverageLevel(),
-            );
+            member.species = try randomSpecies(ctx, themes, .{
+                .species = old_species,
+                .level = member.level orelse trainer.partyAverageLevel(),
+                .ability = member.ability orelse 0,
+            });
         }
 
         switch (ctx.options.items) {
@@ -559,41 +567,80 @@ fn fillWithRandomLevelUpMoves(random: *rand.Random, lvl_up_moves: LvlUpMoves, mo
     }
 }
 
-fn randomSpecies(ctx: *Context, theme: u16, old_species: u16, level: u8) !u16 {
-    const pick_from = switch (ctx.options.types) {
-        .same => blk: {
-            const pokemon = ctx.data.pokemons.get(old_species) orelse {
-                break :blk ctx.species;
-            };
-            const types = pokemon.types;
-            if (types.count() == 0)
-                return util.random.item(ctx.random, ctx.species.items()).?.key;
+const Themes = struct {
+    type: u16,
+    ability: u16,
+};
 
-            const t = util.random.item(ctx.random, types.items()).?.key;
+const SimplePartyMember = struct {
+    species: u16,
+    level: u8,
+    ability: u8,
+};
+
+fn randomSpecies(ctx: *Context, themes: Themes, member: SimplePartyMember) !u16 {
+    const type_set = switch (ctx.options.types) {
+        .same => blk: {
+            const pokemon = ctx.data.pokemons.get(member.species) orelse
+                break :blk ctx.species;
+            if (pokemon.types.count() == 0)
+                break :blk ctx.species;
+
+            const t = util.random.item(ctx.random, pokemon.types.items()).?.key;
             break :blk ctx.species_by_type.get(t).?;
         },
+        .themed => ctx.species_by_type.get(themes.type).?,
         .random => ctx.species,
-        .themed => ctx.species_by_type.get(theme).?,
     };
+    const ability_set = switch (ctx.options.abilities) {
+        .same => blk: {
+            const pokemon = ctx.data.pokemons.get(member.species) orelse
+                break :blk ctx.species;
+            const ability = pokemon.abilities.get(member.ability) orelse
+                break :blk ctx.species;
+            break :blk ctx.species_by_ability.get(ability).?;
+        },
+        .themed => ctx.species_by_ability.get(themes.ability).?,
+        .random => ctx.species,
+    };
+
+    // The intersection between the type_set and ability_set will give
+    // us all pokémons that have a certain type+ability pair. This is
+    // the set we will pick from.
+    var pick_from = ctx.intersection.promote(ctx.allocator);
+    pick_from.clearRetainingCapacity();
+    try util.set.intersectInline(
+        &pick_from,
+        ability_set.promote(ctx.allocator),
+        type_set.promote(ctx.allocator),
+    );
+    ctx.intersection = pick_from.unmanaged;
 
     switch (ctx.options.stats) {
         .follow_level => return try randomSpeciesWithSimularTotalStats(
             ctx,
-            pick_from,
-            levelScaling(ctx.stats.min, ctx.stats.max, level),
+            pick_from.unmanaged,
+            levelScaling(ctx.stats.min, ctx.stats.max, member.level),
         ),
-        .simular => {
-            const pokemon = ctx.data.pokemons.get(old_species) orelse {
-                return util.random.item(ctx.random, pick_from.items()).?.key;
-            };
+        .simular => fallback: {
+            const pokemon = ctx.data.pokemons.get(member.species) orelse break :fallback;
             return try randomSpeciesWithSimularTotalStats(
                 ctx,
-                pick_from,
+                pick_from.unmanaged,
                 algo.fold(pokemon.stats, @as(u16, 0), algo.add),
             );
         },
-        .random => return util.random.item(ctx.random, pick_from.items()).?.key,
+        .random => {},
     }
+
+    // If the above switch didn't return, the we're force to just pick
+    // a random species from the `pick_from` set.
+    if (util.random.item(ctx.random, pick_from.items())) |entry|
+        return entry.key;
+
+    // Yikes, the `pick_from` set was empty. All we can do now is just
+    // return a random species
+    return util.random.item(ctx.random, ctx.species.items()).?.key;
 }
 
 fn randomSpeciesWithSimularTotalStats(
@@ -649,6 +696,7 @@ fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
 }
 
+const Abilities = std.AutoArrayHashMapUnmanaged(u16, u16);
 const LvlUpMoves = std.AutoArrayHashMapUnmanaged(u16, LvlUpMove);
 const MemberMoves = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
@@ -717,18 +765,16 @@ const Data = struct {
     fn speciesByAbility(d: Data, allocator: *mem.Allocator, species: Set) !SpeciesBy {
         var res = SpeciesBy{};
         errdefer {
-            for (res.values()) |set|
-                set.deinit(allocator);
+            for (res.items()) |*set|
+                set.value.deinit(allocator);
             res.deinit(allocator);
         }
 
-        var sit = species.iterator();
-        while (sit.next()) |s| {
-            const pokemon = d.pokemons.get(s).?;
-            var pit = pokemon.abilities.iterator();
-            while (pit.next()) |a| {
-                const set = try res.getOrPutValue(allocator, a, Set{});
-                _ = try set.put(allocator, s);
+        for (species.items()) |s| {
+            const pokemon = d.pokemons.get(s.key).?;
+            for (pokemon.abilities.items()) |a| {
+                const set = try res.getOrPutValue(allocator, a.value, Set{});
+                _ = try set.value.put(allocator, s.key, {});
             }
         }
 
@@ -759,6 +805,7 @@ const PartyMember = struct {
     species: ?u16 = null,
     item: ?u16 = null,
     level: ?u8 = null,
+    ability: ?u8 = null,
     moves: MemberMoves = MemberMoves{},
 };
 
@@ -805,6 +852,7 @@ const RelativeMove = struct {
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
     types: Set = Set{},
+    abilities: Abilities = Abilities{},
     lvl_up_moves: LvlUpMoves = LvlUpMoves{},
     catch_rate: usize = 1,
     pokedex_entry: u16 = math.maxInt(u16),
@@ -816,6 +864,7 @@ test "tm35-rand-parties" {
             comptime id: []const u8,
             comptime stat: []const u8,
             comptime types: []const u8,
+            comptime ability: []const u8,
             comptime move_: []const u8,
             comptime catch_rate: []const u8,
         ) []const u8 {
@@ -829,6 +878,7 @@ test "tm35-rand-parties" {
                 ".pokemons[" ++ id ++ "].sp_defense=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].types[0]=" ++ types ++ "\n" ++
                 ".pokemons[" ++ id ++ "].types[1]=" ++ types ++ "\n" ++
+                ".pokemons[" ++ id ++ "].abilities[0]=" ++ ability ++ "\n" ++
                 ".pokemons[" ++ id ++ "].moves[0].id=" ++ move_ ++ "\n" ++
                 ".pokemons[" ++ id ++ "].moves[0].level=0\n" ++
                 ".pokemons[" ++ id ++ "].catch_rate=" ++ catch_rate ++ "\n";
@@ -842,10 +892,12 @@ test "tm35-rand-parties" {
                 ".trainers[" ++ id ++ "].party_type=" ++ _type ++ "\n" ++
                 ".trainers[" ++ id ++ "].party[0].species=" ++ species ++ "\n" ++
                 ".trainers[" ++ id ++ "].party[0].level=5\n" ++
+                ".trainers[" ++ id ++ "].party[0].ability=0\n" ++
                 (if (item_) |i| ".trainers[" ++ id ++ "].party[0].item=" ++ i ++ "\n" else "") ++
                 (if (move_) |m| ".trainers[" ++ id ++ "].party[0].moves[0]=" ++ m ++ "\n" else "") ++
                 ".trainers[" ++ id ++ "].party[1].species=" ++ species ++ "\n" ++
                 ".trainers[" ++ id ++ "].party[1].level=5\n" ++
+                ".trainers[" ++ id ++ "].party[1].ability=0\n" ++
                 (if (item_) |i| ".trainers[" ++ id ++ "].party[1].item=" ++ i ++ "\n" else "") ++
                 (if (move_) |m| ".trainers[" ++ id ++ "].party[1].moves[0]=" ++ m ++ "\n" else "");
         }
@@ -869,15 +921,15 @@ test "tm35-rand-parties" {
         }
     };
 
-    const result_prefix = comptime H.pokemon("0", "10", "0", "1", "1") ++
-        H.pokemon("1", "15", "16", "2", "1") ++
-        H.pokemon("2", "20", "2", "3", "1") ++
-        H.pokemon("3", "25", "12", "4", "1") ++
-        H.pokemon("4", "30", "10", "5", "1") ++
-        H.pokemon("5", "35", "11", "6", "1") ++
-        H.pokemon("6", "40", "5", "7", "1") ++
-        H.pokemon("7", "45", "4", "8", "1") ++
-        H.pokemon("8", "45", "4", "8", "0") ++
+    const result_prefix = comptime H.pokemon("0", "10", "0", "0", "1", "1") ++
+        H.pokemon("1", "15", "16", "1", "2", "1") ++
+        H.pokemon("2", "20", "2", "2", "3", "1") ++
+        H.pokemon("3", "25", "12", "3", "4", "1") ++
+        H.pokemon("4", "30", "10", "1", "5", "1") ++
+        H.pokemon("5", "35", "11", "2", "6", "1") ++
+        H.pokemon("6", "40", "5", "3", "7", "1") ++
+        H.pokemon("7", "45", "4", "1", "8", "1") ++
+        H.pokemon("8", "45", "4", "2", "8", "0") ++
         H.move("0", "0", "0", "0", "0") ++
         H.move("1", "10", "0", "10", "255") ++
         H.move("2", "10", "16", "10", "255") ++
@@ -1348,6 +1400,76 @@ test "tm35-rand-parties" {
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].moves[0]=3
         \\.trainers[2].party[1].species=1
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[3].party_size=2
+        \\.trainers[3].party_type=none
+        \\.trainers[3].party[0].species=6
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[3].party[1].species=6
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=4
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=same" }, test_string, result_prefix ++
+        \\.trainers[0].party_size=2
+        \\.trainers[0].party_type=none
+        \\.trainers[0].party[0].species=0
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=1
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[1].party_size=2
+        \\.trainers[1].party_type=none
+        \\.trainers[1].party[0].species=1
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[2].party_size=2
+        \\.trainers[2].party_type=none
+        \\.trainers[2].party[0].species=2
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[2].party[1].species=5
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].moves[0]=3
+        \\.trainers[3].party_size=2
+        \\.trainers[3].party_type=none
+        \\.trainers[3].party[0].species=3
+        \\.trainers[3].party[0].level=5
+        \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[3].party[1].species=6
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].moves[0]=4
+        \\
+    );
+    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=themed" }, test_string, result_prefix ++
+        \\.trainers[0].party_size=2
+        \\.trainers[0].party_type=none
+        \\.trainers[0].party[0].species=1
+        \\.trainers[0].party[0].level=5
+        \\.trainers[0].party[0].moves[0]=1
+        \\.trainers[0].party[1].species=1
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].moves[0]=1
+        \\.trainers[1].party_size=2
+        \\.trainers[1].party_type=none
+        \\.trainers[1].party[0].species=0
+        \\.trainers[1].party[0].level=5
+        \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[1].party[1].species=0
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].moves[0]=2
+        \\.trainers[2].party_size=2
+        \\.trainers[2].party_type=none
+        \\.trainers[2].party[0].species=0
+        \\.trainers[2].party[0].level=5
+        \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[2].party[1].species=0
         \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].moves[0]=3
         \\.trainers[3].party_size=2
