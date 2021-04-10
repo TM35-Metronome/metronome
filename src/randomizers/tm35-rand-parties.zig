@@ -442,14 +442,7 @@ fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
     for (trainer.party.items()[0..trainer.party_size]) |*member_kv| {
         const member = &member_kv.value;
 
-        if (member.species) |old_species| {
-            member.species = try randomSpecies(ctx, themes, .{
-                .species = old_species,
-                .level = member.level orelse trainer.partyAverageLevel(),
-                .ability = member.ability orelse 0,
-            });
-        }
-
+        try randomizePartyMember(ctx, themes, trainer.*, member);
         switch (ctx.options.items) {
             .unchanged => {},
             .none => member.item = null,
@@ -572,16 +565,13 @@ const Themes = struct {
     ability: u16,
 };
 
-const SimplePartyMember = struct {
-    species: u16,
-    level: u8,
-    ability: u8,
-};
-
-fn randomSpecies(ctx: *Context, themes: Themes, member: SimplePartyMember) !u16 {
+fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member: *PartyMember) !void {
+    const species = member.species orelse return;
+    const level = member.level orelse trainer.partyAverageLevel();
+    const ability_index = member.ability orelse 0;
     const type_set = switch (ctx.options.types) {
         .same => blk: {
-            const pokemon = ctx.data.pokemons.get(member.species) orelse
+            const pokemon = ctx.data.pokemons.get(species) orelse
                 break :blk ctx.species;
             if (pokemon.types.count() == 0)
                 break :blk ctx.species;
@@ -592,16 +582,38 @@ fn randomSpecies(ctx: *Context, themes: Themes, member: SimplePartyMember) !u16 
         .themed => ctx.species_by_type.get(themes.type).?,
         .random => ctx.species,
     };
+
+    var new_ability: ?u16 = null;
     const ability_set = switch (ctx.options.abilities) {
         .same => blk: {
-            const pokemon = ctx.data.pokemons.get(member.species) orelse
+            const pokemon = ctx.data.pokemons.get(species) orelse
                 break :blk ctx.species;
-            const ability = pokemon.abilities.get(member.ability) orelse
+            const ability = pokemon.abilities.get(ability_index) orelse
                 break :blk ctx.species;
+            new_ability = ability;
             break :blk ctx.species_by_ability.get(ability).?;
         },
-        .themed => ctx.species_by_ability.get(themes.ability).?,
+        .themed => blk: {
+            new_ability = themes.ability;
+            break :blk ctx.species_by_ability.get(themes.ability).?;
+        },
         .random => ctx.species,
+    };
+
+    // When we have picked a new species for our Pokémon we also need
+    // to fix the ability the Pokémon have, if we're picking Pokémons
+    // based on ability.
+    defer if (member.species) |new_species| done: {
+        const ability_to_find = new_ability orelse break :done;
+        const pokemon = ctx.data.pokemons.get(new_species) orelse break :done;
+
+        // Find the index of the ability we want the party member to
+        // have. If we don't find the ability. The best we can do is
+        // just let the Pokémon keep the ability it already has.
+        member.ability = if (findAbility(pokemon.abilities.items(), ability_to_find)) |entry|
+            entry.key
+        else
+            member.ability;
     };
 
     // The intersection between the type_set and ability_set will give
@@ -611,36 +623,45 @@ fn randomSpecies(ctx: *Context, themes: Themes, member: SimplePartyMember) !u16 
     pick_from.clearRetainingCapacity();
     try util.set.intersectInline(
         &pick_from,
+        // HACK: `ArrayHashMapUnmanaged` does not have the `iterator` function,
+        //       but `ArrayHashMap` does. We just promote them to get access to
+        //       this function
         ability_set.promote(ctx.allocator),
         type_set.promote(ctx.allocator),
     );
     ctx.intersection = pick_from.unmanaged;
 
     switch (ctx.options.stats) {
-        .follow_level => return try randomSpeciesWithSimularTotalStats(
-            ctx,
-            pick_from.unmanaged,
-            levelScaling(ctx.stats.min, ctx.stats.max, member.level),
-        ),
+        .follow_level => {
+            member.species = try randomSpeciesWithSimularTotalStats(
+                ctx,
+                pick_from.unmanaged,
+                levelScaling(ctx.stats.min, ctx.stats.max, level),
+            );
+            return;
+        },
         .simular => fallback: {
-            const pokemon = ctx.data.pokemons.get(member.species) orelse break :fallback;
-            return try randomSpeciesWithSimularTotalStats(
+            const pokemon = ctx.data.pokemons.get(species) orelse break :fallback;
+            member.species = try randomSpeciesWithSimularTotalStats(
                 ctx,
                 pick_from.unmanaged,
                 algo.fold(pokemon.stats, @as(u16, 0), algo.add),
             );
+            return;
         },
         .random => {},
     }
 
     // If the above switch didn't return, the we're force to just pick
     // a random species from the `pick_from` set.
-    if (util.random.item(ctx.random, pick_from.items())) |entry|
-        return entry.key;
+    if (util.random.item(ctx.random, pick_from.items())) |entry| {
+        member.species = entry.key;
+        return;
+    }
 
     // Yikes, the `pick_from` set was empty. All we can do now is just
     // return a random species
-    return util.random.item(ctx.random, ctx.species.items()).?.key;
+    member.species = util.random.item(ctx.random, ctx.species.items()).?.key;
 }
 
 fn randomSpeciesWithSimularTotalStats(
@@ -684,19 +705,26 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
 }
 
 fn hasMove(moves: []const MemberMoves.Entry, id: u16) bool {
-    for (moves) |move| {
-        if (move.value == id)
-            return true;
-    }
+    return algo.find(moves, id, struct {
+        fn f(m: u16, e: anytype) bool {
+            return m == e.value;
+        }
+    }.f) != null;
+}
 
-    return false;
+fn findAbility(abilities: []const Abilities.Entry, ability: u16) ?*const Abilities.Entry {
+    return algo.find(abilities, ability, struct {
+        fn f(m: u16, e: anytype) bool {
+            return m == e.value;
+        }
+    }.f);
 }
 
 fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
 }
 
-const Abilities = std.AutoArrayHashMapUnmanaged(u16, u16);
+const Abilities = std.AutoArrayHashMapUnmanaged(u8, u16);
 const LvlUpMoves = std.AutoArrayHashMapUnmanaged(u16, LvlUpMove);
 const MemberMoves = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
