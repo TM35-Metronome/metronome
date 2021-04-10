@@ -30,8 +30,9 @@ pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
 
 pub fn parseNoEscape(str: []const u8) !Game {
     var fba = std.heap.FixedBufferAllocator.init("");
-    const res = (comptime parser(Game, true))(&fba.allocator, str) catch |err| switch (err) {
-        error.OtherError, error.OutOfMemory => unreachable,
+    const res = (comptime parser(Game, false))(&fba.allocator, str) catch |err| switch (err) {
+        error.OtherError => unreachable,
+        error.OutOfMemory => unreachable,
         error.ParserFailed => return error.ParserFailed,
     };
     return res.value;
