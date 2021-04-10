@@ -90,10 +90,3 @@ pub fn eqlPred(comptime value: anytype) @TypeOf(dummy) {
         }
     }.pred;
 }
-
-pub fn groupBy(output_map: anytype, items: anytype, ctx: anytype, get_value: anytype, get_key: anytype) !void {
-    for (items) |item| {
-        const key = get_key(ctx, item);
-        output_map.getOrPutValue();
-    }
-}
