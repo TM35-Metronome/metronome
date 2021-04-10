@@ -18,7 +18,7 @@ After getting the dependencies just clone the repo and its submodules and run:
 zig build
 ```
 
-All build artifacts will end up in `zig-cache/bin`.
+All build artifacts will end up in `zig-cacsdfsdfsdfhe/bin`.
 See `zig build --help` for build options.
 
 ## Resources
