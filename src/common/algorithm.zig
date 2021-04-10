@@ -43,3 +43,57 @@ test "reduce" {
 pub fn add(a: anytype, b: anytype) @TypeOf(a + b) {
     return a + b;
 }
+
+pub fn find(items: anytype, ctx: anytype, pred: anytype) ?FindResult(@TypeOf(items)) {
+    for (items) |*item| {
+        if (pred(ctx, item.*))
+            return item;
+    }
+    return null;
+}
+
+pub fn FindResult(comptime Span: type) type {
+    var info = @typeInfo(mem.Span(Span));
+    info.Pointer.size = .One;
+    return @Type(info);
+}
+
+test "find" {
+    const s = &[_]u8{ 1, 2, 3, 3, 2, 1 };
+    testing.expectEqual(@as(?*const u8, &s[0]), find(s, {}, eqlPred(1)));
+    testing.expectEqual(@as(?*const u8, &s[1]), find(s, {}, eqlPred(2)));
+    testing.expectEqual(@as(?*const u8, &s[2]), find(s, {}, eqlPred(3)));
+}
+
+pub fn findLast(items: anytype, ctx: anytype, pred: anytype) ?FindResult(@TypeOf(items)) {
+    for (items) |_, i_forward| {
+        const i = items.len - (i_forward + 1);
+        if (pred(ctx, items[i]))
+            return &items[i];
+    }
+    return null;
+}
+
+test "findLast" {
+    const s = &[_]u8{ 1, 2, 3, 3, 2, 1 };
+    testing.expectEqual(@as(?*const u8, &s[5]), findLast(s, {}, eqlPred(1)));
+    testing.expectEqual(@as(?*const u8, &s[4]), findLast(s, {}, eqlPred(2)));
+    testing.expectEqual(@as(?*const u8, &s[3]), findLast(s, {}, eqlPred(3)));
+}
+
+fn dummy(ctx: anytype, item: anytype) bool {}
+
+pub fn eqlPred(comptime value: anytype) @TypeOf(dummy) {
+    return struct {
+        fn pred(_: anytype, item: anytype) bool {
+            return item == value;
+        }
+    }.pred;
+}
+
+pub fn groupBy(output_map: anytype, items: anytype, ctx: anytype, get_value: anytype, get_key: anytype) !void {
+    for (items) |item| {
+        const key = get_key(ctx, item);
+        output_map.getOrPutValue();
+    }
+}
