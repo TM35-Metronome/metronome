@@ -619,23 +619,33 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
     // The intersection between the type_set and ability_set will give
     // us all pokémons that have a certain type+ability pair. This is
     // the set we will pick from.
-    var pick_from = ctx.intersection.promote(ctx.allocator);
-    pick_from.clearRetainingCapacity();
+    var intersection = ctx.intersection.promote(ctx.allocator);
+    intersection.clearRetainingCapacity();
     try util.set.intersectInline(
-        &pick_from,
+        &intersection,
         // HACK: `ArrayHashMapUnmanaged` does not have the `iterator` function,
         //       but `ArrayHashMap` does. We just promote them to get access to
         //       this function
         ability_set.promote(ctx.allocator),
         type_set.promote(ctx.allocator),
     );
-    ctx.intersection = pick_from.unmanaged;
+    ctx.intersection = intersection.unmanaged;
+
+    // Pick the first set that has items in it.
+    const pick_from = if (intersection.count() != 0)
+        intersection.unmanaged
+    else if (ctx.options.abilities != .random and ability_set.count() != 0)
+        ability_set
+    else if (ctx.options.types != .random and type_set.count() != 0)
+        type_set
+    else
+        ctx.species;
 
     switch (ctx.options.stats) {
         .follow_level => {
             member.species = try randomSpeciesWithSimularTotalStats(
                 ctx,
-                pick_from.unmanaged,
+                pick_from,
                 levelScaling(ctx.stats.min, ctx.stats.max, level),
             );
             return;
@@ -644,7 +654,7 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
             const pokemon = ctx.data.pokemons.get(species) orelse break :fallback;
             member.species = try randomSpeciesWithSimularTotalStats(
                 ctx,
-                pick_from.unmanaged,
+                pick_from,
                 algo.fold(pokemon.stats, @as(u16, 0), algo.add),
             );
             return;
@@ -652,16 +662,9 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
         .random => {},
     }
 
-    // If the above switch didn't return, the we're force to just pick
-    // a random species from the `pick_from` set.
-    if (util.random.item(ctx.random, pick_from.items())) |entry| {
-        member.species = entry.key;
-        return;
-    }
-
-    // Yikes, the `pick_from` set was empty. All we can do now is just
-    // return a random species
-    member.species = util.random.item(ctx.random, ctx.species.items()).?.key;
+    // The the above switch doesn't return, the best we can do is just pick a
+    // random Pokémon from the pick_from set
+    member.species = util.random.item(ctx.random, pick_from.items()).?.key;
 }
 
 fn randomSpeciesWithSimularTotalStats(
