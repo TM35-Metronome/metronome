@@ -38,28 +38,11 @@ pub fn parseNoEscape(str: []const u8) !Game {
     return res.value;
 }
 
-fn toUnionField(
-    comptime T: type,
-    comptime field_type: type,
-    comptime field_name: []const u8,
-) fn (field_type) T {
-    return struct {
-        fn conv(c: field_type) T {
-            return @unionInit(T, field_name, c);
-        }
-    }.conv;
-}
-
 fn parser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
     @setEvalBranchQuota(100000000);
     const Res = mecha.Result(T);
     if (isArray(T)) {
-        return mecha.map(T, mecha.toStruct(T), mecha.combine(.{
-            mecha.ascii.char('['),
-            mecha.int(T.Index, 10),
-            mecha.ascii.char(']'),
-            parser(T.Value, do_escape),
-        }));
+        return arrayParser(T, do_escape);
     } else switch (T) {
         []const u8 => if (do_escape) {
             // With no '\\' we can assume that string does not need to be unescaped, so we
@@ -85,57 +68,117 @@ fn parser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
             });
         },
         else => switch (@typeInfo(T)) {
-            .Int => return mecha.combine(
-                .{ mecha.ascii.char('='), mecha.int(T, 10), mecha.eos },
-            ),
+            .Int => return intValueParser(T),
             .Enum => return mecha.combine(
                 .{ mecha.ascii.char('='), mecha.enumeration(T), mecha.eos },
             ),
             .Bool => return mecha.convert(bool, mecha.toBool, mecha.combine(
                 .{ mecha.ascii.char('='), mecha.rest },
             )),
-            .Union => |info| return struct {
-                fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-                    // Ensure that fields are sorted, so that the largest field name
-                    // is matched on first.
-                    const fields = comptime blk: {
-                        const Field = struct {
-                            name: []const u8,
-                            index: usize,
-                        };
-
-                        var res: [info.fields.len]Field = undefined;
-                        for (info.fields) |f, i|
-                            res[i] = .{ .name = f.name, .index = i };
-
-                        std.sort.sort(Field, &res, {}, struct {
-                            fn len(_: void, a: Field, b: Field) bool {
-                                return a.name.len > b.name.len;
-                            }
-                        }.len);
-                        break :blk res;
-                    };
-
-                    if (!mem.startsWith(u8, str, "."))
-                        return error.ParserFailed;
-
-                    const str_after_dot = str[1..];
-                    inline for (fields) |f, i| {
-                        if (mem.startsWith(u8, str_after_dot, f.name)) {
-                            const after_field = str_after_dot[f.name.len..];
-                            const FieldT = info.fields[f.index].field_type;
-                            const to_union = comptime toUnionField(T, FieldT, f.name);
-                            const field_parser = comptime mecha.map(T, to_union, parser(FieldT, do_escape));
-                            return field_parser(allocator, after_field);
-                        }
-                    }
-
-                    return error.ParserFailed;
-                }
-            }.p,
+            .Union => return unionParser(T, do_escape),
             else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
         },
     }
+}
+
+const inl = std.builtin.CallOptions{ .modifier = .always_inline };
+
+fn arrayParser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
+    const Res = mecha.Result(T);
+    return struct {
+        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
+            if (str.len == 0 or str[0] != '[')
+                return error.ParserFailed;
+            const index = try @call(
+                inl,
+                comptime mecha.int(T.Index, .{ .parse_sign = false }),
+                .{ allocator, str[1..] },
+            );
+
+            if (index.rest.len == 0 or index.rest[0] != ']')
+                return error.ParserFailed;
+            const value = try @call(
+                inl,
+                comptime parser(T.Value, do_escape),
+                .{ allocator, index.rest[1..] },
+            );
+            return Res{
+                .rest = value.rest,
+                .value = .{
+                    .index = index.value,
+                    .value = value.value,
+                },
+            };
+        }
+    }.p;
+}
+
+fn unionParser(comptime T: type, do_escape: bool) mecha.Parser(T) {
+    const Res = mecha.Result(T);
+    const info = @typeInfo(T).Union;
+    return struct {
+        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
+            // Ensure that fields are sorted, so that the largest field name
+            // is matched on first.
+            const fields = comptime blk: {
+                const Field = struct {
+                    name: []const u8,
+                    index: usize,
+                };
+
+                var res: [info.fields.len]Field = undefined;
+                for (info.fields) |f, i|
+                    res[i] = .{ .name = f.name, .index = i };
+
+                std.sort.sort(Field, &res, {}, struct {
+                    fn len(_: void, a: Field, b: Field) bool {
+                        return a.name.len > b.name.len;
+                    }
+                }.len);
+                break :blk res;
+            };
+
+            if (!mem.startsWith(u8, str, "."))
+                return error.ParserFailed;
+
+            const str_after_dot = str[1..];
+            inline for (fields) |f, i| {
+                if (mem.startsWith(u8, str_after_dot, f.name)) {
+                    const after_field = str_after_dot[f.name.len..];
+                    const FieldT = info.fields[f.index].field_type;
+                    const res = try @call(
+                        inl,
+                        comptime parser(FieldT, do_escape),
+                        .{ allocator, after_field },
+                    );
+                    return Res{
+                        .rest = res.rest,
+                        .value = @unionInit(T, f.name, res.value),
+                    };
+                }
+            }
+
+            return error.ParserFailed;
+        }
+    }.p;
+}
+
+fn intValueParser(comptime T: type) mecha.Parser(T) {
+    const Res = mecha.Result(T);
+    return struct {
+        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
+            if (str.len == 0 or str[0] != '=')
+                return error.ParserFailed;
+            const res = try @call(
+                inl,
+                comptime mecha.int(T, .{ .parse_sign = false }),
+                .{ allocator, str[1..] },
+            );
+            if (res.rest.len != 0)
+                return error.ParserFailed;
+            return res;
+        }
+    }.p;
 }
 
 pub fn write(writer: anytype, value: anytype) !void {
