@@ -20,7 +20,7 @@ const testing = std.testing;
 //!
 
 pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
-    const res = (comptime parser(Game, true))(arena, str) catch |err| switch (err) {
+    const res = (comptime parser(Game, "", true))(arena, str) catch |err| switch (err) {
         error.OtherError => unreachable,
         error.OutOfMemory => return error.OutOfMemory,
         error.ParserFailed => return error.ParserFailed,
@@ -30,7 +30,7 @@ pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
 
 pub fn parseNoEscape(str: []const u8) !Game {
     var fba = std.heap.FixedBufferAllocator.init("");
-    const res = (comptime parser(Game, false))(&fba.allocator, str) catch |err| switch (err) {
+    const res = (comptime parser(Game, "", false))(&fba.allocator, str) catch |err| switch (err) {
         error.OtherError => unreachable,
         error.OutOfMemory => unreachable,
         error.ParserFailed => return error.ParserFailed,
@@ -38,12 +38,10 @@ pub fn parseNoEscape(str: []const u8) !Game {
     return res.value;
 }
 
-fn parser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
-    @setEvalBranchQuota(100000000);
-    const Res = mecha.Result(T);
-    if (isArray(T)) {
-        return arrayParser(T, do_escape);
-    } else switch (T) {
+fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
+    if (isArray(T))
+        return arrayParser(T, prefix, do_escape);
+    switch (T) {
         []const u8 => if (do_escape) {
             // With no '\\' we can assume that string does not need to be unescaped, so we
             // can avoid doing an allocation.
@@ -58,49 +56,47 @@ fn parser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
             }.conv, mecha.rest);
 
             return mecha.combine(.{
-                mecha.ascii.char('='),
+                mecha.string(prefix ++ "="),
                 mecha.oneOf(.{ text, escaped_text }),
             });
         } else {
             return mecha.combine(.{
-                mecha.ascii.char('='),
+                mecha.string(prefix ++ "="),
                 mecha.rest,
             });
         },
-        else => switch (@typeInfo(T)) {
-            .Int => return intValueParser(T),
-            .Enum => return mecha.combine(
-                .{ mecha.ascii.char('='), mecha.enumeration(T), mecha.eos },
-            ),
-            .Bool => return mecha.convert(bool, mecha.toBool, mecha.combine(
-                .{ mecha.ascii.char('='), mecha.rest },
-            )),
-            .Union => return unionParser(T, do_escape),
-            else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
-        },
+        else => {},
+    }
+    switch (@typeInfo(T)) {
+        .Int => return intValueParser(T, prefix),
+        .Enum => return mecha.combine(
+            .{ mecha.string(prefix ++ "="), mecha.enumeration(T), mecha.eos },
+        ),
+        .Bool => return mecha.convert(bool, mecha.toBool, mecha.combine(
+            .{ mecha.string(prefix ++ "="), mecha.rest },
+        )),
+        .Union => return unionParser(T, prefix, do_escape),
+        else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
     }
 }
 
 const inl = std.builtin.CallOptions{ .modifier = .always_inline };
 
-fn arrayParser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
+fn arrayParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
     const Res = mecha.Result(T);
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            if (str.len == 0 or str[0] != '[')
+            if (!mem.startsWith(u8, str, prefix ++ "["))
                 return error.ParserFailed;
             const index = try @call(
                 inl,
                 comptime mecha.int(T.Index, .{ .parse_sign = false }),
-                .{ allocator, str[1..] },
+                .{ allocator, str[prefix.len + 1 ..] },
             );
-
-            if (index.rest.len == 0 or index.rest[0] != ']')
-                return error.ParserFailed;
             const value = try @call(
                 inl,
-                comptime parser(T.Value, do_escape),
-                .{ allocator, index.rest[1..] },
+                comptime parser(T.Value, "]", do_escape),
+                .{ allocator, index.rest },
             );
             return Res{
                 .rest = value.rest,
@@ -113,48 +109,22 @@ fn arrayParser(comptime T: type, comptime do_escape: bool) mecha.Parser(T) {
     }.p;
 }
 
-fn unionParser(comptime T: type, do_escape: bool) mecha.Parser(T) {
+fn unionParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
     const Res = mecha.Result(T);
     const info = @typeInfo(T).Union;
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            // Ensure that fields are sorted, so that the largest field name
-            // is matched on first.
-            const fields = comptime blk: {
-                const Field = struct {
-                    name: []const u8,
-                    index: usize,
-                };
-
-                var res: [info.fields.len]Field = undefined;
-                for (info.fields) |f, i|
-                    res[i] = .{ .name = f.name, .index = i };
-
-                std.sort.sort(Field, &res, {}, struct {
-                    fn len(_: void, a: Field, b: Field) bool {
-                        return a.name.len > b.name.len;
-                    }
-                }.len);
-                break :blk res;
-            };
-
-            if (!mem.startsWith(u8, str, "."))
-                return error.ParserFailed;
-
-            const str_after_dot = str[1..];
-            inline for (fields) |f, i| {
-                if (mem.startsWith(u8, str_after_dot, f.name)) {
-                    const after_field = str_after_dot[f.name.len..];
-                    const FieldT = info.fields[f.index].field_type;
-                    const res = try @call(
-                        inl,
-                        comptime parser(FieldT, do_escape),
-                        .{ allocator, after_field },
-                    );
+            inline for (info.fields) |f| {
+                const new_prefix = prefix ++ "." ++ f.name;
+                const field_parser = comptime parser(f.field_type, new_prefix, do_escape);
+                if (@call(inl, field_parser, .{ allocator, str })) |res| {
                     return Res{
                         .rest = res.rest,
                         .value = @unionInit(T, f.name, res.value),
                     };
+                } else |err| switch (err) {
+                    error.ParserFailed => {},
+                    else => return err,
                 }
             }
 
@@ -163,16 +133,16 @@ fn unionParser(comptime T: type, do_escape: bool) mecha.Parser(T) {
     }.p;
 }
 
-fn intValueParser(comptime T: type) mecha.Parser(T) {
+fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T) {
     const Res = mecha.Result(T);
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            if (str.len == 0 or str[0] != '=')
+            if (!mem.startsWith(u8, str, prefix ++ "="))
                 return error.ParserFailed;
             const res = try @call(
                 inl,
                 comptime mecha.int(T, .{ .parse_sign = false }),
-                .{ allocator, str[1..] },
+                .{ allocator, str[prefix.len + 1 ..] },
             );
             if (res.rest.len != 0)
                 return error.ParserFailed;
@@ -240,12 +210,12 @@ pub fn isArray(comptime T: type) bool {
 
 test "parse" {
     const allocator = testing.failing_allocator;
-    const p1 = comptime parser(u8, false);
+    const p1 = comptime parser(u8, "", false);
     mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0"));
     mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1"));
     mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111"));
 
-    const p2 = comptime parser(u32, false);
+    const p2 = comptime parser(u32, "", false);
     mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0"));
     mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1"));
     mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010"));
@@ -255,13 +225,13 @@ test "parse" {
         b: u16,
         c: u32,
     };
-    const p3 = comptime parser(U1, false);
+    const p3 = comptime parser(U1, "", false);
     mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0"));
     mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1"));
     mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010"));
 
     const A1 = Array(u8, u8);
-    const p4 = comptime parser(A1, false);
+    const p4 = comptime parser(A1, "", false);
     mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0"));
     mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2"));
     mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33"));
@@ -273,7 +243,7 @@ test "parse" {
         }),
         b: u16,
     };
-    const p5 = comptime parser(U2, false);
+    const p5 = comptime parser(U2, "", false);
     mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
     mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
     mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
