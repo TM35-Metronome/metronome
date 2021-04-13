@@ -1,4 +1,5 @@
 const std = @import("std");
+const util = @import("util.zig");
 
 const io = std.io;
 const math = std.math;
@@ -55,8 +56,13 @@ pub fn readUntil(reader: anytype, fifo: anytype, byte: u8) !?[]const u8 {
 
         if (num == 0) {
             if (fifo.count != 0) {
-                defer fifo.count = 0;
-                return fifo.readableSlice(0);
+                // Ensure that the buffer returned always have `byte` terminating
+                // it, so that wrappers can return `[:Z]const u8` if they want to.
+                // This is used by `readLine`.
+                try fifo.writeItem(byte);
+                const res = fifo.readableSlice(0);
+                fifo.count = 0;
+                return res[0 .. res.len - 1];
             }
 
             return null;
@@ -64,9 +70,17 @@ pub fn readUntil(reader: anytype, fifo: anytype, byte: u8) !?[]const u8 {
     }
 }
 
-pub fn readLine(reader: anytype, fifo: anytype) !?[]const u8 {
+pub fn readLine(reader: anytype, fifo: anytype) !?[:'\n']const u8 {
     const res = (try readUntil(reader, fifo, '\n')) orelse return null;
-    return res[0 .. res.len - @boolToInt(mem.endsWith(u8, res, "\r"))];
+    if (mem.endsWith(u8, res, "\r")) {
+        // Right now, readableSliceMut for fifo is private, so i cannot implement
+        // this easily without casting away const, as `readUntil` cannot return
+        // a mutable slice.
+        const res_mut = util.unsafe.castAwayConst(res);
+        res_mut[res.len - 1] = '\n';
+        return res[0 .. res.len - 1 :'\n'];
+    }
+    return res.ptr[0..res.len :'\n'];
 }
 
 test "readLine" {
@@ -98,6 +112,7 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
     for (lines) |expected_line| {
         const actual_line = (try readLine(fbs.reader(), &fifo)).?;
         testing.expectEqualStrings(expected_line, actual_line);
+        testing.expectEqual(@as(u8, '\n'), actual_line[actual_line.len]);
     }
-    testing.expectEqual(@as(?[]const u8, null), try readLine(fbs.reader(), &fifo));
+    testing.expectEqual(@as(?[:'\n']const u8, null), try readLine(fbs.reader(), &fifo));
 }

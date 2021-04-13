@@ -732,7 +732,7 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
             break :blk try sh.wait();
         },
         .windows => blk: {
-            const cache_dir = try util.dir.cache();
+            const cache_dir = try util.dir.folder(.cache);
             const program_cache_dir = util.path.join(&[_][]const u8{
                 cache_dir.toSliceConst(),
                 program_name,

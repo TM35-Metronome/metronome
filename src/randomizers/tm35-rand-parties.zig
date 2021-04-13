@@ -772,7 +772,7 @@ const Data = struct {
         for (species.items()) |s| {
             const pokemon = d.pokemons.get(s.key).?;
             const total_stats = algo.fold(pokemon.stats, @as(u16, 0), algo.add);
-            res.min = math.min(res.max, total_stats);
+            res.min = math.min(res.min, total_stats);
             res.max = math.max(res.max, total_stats);
         }
         return res;
