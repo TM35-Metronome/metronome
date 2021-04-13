@@ -84,20 +84,15 @@ const inl = std.builtin.CallOptions{ .modifier = .always_inline };
 
 fn arrayParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
     const Res = mecha.Result(T);
+    const index_parser = mecha.int(T.Index, .{ .parse_sign = false });
+    const value_parser = parser(T.Value, "]", do_escape);
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
             if (!mem.startsWith(u8, str, prefix ++ "["))
                 return error.ParserFailed;
-            const index = try @call(
-                inl,
-                comptime mecha.int(T.Index, .{ .parse_sign = false }),
-                .{ allocator, str[prefix.len + 1 ..] },
-            );
-            const value = try @call(
-                inl,
-                comptime parser(T.Value, "]", do_escape),
-                .{ allocator, index.rest },
-            );
+
+            const index = try @call(inl, index_parser, .{ allocator, str[prefix.len + 1 ..] });
+            const value = try @call(inl, value_parser, .{ allocator, index.rest });
             return Res{
                 .rest = value.rest,
                 .value = .{
@@ -115,16 +110,23 @@ fn unionParser(comptime T: type, comptime prefix: []const u8, comptime do_escape
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
             inline for (info.fields) |f| {
-                const new_prefix = prefix ++ "." ++ f.name;
-                const field_parser = comptime parser(f.field_type, new_prefix, do_escape);
-                if (@call(inl, field_parser, .{ allocator, str })) |res| {
-                    return Res{
-                        .rest = res.rest,
-                        .value = @unionInit(T, f.name, res.value),
-                    };
-                } else |err| switch (err) {
-                    error.ParserFailed => {},
-                    else => return err,
+                const before_term = prefix ++ "." ++ f.name;
+                const field_parser = comptime parser(f.field_type, before_term, do_escape);
+
+                // Check if `str` has a terminator (".[=") after the field name. If it doesn't
+                // then there is no reason to try to parse this field.
+                const term = if (str.len > before_term.len) str[before_term.len] else 0;
+                const ends_with_term = term == '.' or term == '[' or term == '=';
+                if (ends_with_term) {
+                    if (@call(inl, field_parser, .{ allocator, str })) |res| {
+                        return Res{
+                            .rest = res.rest,
+                            .value = @unionInit(T, f.name, res.value),
+                        };
+                    } else |err| switch (err) {
+                        error.ParserFailed => {},
+                        else => return err,
+                    }
                 }
             }
 
@@ -135,15 +137,13 @@ fn unionParser(comptime T: type, comptime prefix: []const u8, comptime do_escape
 
 fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T) {
     const Res = mecha.Result(T);
+    const int = mecha.int(T, .{ .parse_sign = false });
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
             if (!mem.startsWith(u8, str, prefix ++ "="))
                 return error.ParserFailed;
-            const res = try @call(
-                inl,
-                comptime mecha.int(T, .{ .parse_sign = false }),
-                .{ allocator, str[prefix.len + 1 ..] },
-            );
+
+            const res = try @call(inl, int, .{ allocator, str[prefix.len + 1 ..] });
             if (res.rest.len != 0)
                 return error.ParserFailed;
             return res;

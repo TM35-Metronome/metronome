@@ -20,6 +20,7 @@ pub const random = @import("random.zig");
 pub const set = @import("set.zig");
 pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
+pub const unsafe = @import("unsafe.zig");
 
 test "" {
     _ = algorithm;
@@ -30,6 +31,7 @@ test "" {
     _ = set;
     _ = testing;
     _ = unicode;
+    _ = unsafe;
 }
 
 pub fn getSeed(args: anytype) !u64 {
