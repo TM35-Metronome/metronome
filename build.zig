@@ -102,64 +102,17 @@ pub fn build(b: *Builder) void {
             Target.parse(.{ .arch_os_abi = "x86_64-windows-gnu" }) catch unreachable,
         },
     });
-
-    const skip_release = b.option(bool, "skip-release", "Main test suite skips release builds") orelse false;
-    const modes_to_test: []const builtin.Mode = if (skip_release)
-        &[_]builtin.Mode{.Debug}
-    else
-        &[_]builtin.Mode{ .Debug, .ReleaseFast, .ReleaseSafe, .ReleaseSmall };
-
+    const build_ui = b.option(bool, "build-ui", "") orelse true;
     const test_step = b.step("test", "Run all tests");
-    const build_all_step = b.step("build-all", "Build all programs");
-    const build_cli_step = b.step("build-cli", "Build cli programs");
-    const build_gui_step = b.step("build-gui", "Build gui programs");
-    const build_tools_step = b.step("build-tools", "Build development tools");
-    const build_core_step = b.step("build-core", "Build core programs (tm35-load, tm35-store)");
-    const build_randomizers_step = b.step("build-randomizers", "Build randomizers");
-    b.default_step.dependOn(build_all_step);
-    build_all_step.dependOn(build_cli_step);
-    build_all_step.dependOn(build_gui_step);
-    build_cli_step.dependOn(build_tools_step);
-    build_cli_step.dependOn(build_core_step);
-    build_cli_step.dependOn(build_randomizers_step);
-
-    for (modes_to_test) |test_mode| {
-        const util_test = b.addTest(util_pkg.path);
-        for (pkgs) |pkg|
-            util_test.addPackage(pkg);
-        util_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
-        test_step.dependOn(&util_test.step);
-
-        for (tool_exes) |name|
-            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/{}.zig", .{ tools_folder, name }));
-        for (core_exes) |name|
-            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/core/{}.zig", .{ src_folder, name }));
-        for (randomizer_exes) |name|
-            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/randomizers/{}.zig", .{ src_folder, name }));
-        for (other_exes) |name|
-            testCmdlineProgram(b, test_step, test_mode, b.fmt("{}/other/{}.zig", .{ src_folder, name }));
-
-        for (gui_exes) |tool, i| {
-            const source = b.fmt("{}/gui/{}.zig", .{ src_folder, tool });
-            const exe_test = b.addTest(source);
-            for (pkgs) |pkg|
-                exe_test.addPackage(pkg);
-
-            exe_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
-            exe_test.setBuildMode(test_mode);
-            exe_test.single_threaded = true;
-            test_step.dependOn(&exe_test.step);
-        }
-    }
-
+    testIt(b, test_step, mode, b.fmt("{}/test.zig", .{src_folder}));
     for (tool_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, build_tools_step, false, target, mode, name, b.fmt("{}/{}.zig", .{ tools_folder, name }));
+        buildAndInstallCmdlineProgram(b, false, target, mode, name, b.fmt("{}/{}.zig", .{ tools_folder, name }));
     for (core_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, build_core_step, true, target, mode, name, b.fmt("{}/core/{}.zig", .{ src_folder, name }));
+        buildAndInstallCmdlineProgram(b, true, target, mode, name, b.fmt("{}/core/{}.zig", .{ src_folder, name }));
     for (randomizer_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, build_randomizers_step, true, target, mode, name, b.fmt("{}/randomizers/{}.zig", .{ src_folder, name }));
+        buildAndInstallCmdlineProgram(b, true, target, mode, name, b.fmt("{}/randomizers/{}.zig", .{ src_folder, name }));
     for (other_exes) |name, i|
-        buildAndInstallCmdlineProgram(b, build_randomizers_step, true, target, mode, name, b.fmt("{}/other/{}.zig", .{ src_folder, name }));
+        buildAndInstallCmdlineProgram(b, true, target, mode, name, b.fmt("{}/other/{}.zig", .{ src_folder, name }));
 
     const lib_cflags = &[_][]const u8{
         "-D_POSIX_C_SOURCE=200809L",
@@ -203,37 +156,38 @@ pub fn build(b: *Builder) void {
         exe.setTarget(target);
         exe.setBuildMode(mode);
         exe.single_threaded = true;
-        build_gui_step.dependOn(&b.addInstallArtifact(exe).step);
+        if (build_ui)
+            exe.install();
     }
 }
 
 fn buildAndInstallCmdlineProgram(
     b: *Builder,
-    parent_step: *Step,
     install: bool,
     target: Target,
     mode: builtin.Mode,
     name: []const u8,
     src: []const u8,
 ) void {
+    const step = b.step(b.fmt("build-{}", .{name}), "");
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
         exe.addPackage(pkg);
 
     if (install)
-        parent_step.dependOn(&b.addInstallArtifact(exe).step);
+        step.dependOn(&b.addInstallArtifact(exe).step);
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.single_threaded = true;
-    parent_step.dependOn(&exe.step);
+    step.dependOn(&exe.step);
+    b.default_step.dependOn(step);
 }
 
-fn testCmdlineProgram(b: *Builder, parent_step: *Step, mode: builtin.Mode, src: []const u8) void {
+fn testIt(b: *Builder, parent_step: *Step, mode: builtin.Mode, src: []const u8) void {
     const exe_test = b.addTest(src);
     for (pkgs) |pkg|
         exe_test.addPackage(pkg);
 
-    exe_test.setNamePrefix(b.fmt("{}-", .{@tagName(mode)}));
     exe_test.setBuildMode(mode);
     exe_test.single_threaded = true;
     parent_step.dependOn(&exe_test.step);
