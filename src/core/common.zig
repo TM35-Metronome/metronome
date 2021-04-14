@@ -1,13 +1,8 @@
-const builtin = @import("builtin");
-const rom = @import("rom.zig");
 const std = @import("std");
 
 const debug = std.debug;
 const math = std.math;
 const mem = std.mem;
-const testing = std.testing;
-
-const lu16 = rom.int.lu16;
 
 pub const Patch = struct {
     offset: usize,
@@ -255,25 +250,4 @@ pub const EvYield = packed struct {
     comptime {
         std.debug.assert(@sizeOf(EvYield) == 2);
     }
-};
-
-pub const legendaries = []u16{
-    144, 145, 146, // Articuno, Zapdos, Moltres
-    150, 151, 243, // Mewtwo, Mew, Raikou
-    244, 245, 249, // Entei, Suicune, Lugia
-    250, 251, 377, // Ho-Oh, Celebi, Regirock
-    378, 379, 380, // Regice, Registeel, Latias
-    381, 382, 383, // Latios, Kyogre, Groudon,
-    384, 385, 386, // Rayquaza, Jirachi, Deoxys
-    480, 481, 482, // Uxie, Mesprit, Azelf
-    483, 484, 485, // Dialga, Palkia, Heatran
-    486, 487, 488, // Regigigas, Giratina, Cresselia
-    489, 490, 491, // Phione, Manaphy, Darkrai
-    492, 493, 494, // Shaymin, Arceus, Victini
-    638, 639, 640, // Cobalion, Terrakion, Virizion
-    641, 642, 643, // Tornadus, Thundurus, Reshiram
-    644, 645, 646, // Zekrom, Landorus, Kyurem
-    647, 648, 649, // Keldeo, Meloetta, Genesect
-    716, 717, 718, // Xerneas, Yveltal, Zygarde
-    719, 720, 721, // Diancie, Hoopa, Volcanion
 };
