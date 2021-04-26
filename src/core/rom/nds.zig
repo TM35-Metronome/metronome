@@ -251,7 +251,7 @@ pub const Rom = struct {
             const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
             const new_start = mem.alignForward(last_section_end, 128);
-            try data.resize(new_start + new_size);
+            try data.resize(math.max(data.items.len, new_start + new_size));
             mem.copy(
                 u8,
                 data.items[new_start..][0..new_size],
@@ -269,7 +269,7 @@ pub const Rom = struct {
             const old_rom_len = data.items.len;
             const old_sec_end = old_slice.end();
             const new_rom_len = old_rom_len + extra_bytes;
-            try data.resize(new_rom_len);
+            try data.resize(math.max(data.items.len, new_rom_len));
 
             for (sections[section_index + 1 ..]) |section, i| {
                 const section_slice = section.toSlice(data.items);
@@ -402,19 +402,19 @@ pub const Rom = struct {
         try sections.ensureCapacity(7 + fat.len);
 
         const data = &rom.data;
-        sections.append(Section.fromStartLen(
+        sections.appendAssumeCapacity(Section.fromStartLen(
             data.items,
             &h.banner_offset,
             &h.banner_size,
-        )) catch unreachable;
-        sections.append(Section.fromArm(data.items, &h.arm9)) catch unreachable;
-        sections.append(Section.fromArm(data.items, &h.arm7)) catch unreachable;
-        sections.append(Section.fromSlice(data.items, &h.arm9_overlay)) catch unreachable;
-        sections.append(Section.fromSlice(data.items, &h.arm7_overlay)) catch unreachable;
-        sections.append(Section.fromSlice(data.items, &h.fat)) catch unreachable;
-        sections.append(Section.fromSlice(data.items, &h.fnt)) catch unreachable;
+        ));
+        sections.appendAssumeCapacity(Section.fromArm(data.items, &h.arm9));
+        sections.appendAssumeCapacity(Section.fromArm(data.items, &h.arm7));
+        sections.appendAssumeCapacity(Section.fromSlice(data.items, &h.arm9_overlay));
+        sections.appendAssumeCapacity(Section.fromSlice(data.items, &h.arm7_overlay));
+        sections.appendAssumeCapacity(Section.fromSlice(data.items, &h.fat));
+        sections.appendAssumeCapacity(Section.fromSlice(data.items, &h.fnt));
         for (fat) |*f|
-            sections.append(Section.fromRange(data.items, f)) catch unreachable;
+            sections.appendAssumeCapacity(Section.fromRange(data.items, f));
 
         // Sort sections by where they appear in the rom.
         std.sort.sort(Section, sections.items, data.items, Section.before);

@@ -15,6 +15,7 @@ float zig_cos(float x);
 #define NK_SIN zig_sin
 #define NK_COS zig_cos
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_FIXED_TYPES
 #include <nuklear.h>
 
 int nkBegin(struct nk_context *ctx, const char *title, const struct nk_rect *bounds, nk_flags flags);

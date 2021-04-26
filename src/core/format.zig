@@ -39,6 +39,7 @@ pub fn parseNoEscape(str: []const u8) !Game {
 }
 
 fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
+    @setEvalBranchQuota(1000000);
     if (isArray(T))
         return arrayParser(T, prefix, do_escape);
     switch (T) {
@@ -152,32 +153,38 @@ fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T)
 }
 
 pub fn write(writer: anytype, value: anytype) !void {
+    return writeHelper(writer, "", value);
+}
+
+fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !void {
     const T = @TypeOf(value);
     if (comptime isArray(T)) {
-        try writer.writeByte('[');
+        try writer.writeAll(prefix ++ "[");
         try fmt.formatInt(value.index, 10, false, .{}, writer);
-        try writer.writeByte(']');
-        try write(writer, value.value);
+        try writeHelper(writer, "]", value.value);
     } else switch (T) {
         []const u8 => {
-            try writer.writeByte('=');
+            try writer.writeAll(prefix ++ "=");
             try util.escape.default.escapeWrite(writer, value);
             try writer.writeByte('\n');
         },
         else => switch (@typeInfo(T)) {
-            .Bool => try writer.writeAll(if (value) "=true\n" else "=false\n"),
+            .Bool => try writer.writeAll(if (value) prefix ++ "=true\n" else prefix ++ "=false\n"),
             .Int => {
-                try writer.writeByte('=');
+                try writer.writeAll(prefix ++ "=");
                 try fmt.formatInt(value, 10, false, .{}, writer);
                 try writer.writeByte('\n');
             },
-            .Enum => try write(writer, @tagName(value)),
+            .Enum => try writeHelper(writer, prefix, @tagName(value)),
             .Union => |info| {
                 const Tag = @TagType(T);
                 inline for (info.fields) |field| {
                     if (@field(Tag, field.name) == value) {
-                        try writer.writeAll("." ++ field.name);
-                        try write(writer, @field(value, field.name));
+                        try writeHelper(
+                            writer,
+                            prefix ++ "." ++ field.name,
+                            @field(value, field.name),
+                        );
                         return;
                     }
                 }
