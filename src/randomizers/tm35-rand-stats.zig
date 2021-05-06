@@ -55,21 +55,14 @@ pub fn main2(
     const same_total_stats = args.flag("--same-total-stats");
     const follow_evos = args.flag("--follow-evos");
 
-    const pokemons = try handleInput(allocator, stdio.in, stdio.out);
+    var pokemons = Pokemons{};
+    try format.io(allocator, stdio.in, stdio.out, false, .{
+        .allocator = allocator,
+        .pokemons = &pokemons,
+    }, useGame);
+
     randomize(pokemons, seed, same_total_stats, follow_evos);
     try outputData(stdio.out, pokemons);
-}
-
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Pokemons {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var pokemons = Pokemons{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &pokemons, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return pokemons;
 }
 
 fn outputData(writer: anytype, pokemons: Pokemons) !void {
@@ -88,8 +81,9 @@ fn outputData(writer: anytype, pokemons: Pokemons) !void {
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, pokemons: *Pokemons, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(ctx: anytype, parsed: format.Game) !void {
+    const allocator = ctx.allocator;
+    const pokemons = ctx.pokemons;
     switch (parsed) {
         .pokemons => |mons| {
             const pokemon = &(try pokemons.getOrPutValue(allocator, mons.index, Pokemon{})).value;

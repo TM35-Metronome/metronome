@@ -60,22 +60,12 @@ pub fn main2(
 
     const pick_lowest = args.flag("--pick-lowest-evolution");
 
-    const random = &rand.DefaultPrng.init(seed).random;
-    const data = try handleInput(allocator, stdio.in, stdio.out);
-    const pick_from = try getStartersToPickFrom(allocator, random, data, pick_lowest, evolutions);
-    try outputData(stdio.out, random, data, pick_from);
-}
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
+    const random = &rand.DefaultPrng.init(seed).random;
+    const pick_from = try getStartersToPickFrom(random, data, pick_lowest, evolutions);
+    try outputData(stdio.out, random, data, pick_from);
 }
 
 fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
@@ -86,13 +76,12 @@ fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set)
 }
 
 fn getStartersToPickFrom(
-    allocator: *mem.Allocator,
     random: *rand.Random,
     data: Data,
     pick_lowest: bool,
     evolutions: usize,
 ) !Set {
-    const species = try data.pokedexPokemons(allocator);
+    const species = try data.pokedexPokemons();
     var res = Set{};
     for (species.items()) |pokemon_kv| {
         const pokemon = pokemon_kv.key;
@@ -102,16 +91,16 @@ fn getStartersToPickFrom(
         if (countEvos(data, pokemon) < evolutions)
             continue;
 
-        _ = try res.put(allocator, pokemon, {});
+        _ = try res.put(data.allocator, pokemon, {});
     }
     if (res.count() == 0)
-        _ = try res.put(allocator, 0, {});
+        _ = try res.put(data.allocator, 0, {});
 
     return res;
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try data.pokedex.put(allocator, pokedex.index, {});
@@ -202,15 +191,16 @@ const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokedex: Set = Set{},
     starters: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     evolves_from: Evolutions = Evolutions{},
     evolves_to: Evolutions = Evolutions{},
 
-    fn pokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
+    fn pokedexPokemons(d: Data) !Set {
         var res = Set{};
-        errdefer res.deinit(allocator);
+        errdefer res.deinit(d.allocator);
 
         for (d.pokemons.items()) |pokemon| {
             if (pokemon.value.catch_rate == 0)
@@ -218,7 +208,7 @@ const Data = struct {
             if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(allocator, pokemon.key, {});
+            _ = try res.put(d.allocator, pokemon.key, {});
         }
 
         return res;

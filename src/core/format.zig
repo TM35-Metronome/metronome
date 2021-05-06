@@ -19,24 +19,58 @@ const testing = std.testing;
 //! IDENTIFIER <- [A-Za-z0-9_]+
 //!
 
-pub fn parseEscape(arena: *mem.Allocator, str: []const u8) !Game {
-    const res = (comptime parser(Game, "", true))(arena, str) catch |err| switch (err) {
-        error.OtherError => unreachable,
-        error.OutOfMemory => return error.OutOfMemory,
-        error.ParserFailed => return error.ParserFailed,
-    };
-    return res.value;
+pub fn io(
+    allocator: *mem.Allocator,
+    reader: anytype,
+    writer: anytype,
+    comptime escape: bool,
+    ctx: anytype,
+    parse: anytype,
+) !void {
+    var fifo = util.io.Fifo(.Dynamic).init(allocator);
+    defer fifo.deinit();
+
+    while (true) {
+        const buf = fifo.readableSlice(0);
+        if ((comptime parser(Game, "", escape))(allocator, buf)) |res| {
+            const index = @ptrToInt(res.rest.ptr) - @ptrToInt(buf.ptr);
+            defer fifo.head += index;
+            defer fifo.count -= index;
+            parse(ctx, res.value) catch |err| switch (err) {
+                error.ParserFailed => try writer.writeAll(buf[0..index]),
+                else => return err,
+            };
+            continue;
+        } else |_| if (mem.indexOfScalar(u8, buf, '\n')) |index| {
+            defer fifo.head += index + 1;
+            defer fifo.count -= index + 1;
+            try writer.writeAll(buf[0 .. index + 1]);
+            continue;
+        }
+
+        const new_buf = blk: {
+            fifo.realign();
+            const slice = fifo.writableSlice(0);
+            if (slice.len != 0)
+                break :blk slice;
+            break :blk try fifo.writableWithSize(math.max(util.io.bufsize, fifo.buf.len));
+        };
+
+        const num = try reader.read(new_buf);
+        fifo.update(num);
+
+        if (num == 0) {
+            if (fifo.count != 0) {
+                try fifo.writeItem('\n');
+                continue;
+            }
+
+            return;
+        }
+    }
 }
 
-pub fn parseNoEscape(str: []const u8) !Game {
-    var fba = std.heap.FixedBufferAllocator.init("");
-    const res = (comptime parser(Game, "", false))(&fba.allocator, str) catch |err| switch (err) {
-        error.OtherError => unreachable,
-        error.OutOfMemory => unreachable,
-        error.ParserFailed => return error.ParserFailed,
-    };
-    return res.value;
-}
+const until_newline = mecha.many(mecha.ascii.not(mecha.ascii.char('\n')), .{ .collect = false });
 
 fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
     @setEvalBranchQuota(10000);
@@ -47,23 +81,27 @@ fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: boo
             // With no '\\' we can assume that string does not need to be unescaped, so we
             // can avoid doing an allocation.
             const text = mecha.combine(.{
-                mecha.many(mecha.ascii.not(mecha.ascii.char('\\')), .{ .collect = false }),
-                mecha.eos,
+                mecha.many(mecha.ascii.not(mecha.oneOf(.{
+                    mecha.ascii.char('\\'),
+                    mecha.ascii.char('\n'),
+                })), .{ .collect = false }),
             });
             const escaped_text = mecha.convert([]const u8, struct {
                 fn conv(allocator: *mem.Allocator, str: []const u8) mecha.Error![]const u8 {
                     return try util.escape.default.unescapeAlloc(allocator, str);
                 }
-            }.conv, mecha.rest);
+            }.conv, until_newline);
 
             return mecha.combine(.{
                 mecha.string(prefix ++ "="),
                 mecha.oneOf(.{ text, escaped_text }),
+                mecha.ascii.char('\n'),
             });
         } else {
             return mecha.combine(.{
                 mecha.string(prefix ++ "="),
-                mecha.rest,
+                until_newline,
+                mecha.ascii.char('\n'),
             });
         },
         else => {},
@@ -71,11 +109,17 @@ fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: boo
     switch (@typeInfo(T)) {
         .Int => return intValueParser(T, prefix),
         .Enum => return mecha.combine(
-            .{ mecha.string(prefix ++ "="), mecha.enumeration(T), mecha.eos },
+            .{ mecha.string(prefix ++ "="), mecha.enumeration(T), mecha.ascii.char('\n') },
         ),
-        .Bool => return mecha.convert(bool, mecha.toBool, mecha.combine(
-            .{ mecha.string(prefix ++ "="), mecha.rest },
-        )),
+        .Bool => {
+            const B = enum { @"false", @"true" };
+            const p = parser(B, prefix, do_escape);
+            return mecha.map(bool, struct {
+                fn map(b: B) bool {
+                    return b == .@"true";
+                }
+            }.map, p);
+        },
         .Union => return unionParser(T, prefix, do_escape),
         else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
     }
@@ -179,11 +223,56 @@ fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T)
                 return error.ParserFailed;
 
             const res = try @call(inl, int, .{ allocator, str[prefix.len + 1 ..] });
-            if (res.rest.len != 0)
+            if (!mem.startsWith(u8, res.rest, "\n"))
                 return error.ParserFailed;
-            return res;
+
+            return Res{
+                .rest = res.rest[1..],
+                .value = res.value,
+            };
         }
     }.p;
+}
+
+test "parse" {
+    const allocator = testing.failing_allocator;
+    const p1 = comptime parser(u8, "", false);
+    mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0\n"));
+    mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1\n"));
+    mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111\n"));
+
+    const p2 = comptime parser(u32, "", false);
+    mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0\n"));
+    mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1\n"));
+    mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010\n"));
+
+    const U1 = union(enum) {
+        a: u8,
+        b: u16,
+        c: u32,
+    };
+    const p3 = comptime parser(U1, "", false);
+    mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0\n"));
+    mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1\n"));
+    mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010\n"));
+
+    const A1 = Array(u8, u8);
+    const p4 = comptime parser(A1, "", false);
+    mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0\n"));
+    mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2\n"));
+    mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33\n"));
+
+    const U2 = union(enum) {
+        a: Array(u32, union(enum) {
+            a: u8,
+            b: u32,
+        }),
+        b: u16,
+    };
+    const p5 = comptime parser(U2, "", false);
+    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0\n"));
+    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44\n"));
+    mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1\n"));
 }
 
 pub fn write(writer: anytype, value: anytype) !void {
@@ -196,36 +285,42 @@ fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !vo
         try writer.writeAll(prefix ++ "[");
         try fmt.formatInt(value.index, 10, false, .{}, writer);
         try writeHelper(writer, "]", value.value);
-    } else switch (T) {
+        return;
+    }
+
+    switch (T) {
         []const u8 => {
             try writer.writeAll(prefix ++ "=");
             try util.escape.default.escapeWrite(writer, value);
             try writer.writeByte('\n');
+            return;
         },
-        else => switch (@typeInfo(T)) {
-            .Bool => try writer.writeAll(if (value) prefix ++ "=true\n" else prefix ++ "=false\n"),
-            .Int => {
-                try writer.writeAll(prefix ++ "=");
-                try fmt.formatInt(value, 10, false, .{}, writer);
-                try writer.writeByte('\n');
-            },
-            .Enum => try writeHelper(writer, prefix, @tagName(value)),
-            .Union => |info| {
-                const Tag = @TagType(T);
-                inline for (info.fields) |field| {
-                    if (@field(Tag, field.name) == value) {
-                        try writeHelper(
-                            writer,
-                            prefix ++ "." ++ field.name,
-                            @field(value, field.name),
-                        );
-                        return;
-                    }
+        else => {},
+    }
+
+    switch (@typeInfo(T)) {
+        .Bool => try writer.writeAll(if (value) prefix ++ "=true\n" else prefix ++ "=false\n"),
+        .Int => {
+            try writer.writeAll(prefix ++ "=");
+            try fmt.formatInt(value, 10, false, .{}, writer);
+            try writer.writeByte('\n');
+        },
+        .Enum => try writeHelper(writer, prefix, @tagName(value)),
+        .Union => |info| {
+            const Tag = @TagType(T);
+            inline for (info.fields) |field| {
+                if (@field(Tag, field.name) == value) {
+                    try writeHelper(
+                        writer,
+                        prefix ++ "." ++ field.name,
+                        @field(value, field.name),
+                    );
+                    return;
                 }
-                unreachable;
-            },
-            else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
+            }
+            unreachable;
         },
+        else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
     }
 }
 
@@ -247,47 +342,6 @@ pub fn isArray(comptime T: type) bool {
     if (@TypeOf(T.Index) != type or @TypeOf(T.Value) != type)
         return false;
     return T == Array(T.Index, T.Value);
-}
-
-test "parse" {
-    const allocator = testing.failing_allocator;
-    const p1 = comptime parser(u8, "", false);
-    mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0"));
-    mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1"));
-    mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111"));
-
-    const p2 = comptime parser(u32, "", false);
-    mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0"));
-    mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1"));
-    mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010"));
-
-    const U1 = union(enum) {
-        a: u8,
-        b: u16,
-        c: u32,
-    };
-    const p3 = comptime parser(U1, "", false);
-    mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0"));
-    mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1"));
-    mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010"));
-
-    const A1 = Array(u8, u8);
-    const p4 = comptime parser(A1, "", false);
-    mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0"));
-    mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2"));
-    mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33"));
-
-    const U2 = union(enum) {
-        a: Array(u32, union(enum) {
-            a: u8,
-            b: u32,
-        }),
-        b: u16,
-    };
-    const p5 = comptime parser(U2, "", false);
-    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0"));
-    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44"));
-    mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1"));
 }
 
 /// Takes a struct pointer and a union and sets the structs field with

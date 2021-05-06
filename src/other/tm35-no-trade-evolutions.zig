@@ -55,21 +55,11 @@ pub fn main2(
     stdio: util.CustomStdIoStreams(Reader, Writer),
     args: anytype,
 ) anyerror!void {
-    const data = try handleInput(allocator, stdio.in, stdio.out);
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
+
     removeTradeEvolutions(data);
     try outputData(stdio.out, data);
-}
-
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -87,8 +77,8 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokemons => |pokemons| {
             const pokemon = &(try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
@@ -229,6 +219,7 @@ const Evolutions = std.AutoArrayHashMapUnmanaged(u8, Evolution);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokemons: Pokemons = Pokemons{},
 };
 

@@ -129,50 +129,12 @@ pub fn main2(
     if (patch != .none)
         try old_bytes.appendSlice(game.data());
 
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var line_num: usize = 1;
-    while (try util.io.readLine(stdio.in, &fifo)) |line| : (line_num += 1) {
-        const res: anyerror!void = blk: {
-            const parsed = format.parseEscape(allocator, line) catch |err| switch (err) {
-                error.OutOfMemory => return err,
-                error.ParserFailed => break :blk err,
-            };
-            break :blk switch (game) {
-                .gen3 => |*gen3_game| applyGen3(gen3_game, parsed),
-                .gen4 => |*gen4_game| applyGen4(gen4_game.*, parsed),
-                .gen5 => |*gen5_game| applyGen5(gen5_game.*, parsed),
-            };
-        };
-        res catch |err| {
-            log.info("(stdin):{}:1: {}\n", .{ line_num, @errorName(err) });
-            log.info("{}\n", .{line});
-            if (abort_on_first_warning)
-                return error.ParserFailed;
-            continue;
-        };
-        if (patch == .live)
-            try game.apply();
-
-        if (patch == .live) {
-            var it = common.PatchIterator{
-                .old = old_bytes.items,
-                .new = game.data(),
-            };
-            while (it.next()) |p| {
-                try stdio.out.print("[{}]={x}\n", .{
-                    p.offset,
-                    p.replacement,
-                });
-
-                try old_bytes.resize(math.max(
-                    old_bytes.items.len,
-                    p.offset + p.replacement.len,
-                ));
-                common.patch(old_bytes.items, &[_]common.Patch{p});
-            }
-            try stdio.out.context.flush();
-        }
-    }
+    try format.io(allocator, stdio.in, std.io.null_writer, true, .{
+        .out = stdio.out,
+        .patch = patch,
+        .game = &game,
+        .old_bytes = &old_bytes,
+    }, useGame);
 
     if (patch == .full) {
         var it = common.PatchIterator{
@@ -245,7 +207,36 @@ const Game = union(enum) {
     }
 };
 
-pub fn toInt(
+fn useGame(ctx: anytype, game: format.Game) !void {
+    switch (ctx.game.*) {
+        .gen3 => |*gen3_game| try applyGen3(gen3_game, game),
+        .gen4 => |*gen4_game| try applyGen4(gen4_game.*, game),
+        .gen5 => |*gen5_game| try applyGen5(gen5_game.*, game),
+    }
+
+    if (ctx.patch == .live) {
+        try ctx.game.apply();
+        var it = common.PatchIterator{
+            .old = ctx.old_bytes.items,
+            .new = ctx.game.data(),
+        };
+        while (it.next()) |p| {
+            try ctx.out.print("[{}]={x}\n", .{
+                p.offset,
+                p.replacement,
+            });
+
+            try ctx.old_bytes.resize(math.max(
+                ctx.old_bytes.items.len,
+                p.offset + p.replacement.len,
+            ));
+            common.patch(ctx.old_bytes.items, &[_]common.Patch{p});
+        }
+        try ctx.out.context.flush();
+    }
+}
+
+fn toInt(
     comptime Int: type,
     comptime endian: builtin.Endian,
 ) fn ([]const u8) ?rom.int.Int(Int, endian) {

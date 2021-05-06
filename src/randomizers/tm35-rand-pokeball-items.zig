@@ -53,9 +53,10 @@ pub fn main2(
     const include_tms_hms = args.flag("--include-tms-hms");
     const include_key_items = args.flag("--include-key-items");
 
-    const data = try handleInput(allocator, stdio.in, stdio.out);
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
+
     try randomize(
-        allocator,
         data,
         seed,
         include_tms_hms,
@@ -64,26 +65,14 @@ pub fn main2(
     try outputData(stdio.out, data);
 }
 
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var data = Data{};
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
-}
-
 fn outputData(writer: anytype, data: Data) !void {
     for (data.pokeballs.items()) |ball| {
         try format.write(writer, format.Game.pokeball_item(ball.key, .{ .item = ball.value }));
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokeball_items => |items| switch (items.value) {
             .item => |item| {
@@ -130,7 +119,6 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 }
 
 fn randomize(
-    allocator: *mem.Allocator,
     data: Data,
     seed: u64,
     include_tms_hms: bool,
@@ -150,7 +138,7 @@ fn randomize(
     if (!include_key_items)
         pocket_blacklist.appendAssumeCapacity(.key_items);
 
-    const pick_from = try data.getItems(allocator, pocket_blacklist.items);
+    const pick_from = try data.getItems(pocket_blacklist.items);
     const max = pick_from.count();
 
     outer: for (data.pokeballs.items()) |*ball| {
@@ -169,16 +157,13 @@ const Pokeballs = std.AutoArrayHashMapUnmanaged(u16, u16);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokeballs: Pokeballs = Pokeballs{},
     items: Items = Items{},
 
-    fn getItems(
-        d: Data,
-        allocator: *mem.Allocator,
-        pocket_blacklist: []const format.Pocket,
-    ) !Set {
+    fn getItems(d: Data, pocket_blacklist: []const format.Pocket) !Set {
         var res = Set{};
-        errdefer res.deinit(allocator);
+        errdefer res.deinit(d.allocator);
 
         outer: for (d.items.items()) |item| {
             // Assume that items in the 'items' pocket with price 0 is
@@ -191,7 +176,7 @@ const Data = struct {
                     continue :outer;
             }
 
-            _ = try res.put(allocator, item.key, {});
+            _ = try res.put(d.allocator, item.key, {});
         }
 
         return res;

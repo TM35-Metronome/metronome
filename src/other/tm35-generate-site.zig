@@ -52,14 +52,8 @@ pub fn main2(
     const out = args.option("--output") orelse "site.html";
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var game = Game{};
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
-        parseLine(allocator, &game, line) catch |err| switch (err) {
-            error.ParserFailed => {},
-            error.OutOfMemory => return err,
-        };
-        try stdio.out.print("{}\n", .{line});
-    }
+    var game = Game{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, true, &game, useGame);
 
     // We are now completly done with stdout, so we close it. This gives programs further down the
     // pipeline the ability to finish up what they need to do while we generate the site.
@@ -74,8 +68,9 @@ pub fn main2(
     try writer.flush();
 }
 
-fn parseLine(allocator: *mem.Allocator, game: *Game, str: []const u8) !void {
-    switch (try format.parseEscape(allocator, str)) {
+fn useGame(game: *Game, parsed: format.Game) !void {
+    const allocator = game.allocator;
+    switch (parsed) {
         .starters => |starter| _ = try game.starters.put(allocator, starter.index, starter.value),
         .tms => |tm| _ = try game.tms.put(allocator, tm.index, tm.value),
         .hms => |hm| _ = try game.hms.put(allocator, hm.index, hm.value),
@@ -582,6 +577,7 @@ fn writeHumanized(writer: anytype, str: []const u8) !void {
 const Map = std.AutoArrayHashMapUnmanaged;
 
 const Game = struct {
+    allocator: *mem.Allocator,
     starters: Map(u8, u16) = Map(u8, u16){},
     trainers: Map(u16, Trainer) = Map(u16, Trainer){},
     moves: Map(u16, Move) = Map(u16, Move){},

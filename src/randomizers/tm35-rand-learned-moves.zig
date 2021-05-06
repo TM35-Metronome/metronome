@@ -65,21 +65,11 @@ pub fn main2(
     else
         Preference.random;
 
-    const data = try handleInput(allocator, stdio.in, stdio.out);
-    try randomize(allocator, data, seed, pref);
-    try outputData(stdio.out, data);
-}
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
+    try randomize(data, seed, pref);
+    try outputData(stdio.out, data);
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -97,8 +87,8 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokemons => |pokemons| {
             const pokemon_entry = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
@@ -161,17 +151,16 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: Data, seed: u64, pref: Preference) !void {
+fn randomize(data: Data, seed: u64, pref: Preference) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.pokemons.items()) |pokemon| {
-        try randomizeMachinesLearned(allocator, data, pokemon.value, random, pref, data.tms, pokemon.value.tms);
-        try randomizeMachinesLearned(allocator, data, pokemon.value, random, pref, data.hms, pokemon.value.hms);
+        try randomizeMachinesLearned(data, pokemon.value, random, pref, data.tms, pokemon.value.tms);
+        try randomizeMachinesLearned(data, pokemon.value, random, pref, data.hms, pokemon.value.hms);
     }
 }
 
 fn randomizeMachinesLearned(
-    allocator: *mem.Allocator,
     data: Data,
     pokemon: Pokemon,
     random: *rand.Random,
@@ -208,6 +197,7 @@ const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokemons: Pokemons = Pokemons{},
     moves: Moves = Moves{},
     tms: Machines = Machines{},

@@ -60,23 +60,17 @@ pub fn main2(
     const seed = try util.getSeed(args);
     const hms = args.flag("--hms");
 
-    const data = try handleInput(allocator, stdio.in, stdio.out, hms);
-    try randomize(allocator, data, seed);
+    var data = Data{ .allocator = allocator };
+    try format.io(
+        allocator,
+        stdio.in,
+        stdio.out,
+        true,
+        .{ .hms = hms, .data = &data },
+        useGame,
+    );
+    try randomize(data, seed);
     try outputData(stdio.out, data);
-}
-
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype, hms: bool) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, hms, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.InvalidUtf8,
-            error.ParserFailed,
-            => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -92,13 +86,11 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn parseLine(
-    allocator: *mem.Allocator,
-    data: *Data,
-    hms: bool,
-    str: []const u8,
-) !void {
-    switch (try format.parseEscape(allocator, str)) {
+fn useGame(ctx: anytype, parsed: format.Game) !void {
+    const hms = ctx.hms;
+    const data = ctx.data;
+    const allocator = data.allocator;
+    switch (parsed) {
         .tms => |tms| {
             _ = try data.tms.put(allocator, tms.index, tms.value);
             return;
@@ -159,7 +151,7 @@ fn parseLine(
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
+fn randomize(data: Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
     for (data.tms.items()) |*tm|
@@ -196,28 +188,10 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: u64) !void {
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
             const move = data.moves.get(move_id) orelse continue;
-            const new_desc = try util.unicode.splitIntoLines(allocator, max_line_len, move.description);
+            const new_desc = try util.unicode.splitIntoLines(data.allocator, max_line_len, move.description);
             item.value.description = new_desc.slice(0, item.value.description.len);
         }
     }
-}
-
-fn utf8Len(str: Utf8) usize {
-    var res: usize = 0;
-    var it = str.iterator();
-    while (it.nextCodepointSlice()) |_| : (res += 1) {}
-    return res;
-}
-
-fn utf8Slice(str: Utf8, max_len: usize) Utf8 {
-    var codepoints: usize = 0;
-    var it = str.iterator();
-    while (it.nextCodepointSlice()) |_| : (codepoints += 1) {
-        if (codepoints == max_len)
-            break;
-    }
-
-    return Utf8.initUnchecked(str.bytes[0..it.i]);
 }
 
 const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
@@ -225,6 +199,7 @@ const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     items: Items = Items{},
     moves: Moves = Moves{},
     tms: Machines = Machines{},

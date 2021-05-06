@@ -77,22 +77,11 @@ pub fn main2(
         return error.InvalidArgument;
     };
 
-    const data = try handleInput(allocator, stdio.in, stdio.out);
-    try randomize(allocator, data, seed, method, types);
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
+
+    try randomize(data, seed, method, types);
     try outputData(stdio.out, data);
-}
-
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var data = Data{};
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-
-    return data;
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -121,8 +110,8 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try data.pokedex.put(allocator, pokedex.index, {});
@@ -232,7 +221,6 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
 }
 
 fn randomize(
-    allocator: *mem.Allocator,
     data: Data,
     seed: u64,
     method: Method,
@@ -241,7 +229,7 @@ fn randomize(
     var random_adapt = rand.DefaultPrng.init(seed);
     const random = &random_adapt.random;
 
-    const species = try data.getPokedexPokemons(allocator);
+    const species = try data.getPokedexPokemons();
 
     for ([_]StaticMons{
         data.static_mons,
@@ -259,7 +247,7 @@ fn randomize(
                         static.value = util.random.item(random, species.items()).?.key;
                 },
                 .same => {
-                    const by_type = try data.getSpeciesByType(allocator, &species);
+                    const by_type = try data.getSpeciesByType(&species);
                     for (static_mons.items()) |*static| {
                         const pokemon = data.pokemons.get(static.value).?;
                         const type_max = pokemon.types.count();
@@ -278,10 +266,10 @@ fn randomize(
                     // When we do random, we should never actually touch the 'by_type'
                     // table, so let's just avoid doing the work of constructing it :)
                     .random => undefined,
-                    .same => try data.getSpeciesByType(allocator, &species),
+                    .same => try data.getSpeciesByType(&species),
                 };
 
-                var simular = std.ArrayList(u16).init(allocator);
+                var simular = std.ArrayList(u16).init(data.allocator);
                 for (static_mons.items()) |*static| {
                     defer simular.shrinkRetainingCapacity(0);
 
@@ -354,10 +342,10 @@ fn randomize(
                 // First, lets give each Pokemon a "legendary rating" which
                 // is a measure as to how many "legendary" criteria this
                 // Pokemon fits into. This rating can be negative.
-                var ratings = std.AutoArrayHashMapUnmanaged(u16, isize){};
+                var ratings = std.AutoArrayHashMap(u16, isize).init(data.allocator);
                 for (species.items()) |s| {
                     const pokemon = data.pokemons.get(s.key).?;
-                    const rating = &(try ratings.getOrPutValue(allocator, s.key, 0)).value;
+                    const rating = &(try ratings.getOrPutValue(s.key, 0)).value;
 
                     // Legendaries are generally in the "slow" to "medium_slow"
                     // growth rating
@@ -377,7 +365,7 @@ fn randomize(
                     // And they don't evolve from anything. Subtract
                     // score from this Pokemons evolutions.
                     for (pokemon.evos.items()) |evo| {
-                        const evo_rating = &(try ratings.getOrPutValue(allocator, evo.key, 0)).value;
+                        const evo_rating = &(try ratings.getOrPutValue(evo.key, 0)).value;
                         evo_rating.* -= 10;
                         rating.* -= 10;
                     }
@@ -397,19 +385,19 @@ fn randomize(
                 var rest = Set{};
                 for (ratings.items()) |rating| {
                     if (rating.value >= rating_to_be_legendary) {
-                        _ = try legendaries.put(allocator, rating.key, {});
+                        _ = try legendaries.put(data.allocator, rating.key, {});
                     } else {
-                        _ = try rest.put(allocator, rating.key, {});
+                        _ = try rest.put(data.allocator, rating.key, {});
                     }
                 }
 
                 const legendaries_by_type = switch (_type) {
                     .random => undefined,
-                    .same => try data.getSpeciesByType(allocator, &legendaries),
+                    .same => try data.getSpeciesByType(&legendaries),
                 };
                 const rest_by_type = switch (_type) {
                     .random => undefined,
-                    .same => try data.getSpeciesByType(allocator, &rest),
+                    .same => try data.getSpeciesByType(&rest),
                 };
 
                 for (static_mons.items()) |*static| {
@@ -450,6 +438,7 @@ const HollowPokemons = std.AutoArrayHashMapUnmanaged(u8, HollowMon);
 const HollowVersions = std.AutoArrayHashMapUnmanaged(u8, HollowGroups);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     static_mons: StaticMons = StaticMons{},
@@ -457,34 +446,34 @@ const Data = struct {
     hollow_mons: StaticMons = StaticMons{},
     hidden_hollows: HiddenHollows = HiddenHollows{},
 
-    fn getPokedexPokemons(d: Data, allocator: *mem.Allocator) !Set {
+    fn getPokedexPokemons(d: Data) !Set {
         var res = Set{};
-        errdefer res.deinit(allocator);
+        errdefer res.deinit(d.allocator);
 
         for (d.pokemons.items()) |pokemon| {
             if (pokemon.value.catch_rate == 0)
                 continue;
             if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
                 continue;
-            _ = try res.put(allocator, pokemon.key, {});
+            _ = try res.put(d.allocator, pokemon.key, {});
         }
 
         return res;
     }
 
-    fn getSpeciesByType(d: Data, allocator: *mem.Allocator, _species: *const Set) !SpeciesByType {
+    fn getSpeciesByType(d: Data, _species: *const Set) !SpeciesByType {
         var res = SpeciesByType{};
         errdefer {
             for (res.items()) |*v|
-                v.value.deinit(allocator);
-            res.deinit(allocator);
+                v.value.deinit(d.allocator);
+            res.deinit(d.allocator);
         }
 
         for (_species.items()) |s| {
             const pokemon = d.pokemons.get(s.key) orelse continue;
             for (pokemon.types.items()) |t| {
-                const set = try res.getOrPutValue(allocator, t.key, Set{});
-                _ = try set.value.put(allocator, s.key, {});
+                const set = try res.getOrPutValue(d.allocator, t.key, Set{});
+                _ = try set.value.put(d.allocator, s.key, {});
             }
         }
 
