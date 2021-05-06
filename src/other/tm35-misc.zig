@@ -96,7 +96,6 @@ pub fn main2(
         }
     }
 
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
     const opt = Options{
         .fast_text = fast_text,
         .biking = biking.?,
@@ -106,12 +105,14 @@ pub fn main2(
         .trainer_scale = trainer_scale catch unreachable,
         .wild_scale = wild_scale catch unreachable,
     };
-    while (try util.io.readLine(stdio.in, &fifo)) |line| {
-        parseLine(stdio.out, allocator, opt, line) catch |err| switch (err) {
-            error.ParserFailed => try stdio.out.print("{}\n", .{line}),
-            else => return err,
-        };
-    }
+    try format.io(
+        allocator,
+        stdio.in,
+        stdio.out,
+        false,
+        .{ .out = stdio.out, .opt = opt },
+        useGame,
+    );
 }
 
 const Options = struct {
@@ -124,9 +125,10 @@ const Options = struct {
     wild_scale: f64,
 };
 
-fn parseLine(out: anytype, allocator: *mem.Allocator, opt: Options, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
-    switch (parsed) {
+fn useGame(ctx: anytype, game: format.Game) !void {
+    const out = ctx.out;
+    const opt = ctx.opt;
+    switch (game) {
         .instant_text => |_| if (opt.fast_text) {
             return out.writeAll(".instant_text=true\n");
         } else {

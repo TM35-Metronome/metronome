@@ -136,7 +136,9 @@ pub fn main2(
         }
     }
 
-    const data = try handleInput(allocator, stdio.in, stdio.out);
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
+
     const species = try data.pokedexPokemons(allocator);
     var ctx = Context{
         .allocator = allocator,
@@ -161,18 +163,6 @@ pub fn main2(
     };
     try randomize(&ctx);
     try outputData(stdio.out, data);
-}
-
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -206,8 +196,8 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseNoEscape(str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try data.pokedex.put(allocator, pokedex.index, {});
@@ -742,6 +732,7 @@ const SpeciesBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const Trainers = std.AutoArrayHashMapUnmanaged(u16, Trainer);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokedex: Set = Set{},
     pokemons: Pokemons = Pokemons{},
     trainers: Trainers = Trainers{},

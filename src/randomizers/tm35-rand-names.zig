@@ -51,21 +51,11 @@ pub fn main2(
 ) anyerror!void {
     const seed = try util.getSeed(args);
 
-    const data = try handleInput(allocator, stdio.in, stdio.out);
-    try randomize(allocator, data, seed);
-    try outputData(stdio.out, data);
-}
+    var data = Data{ .allocator = allocator };
+    try format.io(allocator, stdio.in, stdio.out, true, &data, useGame);
 
-fn handleInput(allocator: *mem.Allocator, reader: anytype, writer: anytype) !Data {
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var data = Data{};
-    while (try util.io.readLine(reader, &fifo)) |line| {
-        parseLine(allocator, &data, line) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.ParserFailed => try writer.print("{}\n", .{line}),
-        };
-    }
-    return data;
+    try randomize(data, seed);
+    try outputData(stdio.out, data);
 }
 
 fn outputData(writer: anytype, data: Data) !void {
@@ -81,8 +71,8 @@ fn outputData(writer: anytype, data: Data) !void {
         try format.write(writer, format.Game.item(name.key, .{ .name = name.value }));
 }
 
-fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
-    const parsed = try format.parseEscape(allocator, str);
+fn useGame(data: *Data, parsed: format.Game) !void {
+    const allocator = data.allocator;
     switch (parsed) {
         .pokemons => |pokemons| switch (pokemons.value) {
             .name => |name| {
@@ -178,7 +168,7 @@ fn parseLine(allocator: *mem.Allocator, data: *Data, str: []const u8) !void {
     unreachable;
 }
 
-fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
+fn randomize(data: Data, seed: usize) !void {
     const random = &rand.DefaultPrng.init(seed).random;
 
     for ([_]NameSet{
@@ -197,16 +187,16 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
         for (set.items()) |item| {
             const view = unicode.Utf8View.init(item.value) catch continue;
 
-            var node = &(try pairs.getOrPutValue(allocator, start_of_string, Occurences{})).value;
+            var node = &(try pairs.getOrPutValue(data.allocator, start_of_string, Occurences{})).value;
             var it = view.iterator();
             while (it.nextCodepointSlice()) |code| {
-                const occurance = try node.codepoints.getOrPutValue(allocator, code, 0);
+                const occurance = try node.codepoints.getOrPutValue(data.allocator, code, 0);
                 occurance.value += 1;
                 node.total += 1;
-                node = &(try pairs.getOrPutValue(allocator, code, Occurences{})).value;
+                node = &(try pairs.getOrPutValue(data.allocator, code, Occurences{})).value;
             }
 
-            const occurance = try node.codepoints.getOrPutValue(allocator, end_of_string, 0);
+            const occurance = try node.codepoints.getOrPutValue(data.allocator, end_of_string, 0);
             occurance.value += 1;
             node.total += 1;
             max = math.max(max, item.value.len);
@@ -216,7 +206,7 @@ fn randomize(allocator: *mem.Allocator, data: Data, seed: usize) !void {
         // based on our current C1. C2 is chosen by using the occurnaces of C2 as weights
         // and picking at random from here.
         for (set.items()) |*name| {
-            var new_name = std.ArrayList(u8).init(allocator);
+            var new_name = std.ArrayList(u8).init(data.allocator);
             var node = pairs.get(start_of_string).?;
 
             while (new_name.items.len < max) {
@@ -248,6 +238,7 @@ const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
 const NameSet = std.AutoArrayHashMapUnmanaged(u16, []const u8);
 
 const Data = struct {
+    allocator: *mem.Allocator,
     pokemons: NameSet = NameSet{},
     trainers: NameSet = NameSet{},
     moves: NameSet = NameSet{},

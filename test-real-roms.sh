@@ -13,8 +13,8 @@ expect=$(mktemp)
 found=$(mktemp)
 
 for release in $(printf "false\ntrue\n"); do
-    zig build build-core "-Drelease=$release"
-    for rom in $@; do
+    zig build -Dbuild-ui=false "-Drelease=$release"
+    for rom in "$@"; do
         echo "$rom" >&2
         zig-cache/bin/tm35-load "$rom" >"$expect"
         zig-cache/bin/tm35-apply "$rom" -aro "$rom_dest" <"$expect"
@@ -36,7 +36,7 @@ for release in $(printf "false\ntrue\n"); do
         sed -i -E "s/\.instant_text=.*/.instant_text=false/" "$expect"
         diff -q "$expect" "$found"
 
-        if ! [ -z "$run" ]; then
+        if [ -n "$run" ]; then
             case $rom in
                 *.nds) desmume "$rom_dest" ;;
                 *.gba) mgba-qt "$rom_dest" ;;
