@@ -39,7 +39,7 @@ pub fn parseNoEscape(str: []const u8) !Game {
 }
 
 fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
-    @setEvalBranchQuota(1000000);
+    @setEvalBranchQuota(10000);
     if (isArray(T))
         return arrayParser(T, prefix, do_escape);
     switch (T) {
@@ -108,26 +108,60 @@ fn arrayParser(comptime T: type, comptime prefix: []const u8, comptime do_escape
 fn unionParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
     const Res = mecha.Result(T);
     const info = @typeInfo(T).Union;
+
+    const Field = struct {
+        name: []const u8,
+        index: usize,
+    };
+
+    // Get an array of all unique lengths of the fields
+    const lengths = comptime blk: {
+        var res = [_]usize{0} ** info.fields.len;
+        for (info.fields) |f| {
+            if (mem.indexOfScalar(usize, &res, f.name.len) == null) {
+                const i = mem.indexOfScalar(usize, &res, 0) orelse unreachable;
+                res[i] = f.name.len;
+            }
+        }
+
+        const len = mem.indexOfScalar(usize, &res, 0) orelse res.len;
+        std.sort.sort(usize, res[0..len], {}, std.sort.asc(usize));
+        break :blk res[0..len];
+    };
+
     return struct {
         fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            inline for (info.fields) |f| {
-                const before_term = prefix ++ "." ++ f.name;
-                const field_parser = comptime parser(f.field_type, before_term, do_escape);
-
-                // Check if `str` has a terminator (".[=") after the field name. If it doesn't
-                // then there is no reason to try to parse this field.
-                const term = if (str.len > before_term.len) str[before_term.len] else 0;
+            inline for (lengths) |len| {
+                // For each length, we do a quick check for a terminator
+                // before trying to parse the field. We do this to avoid
+                // trying to check fields that we know will not succeed
+                // parsing further down.
+                const term_index = len + prefix.len + 1;
+                const term = if (str.len > term_index) str[term_index] else 0;
                 const ends_with_term = term == '.' or term == '[' or term == '=';
                 if (ends_with_term) {
-                    if (@call(inl, field_parser, .{ allocator, str })) |res| {
-                        return Res{
-                            .rest = res.rest,
-                            .value = @unionInit(T, f.name, res.value),
-                        };
-                    } else |err| switch (err) {
-                        error.ParserFailed => {},
-                        else => return err,
+                    // For each field of this length, try to parse it.
+                    inline for (info.fields) |f| {
+                        if (f.name.len != len)
+                            continue;
+
+                        const before_term = prefix ++ "." ++ f.name;
+                        const field_parser = comptime parser(f.field_type, before_term, do_escape);
+                        if (@call(inl, field_parser, .{ allocator, str })) |res| {
+                            return Res{
+                                .rest = res.rest,
+                                .value = @unionInit(T, f.name, res.value),
+                            };
+                        } else |err| switch (err) {
+                            error.ParserFailed => {},
+                            else => return err,
+                        }
                     }
+
+                    // None of the fields of this length succeeded parsing.
+                    // No reason to try parsing any more fields, as we know
+                    // they will all fail.
+                    return error.ParserFailed;
                 }
             }
 
