@@ -55,17 +55,25 @@ pub fn main2(
     var game = Game{ .allocator = allocator };
     try format.io(allocator, stdio.in, stdio.out, true, &game, useGame);
 
+    try stdio.out.context.flush();
+
     // We are now completly done with stdout, so we close it. This gives programs further down the
     // pipeline the ability to finish up what they need to do while we generate the site.
-    try stdio.out.context.flush();
-    stdio.out.context.unbuffered_writer.context.close();
+    switch (std.builtin.os.tag) {
+        .linux => stdio.out.context.file.close(),
+        else => stdio.out.context.unbuffered_writer.context.close(),
+    }
 
-    const out_file = try fs.cwd().createFile(out, .{ .exclusive = false });
+    const out_file = try fs.cwd().createFile(out, .{
+        .exclusive = false,
+        .truncate = false,
+    });
     defer out_file.close();
 
-    var writer = io.bufferedWriter(out_file.writer());
+    var writer = util.io.bufferedWriter(out_file.writer());
     try generate(writer.writer(), game);
     try writer.flush();
+    try out_file.setEndPos(try out_file.getPos());
 }
 
 fn useGame(game: *Game, parsed: format.Game) !void {
@@ -202,54 +210,65 @@ fn generate(writer: anytype, game: Game) !void {
         .{ "speed", "Speed" },
     };
 
-    try writer.writeAll("<!DOCTYPE html>\n");
-    try writer.writeAll("<html>\n");
-    try writer.writeAll("<head>\n");
-    try writer.writeAll("<title>Wiki</title>\n");
-    try writer.writeAll("<style>\n");
+    try writer.print(
+        \\<!DOCTYPE html>
+        \\<html>
+        \\<head>
+        \\<title>Wiki</title>
+        \\<style>
+        \\
+        \\* {{font-family: Arial, Helvetica, sans-serif;}}
+        \\.type {{border-style: solid; border-width: 1px; border-color: black; color: white;}}
+        \\.type_Bug {{background-color: #88960e;}}
+        \\.type_Dark {{background-color: #3c2d23;}}
+        \\.type_Dragon {{background-color: #4e3ba4;}}
+        \\.type_Electric {{background-color: #e79302;}}
+        \\.type_Fairy {{background-color: #e08ee0;}}
+        \\.type_Fighting {{background-color: #5f2311;}}
+        \\.type_Fight {{background-color: #5f2311;}}
+        \\.type_Fire {{background-color: #c72100;}}
+        \\.type_Flying {{background-color: #5d73d4;}}
+        \\.type_Ghost {{background-color: #454593;}}
+        \\.type_Grass {{background-color: #389a02;}}
+        \\.type_Ground {{background-color: #ad8c33;}}
+        \\.type_Ice {{background-color: #6dd3f5;}}
+        \\.type_Normal {{background-color: #ada594;}}
+        \\.type_Poison {{background-color: #6b246e;}}
+        \\.type_Psychic {{background-color: #dc3165;}}
+        \\.type_Psychc {{background-color: #dc3165;}}
+        \\.type_Rock {{background-color: #9e863d;}}
+        \\.type_Steel {{background-color: #8e8e9f;}}
+        \\.type_Water {{background-color: #0c67c2;}}
+        \\
+        \\.pokemon_stat {{width:100%;}}
+        \\.pokemon_stat_table {{width:50%;}}
+        \\.pokemon_stat_hp {{background-color: #6ab04c;}}
+        \\.pokemon_stat_attack {{background-color: #eb4d4b;}}
+        \\.pokemon_stat_defense {{background-color: #f0932b;}}
+        \\.pokemon_stat_sp_attack {{background-color:#be2edd;}}
+        \\.pokemon_stat_sp_defense {{background-color: #686de0;}}
+        \\.pokemon_stat_speed {{background-color: #f9ca24;}}
+        \\.pokemon_stat_total {{background-color: #95afc0;}}
+        \\
+    , .{});
 
-    try writer.writeAll("* {font-family: Arial, Helvetica, sans-serif;}\n");
-    try writer.writeAll(".type {border-style: solid; border-width: 1px; border-color: black; color: white;}\n");
-    try writer.writeAll(".type_Bug {background-color: #88960e;}\n");
-    try writer.writeAll(".type_Dark {background-color: #3c2d23;}\n");
-    try writer.writeAll(".type_Dragon {background-color: #4e3ba4;}\n");
-    try writer.writeAll(".type_Electric {background-color: #e79302;}\n");
-    try writer.writeAll(".type_Fairy {background-color: #e08ee0;}\n");
-    try writer.writeAll(".type_Fighting {background-color: #5f2311;}\n");
-    try writer.writeAll(".type_Fight {background-color: #5f2311;}\n");
-    try writer.writeAll(".type_Fire {background-color: #c72100;}\n");
-    try writer.writeAll(".type_Flying {background-color: #5d73d4;}\n");
-    try writer.writeAll(".type_Ghost {background-color: #454593;}\n");
-    try writer.writeAll(".type_Grass {background-color: #389a02;}\n");
-    try writer.writeAll(".type_Ground {background-color: #ad8c33;}\n");
-    try writer.writeAll(".type_Ice {background-color: #6dd3f5;}\n");
-    try writer.writeAll(".type_Normal {background-color: #ada594;}\n");
-    try writer.writeAll(".type_Poison {background-color: #6b246e;}\n");
-    try writer.writeAll(".type_Psychic {background-color: #dc3165;}\n");
-    try writer.writeAll(".type_Psychc {background-color: #dc3165;}\n");
-    try writer.writeAll(".type_Rock {background-color: #9e863d;}\n");
-    try writer.writeAll(".type_Steel {background-color: #8e8e9f;}\n");
-    try writer.writeAll(".type_Water {background-color: #0c67c2;}\n");
-
-    try writer.writeAll(".pokemon_stat {width:100%;}\n");
-    try writer.writeAll(".pokemon_stat_table {width:50%;}\n");
-    try writer.writeAll(".pokemon_stat_hp {background-color: #6ab04c;}\n");
-    try writer.writeAll(".pokemon_stat_attack {background-color: #eb4d4b;}\n");
-    try writer.writeAll(".pokemon_stat_defense {background-color: #f0932b;}\n");
-    try writer.writeAll(".pokemon_stat_sp_attack {background-color:#be2edd;}\n");
-    try writer.writeAll(".pokemon_stat_sp_defense {background-color: #686de0;}\n");
-    try writer.writeAll(".pokemon_stat_speed {background-color: #f9ca24;}\n");
-    try writer.writeAll(".pokemon_stat_total {background-color: #95afc0;}\n");
     for ([_]void{{}} ** 101) |_, i| {
         try writer.print(".pokemon_stat_p{} {{width: {}%;}}\n", .{ i, i });
     }
 
-    try writer.writeAll("</style>\n");
-    try writer.writeAll("</head>\n");
-    try writer.writeAll("<body>\n");
+    try writer.print(
+        \\</style>
+        \\</head>
+        \\<body>
+        \\
+    , .{});
 
-    try writer.writeAll("<h1>Starters</h1>\n");
-    try writer.writeAll("<table>\n");
+    try writer.print(
+        \\<h1>Starters</h1>
+        \\<table>
+        \\
+    , .{});
+
     for (game.starters.items()) |starter_kv| {
         const starter_name = if (game.pokemons.get(starter_kv.value)) |p| p.name else unknown;
         try writer.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td></tr>", .{
@@ -257,10 +276,13 @@ fn generate(writer: anytype, game: Game) !void {
             starter_name,
         });
     }
-    try writer.writeAll("</table>\n");
 
-    try writer.writeAll("<h1>Pokedex</h1>\n");
-    try writer.writeAll("<table>\n");
+    try writer.print(
+        \\</table>
+        \\<h1>Pokedex</h1>
+        \\<table>
+        \\
+    , .{});
     for (game.pokedex.items()) |dex| {
         const pokemon = for (game.pokemons.items()) |pokemon| {
             if (pokemon.value.pokedex_entry == dex.key)
@@ -269,20 +291,26 @@ fn generate(writer: anytype, game: Game) !void {
 
         try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {}</a></td></tr>\n", .{ pokemon.species, dex.key, pokemon.name });
     }
-    try writer.writeAll("</table>\n");
 
-    try writer.writeAll("<h1>Pokemons</h1>\n");
+    try writer.print(
+        \\</table>
+        \\<h1>Pokemons</h1>
+        \\
+    , .{});
     for (game.pokemons.items()) |pokemon_kv| {
         const species = pokemon_kv.key;
         const pokemon = pokemon_kv.value;
         try writer.print("<h2 id=\"pokemon_{}\">#{} {}</h2>\n", .{ species, species, pokemon.name });
 
-        try writer.writeAll("<table>\n");
-        try writer.writeAll("<tr><td>Type:</td><td>");
+        try writer.print(
+            \\<table>
+            \\<tr><td>Type:</td><td>
+            \\
+        , .{});
         for (pokemon.types.items()) |t, i| {
             const type_name = humanize(if (game.types.get(t.key)) |ty| ty.name else unknown);
             if (i != 0)
-                try writer.writeAll(" ");
+                try writer.print(" ", .{});
 
             try writer.print("<a href=\"#type_{}\" class=\"type type_{}\"><b>{}</b></a>", .{
                 t.key,
@@ -290,44 +318,56 @@ fn generate(writer: anytype, game: Game) !void {
                 type_name,
             });
         }
-        try writer.writeAll("</td>\n");
 
-        try writer.writeAll("<tr><td>Abilities:</td><td>");
+        try writer.print(
+            \\</td>
+            \\<tr><td>Abilities:</td><td>
+            \\
+        , .{});
         for (pokemon.abilities.items()) |a, i| {
             if (a.value == 0)
                 continue;
             if (i != 0)
-                try writer.writeAll(", ");
+                try writer.print(", ", .{});
 
             const ability_name = if (game.abilities.get(a.value)) |abil| abil.name else unknown;
             try writer.print("<a href=\"#ability_{}\">{}</a>", .{ a.value, humanize(ability_name) });
         }
-        try writer.writeAll("</td>\n");
 
-        try writer.writeAll("<tr><td>Items:</td><td>");
+        try writer.print(
+            \\</td>
+            \\<tr><td>Items:</td><td>
+            \\
+        , .{});
         for (pokemon.items.items()) |item, i| {
             if (i != 0)
-                try writer.writeAll(", ");
+                try writer.print(", ", .{});
 
             const item_name = if (game.items.get(item.value)) |it| it.name else unknown;
             try writer.print("<a href=\"#item_{}\">{}</a>", .{ item.value, humanize(item_name) });
         }
-        try writer.writeAll("</td>\n");
 
-        try writer.writeAll("<tr><td>Egg Groups:</td><td>");
+        try writer.print(
+            \\</td>
+            \\<tr><td>Egg Groups:</td><td>
+            \\
+        , .{});
         for (pokemon.egg_groups.items()) |egg_group, i| {
             if (i != 0)
-                try writer.writeAll(", ");
+                try writer.print(", ", .{});
 
             try writer.print("{}", .{humanize(@tagName(egg_group.key))});
         }
-        try writer.writeAll("</td>\n");
+        try writer.print("</td>\n", .{});
         try printSimpleFields(writer, pokemon, &[_][]const u8{});
-        try writer.writeAll("</table>\n");
+        try writer.print("</table>\n", .{});
 
-        try writer.writeAll("<details><summary><b>Evolutions</b></summary>\n");
-        try writer.writeAll("<table>\n");
-        try writer.writeAll("<tr><th>Evolution</th><th>Method</th></tr>\n");
+        try writer.print(
+            \\<details><summary><b>Evolutions</b></summary>
+            \\<table>
+            \\<tr><th>Evolution</th><th>Method</th></tr>
+            \\
+        , .{});
         for (pokemon.evos.items()) |evo_kv| {
             const evo = evo_kv.value;
             const target_name = humanize(if (game.pokemons.get(evo.target)) |p| p.name else unknown);
@@ -337,11 +377,11 @@ fn generate(writer: anytype, game: Game) !void {
 
             try writer.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td><td>", .{ evo.target, target_name });
             switch (evo.method) {
-                .friend_ship => try writer.writeAll("Level up with friendship high"),
-                .friend_ship_during_day => try writer.writeAll("Level up with friendship high during daytime"),
-                .friend_ship_during_night => try writer.writeAll("Level up with friendship high during night"),
+                .friend_ship => try writer.print("Level up with friendship high", .{}),
+                .friend_ship_during_day => try writer.print("Level up with friendship high during daytime", .{}),
+                .friend_ship_during_night => try writer.print("Level up with friendship high during night", .{}),
                 .level_up => try writer.print("Level {}", .{evo.param}),
-                .trade => try writer.writeAll("Trade"),
+                .trade => try writer.print("Trade", .{}),
                 .trade_holding_item => try writer.print("Trade holding <a href=\"#item_{}\">{}</a>", .{ evo.param, param_item_name }),
                 .trade_with_pokemon => try writer.print("Trade for <a href=\"#pokemon_{}\">{}</a>", .{ evo.param, param_pokemon_name }),
                 .use_item => try writer.print("Using <a href=\"#item_{}\">{}</a>", .{ evo.param, param_item_name }),
@@ -363,20 +403,23 @@ fn generate(writer: anytype, game: Game) !void {
                 .level_up_with_other_pokemon_in_party => try writer.print("Level up with <a href=\"#pokemon_{}\">{}</a> in the Party", .{ evo.param, param_pokemon_name }),
                 .level_up_male => try writer.print("Level {} male", .{evo.param}),
                 .level_up_female => try writer.print("Level {} female", .{evo.param}),
-                .level_up_in_special_magnetic_field => try writer.writeAll("Level up in special magnetic field"),
-                .level_up_near_moss_rock => try writer.writeAll("Level up near moss rock"),
-                .level_up_near_ice_rock => try writer.writeAll("Level up near ice rock"),
+                .level_up_in_special_magnetic_field => try writer.print("Level up in special magnetic field", .{}),
+                .level_up_near_moss_rock => try writer.print("Level up near moss rock", .{}),
+                .level_up_near_ice_rock => try writer.print("Level up near ice rock", .{}),
                 .unknown_0x02,
                 .unknown_0x03,
                 .unused,
-                => try writer.writeAll("Unknown"),
+                => try writer.print("Unknown", .{}),
             }
-            try writer.writeAll("</td></tr>\n");
+            try writer.print("</td></tr>\n", .{});
         }
-        try writer.writeAll("</table></details>\n");
 
-        try writer.writeAll("<details><summary><b>Stats</b></summary>\n");
-        try writer.writeAll("<table class=\"pokemon_stat_table\">\n");
+        try writer.print(
+            \\</table></details>
+            \\<details><summary><b>Stats</b></summary>
+            \\<table class="pokemon_stat_table">
+            \\
+        , .{});
 
         var total_stats: usize = 0;
         inline for (stat_names) |stat| {
@@ -388,10 +431,12 @@ fn generate(writer: anytype, game: Game) !void {
 
         const percent = @floatToInt(usize, (@intToFloat(f64, total_stats) / 1000) * 100);
         try writer.print("<tr><td>Total:</td><td><div class=\"pokemon_stat pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
-        try writer.writeAll("</table></details>\n");
-
-        try writer.writeAll("<details><summary><b>Ev Yield</b></summary>\n");
-        try writer.writeAll("<table>\n");
+        try writer.print(
+            \\</table></details>
+            \\<details><summary><b>Ev Yield</b></summary>
+            \\<table>
+            \\
+        , .{});
 
         total_stats = 0;
         inline for (stat_names) |stat| {
@@ -401,18 +446,23 @@ fn generate(writer: anytype, game: Game) !void {
         }
 
         try writer.print("<tr><td>Total:</td><td>{}</td></tr>\n", .{total_stats});
-        try writer.writeAll("</table></details>\n");
-
-        try writer.writeAll("<details><summary><b>Learnset</b></summary>\n");
-        try writer.writeAll("<table>\n");
+        try writer.print(
+            \\</table></details>
+            \\<details><summary><b>Learnset</b></summary>
+            \\<table>
+            \\
+        , .{});
         for (pokemon.moves.items()) |move_kv| {
             const move = move_kv.value;
             const move_name = humanize(if (game.moves.get(move.id)) |m| m.name else unknown);
             try writer.print("<tr><td>Lvl {}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ move.level, move.id, move_name });
         }
-        try writer.writeAll("</table>\n");
 
-        try writer.writeAll("<table>\n");
+        try writer.print(
+            \\</table>
+            \\<table>
+            \\
+        , .{});
         for ([_]Map(u8, void){ pokemon.hms, pokemon.tms }) |machines, i| {
             const prefix = if (i == 0) "TM" else "HM";
             const moves = if (i == 0) game.tms else game.hms;
@@ -427,30 +477,36 @@ fn generate(writer: anytype, game: Game) !void {
                 );
             }
         }
-        try writer.writeAll("</table>\n");
-        try writer.writeAll("</details>\n");
+        try writer.print(
+            \\</table>
+            \\</details>
+            \\
+        , .{});
     }
 
-    try writer.writeAll("<h1>Trainers</h1>\n");
+    try writer.print("<h1>Trainers</h1>\n", .{});
     for (game.trainers.items()) |trainer_kv| {
         const trainer_id = trainer_kv.key;
         const trainer = trainer_kv.value;
         try writer.print("<h2 id=\"trainer_{}\">{}</h2>\n", .{ trainer_id, humanize(trainer.name) });
 
-        try writer.writeAll("<table>\n");
-        try writer.writeAll("<tr><td>Items:</td><td>");
+        try writer.print("<table>\n", .{});
+        try writer.print("<tr><td>Items:</td><td>", .{});
         for (trainer.items.items()) |item, i| {
             if (i != 0)
-                try writer.writeAll(", ");
+                try writer.print(", ", .{});
 
             const item_name = if (game.items.get(item.value)) |it| it.name else unknown;
             try writer.print("<a href=\"#item_{}\">{}</a>", .{ item.value, humanize(item_name) });
         }
-        try writer.writeAll("</td>\n");
-        try writer.writeAll("</table>\n");
 
-        try writer.writeAll("<h3>Party:</h3>");
-        try writer.writeAll("<table>\n");
+        try writer.print(
+            \\</td>
+            \\</table>
+            \\<h3>Party:</h3>
+            \\<table>
+            \\
+        , .{});
         const party = trainer.party.items();
         for (party[0..math.min(party.len, trainer.party_size)]) |member_kv| {
             const member = member_kv.value;
@@ -469,7 +525,7 @@ fn generate(writer: anytype, game: Game) !void {
                     member.item,
                     item_name,
                 }),
-                .moves, .none => try writer.writeAll("<td>----</td>"),
+                .moves, .none => try writer.print("<td>----</td>", .{}),
             }
             switch (trainer.party_type) {
                 .moves, .both => for (member.moves.items()) |move_kv| {
@@ -480,19 +536,19 @@ fn generate(writer: anytype, game: Game) !void {
                 .item, .none => {},
             }
 
-            try writer.writeAll("</tr>");
+            try writer.print("</tr>", .{});
         }
-        try writer.writeAll("<table>\n");
+        try writer.print("<table>\n", .{});
     }
 
-    try writer.writeAll("<h1>Moves</h1>\n");
+    try writer.print("<h1>Moves</h1>\n", .{});
     for (game.moves.items()) |move_kv| {
         const move_id = move_kv.key;
         const move = move_kv.value;
         const move_name = humanize(move.name);
         try writer.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
         try writer.print("<p>{}</p>\n", .{move.description});
-        try writer.writeAll("<table>\n");
+        try writer.print("<table>\n", .{});
 
         const type_name = humanize(if (game.types.get(move.type)) |t| t.name else unknown);
         try writer.print(
@@ -500,10 +556,10 @@ fn generate(writer: anytype, game: Game) !void {
             .{ move.type, type_name, type_name },
         );
         try printSimpleFields(writer, move, &[_][]const u8{"type"});
-        try writer.writeAll("</table>\n");
+        try writer.print("</table>\n", .{});
     }
 
-    try writer.writeAll("<h1>Items</h1>\n");
+    try writer.print("<h1>Items</h1>\n", .{});
     for (game.items.items()) |item_kv| {
         const item_id = item_kv.key;
         const item = item_kv.value;
@@ -511,13 +567,16 @@ fn generate(writer: anytype, game: Game) !void {
         try writer.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });
         try writer.print("<p>{}</p>\n", .{item.description});
 
-        try writer.writeAll("<table>\n");
+        try writer.print("<table>\n", .{});
         try printSimpleFields(writer, item, &[_][]const u8{});
-        try writer.writeAll("</table>\n");
+        try writer.print("</table>\n", .{});
     }
 
-    try writer.writeAll("</body>\n");
-    try writer.writeAll("</html>\n");
+    try writer.print(
+        \\</body>
+        \\</html>
+        \\
+    , .{});
 }
 
 pub fn printSimpleFields(writer: anytype, value: anytype, comptime blacklist: []const []const u8) !void {
@@ -638,7 +697,7 @@ const Pokemon = struct {
     stats: Stats(u8) = Stats(u8){},
     ev_yield: Stats(u2) = Stats(u2){},
     catch_rate: u8 = 0,
-    base_exp_yield: u8 = 0,
+    base_exp_yield: u16 = 0,
     gender_ratio: u8 = 0,
     egg_cycles: u8 = 0,
     base_friendship: u8 = 0,

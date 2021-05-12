@@ -55,8 +55,6 @@ pub fn generateMain(
 ) fn () anyerror!void {
     return struct {
         fn main() anyerror!void {
-            var stdio_buf = getStdIo();
-            const stdio = stdio_buf.streams();
 
             // No need to deinit arena. The program will exit when this function
             // ends and all the memory will be freed by the os. This saves a bit
@@ -72,47 +70,31 @@ pub fn generateMain(
             };
 
             if (args.flag("--help")) {
-                try usage(stdio.out);
-                try stdio_buf.out.flush();
+                var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+                try usage(stdout.writer());
+                try stdout.flush();
                 return;
             }
 
             if (args.flag("--version")) {
-                try stdio.out.print("{}\n", .{version});
-                try stdio_buf.out.flush();
+                var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+                try stdout.writer().print("{}\n", .{version});
+                try stdout.flush();
                 return;
             }
 
-            const res = main2(
-                &arena.allocator,
-                StdIo.In.Reader,
-                StdIo.Out.Writer,
-                stdio,
-                args,
-            );
+            var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+            const res = main2(&arena.allocator, std.fs.File.Reader, @TypeOf(stdout.writer()), .{
+                .in = std.io.getStdIn().reader(),
+                .out = stdout.writer(),
+            }, args);
 
-            try stdio_buf.out.flush();
+            try stdout.flush();
             return res;
         }
     }.main;
 }
 
-pub const StdIo = struct {
-    pub const In = fs.File;
-    pub const Out = std.io.BufferedWriter(io.bufsize, fs.File.Writer);
-
-    in: In,
-    out: Out,
-
-    pub fn streams(stdio: *StdIo) StdIoStreams {
-        return StdIoStreams{
-            .in = stdio.in.reader(),
-            .out = stdio.out.writer(),
-        };
-    }
-};
-
-pub const StdIoStreams = CustomStdIoStreams(StdIo.In.Reader, StdIo.Out.Writer);
 pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
     return struct {
         pub const Reader = _Reader;
@@ -121,18 +103,6 @@ pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
         in: Reader,
         out: Writer,
     };
-}
-
-pub fn getStdIo() StdIo {
-    return StdIo{
-        .in = std.io.getStdIn(),
-        .out = io.bufferedWriter(std.io.getStdOut().writer()),
-    };
-}
-
-test "getStdIo" {
-    var stdio = getStdIo();
-    const stdio_streams = stdio.streams();
 }
 
 /// Given a slice and a pointer, returns the pointers index into the slice.

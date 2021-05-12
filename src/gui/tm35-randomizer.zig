@@ -55,8 +55,6 @@ pub fn main() anyerror!void {
     }
 
     const allocator = heap.c_allocator;
-    var stdio_buf = util.getStdIo();
-    const stdio = stdio_buf.streams();
 
     // Set up essetial state for the program to run. If any of these
     // fail, the only thing we can do is exit.
