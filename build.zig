@@ -10,10 +10,6 @@ const RunStep = std.build.RunStep;
 const Step = std.build.Step;
 const Target = std.build.Target;
 
-const tool_exes = [_][]const u8{
-    "asm-macros-to-zig-struct",
-};
-
 const core_exes = [_][]const u8{
     "tm35-apply",
     "tm35-disassemble-scripts",
@@ -87,17 +83,13 @@ pub fn build(b: *Builder) void {
     const test_step = b.step("test", "Run all tests");
     testIt(b, test_step, mode, "src/test.zig");
 
-    const tool_options = BuildProgramOptions{ .install = false, .target = target };
-    for (tool_exes) |name, i|
-        buildProgram(b, name, b.fmt("tools/{}.zig", .{name}), tool_options);
-
-    const other_options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
+    const options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
     for (core_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/core/{}.zig", .{name}), other_options);
+        buildProgram(b, name, b.fmt("src/core/{}.zig", .{name}), options);
     for (randomizer_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/randomizers/{}.zig", .{name}), other_options);
+        buildProgram(b, name, b.fmt("src/randomizers/{}.zig", .{name}), options);
     for (other_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/other/{}.zig", .{name}), other_options);
+        buildProgram(b, name, b.fmt("src/other/{}.zig", .{name}), options);
 
     const lib_cflags = &[_][]const u8{
         "-D_POSIX_C_SOURCE=200809L",

@@ -168,7 +168,7 @@ const Game = union(enum) {
     gen4: gen4.Game,
     gen5: gen5.Game,
 
-    pub fn data(game: Game) []const u8 {
+    fn data(game: Game) []const u8 {
         return switch (game) {
             .gen3 => |g| g.data,
             .gen4 => |g| g.rom.data.items,
@@ -176,7 +176,7 @@ const Game = union(enum) {
         };
     }
 
-    pub fn apply(game: *Game) !void {
+    fn apply(game: *Game) !void {
         switch (game.*) {
             .gen3 => |*g| try g.apply(),
             .gen4 => |*g| try g.apply(),
@@ -184,7 +184,7 @@ const Game = union(enum) {
         }
     }
 
-    pub fn write(game: Game, writer: anytype) !void {
+    fn write(game: Game, writer: anytype) !void {
         switch (game) {
             .gen3 => |g| try g.write(writer),
             .gen4 => |g| try g.rom.write(writer),
@@ -192,7 +192,7 @@ const Game = union(enum) {
         }
     }
 
-    pub fn deinit(game: Game) void {
+    fn deinit(game: Game) void {
         switch (game) {
             .gen3 => |g| g.deinit(),
             .gen4 => |g| {
@@ -449,7 +449,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 },
                 .color => |color| pokemon.color.color = color,
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
-                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = try math.cast(u8, base_exp_yield),
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
@@ -865,7 +865,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     pokemon.abilities[abilities.index] = abilities.value;
                 },
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
-                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = try math.cast(u8, base_exp_yield),
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,

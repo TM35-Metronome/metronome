@@ -177,7 +177,10 @@ pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime Chil
         child_writer: ChildWriter,
         state: State = .{ .end = replacements.len },
 
-        pub const Error = ChildWriter.Error;
+        pub const Error = switch (@typeInfo(ChildWriter)) {
+            .Pointer => |info| info.child.Error,
+            else => ChildWriter.Error,
+        };
         pub const Writer = io.Writer(*@This(), Error, write);
 
         pub fn writer(self: *@This()) Writer {

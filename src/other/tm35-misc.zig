@@ -130,7 +130,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
     const opt = ctx.opt;
     switch (game) {
         .instant_text => |_| if (opt.fast_text) {
-            return out.writeAll(".instant_text=true\n");
+            return out.print(".instant_text=true\n", .{});
         } else {
             return error.ParserFailed;
         },

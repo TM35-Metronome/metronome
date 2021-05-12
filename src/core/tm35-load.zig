@@ -867,6 +867,7 @@ fn outputGen5Data(nds_rom: nds.Rom, game: gen5.Game, writer: anytype) !void {
         try format.write(writer, Game.pokemon(i, .{ .stats = .{ .speed = pokemon.stats.speed } }));
         try format.write(writer, Game.pokemon(i, .{ .stats = .{ .sp_attack = pokemon.stats.sp_attack } }));
         try format.write(writer, Game.pokemon(i, .{ .stats = .{ .sp_defense = pokemon.stats.sp_defense } }));
+        try format.write(writer, Game.pokemon(i, .{ .base_exp_yield = pokemon.base_exp_yield.value() }));
         try format.write(writer, Game.pokemon(i, .{ .catch_rate = pokemon.catch_rate }));
         try format.write(writer, Game.pokemon(i, .{ .gender_ratio = pokemon.gender_ratio }));
         try format.write(writer, Game.pokemon(i, .{ .egg_cycles = pokemon.egg_cycles }));

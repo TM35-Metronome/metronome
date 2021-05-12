@@ -19,6 +19,12 @@ const testing = std.testing;
 //! IDENTIFIER <- [A-Za-z0-9_]+
 //!
 
+/// A function for efficiently reading the tm35 format from `reader` and write unwanted lines
+/// back into `writer`. `parse` will be called once a line has been parsed successfully, which
+/// allows the caller to handle the parsed result however they like. If `parse` returns
+/// `error.ParserFailed`, then that will indicate to `io`, that the callback could not handle
+/// the result and that `io` should handle it instead. Any other error from `parse` will
+/// be returned from `io` as well.
 pub fn io(
     allocator: *mem.Allocator,
     reader: anytype,
@@ -32,20 +38,47 @@ pub fn io(
 
     while (true) {
         const buf = fifo.readableSlice(0);
+
         if ((comptime parser(Game, "", escape))(allocator, buf)) |res| {
             const index = @ptrToInt(res.rest.ptr) - @ptrToInt(buf.ptr);
             defer fifo.head += index;
             defer fifo.count -= index;
             parse(ctx, res.value) catch |err| switch (err) {
-                error.ParserFailed => try writer.writeAll(buf[0..index]),
+                // When `parse` returns `ParserFailed` it communicates to us that they
+                // could not handle the result in any meaningful way, so we are responsible
+                // for writing the parsed string back out.
+                error.ParserFailed => switch (@TypeOf(writer)) {
+                    util.io.BufferedWritev.Writer => {
+                        try writer.context.writeAssumeValidUntilFlush(buf[0..index]);
+                    },
+                    else => try writer.writeAll(buf[0..index]),
+                },
                 else => return err,
             };
             continue;
-        } else |_| if (mem.indexOfScalar(u8, buf, '\n')) |index| {
+        } else |_| {}
+
+        // If we couldn't parse a portion of the buffer, then we skip to the next line
+        // and try again. The current line will just be written out again.
+        if (mem.indexOfScalar(u8, buf, '\n')) |index| {
             defer fifo.head += index + 1;
             defer fifo.count -= index + 1;
-            try writer.writeAll(buf[0 .. index + 1]);
+            const line = buf[0 .. index + 1];
+            switch (@TypeOf(writer)) {
+                util.io.BufferedWritev.Writer => {
+                    try writer.context.writeAssumeValidUntilFlush(line);
+                },
+                else => try writer.writeAll(line),
+            }
             continue;
+        }
+
+        // For `BufferedWritev` we should flush here, as we might have called
+        // `writeAssumeValidUntilFlush` on parts of `buf`. If we don't flush here,
+        // then the buffers will be invalidate and we get some fun™ behavior.
+        switch (@TypeOf(writer)) {
+            util.io.BufferedWritev.Writer => try writer.context.flush(),
+            else => {},
         }
 
         const new_buf = blk: {
@@ -61,6 +94,9 @@ pub fn io(
 
         if (num == 0) {
             if (fifo.count != 0) {
+                // If get here, then both parsing and the "index of newline" branches above
+                // failed. Let's terminate the buffer, so that at least the "index of newline"
+                // branch will succeed. Once that succeed, this branch will never be hit again.
                 try fifo.writeItem('\n');
                 continue;
             }
@@ -282,7 +318,7 @@ pub fn write(writer: anytype, value: anytype) !void {
 fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !void {
     const T = @TypeOf(value);
     if (comptime isArray(T)) {
-        try writer.writeAll(prefix ++ "[");
+        try writer.print(prefix ++ "[", .{});
         try fmt.formatInt(value.index, 10, false, .{}, writer);
         try writeHelper(writer, "]", value.value);
         return;
@@ -290,20 +326,24 @@ fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !vo
 
     switch (T) {
         []const u8 => {
-            try writer.writeAll(prefix ++ "=");
+            try writer.print(prefix ++ "=", .{});
             try util.escape.default.escapeWrite(writer, value);
-            try writer.writeByte('\n');
+            try writer.print("{c}", .{'\n'});
             return;
         },
         else => {},
     }
 
     switch (@typeInfo(T)) {
-        .Bool => try writer.writeAll(if (value) prefix ++ "=true\n" else prefix ++ "=false\n"),
+        .Bool => if (value) {
+            try writer.print(prefix ++ "=true\n", .{});
+        } else {
+            try writer.print(prefix ++ "=false\n", .{});
+        },
         .Int => {
-            try writer.writeAll(prefix ++ "=");
+            try writer.print(prefix ++ "=", .{});
             try fmt.formatInt(value, 10, false, .{}, writer);
-            try writer.writeByte('\n');
+            try writer.print("{c}", .{'\n'});
         },
         .Enum => try writeHelper(writer, prefix, @tagName(value)),
         .Union => |info| {
@@ -528,7 +568,7 @@ pub const Pokemon = union(enum) {
     name: []const u8,
     stats: Stats(u8),
     ev_yield: Stats(u2),
-    base_exp_yield: u8,
+    base_exp_yield: u16,
     base_friendship: u8,
     catch_rate: u8,
     egg_cycles: u8,
