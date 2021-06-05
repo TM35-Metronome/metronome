@@ -68,8 +68,8 @@ pub fn main2(
 
 fn outputInfo(writer: anytype, i: usize, info: offsets.Info) !void {
     try writer.print(".game[{}].game_title={}\n", .{ i, info.game_title });
-    try writer.print(".game[{}].gamecode={}\n", .{ i, info.gamecode });
-    try writer.print(".game[{}].version={}\n", .{ i, @tagName(info.version) });
+    try writer.print(".game[{}].gamecode={s}\n", .{ i, info.gamecode });
+    try writer.print(".game[{}].version={s}\n", .{ i, @tagName(info.version) });
     try writer.print(".game[{}].software_version={}\n", .{ i, info.software_version });
     try writer.print(".game[{}].text_delays.start={}\n", .{ i, info.text_delays.start });
     try writer.print(".game[{}].text_delays.len={}\n", .{ i, info.text_delays.len });
@@ -333,6 +333,7 @@ fn getOffsets(
         .pokemons = offsets.BaseStatsSection.init(data, pokemons),
         .evolutions = offsets.EvolutionSection.init(data, evolution_table),
         .level_up_learnset_pointers = offsets.LevelUpLearnsetPointerSection.init(data, level_up_learnset_pointers),
+        .type_effectiveness = undefined,
         .hms = offsets.HmSection.init(data, hms_slice),
         .tms = offsets.TmSection.init(data, tms_slice),
         .pokedex = switch (version) {

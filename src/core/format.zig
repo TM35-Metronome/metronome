@@ -7,6 +7,7 @@ const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
+const meta = std.meta;
 
 //! The tm35 format in 8 lines of cfg:
 //! Line <- Suffix* '=' .*
@@ -347,7 +348,7 @@ fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !vo
         },
         .Enum => try writeHelper(writer, prefix, @tagName(value)),
         .Union => |info| {
-            const Tag = @TagType(T);
+            const Tag = meta.TagType(T);
             inline for (info.fields) |field| {
                 if (@field(Tag, field.name) == value) {
                     try writeHelper(
@@ -393,7 +394,7 @@ pub fn setField(struct_ptr: anytype, union_val: anytype) void {
     const Union = @TypeOf(union_val);
 
     inline for (@typeInfo(Union).Union.fields) |field| {
-        if (union_val == @field(@TagType(Union), field.name)) {
+        if (union_val == @field(meta.TagType(Union), field.name)) {
             @field(struct_ptr, field.name) = @field(union_val, field.name);
             return;
         }
@@ -405,7 +406,7 @@ fn getUnionValue(
 ) @TypeOf(&@field(val, @typeInfo(@TypeOf(val)).Union.fields[0].name)) {
     const T = @TypeOf(val);
     inline for (@typeInfo(T).Union.fields) |field| {
-        if (val == @field(@TagType(T), field.name)) {
+        if (val == @field(meta.TagType(T), field.name)) {
             return &@field(val, field.name);
         }
     }
@@ -702,8 +703,8 @@ pub const WildPokemons = union(enum) {
     good_rod: WildArea,
     super_rod: WildArea,
 
-    pub fn init(tag: @TagType(WildPokemons), area: WildArea) WildPokemons {
-        const Tag = @TagType(WildPokemons);
+    pub fn init(tag: meta.TagType(WildPokemons), area: WildArea) WildPokemons {
+        const Tag = meta.TagType(WildPokemons);
         inline for (@typeInfo(Tag).Enum.fields) |field| {
             if (@field(Tag, field.name) == tag)
                 return @unionInit(WildPokemons, field.name, area);

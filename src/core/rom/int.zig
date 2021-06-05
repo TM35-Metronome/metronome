@@ -5,25 +5,25 @@ const debug = std.debug;
 const mem = std.mem;
 const testing = std.testing;
 
-pub const lu16 = Int(u16, .Little);
-pub const lu32 = Int(u32, .Little);
-pub const lu64 = Int(u64, .Little);
-pub const lu128 = Int(u128, .Little);
+pub const li128 = Int(i128, .Little);
 pub const li16 = Int(i16, .Little);
 pub const li32 = Int(i32, .Little);
 pub const li64 = Int(i64, .Little);
-pub const li128 = Int(i128, .Little);
+pub const lu128 = Int(u128, .Little);
+pub const lu16 = Int(u16, .Little);
+pub const lu32 = Int(u32, .Little);
+pub const lu64 = Int(u64, .Little);
 
+pub const bi128 = Int(i128, .Big);
+pub const bi16 = Int(i16, .Big);
+pub const bi32 = Int(i32, .Big);
+pub const bu128 = Int(u128, .Big);
 pub const bu16 = Int(u16, .Big);
 pub const bu32 = Int(u32, .Big);
 pub const bu64 = Int(u64, .Big);
-pub const bu128 = Int(u128, .Big);
-pub const bi16 = Int(i16, .Big);
-pub const bi32 = Int(i32, .Big);
-pub const bi128 = Int(i128, .Big);
 
 /// A data structure representing an integer of a specific endianess
-pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
+pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
     comptime debug.assert(@typeInfo(_Inner) == .Int);
 
     return packed struct {
@@ -67,7 +67,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: builtin.Endian) type {
         }
 
         fn swap(v: Inner) Inner {
-            return if (_endian != builtin.endian) @byteSwap(Inner, v) else v;
+            return if (_endian != builtin.target.cpu.arch.endian()) @byteSwap(Inner, v) else v;
         }
     };
 }

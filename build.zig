@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 
 const mem = std.mem;
@@ -85,18 +84,18 @@ pub fn build(b: *Builder) void {
 
     const options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
     for (core_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/core/{}.zig", .{name}), options);
+        buildProgram(b, name, b.fmt("src/core/{s}.zig", .{name}), options);
     for (randomizer_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/randomizers/{}.zig", .{name}), options);
+        buildProgram(b, name, b.fmt("src/randomizers/{s}.zig", .{name}), options);
     for (other_exes) |name, i|
-        buildProgram(b, name, b.fmt("src/other/{}.zig", .{name}), options);
+        buildProgram(b, name, b.fmt("src/other/{s}.zig", .{name}), options);
 
     const lib_cflags = &[_][]const u8{
         "-D_POSIX_C_SOURCE=200809L",
         "-fno-sanitize=undefined", // Nuklear trips the undefined sanitizer https://github.com/Immediate-Mode-UI/Nuklear/issues/94
     };
     for (gui_exes) |tool, i| {
-        const source = b.fmt("src/gui/{}.zig", .{tool});
+        const source = b.fmt("src/gui/{s}.zig", .{tool});
         const exe = b.addExecutable(tool, source);
         for (pkgs) |pkg|
             exe.addPackage(pkg);
@@ -141,7 +140,7 @@ pub fn build(b: *Builder) void {
 const BuildProgramOptions = struct {
     install: bool = true,
     strip: bool = false,
-    mode: builtin.Mode = .Debug,
+    mode: std.builtin.Mode = .Debug,
     target: Target,
 };
 
@@ -151,7 +150,7 @@ fn buildProgram(
     src: []const u8,
     opt: BuildProgramOptions,
 ) void {
-    const step = b.step(b.fmt("build-{}", .{name}), "");
+    const step = b.step(b.fmt("build-{s}", .{name}), "");
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
         exe.addPackage(pkg);
@@ -166,7 +165,7 @@ fn buildProgram(
     b.default_step.dependOn(step);
 }
 
-fn testIt(b: *Builder, parent_step: *Step, mode: builtin.Mode, src: []const u8) void {
+fn testIt(b: *Builder, parent_step: *Step, mode: std.builtin.Mode, src: []const u8) void {
     const exe_test = b.addTest(src);
     for (pkgs) |pkg|
         exe_test.addPackage(pkg);

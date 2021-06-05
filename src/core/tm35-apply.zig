@@ -80,7 +80,7 @@ pub fn main2(
 
     const patch_arg = args.option("--patch") orelse "none";
     const patch = std.meta.stringToEnum(PatchOption, patch_arg) orelse {
-        log.err("--patch does not support '{}'\n", .{patch_arg});
+        log.err("--patch does not support '{s}'\n", .{patch_arg});
         return error.InvalidArgument;
     };
 
@@ -88,7 +88,7 @@ pub fn main2(
     const abort_on_first_warning = args.flag("--abort-on-first-warning");
     const replace = args.flag("--replace");
     const out = args.option("--output") orelse blk: {
-        break :blk try fmt.allocPrint(allocator, "{}.modified", .{path.basename(file_name)});
+        break :blk try fmt.allocPrint(allocator, "{s}.modified", .{path.basename(file_name)});
     };
 
     var nds_rom: nds.Rom = undefined;
@@ -102,8 +102,8 @@ pub fn main2(
 
         try file.seekTo(0);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
-            log.err("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error });
-            log.err("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+            log.err("Failed to load '{s}' as a gen3 game: {}\n", .{ file_name, gen3_error });
+            log.err("Failed to load '{s}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
             return error.InvalidRom;
         };
 
@@ -115,9 +115,9 @@ pub fn main2(
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
-        log.err("Successfully loaded '{}' as a nds rom.\n", .{file_name});
-        log.err("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error });
-        log.err("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        log.err("Successfully loaded '{s}' as a nds rom.\n", .{file_name});
+        log.err("Failed to load '{s}' as a gen4 game: {}\n", .{ file_name, gen4_error });
+        log.err("Failed to load '{s}' as a gen5 game: {}\n", .{ file_name, gen5_error });
         return error.InvalidRom;
     };
     defer game.deinit();
@@ -144,7 +144,7 @@ pub fn main2(
         while (it.next()) |p| {
             try stdio.out.print("[{}]={x}\n", .{
                 p.offset,
-                p.replacement,
+                std.fmt.fmtSliceHexLower(p.replacement),
             });
         }
     }
@@ -223,7 +223,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         while (it.next()) |p| {
             try ctx.out.print("[{}]={x}\n", .{
                 p.offset,
-                p.replacement,
+                std.fmt.fmtSliceHexLower(p.replacement),
             });
 
             try ctx.old_bytes.resize(math.max(

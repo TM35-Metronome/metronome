@@ -16,9 +16,9 @@ const lu16 = int.lu16;
 const lu32 = int.lu32;
 const lu64 = int.lu64;
 
-pub const crc_modbus = comptime blk: {
+pub const crc_modbus = blk: {
     @setEvalBranchQuota(crc.crcspec_init_backward_cycles);
-    break :blk crc.CrcSpec(u16).init(0x8005, 0xFFFF, 0x0000, crc.Reflect.Data.True, crc.Reflect.Remainder.True);
+    break :blk crc.CrcSpec(u16).init(0x8005, 0xFFFF, 0x0000, true, true);
 };
 
 test "nds.crc_modbus" {

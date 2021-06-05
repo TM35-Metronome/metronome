@@ -271,7 +271,7 @@ fn generate(writer: anytype, game: Game) !void {
 
     for (game.starters.items()) |starter_kv| {
         const starter_name = if (game.pokemons.get(starter_kv.value)) |p| p.name else unknown;
-        try writer.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td></tr>", .{
+        try writer.print("<tr><td><a href=\"#pokemon_{}\">{s}</a></td></tr>", .{
             starter_kv.value,
             starter_name,
         });
@@ -289,7 +289,7 @@ fn generate(writer: anytype, game: Game) !void {
                 break .{ .name = pokemon.value.name, .species = pokemon.key };
         } else continue;
 
-        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {}</a></td></tr>\n", .{ pokemon.species, dex.key, pokemon.name });
+        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {s}</a></td></tr>\n", .{ pokemon.species, dex.key, pokemon.name });
     }
 
     try writer.print(
@@ -300,7 +300,7 @@ fn generate(writer: anytype, game: Game) !void {
     for (game.pokemons.items()) |pokemon_kv| {
         const species = pokemon_kv.key;
         const pokemon = pokemon_kv.value;
-        try writer.print("<h2 id=\"pokemon_{}\">#{} {}</h2>\n", .{ species, species, pokemon.name });
+        try writer.print("<h2 id=\"pokemon_{}\">#{} {s}</h2>\n", .{ species, species, pokemon.name });
 
         try writer.print(
             \\<table>
@@ -425,7 +425,7 @@ fn generate(writer: anytype, game: Game) !void {
         inline for (stat_names) |stat| {
             const value = @field(pokemon.stats, stat[0]);
             const percent = @floatToInt(usize, (@intToFloat(f64, value) / 255) * 100);
-            try writer.print("<tr><td>{}:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_{}\">{}</div></td></tr>\n", .{ stat[1], percent, stat[0], value });
+            try writer.print("<tr><td>{s}:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_{s}\">{}</div></td></tr>\n", .{ stat[1], percent, stat[0], value });
             total_stats += value;
         }
 
@@ -441,7 +441,7 @@ fn generate(writer: anytype, game: Game) !void {
         total_stats = 0;
         inline for (stat_names) |stat| {
             const value = @field(pokemon.ev_yield, stat[0]);
-            try writer.print("<tr><td>{}:</td><td>{}</td></tr>\n", .{ stat[1], value });
+            try writer.print("<tr><td>{s}:</td><td>{}</td></tr>\n", .{ stat[1], value });
             total_stats += value;
         }
 
@@ -472,7 +472,7 @@ fn generate(writer: anytype, game: Game) !void {
                 const move_id = moves.get(id) orelse continue;
                 const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
                 try writer.print(
-                    "<tr><td>{}{}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n",
+                    "<tr><td>{s}{}</td><td><a href=\"#move_{}\">{s}</a></td></tr>\n",
                     .{ prefix, id + 1, move_id, move_name },
                 );
             }
@@ -547,7 +547,7 @@ fn generate(writer: anytype, game: Game) !void {
         const move = move_kv.value;
         const move_name = humanize(move.name);
         try writer.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
-        try writer.print("<p>{}</p>\n", .{move.description});
+        try writer.print("<p>{s}</p>\n", .{move.description});
         try writer.print("<table>\n", .{});
 
         const type_name = humanize(if (game.types.get(move.type)) |t| t.name else unknown);
@@ -565,7 +565,7 @@ fn generate(writer: anytype, game: Game) !void {
         const item = item_kv.value;
         const item_name = humanize(item.name);
         try writer.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });
-        try writer.print("<p>{}</p>\n", .{item.description});
+        try writer.print("<p>{s}</p>\n", .{item.description});
 
         try writer.print("<table>\n", .{});
         try printSimpleFields(writer, item, &[_][]const u8{});

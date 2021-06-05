@@ -23,10 +23,8 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.") catch unreachable,
         clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
         clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
-        clap.parseParam("-r, --replace                 Replace output file if it already exists.    ") catch unreachable,
         clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
         clap.parseParam("<ROM>") catch unreachable,
     };
@@ -57,7 +55,7 @@ pub fn main2(
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
     const out = args.option("--output") orelse blk: {
-        break :blk try fmt.allocPrint(allocator, "{}.output", .{path.basename(file_name)});
+        break :blk try fmt.allocPrint(allocator, "{s}.output", .{path.basename(file_name)});
     };
 
     const rom_file = try cwd.openFile(file_name, .{});
@@ -83,14 +81,15 @@ pub fn main2(
     defer root_dir.close();
 
     try out_dir.writeFile("arm9", nds_rom.arm9());
+    try out_dir.writeFile("arm9_decoded", try nds_rom.getDecodedArm9(allocator));
     try out_dir.writeFile("arm7", nds_rom.arm7());
     try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
     if (nds_rom.banner()) |banner|
         try out_dir.writeFile("banner", mem.asBytes(banner));
 
     const file_system = nds_rom.fileSystem();
-    try writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable());
-    try writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable());
+    try writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable(), allocator);
+    try writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable(), allocator);
 
     try writeFs(root_dir, file_system, nds.fs.root);
 }
@@ -111,11 +110,18 @@ fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!voi
     }
 }
 
-fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay) !void {
+fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay, allocator: *mem.Allocator) !void {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
 
     for (overlays) |*overlay, i| {
         try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
-        try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, file_system.fileData(.{ .i = overlay.file_id.value() }));
+
+        const data = file_system.fileData(.{ .i = overlay.file_id.value() });
+        if (nds.blz.decode(data, allocator)) |d| {
+            std.log.info("Decompressed overlay {}", .{i});
+            try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, d);
+        } else |_| {
+            try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, data);
+        }
     }
 }

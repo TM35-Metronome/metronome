@@ -59,7 +59,7 @@ pub fn main2(
         else if (mem.eql(u8, pref, "stab"))
             Preference.stab
         else {
-            log.err("--preference does not support '{}'\n", .{pref});
+            log.err("--preference does not support '{s}'\n", .{pref});
             return error.InvalidArgument;
         }
     else

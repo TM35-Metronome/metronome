@@ -1,6 +1,7 @@
-const builtin = @import("builtin");
-const std = @import("std");
 const int = @import("int.zig");
+const std = @import("std");
+
+const builtin = std.builtin;
 
 pub const Error = error{InvalidPointer};
 

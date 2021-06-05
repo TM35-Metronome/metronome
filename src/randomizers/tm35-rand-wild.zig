@@ -10,6 +10,7 @@ const heap = std.heap;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
+const meta = std.meta;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
@@ -62,7 +63,7 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.wild_pokemons.items()) |zone| {
         for (zone.value.wild_areas) |area, j| {
-            const aid = @intToEnum(@TagType(format.WildPokemons), @intCast(u5, j));
+            const aid = @intToEnum(meta.TagType(format.WildPokemons), @intCast(u5, j));
             for (area.pokemons.items()) |pokemon| {
                 if (pokemon.value.min_level) |l|
                     try format.write(writer, format.Game.wild_pokemon(zone.key, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon.key, .value = .{ .min_level = l } } })));

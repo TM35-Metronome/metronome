@@ -67,13 +67,13 @@ pub fn main2(
     const seed = try util.getSeed(args);
     const type_arg = args.option("--types") orelse "random";
     const types = std.meta.stringToEnum(Type, type_arg) orelse {
-        log.err("--types does not support '{}'\n", .{type_arg});
+        log.err("--types does not support '{s}'\n", .{type_arg});
         return error.InvalidArgument;
     };
 
     const method_arg = args.option("--method") orelse "random";
     const method = std.meta.stringToEnum(Method, method_arg) orelse {
-        log.err("--method does not support '{}'\n", .{method_arg});
+        log.err("--method does not support '{s}'\n", .{method_arg});
         return error.InvalidArgument;
     };
 

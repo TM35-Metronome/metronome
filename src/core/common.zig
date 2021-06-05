@@ -251,3 +251,9 @@ pub const EvYield = packed struct {
         std.debug.assert(@sizeOf(EvYield) == 2);
     }
 };
+
+pub const TypeEffectiveness = packed struct {
+    attacker: u8,
+    defender: u8,
+    multiplier: u8,
+};

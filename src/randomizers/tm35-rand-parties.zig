@@ -103,27 +103,27 @@ pub fn main2(
     const party_size_min = fmt.parseUnsigned(u8, party_size_min_arg, 10);
     const party_size_max = fmt.parseUnsigned(u8, party_size_max_arg, 10);
     const abilities = std.meta.stringToEnum(ThemeOption, abilities_arg) orelse {
-        log.err("--abilities does not support '{}'\n", .{abilities_arg});
+        log.err("--abilities does not support '{s}'\n", .{abilities_arg});
         return error.InvalidArgument;
     };
     const items = std.meta.stringToEnum(ItemOption, items_arg) orelse {
-        log.err("--items does not support '{}'\n", .{items_arg});
+        log.err("--items does not support '{s}'\n", .{items_arg});
         return error.InvalidArgument;
     };
     const party_size_method = std.meta.stringToEnum(PartySizeMethod, party_size_method_arg) orelse {
-        log.err("--party-size-pick-method does not support '{}'\n", .{party_size_method_arg});
+        log.err("--party-size-pick-method does not support '{s}'\n", .{party_size_method_arg});
         return error.InvalidArgument;
     };
     const moves = std.meta.stringToEnum(MoveOption, moves_arg) orelse {
-        log.err("--moves does not support '{}'\n", .{moves_arg});
+        log.err("--moves does not support '{s}'\n", .{moves_arg});
         return error.InvalidArgument;
     };
     const stats = std.meta.stringToEnum(StatsOption, stats_arg) orelse {
-        log.err("--stats does not support '{}'\n", .{stats_arg});
+        log.err("--stats does not support '{s}'\n", .{stats_arg});
         return error.InvalidArgument;
     };
     const types = std.meta.stringToEnum(ThemeOption, types_arg) orelse {
-        log.err("--types does not support '{}'\n", .{types_arg});
+        log.err("--types does not support '{s}'\n", .{types_arg});
         return error.InvalidArgument;
     };
     for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!u8 }{
@@ -131,7 +131,7 @@ pub fn main2(
         .{ .arg = "--party-size-max", .value = party_size_max_arg, .check = party_size_max },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
-            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            log.err("Invalid value for {s}: {s}\n", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
     }

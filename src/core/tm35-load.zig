@@ -80,13 +80,13 @@ pub fn main2(
             return;
         } else |err| err;
 
-        log.info("Successfully loaded '{}' as a nds rom.\n", .{file_name});
-        log.err("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error });
-        log.err("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        log.info("Successfully loaded '{s}' as a nds rom.\n", .{file_name});
+        log.err("Failed to load '{s}' as a gen4 game: {}\n", .{ file_name, gen4_error });
+        log.err("Failed to load '{s}' as a gen5 game: {}\n", .{ file_name, gen5_error });
         return gen5_error;
     } else |nds_error| {
-        log.err("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error });
-        log.err("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+        log.err("Failed to load '{s}' as a gen3 game: {}\n", .{ file_name, gen3_error });
+        log.err("Failed to load '{s}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
         return nds_error;
     }
 }

@@ -79,7 +79,7 @@ pub fn main2(
         .{ .arg = "--allow-running", .value = running_arg, .check = running },
     }) |arg| {
         if (arg.check == null) {
-            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            log.err("Invalid value for {s}: {s}\n", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
     }
@@ -91,7 +91,7 @@ pub fn main2(
         .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
-            log.err("Invalid value for {}: {}\n", .{ arg.arg, arg.value });
+            log.err("Invalid value for {s}: {s}\n", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
     }
@@ -182,7 +182,11 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                     if (allow == .unchanged)
                         return error.ParserFailed;
 
-                    return out.print(".maps[{}].{}={}\n", .{ maps.index, @tagName(maps.value), allow == .everywhere });
+                    return out.print(".maps[{}].{s}={}\n", .{
+                        maps.index,
+                        @tagName(maps.value),
+                        allow == .everywhere,
+                    });
                 },
                 .music,
                 .cave,
@@ -255,7 +259,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                     .min_level, .max_level => |level| if (opt.wild_scale != 1.0) {
                         const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
                         const new_level = @floatToInt(u8, math.min(new_level_float, 100));
-                        return out.print(".wild_pokemons[{}].{}.pokemons[{}].{}={}\n", .{
+                        return out.print(".wild_pokemons[{}].{s}.pokemons[{}].{s}={}\n", .{
                             wild_areas.index,
                             @tagName(wild_areas.value),
                             pokemons.index,

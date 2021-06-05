@@ -5,6 +5,11 @@ pub const NarcOffset = struct {
     offset: usize,
 };
 
+pub const OverlayOffset = struct {
+    overlay: usize,
+    offset: usize,
+};
+
 pub const Info = struct {
     game_title: [11:0]u8,
     gamecode: [4]u8,
@@ -12,6 +17,7 @@ pub const Info = struct {
 
     starters: [3][]const NarcOffset,
     instant_text_patch: []const common.Patch,
+    type_effectiveness: OverlayOffset,
 
     scripts: []const u8,
     pokemons: []const u8,
@@ -74,6 +80,7 @@ const black2_info = Info{
         .{ .offset = 0x01e544, .replacement = "\xc0\x46\xc0\x46" },
         .{ .offset = 0x01e5fc, .replacement = "\xc5\xd1" },
     },
+    .type_effectiveness = .{ .overlay = 167, .offset = 0x3dc40 },
 
     .scripts = "/a/0/5/6",
     .pokemons = "/a/0/1/6",
@@ -113,6 +120,7 @@ const white2_info = Info{
         .{ .offset = 0x01e570, .replacement = "\xc0\x46\xc0\x46" },
         .{ .offset = 0x01e628, .replacement = "\xc5\xd1" },
     },
+    .type_effectiveness = .{ .overlay = 167, .offset = 0x3dc40 },
 
     .scripts = black2_info.scripts,
     .pokemons = black2_info.pokemons,
@@ -177,6 +185,7 @@ const black_info = Info{
         .{ .offset = 0x018fc0, .replacement = "\xc0\x46\xc0\x46" },
         .{ .offset = 0x019078, .replacement = "\xc5\xd1" },
     },
+    .type_effectiveness = .{ .overlay = 93, .offset = 0x3a37c },
 
     .scripts = "/a/0/5/7",
     .pokemons = black2_info.pokemons,
@@ -216,6 +225,7 @@ const white_info = Info{
         .{ .offset = 0x018fdc, .replacement = "\xc0\x46\xc0\x46" },
         .{ .offset = 0x019094, .replacement = "\xc5\xd1" },
     },
+    .type_effectiveness = .{ .overlay = 93, .offset = 0x3a37c },
 
     .scripts = black_info.scripts,
     .pokemons = black_info.pokemons,
@@ -245,6 +255,6 @@ const white_info = Info{
     .map_names = black_info.map_names,
 };
 
-pub const tm_count = 95;
 pub const hm_count = 6;
 pub const hm_tm_prefix = "\x87\x03\x88\x03";
+pub const tm_count = 95;

@@ -75,13 +75,13 @@ pub fn main2(
             return;
         } else |err| err;
 
-        log.info("Successfully loaded '{}' as a nds rom.\n", .{file_name});
-        log.err("Failed to load '{}' as a gen4 game: {}\n", .{ file_name, gen4_error });
-        log.err("Failed to load '{}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        log.info("Successfully loaded '{s}' as a nds rom.\n", .{file_name});
+        log.err("Failed to load '{s}' as a gen4 game: {}\n", .{ file_name, gen4_error });
+        log.err("Failed to load '{s}' as a gen5 game: {}\n", .{ file_name, gen5_error });
         return gen5_error;
     } else |nds_error| {
-        log.err("Failed to load '{}' as a gen3 game: {}\n", .{ file_name, gen3_error });
-        log.err("Failed to load '{}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+        log.err("Failed to load '{s}' as a gen3 game: {}\n", .{ file_name, gen3_error });
+        log.err("Failed to load '{s}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
         return nds_error;
     }
 }
@@ -160,7 +160,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, writer: any
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
                 try writer.print("\tUnknown(0x{x})\t@0x{x}\n", .{
-                    rest[0..math.min(rest.len, 2)],
+                    std.fmt.fmtSliceHexLower(rest[0..math.min(rest.len, 2)]),
                     decoder.i,
                 });
                 continue;
@@ -219,7 +219,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, writer: any
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
                 try writer.print("\tUnknown(0x{x})\t@0x{x}\n", .{
-                    rest[0..math.min(rest.len, 2)],
+                    std.fmt.fmtSliceHexLower(rest[0..math.min(rest.len, 2)]),
                     decoder.i,
                 });
                 continue;
@@ -260,7 +260,7 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
     switch (@typeInfo(T)) {
         .Void => {},
         .Int => |i| try writer.print("{}", .{value}),
-        .Enum => |e| try writer.print("{}", .{@tagName(value)}),
+        .Enum => |e| try writer.print("{s}", .{@tagName(value)}),
         .Array => for (value) |v| {
             try printCommandHelper(writer, v);
         },

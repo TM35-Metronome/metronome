@@ -63,7 +63,7 @@ pub fn main2(
     }) |Game| {
         try file.seekTo(0);
         if (Game.identify(reader)) |info| {
-            try stdio.out.print("Version: Pokémon {}\nGamecode: {}\n", .{
+            try stdio.out.print("Version: Pokémon {s}\nGamecode: {s}\n", .{
                 info.version.humanString(),
                 info.gamecode,
             });

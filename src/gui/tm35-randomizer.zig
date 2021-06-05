@@ -307,7 +307,7 @@ pub fn drawOptions(
     var biggest_width: f32 = 0;
     for (command.params) |param, i| {
         const text = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-        if (param.takes_value == .None)
+        if (param.takes_value == .none)
             continue;
         if (mem.eql(u8, text, "help"))
             continue;
@@ -332,7 +332,7 @@ pub fn drawOptions(
         if (mem.eql(u8, param_name, "version"))
             continue;
 
-        if (param.takes_value == .None) {
+        if (param.takes_value == .none) {
             c.nk_layout_row_dynamic(ctx, 0, 1);
 
             c.nkWidgetBounds(ctx, &bounds);
@@ -409,7 +409,7 @@ pub fn drawOptions(
                         continue;
 
                     arg.* = Settings.Arg.fromSlice(item) catch {
-                        popups.err("{}", .{bug_message});
+                        popups.err("{s}", .{bug_message});
                         continue;
                     };
                 }
@@ -510,13 +510,13 @@ pub fn drawActions(
                     selected_path_slice,
                 },
             }) catch |err| {
-                popups.err("Failed to identify {}: {}", .{ selected_path_slice, err });
+                popups.err("Failed to identify {s}: {}", .{ selected_path_slice, err });
                 rom = null;
                 return rom;
             };
 
             if (result.term != .Exited or result.term.Exited != 0) {
-                popups.err("{} is not a Pokémon rom.\n{}", .{ selected_path_slice, result.stderr });
+                popups.err("{s} is not a Pokémon rom.\n{s}", .{ selected_path_slice, result.stderr });
                 exes.allocator.free(result.stdout);
                 exes.allocator.free(result.stderr);
                 rom = null;
@@ -539,7 +539,7 @@ pub fn drawActions(
             stderr.writeAll("\n") catch {};
             randomize(exes, settings, in_path, out_path) catch |err| {
                 // TODO: Maybe print the stderr from the command we run in the randomizer function
-                popups.err("Failed to randomize '{}': {}", .{ in_path, err });
+                popups.err("Failed to randomize '{s}': {}", .{ in_path, err });
                 return rom;
             };
 
@@ -547,23 +547,23 @@ pub fn drawActions(
         },
         .load_settings => {
             const file = fs.cwd().openFile(selected_path.toSliceConst(), .{}) catch |err| {
-                popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Could not open '{s}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
             defer file.close();
             settings.load(exes, file.reader()) catch |err| {
-                popups.err("Failed to load from '{}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Failed to load from '{s}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
         },
         .save_settings => {
             const file = fs.cwd().createFile(selected_path.toSliceConst(), .{}) catch |err| {
-                popups.err("Could not open '{}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Could not open '{s}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
             defer file.close();
             settings.save(exes, file.writer()) catch |err| {
-                popups.err("Failed to write to '{}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Failed to write to '{s}': {}", .{ selected_path.toSliceConst(), err });
                 return rom;
             };
         },
@@ -812,7 +812,7 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
             try escaping_writer.writer().writeAll(param_name);
             try escaping_writer.finish();
             try writer.writeAll(quotes);
-            if (param.takes_value != .None) {
+            if (param.takes_value != .none) {
                 try writer.writeAll(" " ++ quotes);
                 try escaping_writer.writer().writeAll(arg.toSliceConst());
                 try escaping_writer.finish();
@@ -969,7 +969,7 @@ const Settings = struct {
                 const param_name = if (param.names.long) |long| long else @as(*const [1]u8, &param.names.short.?)[0..];
                 try writer.writeAll(param_pre);
                 try csv_escape.escapeWrite(writer, param_name);
-                if (param.takes_value != .None) {
+                if (param.takes_value != .none) {
                     try writer.writeAll(",");
                     try csv_escape.escapeWrite(writer, arg.toSliceConst());
                 }
@@ -1026,7 +1026,7 @@ const Settings = struct {
                 .params = command.params,
             };
 
-            while (try streaming_clap.next(null)) |arg| {
+            while (try streaming_clap.next()) |arg| {
                 const param_i = util.indexOfPtr(clap.Param(clap.Help), command.params, arg.param);
                 const command_arg = &command_args[param_i];
 
@@ -1202,11 +1202,11 @@ const Exes = struct {
 
         std.sort.sort(clap.Param(clap.Help), params.items, {}, struct {
             fn lessThan(ctx: void, a: clap.Param(clap.Help), b: clap.Param(clap.Help)) bool {
-                if (a.takes_value == .None and b.takes_value != .None)
+                if (a.takes_value == .none and b.takes_value != .none)
                     return true;
-                if (a.takes_value != .None and b.takes_value == .None)
+                if (a.takes_value != .none and b.takes_value == .none)
                     return false;
-                if (a.takes_value != .None and b.takes_value != .None) {
+                if (a.takes_value != .none and b.takes_value != .none) {
                     const a_is_opt = mem.indexOfScalar(u8, a.id.value, '|') != null;
                     const b_is_opt = mem.indexOfScalar(u8, b.id.value, '|') != null;
                     if (a_is_opt and !b_is_opt)

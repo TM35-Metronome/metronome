@@ -37,7 +37,7 @@ test "" {
 pub fn getSeed(args: anytype) !u64 {
     if (args.option("--seed")) |seed| {
         return fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            log.err("'{}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
+            log.err("'{s}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
             return error.InvalidSeed;
         };
     } else {
@@ -61,7 +61,7 @@ pub fn generateMain(
             // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
-            var args = clap.parse(clap.Help, params, &arena.allocator, &diag) catch |err| {
+            var args = clap.parse(clap.Help, params, .{ .diagnostic = &diag }) catch |err| {
                 var stderr = io.bufferedWriter(std.io.getStdErr().writer());
                 diag.report(stderr.writer(), err) catch {};
                 usage(stderr.writer()) catch {};
@@ -78,7 +78,7 @@ pub fn generateMain(
 
             if (args.flag("--version")) {
                 var stdout = io.bufferedWriter(std.io.getStdOut().writer());
-                try stdout.writer().print("{}\n", .{version});
+                try stdout.writer().print("{s}\n", .{version});
                 try stdout.flush();
                 return;
             }
@@ -213,7 +213,7 @@ pub const dir = struct {
         var buf: [fs.MAX_PATH_BYTES * 2]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
         const res = (try folders.getPath(&fba.allocator, f)) //
-            orelse return error.NotAvailable;
+        orelse return error.NotAvailable;
         return Path.fromSlice(res);
     }
 };

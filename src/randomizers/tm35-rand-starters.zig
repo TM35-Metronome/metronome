@@ -52,7 +52,7 @@ pub fn main2(
     const seed = try util.getSeed(args);
     const evolutions = if (args.option("--evolutions")) |evos|
         fmt.parseUnsigned(usize, evos, 10) catch |err| {
-            log.err("'{}' could not be parsed as a number to --evolutions: {}\n", .{ evos, err });
+            log.err("'{s}' could not be parsed as a number to --evolutions: {}\n", .{ evos, err });
             return error.InvalidArgument;
         }
     else

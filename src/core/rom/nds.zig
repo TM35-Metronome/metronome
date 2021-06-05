@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const blz = @import("nds/blz.zig");
 const int = @import("int.zig");
+pub const blz = @import("nds/blz.zig");
 
 const debug = std.debug;
 const heap = std.heap;
