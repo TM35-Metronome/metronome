@@ -510,8 +510,8 @@ test "searcher.Searcher.find" {
     });
 
     const search_for = S{ .a = 0, .b = 3 };
-    testing.expectEqual(try S1.find1(data, search_for), &s_array[1]);
-    testing.expectEqual(try S2.find1(data, search_for), &s_array[0]);
+    try testing.expectEqual(try S1.find1(data, search_for), &s_array[1]);
+    try testing.expectEqual(try S2.find1(data, search_for), &s_array[0]);
 }
 
 test "searcher.Searcher.find2" {
@@ -536,12 +536,12 @@ test "searcher.Searcher.find2" {
         S{ .a = 4, .b = 3 },
         S{ .a = 0, .b = 1 },
     };
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..3]),
         mem.sliceAsBytes(try S1.find2(data, search_for)),
     );
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..2]),
         mem.sliceAsBytes(try S2.find2(data, search_for)),
@@ -569,12 +569,12 @@ test "searcher.Searcher.find3" {
 
     const a = S{ .a = 4, .b = 3 };
     const b = S{ .a = 4, .b = 3 };
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..4]),
         mem.sliceAsBytes(try S1.find3(data, a, b)),
     );
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..3]),
         mem.sliceAsBytes(try S2.find3(data, a, b)),
@@ -610,12 +610,12 @@ test "searcher.Searcher.find4" {
         S{ .a = 0, .b = 1 },
         S{ .a = 4, .b = 3 },
     };
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[1..6]),
         mem.sliceAsBytes(try S1.find4(data, &a, &b)),
     );
-    testing.expectEqualSlices(
+    try testing.expectEqualSlices(
         u8,
         mem.sliceAsBytes(s_array[0..5]),
         mem.sliceAsBytes(try S2.find4(data, &a, &b)),

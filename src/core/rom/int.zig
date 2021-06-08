@@ -5,6 +5,8 @@ const debug = std.debug;
 const mem = std.mem;
 const testing = std.testing;
 
+const native_endian = builtin.target.cpu.arch.endian();
+
 pub const li128 = Int(i128, .Little);
 pub const li16 = Int(i16, .Little);
 pub const li32 = Int(i32, .Little);
@@ -27,34 +29,18 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
     comptime debug.assert(@typeInfo(_Inner) == .Int);
 
     return packed struct {
-        __inner: Inner,
+        inner: Inner,
 
         pub const Inner = _Inner;
         pub const endian = _endian;
 
         pub fn init(v: Inner) @This() {
-            return .{ .__inner = swap(v) };
+            return .{ .inner = swap(v) };
         }
 
         /// Converts the integer to native endianess and returns it.
         pub fn value(int: @This()) Inner {
-            return swap(int.__inner);
-        }
-
-        /// Ignore the integers endianess and read it as if it was a native integer.
-        /// You probably shouldn't call this function as it is most likely not what you want.
-        /// The few cases this is useful is for things like defining an endian aware enum:
-        /// pub const E = enum(u16) {
-        ///     A = lu16.init(1).valueNative(),
-        ///     B = lu16.init(2).valueNative(),
-        ///     C = lu16.init(3).valueNative(),
-        /// }
-        ///
-        /// Here, we cannot define the tag as a `lu16´, so instead we use `valueNative`.
-        /// The values of A,B,C will differ on platforms of different endianess, but
-        /// the bit layout of A,B,C will always be the same no matter the endianess.
-        pub fn valueNative(int: @This()) Inner {
-            return int.__inner;
+            return swap(int.inner);
         }
 
         pub fn format(
@@ -67,7 +53,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
         }
 
         fn swap(v: Inner) Inner {
-            return if (_endian != builtin.target.cpu.arch.endian()) @byteSwap(Inner, v) else v;
+            return if (_endian != native_endian) @byteSwap(Inner, v) else v;
         }
     };
 }
@@ -76,18 +62,18 @@ test "Int" {
     const value: u32 = 0x12345678;
     const numLittle = Int(u32, .Little).init(value);
     const numBig = Int(u32, .Big).init(value);
-    testing.expectEqual(value, numLittle.value());
-    testing.expectEqual(value, numBig.value());
-    testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, &@bitCast([4]u8, numLittle));
-    testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, &@bitCast([4]u8, numBig));
-    switch (builtin.endian) {
+    try testing.expectEqual(value, numLittle.value());
+    try testing.expectEqual(value, numBig.value());
+    try testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, @ptrCast(*const [4]u8, &numLittle));
+    try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, @ptrCast(*const [4]u8, &numBig));
+    switch (native_endian) {
         .Big => {
-            testing.expectEqual(@as(u32, 0x78563412), numLittle.valueNative());
-            testing.expectEqual(value, numBig.valueNative());
+            try testing.expectEqual(@as(u32, 0x78563412), numLittle.inner);
+            try testing.expectEqual(value, numBig.inner);
         },
         .Little => {
-            testing.expectEqual(@as(u32, 0x78563412), numBig.valueNative());
-            testing.expectEqual(value, numLittle.valueNative());
+            try testing.expectEqual(@as(u32, 0x78563412), numBig.inner);
+            try testing.expectEqual(value, numLittle.inner);
         },
     }
 }

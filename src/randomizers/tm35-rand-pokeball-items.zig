@@ -211,28 +211,28 @@ test "tm35-rand-pokeball-items" {
         H.pokeball("2", "2") ++
         H.pokeball("3", "3");
 
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=3"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=3"}, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[3].item=1
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-key-items" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=1
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=2
         \\.pokeball_items[3].item=3
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-tms-hms" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--include-tms-hms" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
         \\.pokeball_items[1].item=2
         \\.pokeball_items[2].item=3
         \\.pokeball_items[3].item=3
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--include-tms-hms", "--include-key-items" }, test_string, result_prefix ++
         \\.pokeball_items[0].item=1
         \\.pokeball_items[1].item=3
         \\.pokeball_items[2].item=0

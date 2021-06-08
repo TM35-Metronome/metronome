@@ -235,7 +235,7 @@ test "tm35-rand-machines" {
         \\.hms[2]=5
         \\
     ;
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.hms[0]=1
         \\.hms[1]=3
         \\.hms[2]=5
@@ -244,7 +244,7 @@ test "tm35-rand-machines" {
         \\.tms[2]=0
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
         \\.tms[0]=1
         \\.tms[1]=0
         \\.tms[2]=0

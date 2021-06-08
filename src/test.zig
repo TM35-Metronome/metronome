@@ -1,4 +1,4 @@
-test "" {
+test {
     _ = @import("common/util.zig");
     _ = @import("core/tm35-apply.zig");
     _ = @import("core/tm35-disassemble-scripts.zig");

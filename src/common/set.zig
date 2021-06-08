@@ -46,8 +46,8 @@ test "intersect" {
         defer res_a.deinit();
         var res_b = try intersect(Set, testing.allocator, b, a);
         defer res_b.deinit();
-        expectEqual(expect, res_a);
-        expectEqual(expect, res_b);
+        try expectEqual(expect, res_a);
+        try expectEqual(expect, res_b);
     }
 }
 
@@ -81,6 +81,6 @@ pub fn eql(a: anytype, b: anytype) bool {
 }
 
 /// Tests that the set `actual` is equal to the set `expect`.
-pub fn expectEqual(expect: anytype, actual: anytype) void {
-    testing.expect(eql(expect, actual));
+pub fn expectEqual(expect: anytype, actual: anytype) !void {
+    try testing.expect(eql(expect, actual));
 }

@@ -249,7 +249,7 @@ test "tm35-no-trade-evolutions" {
         H.evo("2", "trade_holding_item", "1") ++
         H.evo("3", "trade_with_pokemon", "1");
 
-    util.testing.testProgram(
+    try util.testing.testProgram(
         main2,
         &params,
         &[_][]const u8{},
@@ -259,7 +259,7 @@ test "tm35-no-trade-evolutions" {
             H.evo("2", "level_up", "36") ++
             H.evo("3", "level_up", "36"),
     );
-    util.testing.testProgram(
+    try util.testing.testProgram(
         main2,
         &params,
         &[_][]const u8{},
@@ -271,7 +271,7 @@ test "tm35-no-trade-evolutions" {
             H.evo("3", "level_up", "36") ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
     );
-    util.testing.testProgram(
+    try util.testing.testProgram(
         main2,
         &params,
         &[_][]const u8{},

@@ -14,21 +14,22 @@ pub fn testProgram(
     args: []const []const u8,
     in: []const u8,
     out: []const u8,
-) void {
+) !void {
     var alloc_buf: [1024 * 50]u8 = undefined;
     var out_buf: [1024 * 10]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&alloc_buf);
     var stdin = io.fixedBufferStream(in);
     var stdout = io.fixedBufferStream(&out_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
-    const clap_args = clap.parseEx(clap.Help, params, &fba.allocator, &arg_iter, null) catch unreachable;
+    const clap_args = try clap.parseEx(clap.Help, params, &arg_iter, .{});
+    defer clap_args.deinit();
 
     const StdIo = util.CustomStdIoStreams(
         std.io.FixedBufferStream([]const u8).Reader,
         io.FixedBufferStream([]u8).Writer,
     );
 
-    const res = main(
+    const res = try main(
         &fba.allocator,
         StdIo.Reader,
         StdIo.Writer,
@@ -38,6 +39,5 @@ pub fn testProgram(
         },
         clap_args,
     );
-    testing.expectEqual(@as(anyerror!void, {}), res);
-    testing.expectEqualStrings(out, stdout.getWritten());
+    try testing.expectEqualStrings(out, stdout.getWritten());
 }

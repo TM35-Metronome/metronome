@@ -252,7 +252,7 @@ test "tm35-rand-learned-moves" {
         \\.pokemons[0].hms[2]=false
         \\
     ;
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
         \\.pokemons[0].tms[1]=false
         \\.pokemons[0].tms[2]=true
@@ -261,7 +261,7 @@ test "tm35-rand-learned-moves" {
         \\.pokemons[0].hms[2]=false
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
         \\.pokemons[0].tms[1]=true
         \\.pokemons[0].tms[2]=true

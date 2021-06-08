@@ -7,8 +7,8 @@ const testing = std.testing;
 
 /// An array of string<->string that models how to encode and decode
 /// from any decoding to any other encoding.
-pub const CharMap = []const Char;
 pub const Char = [2][]const u8;
+pub const CharMap = []const Char;
 
 /// Encode from one encoding to another using `CharMap` as the specification
 /// of how to do transform between the encodings.
@@ -54,7 +54,7 @@ fn testHelper(map: CharMap, curr: u1, in: []const u8, out: []const u8) !void {
     var res: [1024]u8 = undefined;
     var fos = io.fixedBufferStream(&res);
     try encode(map, curr, in, fos.writer());
-    testing.expectEqualSlices(u8, out, fos.getWritten());
+    try testing.expectEqualSlices(u8, out, fos.getWritten());
 }
 
 pub fn testCharMap(map: CharMap, a: []const u8, b: []const u8) !void {

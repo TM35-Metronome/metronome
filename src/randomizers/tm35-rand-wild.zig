@@ -361,7 +361,7 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[3].grass.pokemons[3].species=0
         \\
     ;
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.wild_pokemons[0].grass.pokemons[0].species=2
         \\.wild_pokemons[0].grass.pokemons[1].species=0
         \\.wild_pokemons[0].grass.pokemons[2].species=0
@@ -380,7 +380,7 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[3].grass.pokemons[3].species=7
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
         \\.wild_pokemons[0].grass.pokemons[0].species=0
         \\.wild_pokemons[0].grass.pokemons[1].species=0
         \\.wild_pokemons[0].grass.pokemons[2].species=0

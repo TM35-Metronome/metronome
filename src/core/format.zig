@@ -6,19 +6,19 @@ const util = @import("util");
 const fmt = std.fmt;
 const math = std.math;
 const mem = std.mem;
-const testing = std.testing;
 const meta = std.meta;
+const testing = std.testing;
 
-//! The tm35 format in 8 lines of cfg:
-//! Line <- Suffix* '=' .*
-//!
-//! Suffix
-//!    <- '.' IDENTIFIER
-//!     / '[' INTEGER ']'
-//!
-//! INTEGER <- [0-9]+
-//! IDENTIFIER <- [A-Za-z0-9_]+
-//!
+// The tm35 format in 8 lines of cfg:
+// Line <- Suffix* '=' .*
+//
+// Suffix
+//    <- '.' IDENTIFIER
+//     / '[' INTEGER ']'
+//
+// INTEGER <- [0-9]+
+// IDENTIFIER <- [A-Za-z0-9_]+
+//
 
 /// A function for efficiently reading the tm35 format from `reader` and write unwanted lines
 /// back into `writer`. `parse` will be called once a line has been parsed successfully, which
@@ -274,14 +274,14 @@ fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T)
 test "parse" {
     const allocator = testing.failing_allocator;
     const p1 = comptime parser(u8, "", false);
-    mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0\n"));
-    mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1\n"));
-    mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111\n"));
+    try mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0\n"));
+    try mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1\n"));
+    try mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111\n"));
 
     const p2 = comptime parser(u32, "", false);
-    mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0\n"));
-    mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1\n"));
-    mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010\n"));
+    try mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0\n"));
+    try mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1\n"));
+    try mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010\n"));
 
     const U1 = union(enum) {
         a: u8,
@@ -289,15 +289,15 @@ test "parse" {
         c: u32,
     };
     const p3 = comptime parser(U1, "", false);
-    mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0\n"));
-    mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1\n"));
-    mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010\n"));
+    try mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0\n"));
+    try mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1\n"));
+    try mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010\n"));
 
     const A1 = Array(u8, u8);
     const p4 = comptime parser(A1, "", false);
-    mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0\n"));
-    mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2\n"));
-    mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33\n"));
+    try mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0\n"));
+    try mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2\n"));
+    try mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33\n"));
 
     const U2 = union(enum) {
         a: Array(u32, union(enum) {
@@ -307,9 +307,9 @@ test "parse" {
         b: u16,
     };
     const p5 = comptime parser(U2, "", false);
-    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0\n"));
-    mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44\n"));
-    mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1\n"));
+    try mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0\n"));
+    try mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44\n"));
+    try mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1\n"));
 }
 
 pub fn write(writer: anytype, value: anytype) !void {
@@ -745,11 +745,9 @@ pub const PokeballItem = union(enum) {
 
 pub const HiddenHollow = union(enum) {
     versions: Array(u8, union(enum) {
-        groups: Array(u8, union(enum) {
-            pokemons: Array(u8, union(enum) {
-                species: u16,
-            })
-        }),
+        groups: Array(u8, union(enum) { pokemons: Array(u8, union(enum) {
+            species: u16,
+        }) }),
     }),
     items: Array(u8, u16),
 

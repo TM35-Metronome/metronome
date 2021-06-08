@@ -569,7 +569,7 @@ test "tm35-rand-static" {
         H.static("4", "4") ++
         H.static("5", "21");
 
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.static_pokemons[0].species=6
         \\.static_pokemons[1].species=0
         \\.static_pokemons[2].species=1
@@ -578,7 +578,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=18
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
         \\.static_pokemons[1].species=1
         \\.static_pokemons[2].species=2
@@ -587,7 +587,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=21
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=2
         \\.static_pokemons[1].species=13
         \\.static_pokemons[2].species=0
@@ -596,7 +596,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=9
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
         \\.static_pokemons[1].species=11
         \\.static_pokemons[2].species=2
@@ -605,7 +605,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=7
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=2
         \\.static_pokemons[1].species=11
         \\.static_pokemons[2].species=6
@@ -614,7 +614,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=18
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=0
         \\.static_pokemons[1].species=3
         \\.static_pokemons[2].species=2
@@ -623,7 +623,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=7
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=8
         \\.static_pokemons[1].species=0
         \\.static_pokemons[2].species=8
@@ -632,7 +632,7 @@ test "tm35-rand-static" {
         \\.static_pokemons[5].species=15
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
         \\.static_pokemons[0].species=6
         \\.static_pokemons[1].species=3
         \\.static_pokemons[2].species=2

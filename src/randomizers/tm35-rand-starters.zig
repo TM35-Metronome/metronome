@@ -246,25 +246,25 @@ test "tm35-rand-starters" {
         \\
     ;
 
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
         \\.starters[0]=1
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=3
         \\.starters[2]=0
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=0
         \\.starters[2]=0

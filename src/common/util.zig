@@ -22,7 +22,7 @@ pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
 pub const unsafe = @import("unsafe.zig");
 
-test "" {
+test {
     _ = algorithm;
     _ = bit;
     _ = escape;
@@ -119,7 +119,7 @@ pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {
 test "indexOfPtr" {
     const arr = "abcde";
     for (arr) |*item, i| {
-        std.testing.expectEqual(i, indexOfPtr(u8, arr, item));
+        try std.testing.expectEqual(i, indexOfPtr(u8, arr, item));
     }
 }
 

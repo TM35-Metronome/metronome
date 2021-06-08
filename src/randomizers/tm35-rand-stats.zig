@@ -303,7 +303,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=40
         \\
     ;
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -330,7 +330,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -357,7 +357,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9
@@ -384,7 +384,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=47
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9

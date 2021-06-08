@@ -11,8 +11,8 @@ pub fn all(items: anytype, pred: anytype) bool {
 }
 
 test "all" {
-    testing.expect(all("abcd", std.ascii.isAlpha));
-    testing.expect(!all("1a3b", std.ascii.isAlpha));
+    try testing.expect(all("abcd", std.ascii.isAlpha));
+    try testing.expect(!all("1a3b", std.ascii.isAlpha));
 }
 
 pub fn fold(items: anytype, init: anytype, func: anytype) @TypeOf(init) {
@@ -23,8 +23,8 @@ pub fn fold(items: anytype, init: anytype, func: anytype) @TypeOf(init) {
 }
 
 test "fold" {
-    testing.expectEqual(@as(usize, 12), fold(&[_]u8{ 1, 2, 3, 3, 2, 1 }, @as(usize, 0), add));
-    testing.expectEqual(@as(usize, 15), fold(&[_]u8{ 5, 5, 5 }, @as(usize, 0), add));
+    try testing.expectEqual(@as(usize, 12), fold(&[_]u8{ 1, 2, 3, 3, 2, 1 }, @as(usize, 0), add));
+    try testing.expectEqual(@as(usize, 15), fold(&[_]u8{ 5, 5, 5 }, @as(usize, 0), add));
 }
 
 pub fn reduce(items: anytype, func: anytype) ?@typeInfo(mem.Span(@TypeOf(items))).Pointer.child {
@@ -35,9 +35,9 @@ pub fn reduce(items: anytype, func: anytype) ?@typeInfo(mem.Span(@TypeOf(items))
 }
 
 test "reduce" {
-    testing.expectEqual(@as(?u8, 12), reduce(&[_]u8{ 1, 2, 3, 3, 2, 1 }, add));
-    testing.expectEqual(@as(?u8, 15), reduce(&[_]u8{ 5, 5, 5 }, add));
-    testing.expectEqual(@as(?u8, null), reduce(&[_]u8{}, add));
+    try testing.expectEqual(@as(?u8, 12), reduce(&[_]u8{ 1, 2, 3, 3, 2, 1 }, add));
+    try testing.expectEqual(@as(?u8, 15), reduce(&[_]u8{ 5, 5, 5 }, add));
+    try testing.expectEqual(@as(?u8, null), reduce(&[_]u8{}, add));
 }
 
 pub fn add(a: anytype, b: anytype) @TypeOf(a + b) {
@@ -60,9 +60,9 @@ pub fn FindResult(comptime Span: type) type {
 
 test "find" {
     const s = &[_]u8{ 1, 2, 3, 3, 2, 1 };
-    testing.expectEqual(@as(?*const u8, &s[0]), find(s, {}, eqlPred(1)));
-    testing.expectEqual(@as(?*const u8, &s[1]), find(s, {}, eqlPred(2)));
-    testing.expectEqual(@as(?*const u8, &s[2]), find(s, {}, eqlPred(3)));
+    try testing.expectEqual(@as(?*const u8, &s[0]), find(s, {}, eqlPred(1)));
+    try testing.expectEqual(@as(?*const u8, &s[1]), find(s, {}, eqlPred(2)));
+    try testing.expectEqual(@as(?*const u8, &s[2]), find(s, {}, eqlPred(3)));
 }
 
 pub fn findLast(items: anytype, ctx: anytype, pred: anytype) ?FindResult(@TypeOf(items)) {
@@ -76,9 +76,9 @@ pub fn findLast(items: anytype, ctx: anytype, pred: anytype) ?FindResult(@TypeOf
 
 test "findLast" {
     const s = &[_]u8{ 1, 2, 3, 3, 2, 1 };
-    testing.expectEqual(@as(?*const u8, &s[5]), findLast(s, {}, eqlPred(1)));
-    testing.expectEqual(@as(?*const u8, &s[4]), findLast(s, {}, eqlPred(2)));
-    testing.expectEqual(@as(?*const u8, &s[3]), findLast(s, {}, eqlPred(3)));
+    try testing.expectEqual(@as(?*const u8, &s[5]), findLast(s, {}, eqlPred(1)));
+    try testing.expectEqual(@as(?*const u8, &s[4]), findLast(s, {}, eqlPred(2)));
+    try testing.expectEqual(@as(?*const u8, &s[3]), findLast(s, {}, eqlPred(3)));
 }
 
 fn dummy(ctx: anytype, item: anytype) bool {}

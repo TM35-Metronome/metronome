@@ -1114,6 +1114,6 @@ fn outputString(
     try format.write(writer, @unionInit(Game, array_name, .{ .index = i, .value = @unionInit(T, field_name, string) }));
 }
 
-test "" {
+test {
     std.testing.refAllDecls(@This());
 }

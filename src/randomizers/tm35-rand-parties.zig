@@ -979,7 +979,7 @@ test "tm35-rand-parties" {
         H.trainer("2", "2", null, "3") ++
         H.trainer("3", "3", null, "4");
 
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1022,7 +1022,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-min=3" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-min=3" }, test_string, result_prefix ++
         \\.trainers[0].party_size=3
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1077,7 +1077,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[2].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-max=1" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-max=1" }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1104,7 +1104,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[0].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=minimum" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=minimum" }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1131,7 +1131,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[0].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=random" }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=0
@@ -1178,7 +1178,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--items=unchanged" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--items=unchanged" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1223,7 +1223,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--items=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--items=random" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=item
         \\.trainers[0].party[0].species=2
@@ -1274,7 +1274,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=unchanged" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=unchanged" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1360,9 +1360,9 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=6
         \\
     ;
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=best" }, test_string, result_prefix ++ moves_result);
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=best_for_level" }, test_string, result_prefix ++ moves_result);
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=random_learnable" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=best" }, test_string, result_prefix ++ moves_result);
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=best_for_level" }, test_string, result_prefix ++ moves_result);
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=random_learnable" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1405,7 +1405,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--moves=random" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1448,7 +1448,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=2
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=0
@@ -1491,7 +1491,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1534,7 +1534,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=same" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1577,7 +1577,7 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=themed" }, test_string, result_prefix ++
+    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--abilities=themed" }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=1

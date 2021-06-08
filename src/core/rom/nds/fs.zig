@@ -520,7 +520,7 @@ test "Builder" {
 
     for (paths) |path, i|
         _ = try fs.openFile(root, path);
-    testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
-    testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
-    testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
+    try testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
+    try testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
+    try testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
 }

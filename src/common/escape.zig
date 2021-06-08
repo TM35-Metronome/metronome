@@ -162,10 +162,10 @@ test "transion" {
         .{ .find = "baz", .replace = "stuff" },
         .{ .find = "foo", .replace = "bar" },
     };
-    testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
-    testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
-    testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
-    testing.expectEqual(@as(?State, State{ .index = 3, .start = 1, .end = 2 }), transion(&replacements, 'z', .{ .index = 2, .start = 0, .end = 2 }));
+    try testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
+    try testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
+    try testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
+    try testing.expectEqual(@as(?State, State{ .index = 3, .start = 1, .end = 2 }), transion(&replacements, 'z', .{ .index = 2, .start = 0, .end = 2 }));
 }
 
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
@@ -301,18 +301,18 @@ pub fn replacingReader(
     return .{ .child_reader = child_reader };
 }
 
-fn testReplacingStreams(comptime replacements: []const Replacement, input: []const u8, expect: []const u8) void {
+fn testReplacingStreams(comptime replacements: []const Replacement, input: []const u8, expect: []const u8) !void {
     var buf: [mem.page_size]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     var replacing_writer = replacingWriter(replacements, fbs.writer());
     replacing_writer.writer().writeAll(input) catch unreachable;
     replacing_writer.finish() catch unreachable;
-    testing.expectEqualStrings(expect, fbs.getWritten());
+    try testing.expectEqualStrings(expect, fbs.getWritten());
 
     var fbs2 = io.fixedBufferStream(input);
     var replacing_reader = replacingReader(replacements, fbs2.reader());
     const res = replacing_reader.reader().readAll(&buf) catch unreachable;
-    testing.expectEqualStrings(expect, buf[0..res]);
+    try testing.expectEqualStrings(expect, buf[0..res]);
 }
 
 test "replacingWriter" {
@@ -322,13 +322,13 @@ test "replacingWriter" {
         .{ .find = "bar", .replace = "baz" },
     };
 
-    testReplacingStreams(&replacements, "abcd", "abcd");
-    testReplacingStreams(&replacements, "abfoocd", "abbarcd");
-    testReplacingStreams(&replacements, "abbarcd", "abbazcd");
-    testReplacingStreams(&replacements, "abbazcd", "abstuffcd");
-    testReplacingStreams(&replacements, "foobarbaz", "barbazstuff");
-    testReplacingStreams(&replacements, "bazbarfoo", "stuffbazbar");
-    testReplacingStreams(&replacements, "baz bar foo", "stuff baz bar");
+    try testReplacingStreams(&replacements, "abcd", "abcd");
+    try testReplacingStreams(&replacements, "abfoocd", "abbarcd");
+    try testReplacingStreams(&replacements, "abbarcd", "abbazcd");
+    try testReplacingStreams(&replacements, "abbazcd", "abstuffcd");
+    try testReplacingStreams(&replacements, "foobarbaz", "barbazstuff");
+    try testReplacingStreams(&replacements, "bazbarfoo", "stuffbazbar");
+    try testReplacingStreams(&replacements, "baz bar foo", "stuff baz bar");
 }
 
 pub fn splitEscaped(buffer: []const u8, esc: []const u8, delimiter: []const u8) EscapedSplitter {
@@ -385,37 +385,37 @@ pub const EscapedSplitter = struct {
 
 test "splitEscaped" {
     var it = splitEscaped("abc|def||ghi\\|jkl", "\\", "|");
-    testing.expectEqualStrings("abc", it.next().?);
-    testing.expectEqualStrings("def", it.next().?);
-    testing.expectEqualStrings("", it.next().?);
-    testing.expectEqualStrings("ghi\\|jkl", it.next().?);
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings("abc", it.next().?);
+    try testing.expectEqualStrings("def", it.next().?);
+    try testing.expectEqualStrings("", it.next().?);
+    try testing.expectEqualStrings("ghi\\|jkl", it.next().?);
+    try testing.expect(it.next() == null);
 
     it = splitEscaped("", "\\", "|");
-    testing.expectEqualStrings("", it.next().?);
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings("", it.next().?);
+    try testing.expect(it.next() == null);
 
     it = splitEscaped("|", "\\", "|");
-    testing.expectEqualStrings("", it.next().?);
-    testing.expectEqualStrings("", it.next().?);
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings("", it.next().?);
+    try testing.expectEqualStrings("", it.next().?);
+    try testing.expect(it.next() == null);
 
     it = splitEscaped("hello", "\\", " ");
-    testing.expectEqualStrings(it.next().?, "hello");
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings(it.next().?, "hello");
+    try testing.expect(it.next() == null);
 
     it = splitEscaped("\\,\\,,", "\\", ",");
-    testing.expectEqualStrings(it.next().?, "\\,\\,");
-    testing.expectEqualStrings(it.next().?, "");
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings(it.next().?, "\\,\\,");
+    try testing.expectEqualStrings(it.next().?, "");
+    try testing.expect(it.next() == null);
 }
 
 test "splitEscaped (multibyte)" {
     var it = splitEscaped("a, b ,, c, d, e\\\\, f", "\\\\", ", ");
-    testing.expectEqualStrings(it.next().?, "a");
-    testing.expectEqualStrings(it.next().?, "b ,");
-    testing.expectEqualStrings(it.next().?, "c");
-    testing.expectEqualStrings(it.next().?, "d");
-    testing.expectEqualStrings(it.next().?, "e\\\\, f");
-    testing.expect(it.next() == null);
+    try testing.expectEqualStrings(it.next().?, "a");
+    try testing.expectEqualStrings(it.next().?, "b ,");
+    try testing.expectEqualStrings(it.next().?, "c");
+    try testing.expectEqualStrings(it.next().?, "d");
+    try testing.expectEqualStrings(it.next().?, "e\\\\, f");
+    try testing.expect(it.next() == null);
 }

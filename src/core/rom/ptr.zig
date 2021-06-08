@@ -162,17 +162,17 @@ test "RelativePointer" {
             const p = try RPtr.init(expect, bytes);
             const actual = if (is_optional) (try p.toPtr(bytes)).?
                 else try p.toPtr(bytes);
-            std.testing.expectEqual(expect, actual);
+            try std.testing.expectEqual(expect, actual);
         }
         if (is_optional) {
             const p = try RPtr.init(null, bytes);
-            std.testing.expectEqual(@as(Ptr, null), try p.toPtr(bytes));
+            try std.testing.expectEqual(@as(Ptr, null), try p.toPtr(bytes));
         }
         for (data[0..4]) |_, i| {
             const expect = data[i..i+1];
             const p = try RPtr2.init(expect.ptr, bytes);
             const actual = try p.toSlice(bytes, 1);
-            std.testing.expectEqualSlices(Child, expect, actual);
+            try std.testing.expectEqualSlices(Child, expect, actual);
         }
     };
 }
@@ -275,8 +275,8 @@ test "RelativeSlice" {
             const expect = data[i..i+1];
             const slice1 = try (try Slice1.init(expect, bytes)).toSlice(bytes);
             const slice2 = try (try Slice2.init(expect, bytes)).toSlice(bytes);
-            std.testing.expectEqualSlices(Child, expect, slice1);
-            std.testing.expectEqualSlices(Child, expect, slice2);
+            try std.testing.expectEqualSlices(Child, expect, slice1);
+            try std.testing.expectEqualSlices(Child, expect, slice2);
         }
     };
 }

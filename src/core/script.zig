@@ -1,11 +1,11 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const meta = std.meta;
-const trait = meta.trait;
-const mem = std.mem;
 const math = std.math;
+const mem = std.mem;
+const meta = std.meta;
 const testing = std.testing;
+const trait = meta.trait;
 
 /// Find the field name which is most likly to be the tag of 'union_field'.
 /// This function looks at all fields declared before 'union_field'. If one
@@ -56,11 +56,11 @@ pub fn findTagFieldName(comptime Container: type, comptime union_field: []const 
     return null;
 }
 
-fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) void {
+fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) !void {
     if (comptime findTagFieldName(Container, union_field)) |actual| {
-        testing.expectEqualStrings(expect.?, actual);
+        try testing.expectEqualStrings(expect.?, actual);
     } else {
-        testing.expectEqual(expect, null);
+        try testing.expectEqual(expect, null);
     }
 }
 
@@ -76,11 +76,11 @@ test "findTagFieldName" {
         b,
         c,
     };
-    testFindTagFieldName(struct {
+    try testFindTagFieldName(struct {
         tag: Tag,
         un: Union,
     }, "un", "tag");
-    testFindTagFieldName(struct {
+    try testFindTagFieldName(struct {
         tag: Tag,
         not_tag: u8,
         un: Union,
@@ -91,7 +91,7 @@ test "findTagFieldName" {
             q,
         },
     }, "un", "tag");
-    testFindTagFieldName(struct {
+    try testFindTagFieldName(struct {
         not_tag: u8,
         un: Union,
         not_tag2: struct {},
@@ -115,12 +115,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
                 @compileError("Does not support none power of two intergers");
             return @as(usize, i.bits / 8);
         },
-        .Enum => |e| {
-            if (e.layout != .Packed)
-                @compileError(@typeName(T) ++ " is not packed");
-
-            return packedLength(@enumToInt(value)) catch unreachable;
-        },
+        .Enum => return packedLength(@enumToInt(value)) catch unreachable,
         .Array => |a| {
             var res: usize = 0;
             for (value) |item|
@@ -175,18 +170,18 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
     }
 }
 
-fn testPackedLength(value: anytype, expect: error{InvalidTag}!usize) void {
+fn testPackedLength(value: anytype, expect: error{InvalidTag}!usize) !void {
     if (packedLength(value)) |size| {
         const expected_size = expect catch unreachable;
-        testing.expectEqual(expected_size, size);
+        try testing.expectEqual(expected_size, size);
     } else |err| {
         const expected_err = if (expect) |_| unreachable else |e| e;
-        testing.expectEqual(expected_err, err);
+        try testing.expectEqual(expected_err, err);
     }
 }
 
 test "packedLength" {
-    const E = packed enum(u8) {
+    const E = enum(u8) {
         a,
         b,
         c,
@@ -204,9 +199,9 @@ test "packedLength" {
         data: U,
     };
 
-    testPackedLength(S{ .tag = E.a, .pad = 0, .data = U{ .a = {} } }, 2);
-    testPackedLength(S{ .tag = E.b, .pad = 0, .data = U{ .b = 0 } }, 3);
-    testPackedLength(S{ .tag = E.c, .pad = 0, .data = U{ .c = 0 } }, 4);
+    try testPackedLength(S{ .tag = E.a, .pad = 0, .data = U{ .a = {} } }, 2);
+    try testPackedLength(S{ .tag = E.b, .pad = 0, .data = U{ .b = 0 } }, 3);
+    try testPackedLength(S{ .tag = E.c, .pad = 0, .data = U{ .c = 0 } }, 4);
 }
 
 pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool) type {

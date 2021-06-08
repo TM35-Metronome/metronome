@@ -305,7 +305,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
 }
 
 test "tm35-misc" {
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=everywhere"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=everywhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -314,7 +314,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=nowhere"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=nowhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -323,7 +323,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=false
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=unchanged"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=unchanged"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -332,7 +332,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=everywhere"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=everywhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -341,7 +341,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=nowhere"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=nowhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -350,7 +350,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=false
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=unchanged"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=unchanged"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -359,7 +359,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--fast-text"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--fast-text"},
         \\.instant_text=false
         \\.instant_text=true
         \\.text_delays[0]=10
@@ -376,7 +376,7 @@ test "tm35-misc" {
         \\.text_delays[3]=0
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--static-level-scaling=0.5"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--static-level-scaling=0.5"},
         \\.static_pokemons[0].level=20
         \\.static_pokemons[1].level=30
         \\
@@ -385,7 +385,7 @@ test "tm35-misc" {
         \\.static_pokemons[1].level=15
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--trainer-level-scaling=0.5"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--trainer-level-scaling=0.5"},
         \\.trainers[0].party[0].level=20
         \\.trainers[10].party[10].level=10
         \\
@@ -394,7 +394,7 @@ test "tm35-misc" {
         \\.trainers[10].party[10].level=5
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--wild-level-scaling=0.5"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--wild-level-scaling=0.5"},
         \\.wild_pokemons[0].grass.pokemons[0].min_level=10
         \\.wild_pokemons[0].grass.pokemons[0].max_level=20
         \\.wild_pokemons[0].fishing.pokemons[0].min_level=20
@@ -407,7 +407,7 @@ test "tm35-misc" {
         \\.wild_pokemons[0].fishing.pokemons[0].max_level=20
         \\
     );
-    util.testing.testProgram(main2, &params, &[_][]const u8{"--exp-yield-scaling=0.5"},
+    try util.testing.testProgram(main2, &params, &[_][]const u8{"--exp-yield-scaling=0.5"},
         \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].base_exp_yield=20
         \\.pokemons[1].base_exp_yield=40

@@ -109,10 +109,10 @@ fn testReadLine(str: []const u8, lines: []const []const u8) !void {
 
     for (lines) |expected_line| {
         const actual_line = (try readLine(fbs.reader(), &fifo)).?;
-        testing.expectEqualStrings(expected_line, actual_line);
-        testing.expectEqual(@as(u8, '\n'), actual_line[actual_line.len]);
+        try testing.expectEqualStrings(expected_line, actual_line);
+        try testing.expectEqual(@as(u8, '\n'), actual_line[actual_line.len]);
     }
-    testing.expectEqual(@as(?[:'\n']const u8, null), try readLine(fbs.reader(), &fifo));
+    try testing.expectEqual(@as(?[:'\n']const u8, null), try readLine(fbs.reader(), &fifo));
 }
 
 /// For windows, we don't want to use `BufferedWritev`, as the implementaion of
