@@ -69,9 +69,9 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
-    for (data.starters.items()) |starter| {
-        const res = util.random.item(random, pick_from.items()).?.key;
-        try format.write(writer, format.Game.starter(@intCast(u8, starter.key), res));
+    for (data.starters.keys()) |starter| {
+        const res = util.random.item(random, pick_from.keys()).?.*;
+        try format.write(writer, format.Game.starter(@intCast(u8, starter), res));
     }
 }
 
@@ -81,17 +81,16 @@ fn getStartersToPickFrom(
     pick_lowest: bool,
     evolutions: usize,
 ) !Set {
-    const species = try data.pokedexPokemons();
+    const dex_mons = try data.pokedexPokemons();
     var res = Set{};
-    for (species.items()) |pokemon_kv| {
-        const pokemon = pokemon_kv.key;
-        // Only pick lowest evo pokemon if pick_lowest is true
-        if (pick_lowest and data.evolves_from.get(pokemon) != null)
+    for (dex_mons.keys()) |species| {
+        // Only pick lowest evo species if pick_lowest is true
+        if (pick_lowest and data.evolves_from.get(species) != null)
             continue;
-        if (countEvos(data, pokemon) < evolutions)
+        if (countEvos(data, species) < evolutions)
             continue;
 
-        _ = try res.put(data.allocator, pokemon, {});
+        _ = try res.put(data.allocator, species, {});
     }
     if (res.count() == 0)
         _ = try res.put(data.allocator, 0, {});
@@ -112,18 +111,17 @@ fn useGame(data: *Data, parsed: format.Game) !void {
         },
         .pokemons => |pokemons| {
             const evolves_from = pokemons.index;
-            const pokemon_entry = try data.pokemons.getOrPutValue(allocator, evolves_from, Pokemon{});
-            const pokemon = &pokemon_entry.value;
+            const pokemon = (try data.pokemons.getOrPutValue(allocator, evolves_from, .{})).value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
                 .evos => |evos| switch (evos.value) {
                     .target => |evolves_to| {
-                        const from_set = try data.evolves_from.getOrPutValue(allocator, evolves_to, Set{});
-                        const to_set = try data.evolves_to.getOrPutValue(allocator, evolves_from, Set{});
-                        _ = try data.pokemons.getOrPutValue(allocator, evolves_to, Pokemon{});
-                        _ = try from_set.value.put(allocator, evolves_from, {});
-                        _ = try to_set.value.put(allocator, evolves_to, {});
+                        const from_set = (try data.evolves_from.getOrPutValue(allocator, evolves_to, .{})).value_ptr;
+                        const to_set = (try data.evolves_to.getOrPutValue(allocator, evolves_from, .{})).value_ptr;
+                        _ = try data.pokemons.getOrPutValue(allocator, evolves_to, .{});
+                        _ = try from_set.put(allocator, evolves_from, {});
+                        _ = try to_set.put(allocator, evolves_to, {});
                     },
                     .param,
                     .method,
@@ -178,8 +176,8 @@ fn countEvos(data: Data, pokemon: u16) usize {
     const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
 
     // TODO: We don't handle cycles here.
-    for (evolves_to.items()) |evo| {
-        const evos = countEvos(data, evo.key) + 1;
+    for (evolves_to.keys()) |evo| {
+        const evos = countEvos(data, evo) + 1;
         res = math.max(res, evos);
     }
 
@@ -202,13 +200,14 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(d.allocator);
 
-        for (d.pokemons.items()) |pokemon| {
-            if (pokemon.value.catch_rate == 0)
+        for (d.pokemons.values()) |pokemon, i| {
+            const species = d.pokemons.keys()[i];
+            if (pokemon.catch_rate == 0)
                 continue;
-            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
+            if (d.pokedex.get(pokemon.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(d.allocator, pokemon.key, {});
+            _ = try res.put(d.allocator, species, {});
         }
 
         return res;

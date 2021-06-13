@@ -22,8 +22,8 @@ fn intersectImpl(out: anytype, biggest: anytype, smallest: anytype) !void {
     debug.assert(biggest.count() >= smallest.count());
     var it = biggest.iterator();
     while (it.next()) |entry| {
-        if (smallest.get(entry.key) != null)
-            _ = try out.put(entry.key, {});
+        if (smallest.get(entry.key_ptr.*) != null)
+            _ = try out.put(entry.key_ptr.*, {});
     }
 }
 
@@ -73,7 +73,7 @@ pub fn eql(a: anytype, b: anytype) bool {
 
     var it = a.iterator();
     while (it.next()) |entry| {
-        if (b.get(entry.key) == null)
+        if (b.get(entry.key_ptr.*) == null)
             return false;
     }
 

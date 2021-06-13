@@ -1,5 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,8 +15,6 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
-
-const algo = util.algorithm;
 
 const Utf8 = util.unicode.Utf8View;
 
@@ -80,25 +79,30 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.items()) |pokemon| {
-        for (pokemon.value.evos.items()) |evo| {
-            try format.write(writer, format.Game.pokemon(pokemon.key, format.Pokemon.evo(evo.key, .{ .method = .use_item })));
-            try format.write(writer, format.Game.pokemon(pokemon.key, format.Pokemon.evo(evo.key, .{ .param = evo.value.param })));
-            try format.write(writer, format.Game.pokemon(pokemon.key, format.Pokemon.evo(evo.key, .{ .target = evo.value.target })));
+    for (data.pokemons.values()) |pokemon, i| {
+        const species = data.pokemons.keys()[i];
+        for (pokemon.evos.values()) |evo, j| {
+            const evo_i = pokemon.evos.keys()[j];
+            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .method = .use_item })));
+            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .param = evo.param })));
+            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .target = evo.target })));
         }
     }
-    for (data.items.items()) |item| {
-        if (item.value.name.bytes.len != 0)
-            try format.write(writer, format.Game.item(item.key, .{ .name = item.value.name.bytes }));
-        if (item.value.description.bytes.len != 0) {
-            try format.write(
-                writer,
-                format.Game.item(item.key, .{ .description = item.value.description.bytes }),
-            );
+    for (data.items.values()) |item, i| {
+        const item_id = data.items.keys()[i];
+
+        if (item.name.bytes.len != 0)
+            try format.write(writer, format.Game.item(item_id, .{ .name = item.name.bytes }));
+        if (item.description.bytes.len != 0) {
+            try format.write(writer, format.Game.item(item_id, .{
+                .description = item.description.bytes,
+            }));
         }
     }
-    for (data.pokeball_items.items()) |item|
-        try format.write(writer, format.Game.pokeball_item(item.key, .{ .item = item.value }));
+    for (data.pokeball_items.values()) |item, i| {
+        const item_id = data.items.keys()[i];
+        try format.write(writer, format.Game.pokeball_item(item_id, .{ .item = item }));
+    }
 }
 
 fn useGame(ctx: anytype, parsed: format.Game) !void {
@@ -111,7 +115,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = &(try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
+            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
@@ -123,7 +127,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
                 .egg_groups => |egg_groups| _ = try pokemon.egg_groups.put(allocator, @enumToInt(egg_groups.value), {}),
                 .evos => |evos| {
                     data.max_evolutions = math.max(data.max_evolutions, evos.index + 1);
-                    const evo = &(try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{})).value;
+                    const evo = (try pokemon.evos.getOrPutValue(allocator, evos.index, .{})).value_ptr;
                     format.setField(evo, evos.value);
                     return;
                 },
@@ -142,7 +146,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .items => |items| {
-            const item = &(try data.items.getOrPutValue(allocator, items.index, Item{})).value;
+            const item = (try data.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .name => |name| {
                     item.name = try Utf8.init(try mem.dupe(allocator, u8, name));
@@ -196,20 +200,20 @@ fn randomize(data: Data, seed: usize) !void {
     // First, let's find items that are used for evolving Pokémons.
     // We will use these items as our stones.
     var stones = Set{};
-    for (data.pokemons.items()) |*pokemon| {
-        for (pokemon.value.evos.items()) |evo| {
-            if (evo.value.method == .use_item)
-                _ = try stones.put(data.allocator, evo.value.param, {});
+    for (data.pokemons.values()) |*pokemon| {
+        for (pokemon.evos.values()) |evo| {
+            if (evo.method == .use_item)
+                _ = try stones.put(data.allocator, evo.param, {});
         }
 
         // Reset evolutions. We don't need the old anymore.
-        pokemon.value.evos.clearRetainingCapacity();
+        pokemon.evos.clearRetainingCapacity();
     }
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;
-    for (data.items.items()) |item| {
-        var description = item.value.description;
+    for (data.items.values()) |item| {
+        var description = item.description;
         while (mem.indexOf(u8, description.bytes, "\n")) |index| {
             const line = Utf8.init(description.bytes[0..index]) catch unreachable;
             max_line_len = math.max(line.len, max_line_len);
@@ -467,31 +471,30 @@ fn randomize(data: Data, seed: usize) !void {
         if (data.max_evolutions <= stone or stones.count() <= stone)
             break;
 
-        const item_id = stones.items()[stone].key;
-        const item = data.items.getEntry(item_id).?;
+        const item_id = stones.keys()[stone];
+        const item = data.items.getPtr(item_id).?;
 
         // We have no idea as to how long the name/desc can be in the game we
         // are working on. Our best guess will therefor be to use the current
         // items name/desc as the limits and pick something that fits.
-        item.value = Item{
-            .name = pickString(item.value.name.len, strs.names),
-            .description = pickString(item.value.description.len, strs.descriptions),
+        item.* = Item{
+            .name = pickString(item.name.len, strs.names),
+            .description = pickString(item.description.len, strs.descriptions),
         };
     }
 
     const num_pokemons = species.count();
-    for (species.items()) |s| {
-        const pokemon_id = s.key;
-        const pokemon = data.pokemons.getEntry(pokemon_id).?;
+    for (species.keys()) |pokemon_id| {
+        const pokemon = data.pokemons.getPtr(pokemon_id).?;
 
         for (stone_strings) |_, stone| {
             if (data.max_evolutions <= stone or stones.count() <= stone)
                 break;
 
-            const item_id = stones.items()[stone].key;
+            const item_id = stones.keys()[stone];
             const pick = switch (stone) {
                 chance_stone => while (num_pokemons > 1) {
-                    const pick = util.random.item(random, species.items()).?.key;
+                    const pick = util.random.item(random, species.keys()).?.*;
                     if (pick != pokemon_id)
                         break pick;
                 } else pokemon_id,
@@ -504,9 +507,9 @@ fn randomize(data: Data, seed: usize) !void {
                         else => unreachable,
                     };
                     const set = switch (stone) {
-                        form_stone => pokemon.value.types,
-                        skill_stone => pokemon.value.abilities,
-                        breed_stone => pokemon.value.egg_groups,
+                        form_stone => pokemon.types,
+                        skill_stone => pokemon.abilities,
+                        breed_stone => pokemon.egg_groups,
                         else => unreachable,
                     };
 
@@ -517,17 +520,17 @@ fn randomize(data: Data, seed: usize) !void {
                         // Assume that ability 0 means that there is no ability, and
                         // don't pick that.
                         skill_stone => while (set.count() != 1) {
-                            const pick = util.random.item(random, set.items()).?.key;
+                            const pick = util.random.item(random, set.keys()).?.*;
                             if (pick != 0)
                                 break pick;
-                        } else set.items()[0].key,
-                        form_stone, breed_stone => util.random.item(random, set.items()).?.key,
+                        } else set.keys()[0],
+                        form_stone, breed_stone => util.random.item(random, set.keys()).?.*,
                         else => unreachable,
                     };
                     const pokemon_set = map.get(picked_id).?;
                     const pokemons = pokemon_set.count();
                     while (pokemons != 1) {
-                        const pick = util.random.item(random, pokemon_set.items()).?.key;
+                        const pick = util.random.item(random, pokemon_set.keys()).?.*;
                         if (pick != pokemon_id)
                             break :blk pick;
                     }
@@ -542,9 +545,9 @@ fn randomize(data: Data, seed: usize) !void {
                         else => unreachable,
                     };
                     const number = switch (stone) {
-                        stat_stone => algo.fold(&pokemon.value.stats, @as(u16, 0), algo.add),
-                        growth_stone => @enumToInt(pokemon.value.growth_rate),
-                        buddy_stone => pokemon.value.base_friendship,
+                        stat_stone => it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8),
+                        growth_stone => @enumToInt(pokemon.growth_rate),
+                        buddy_stone => pokemon.base_friendship,
                         else => unreachable,
                     };
                     if (map.count() == 0)
@@ -553,7 +556,7 @@ fn randomize(data: Data, seed: usize) !void {
                     const pokemon_set = map.get(number).?;
                     const pokemons = pokemon_set.count();
                     while (pokemons != 1) {
-                        const pick = util.random.item(random, pokemon_set.items()).?.key;
+                        const pick = util.random.item(random, pokemon_set.keys()).?.*;
                         if (pick != pokemon_id)
                             break :blk pick;
                     }
@@ -562,7 +565,7 @@ fn randomize(data: Data, seed: usize) !void {
                 else => unreachable,
             };
 
-            _ = try pokemon.value.evos.put(data.allocator, @intCast(u8, stone), Evolution{
+            _ = try pokemon.evos.put(data.allocator, @intCast(u8, stone), Evolution{
                 .method = .use_item,
                 .param = item_id,
                 .target = pick,
@@ -572,11 +575,11 @@ fn randomize(data: Data, seed: usize) !void {
 
     // Replace cheap pokeball items with random stones.
     const number_of_stones = math.min(math.min(stones.count(), stone_strings.len), data.max_evolutions);
-    for (data.pokeball_items.items()) |*item_id| {
-        const item = data.items.get(item_id.value) orelse continue;
+    for (data.pokeball_items.values()) |*item_id| {
+        const item = data.items.get(item_id.*) orelse continue;
         if (item.price == 0 or item.price > 600)
             continue;
-        item_id.value = util.random.item(random, stones.items()).?.key;
+        item_id.* = util.random.item(random, stones.keys()).?.*;
     }
 }
 
@@ -599,18 +602,18 @@ fn filterBy(
 ) !PokemonBy {
     var buf: [16]u16 = undefined;
     var pokemons_by = PokemonBy{};
-    for (species.items()) |id| {
-        const pokemon = pokemons.get(id.key).?;
+    for (species.keys()) |id| {
+        const pokemon = pokemons.get(id).?;
         for (filter(pokemon, &buf)) |key| {
-            const set = try pokemons_by.getOrPutValue(allocator, key, Set{});
-            _ = try set.value.put(allocator, id.key, {});
+            const set = (try pokemons_by.getOrPutValue(allocator, key, .{})).value_ptr;
+            _ = try set.put(allocator, id, {});
         }
     }
     return pokemons_by;
 }
 
 fn statsFilter(pokemon: Pokemon, buf: []u16) []const u16 {
-    buf[0] = algo.fold(&pokemon.stats, @as(u16, 0), algo.add);
+    buf[0] = it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8);
     return buf[0..1];
 }
 
@@ -638,11 +641,15 @@ fn eggGroupFilter(pokemon: Pokemon, buf: []u16) []const u16 {
 
 fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []u16) []const u16 {
     var i: usize = 0;
-    for (@field(pokemon, field).items()) |item| {
-        buf[i] = item.key;
+    for (@field(pokemon, field).keys()) |item| {
+        buf[i] = item;
         i += 1;
     }
     return buf[0..i];
+}
+
+fn foldu8(a: u16, b: u8) u16 {
+    return a + b;
 }
 
 const Evolutions = std.AutoArrayHashMapUnmanaged(u8, Evolution);
@@ -664,13 +671,13 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(d.allocator);
 
-        for (d.pokemons.items()) |pokemon, i| {
-            if (pokemon.value.catch_rate == 0)
+        for (d.pokemons.values()) |pokemon, i| {
+            if (pokemon.catch_rate == 0)
                 continue;
-            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
+            if (d.pokedex.get(pokemon.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(d.allocator, pokemon.key, {});
+            _ = try res.put(d.allocator, d.pokemons.keys()[i], {});
         }
 
         return res;

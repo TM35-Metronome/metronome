@@ -59,16 +59,16 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.items()) |name|
-        try format.write(writer, format.Game.pokemon(name.key, .{ .name = name.value }));
-    for (data.trainers.items()) |name|
-        try format.write(writer, format.Game.trainer(name.key, .{ .name = name.value }));
-    for (data.moves.items()) |name|
-        try format.write(writer, format.Game.move(name.key, .{ .name = name.value }));
-    for (data.abilities.items()) |name|
-        try format.write(writer, format.Game.ability(name.key, .{ .name = name.value }));
-    for (data.item_names.items()) |name|
-        try format.write(writer, format.Game.item(name.key, .{ .name = name.value }));
+    for (data.pokemons.values()) |name, i|
+        try format.write(writer, format.Game.pokemon(data.pokemons.keys()[i], .{ .name = name }));
+    for (data.trainers.values()) |name, i|
+        try format.write(writer, format.Game.trainer(data.trainers.keys()[i], .{ .name = name }));
+    for (data.moves.values()) |name, i|
+        try format.write(writer, format.Game.move(data.moves.keys()[i], .{ .name = name }));
+    for (data.abilities.values()) |name, i|
+        try format.write(writer, format.Game.ability(data.abilities.keys()[i], .{ .name = name }));
+    for (data.item_names.values()) |name, i|
+        try format.write(writer, format.Game.item(data.item_names.keys()[i], .{ .name = name }));
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {
@@ -184,37 +184,37 @@ fn randomize(data: Data, seed: usize) !void {
         // Build our codepoint pair map. This map contains a mapping from C1 -> []C2+N,
         // where CX is a codepoint and N is the number of times C2 was seen after C1.
         // This map will be used to generate names later.
-        for (set.items()) |item| {
-            const view = unicode.Utf8View.init(item.value) catch continue;
+        for (set.values()) |item| {
+            const view = unicode.Utf8View.init(item) catch continue;
 
-            var node = &(try pairs.getOrPutValue(data.allocator, start_of_string, Occurences{})).value;
+            var node = (try pairs.getOrPutValue(data.allocator, start_of_string, .{})).value_ptr;
             var it = view.iterator();
             while (it.nextCodepointSlice()) |code| {
-                const occurance = try node.codepoints.getOrPutValue(data.allocator, code, 0);
-                occurance.value += 1;
+                const occurance = (try node.codepoints.getOrPutValue(data.allocator, code, 0)).value_ptr;
+                occurance.* += 1;
                 node.total += 1;
-                node = &(try pairs.getOrPutValue(data.allocator, code, Occurences{})).value;
+                node = (try pairs.getOrPutValue(data.allocator, code, .{})).value_ptr;
             }
 
-            const occurance = try node.codepoints.getOrPutValue(data.allocator, end_of_string, 0);
-            occurance.value += 1;
+            const occurance = (try node.codepoints.getOrPutValue(data.allocator, end_of_string, 0)).value_ptr;
+            occurance.* += 1;
             node.total += 1;
-            max = math.max(max, item.value.len);
+            max = math.max(max, item.len);
         }
 
         // Generate our random names from our pair map. This is done by picking a C2
         // based on our current C1. C2 is chosen by using the occurnaces of C2 as weights
         // and picking at random from here.
-        for (set.items()) |*name| {
+        for (set.values()) |*name| {
             var new_name = std.ArrayList(u8).init(data.allocator);
             var node = pairs.get(start_of_string).?;
 
             while (new_name.items.len < max) {
                 var i = random.intRangeLessThan(usize, 0, node.total);
-                const pick = for (node.codepoints.items()) |item| {
-                    if (i < item.value)
-                        break item.key;
-                    i -= item.value;
+                const pick = for (node.codepoints.values()) |item, j| {
+                    if (i < item)
+                        break node.codepoints.keys()[j];
+                    i -= item;
                 } else unreachable;
 
                 if (mem.eql(u8, pick, end_of_string))
@@ -226,7 +226,7 @@ fn randomize(data: Data, seed: usize) !void {
                 node = pairs.get(pick).?;
             }
 
-            name.value = new_name.toOwnedSlice();
+            name.* = new_name.toOwnedSlice();
         }
     }
 }

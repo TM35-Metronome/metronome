@@ -83,7 +83,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .tms => |tm| _ = try game.tms.put(allocator, tm.index, tm.value),
         .hms => |hm| _ = try game.hms.put(allocator, hm.index, hm.value),
         .trainers => |trainers| {
-            const trainer = &(try game.trainers.getOrPutValue(allocator, trainers.index, Trainer{})).value;
+            const trainer = (try game.trainers.getOrPutValue(allocator, trainers.index, .{})).value_ptr;
             switch (trainers.value) {
                 .name => |name| trainer.name = try allocator.dupe(u8, name),
                 .class => |class| trainer.class = class,
@@ -93,7 +93,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
                 .party_size => |party_size| trainer.party_size = party_size,
                 .items => |items| _ = try trainer.items.put(allocator, items.index, items.value),
                 .party => |party| {
-                    const member = &(try trainer.party.getOrPutValue(allocator, party.index, PartyMember{})).value;
+                    const member = (try trainer.party.getOrPutValue(allocator, party.index, .{})).value_ptr;
                     switch (party.value) {
                         .ability => |ability| member.ability = ability,
                         .level => |level| member.level = level,
@@ -105,7 +105,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             }
         },
         .moves => |moves| {
-            const move = &(try game.moves.getOrPutValue(allocator, moves.index, Move{})).value;
+            const move = (try game.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .name => |name| move.name = try allocator.dupe(u8, name),
                 .description => |description| move.description = try allocator.dupe(u8, description),
@@ -120,7 +120,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             }
         },
         .pokemons => |pokemons| {
-            const pokemon = &(try game.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
+            const pokemon = (try game.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
                 .name => |name| pokemon.name = try allocator.dupe(u8, name),
                 .stats => |stats| format.setField(&pokemon.stats, stats),
@@ -144,29 +144,29 @@ fn useGame(game: *Game, parsed: format.Game) !void {
                 .types => |_type| _ = try pokemon.types.put(allocator, _type.value, {}),
                 .items => |item| _ = try pokemon.items.put(allocator, item.index, item.value),
                 .moves => |moves| {
-                    const move = &(try pokemon.moves.getOrPutValue(allocator, moves.index, LevelUpMove{})).value;
+                    const move = (try pokemon.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
                     format.setField(move, moves.value);
                 },
                 .evos => |evos| {
-                    const evo = &(try pokemon.evos.getOrPutValue(allocator, evos.index, Evolution{})).value;
+                    const evo = (try pokemon.evos.getOrPutValue(allocator, evos.index, .{})).value_ptr;
                     format.setField(evo, evos.value);
                 },
             }
         },
         .abilities => |abilities| {
-            const ability = &(try game.abilities.getOrPutValue(allocator, abilities.index, Ability{})).value;
+            const ability = (try game.abilities.getOrPutValue(allocator, abilities.index, .{})).value_ptr;
             switch (abilities.value) {
                 .name => |name| ability.name = try allocator.dupe(u8, name),
             }
         },
         .types => |types| {
-            const _type = &(try game.types.getOrPutValue(allocator, types.index, Type{})).value;
+            const _type = (try game.types.getOrPutValue(allocator, types.index, .{})).value_ptr;
             switch (types.value) {
                 .name => |name| _type.name = try allocator.dupe(u8, name),
             }
         },
         .items => |items| {
-            const item = &(try game.items.getOrPutValue(allocator, items.index, Item{})).value;
+            const item = (try game.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .name => |name| item.name = try allocator.dupe(u8, name),
                 .description => |description| item.description = try allocator.dupe(u8, description),
@@ -176,7 +176,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             }
         },
         .pokedex => |pokedex| {
-            const pokedex_entry = &(try game.pokedex.getOrPutValue(allocator, pokedex.index, Pokedex{})).value;
+            const pokedex_entry = (try game.pokedex.getOrPutValue(allocator, pokedex.index, .{})).value_ptr;
             switch (pokedex.value) {
                 .category => |category| pokedex_entry.category = try allocator.dupe(u8, category),
                 .height => |height| pokedex_entry.height = height,
@@ -200,6 +200,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
 }
 
 fn generate(writer: anytype, game: Game) !void {
+    @setEvalBranchQuota(1000000);
     const unknown = "???";
     const stat_names = [_][2][]const u8{
         .{ "hp", "Hp" },
@@ -269,10 +270,10 @@ fn generate(writer: anytype, game: Game) !void {
         \\
     , .{});
 
-    for (game.starters.items()) |starter_kv| {
-        const starter_name = if (game.pokemons.get(starter_kv.value)) |p| p.name else unknown;
+    for (game.starters.values()) |starter| {
+        const starter_name = if (game.pokemons.get(starter)) |p| p.name else unknown;
         try writer.print("<tr><td><a href=\"#pokemon_{}\">{s}</a></td></tr>", .{
-            starter_kv.value,
+            starter,
             starter_name,
         });
     }
@@ -283,13 +284,13 @@ fn generate(writer: anytype, game: Game) !void {
         \\<table>
         \\
     , .{});
-    for (game.pokedex.items()) |dex| {
-        const pokemon = for (game.pokemons.items()) |pokemon| {
-            if (pokemon.value.pokedex_entry == dex.key)
-                break .{ .name = pokemon.value.name, .species = pokemon.key };
+    for (game.pokedex.keys()) |dex| {
+        const pokemon = for (game.pokemons.values()) |pokemon, i| {
+            if (pokemon.pokedex_entry == dex)
+                break .{ .name = pokemon.name, .species = game.pokemons.keys()[i] };
         } else continue;
 
-        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {s}</a></td></tr>\n", .{ pokemon.species, dex.key, pokemon.name });
+        try writer.print("<tr><td><a href=\"#pokemon_{}\">#{} {s}</a></td></tr>\n", .{ pokemon.species, dex, pokemon.name });
     }
 
     try writer.print(
@@ -297,9 +298,8 @@ fn generate(writer: anytype, game: Game) !void {
         \\<h1>Pokemons</h1>
         \\
     , .{});
-    for (game.pokemons.items()) |pokemon_kv| {
-        const species = pokemon_kv.key;
-        const pokemon = pokemon_kv.value;
+    for (game.pokemons.values()) |pokemon, i| {
+        const species = game.pokemons.keys()[i];
         try writer.print("<h2 id=\"pokemon_{}\">#{} {s}</h2>\n", .{ species, species, pokemon.name });
 
         try writer.print(
@@ -307,13 +307,13 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Type:</td><td>
             \\
         , .{});
-        for (pokemon.types.items()) |t, i| {
-            const type_name = humanize(if (game.types.get(t.key)) |ty| ty.name else unknown);
-            if (i != 0)
+        for (pokemon.types.keys()) |t, j| {
+            const type_name = humanize(if (game.types.get(t)) |ty| ty.name else unknown);
+            if (j != 0)
                 try writer.print(" ", .{});
 
             try writer.print("<a href=\"#type_{}\" class=\"type type_{}\"><b>{}</b></a>", .{
-                t.key,
+                t,
                 type_name,
                 type_name,
             });
@@ -324,14 +324,14 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Abilities:</td><td>
             \\
         , .{});
-        for (pokemon.abilities.items()) |a, i| {
-            if (a.value == 0)
+        for (pokemon.abilities.values()) |a, j| {
+            if (a == 0)
                 continue;
-            if (i != 0)
+            if (j != 0)
                 try writer.print(", ", .{});
 
-            const ability_name = if (game.abilities.get(a.value)) |abil| abil.name else unknown;
-            try writer.print("<a href=\"#ability_{}\">{}</a>", .{ a.value, humanize(ability_name) });
+            const ability_name = if (game.abilities.get(a)) |abil| abil.name else unknown;
+            try writer.print("<a href=\"#ability_{}\">{}</a>", .{ a, humanize(ability_name) });
         }
 
         try writer.print(
@@ -339,12 +339,12 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Items:</td><td>
             \\
         , .{});
-        for (pokemon.items.items()) |item, i| {
-            if (i != 0)
+        for (pokemon.items.values()) |item, j| {
+            if (j != 0)
                 try writer.print(", ", .{});
 
-            const item_name = if (game.items.get(item.value)) |it| it.name else unknown;
-            try writer.print("<a href=\"#item_{}\">{}</a>", .{ item.value, humanize(item_name) });
+            const item_name = if (game.items.get(item)) |it| it.name else unknown;
+            try writer.print("<a href=\"#item_{}\">{}</a>", .{ item, humanize(item_name) });
         }
 
         try writer.print(
@@ -352,11 +352,11 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Egg Groups:</td><td>
             \\
         , .{});
-        for (pokemon.egg_groups.items()) |egg_group, i| {
-            if (i != 0)
+        for (pokemon.egg_groups.keys()) |egg_group, j| {
+            if (j != 0)
                 try writer.print(", ", .{});
 
-            try writer.print("{}", .{humanize(@tagName(egg_group.key))});
+            try writer.print("{}", .{humanize(@tagName(egg_group))});
         }
         try writer.print("</td>\n", .{});
         try printSimpleFields(writer, pokemon, &[_][]const u8{});
@@ -368,12 +368,11 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><th>Evolution</th><th>Method</th></tr>
             \\
         , .{});
-        for (pokemon.evos.items()) |evo_kv| {
-            const evo = evo_kv.value;
+        for (pokemon.evos.values()) |evo| {
             const target_name = humanize(if (game.pokemons.get(evo.target)) |p| p.name else unknown);
-            const param_item_name = humanize(if (game.items.get(evo.param)) |i| i.name else unknown);
-            const param_move_name = humanize(if (game.moves.get(evo.param)) |i| i.name else unknown);
-            const param_pokemon_name = humanize(if (game.pokemons.get(evo.param)) |i| i.name else unknown);
+            const param_item_name = humanize(if (game.items.get(evo.param)) |item| item.name else unknown);
+            const param_move_name = humanize(if (game.moves.get(evo.param)) |m| m.name else unknown);
+            const param_pokemon_name = humanize(if (game.pokemons.get(evo.param)) |p| p.name else unknown);
 
             try writer.print("<tr><td><a href=\"#pokemon_{}\">{}</a></td><td>", .{ evo.target, target_name });
             switch (evo.method) {
@@ -452,8 +451,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\<table>
             \\
         , .{});
-        for (pokemon.moves.items()) |move_kv| {
-            const move = move_kv.value;
+        for (pokemon.moves.values()) |move| {
             const move_name = humanize(if (game.moves.get(move.id)) |m| m.name else unknown);
             try writer.print("<tr><td>Lvl {}</td><td><a href=\"#move_{}\">{}</a></td></tr>\n", .{ move.level, move.id, move_name });
         }
@@ -463,17 +461,16 @@ fn generate(writer: anytype, game: Game) !void {
             \\<table>
             \\
         , .{});
-        for ([_]Map(u8, void){ pokemon.hms, pokemon.tms }) |machines, i| {
-            const prefix = if (i == 0) "TM" else "HM";
-            const moves = if (i == 0) game.tms else game.hms;
+        for ([_]Map(u8, void){ pokemon.hms, pokemon.tms }) |machines, j| {
+            const prefix = if (j == 0) "TM" else "HM";
+            const moves = if (j == 0) game.tms else game.hms;
 
-            for (machines.items()) |machine| {
-                const id = machine.key;
-                const move_id = moves.get(id) orelse continue;
+            for (machines.keys()) |machine| {
+                const move_id = moves.get(machine) orelse continue;
                 const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
                 try writer.print(
                     "<tr><td>{s}{}</td><td><a href=\"#move_{}\">{s}</a></td></tr>\n",
-                    .{ prefix, id + 1, move_id, move_name },
+                    .{ prefix, machine + 1, move_id, move_name },
                 );
             }
         }
@@ -485,19 +482,18 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.print("<h1>Trainers</h1>\n", .{});
-    for (game.trainers.items()) |trainer_kv| {
-        const trainer_id = trainer_kv.key;
-        const trainer = trainer_kv.value;
+    for (game.trainers.values()) |trainer, i| {
+        const trainer_id = game.trainers.keys()[i];
         try writer.print("<h2 id=\"trainer_{}\">{}</h2>\n", .{ trainer_id, humanize(trainer.name) });
 
         try writer.print("<table>\n", .{});
         try writer.print("<tr><td>Items:</td><td>", .{});
-        for (trainer.items.items()) |item, i| {
-            if (i != 0)
+        for (trainer.items.values()) |item, j| {
+            if (j != 0)
                 try writer.print(", ", .{});
 
-            const item_name = if (game.items.get(item.value)) |it| it.name else unknown;
-            try writer.print("<a href=\"#item_{}\">{}</a>", .{ item.value, humanize(item_name) });
+            const item_name = if (game.items.get(item)) |it| it.name else unknown;
+            try writer.print("<a href=\"#item_{}\">{}</a>", .{ item, humanize(item_name) });
         }
 
         try writer.print(
@@ -507,9 +503,8 @@ fn generate(writer: anytype, game: Game) !void {
             \\<table>
             \\
         , .{});
-        const party = trainer.party.items();
-        for (party[0..math.min(party.len, trainer.party_size)]) |member_kv| {
-            const member = member_kv.value;
+        const party = trainer.party.values();
+        for (party[0..math.min(party.len, trainer.party_size)]) |member| {
             const pokemon = game.pokemons.get(member.species);
             const pokemon_name = humanize(if (pokemon) |p| p.name else unknown);
             const ability_id = if (pokemon) |p| p.abilities.get(member.ability) else null;
@@ -528,8 +523,7 @@ fn generate(writer: anytype, game: Game) !void {
                 .moves, .none => try writer.print("<td>----</td>", .{}),
             }
             switch (trainer.party_type) {
-                .moves, .both => for (member.moves.items()) |move_kv| {
-                    const move = move_kv.value;
+                .moves, .both => for (member.moves.values()) |move| {
                     const move_name = humanize(if (game.moves.get(move)) |m| m.name else unknown);
                     try writer.print("<td><a href=\"#move_{}\">{}</a></td>", .{ move, move_name });
                 },
@@ -542,9 +536,8 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.print("<h1>Moves</h1>\n", .{});
-    for (game.moves.items()) |move_kv| {
-        const move_id = move_kv.key;
-        const move = move_kv.value;
+    for (game.moves.values()) |move, i| {
+        const move_id = game.moves.keys()[i];
         const move_name = humanize(move.name);
         try writer.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
         try writer.print("<p>{s}</p>\n", .{move.description});
@@ -560,9 +553,8 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.print("<h1>Items</h1>\n", .{});
-    for (game.items.items()) |item_kv| {
-        const item_id = item_kv.key;
-        const item = item_kv.value;
+    for (game.items.values()) |item, i| {
+        const item_id = game.items.keys()[i];
         const item_name = humanize(item.name);
         try writer.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });
         try writer.print("<p>{s}</p>\n", .{item.description});

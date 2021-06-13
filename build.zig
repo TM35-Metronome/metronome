@@ -45,6 +45,7 @@ const clap_pkg = Pkg{ .name = "clap", .path = "lib/zig-clap/clap.zig" };
 const crc_pkg = Pkg{ .name = "crc", .path = "lib/zig-crc/crc.zig" };
 const folders_pkg = Pkg{ .name = "folders", .path = "lib/known-folders/known-folders.zig" };
 const mecha_pkg = Pkg{ .name = "mecha", .path = "lib/mecha/mecha.zig" };
+const ziter_pkg = Pkg{ .name = "ziter", .path = "lib/ziter/ziter.zig" };
 
 const util_pkg = Pkg{
     .name = "util",
@@ -61,9 +62,10 @@ const format_pkg = Pkg{
 const pkgs = [_]Pkg{
     clap_pkg,
     crc_pkg,
+    format_pkg,
     mecha_pkg,
     util_pkg,
-    format_pkg,
+    ziter_pkg,
 };
 
 pub fn build(b: *Builder) void {

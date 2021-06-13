@@ -74,15 +74,14 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.tms.items()) |tm|
-        try format.write(writer, format.Game.tm(tm.key, tm.value));
-    for (data.hms.items()) |hm|
-        try format.write(writer, format.Game.hm(hm.key, hm.value));
-    for (data.items.items()) |item| {
-        try format.write(
-            writer,
-            format.Game.item(item.key, .{ .description = item.value.description.bytes }),
-        );
+    for (data.tms.values()) |tm, i|
+        try format.write(writer, format.Game.tm(data.tms.keys()[i], tm));
+    for (data.hms.values()) |hm, i|
+        try format.write(writer, format.Game.hm(data.hms.keys()[i], hm));
+    for (data.items.values()) |item, i| {
+        try format.write(writer, format.Game.item(data.items.keys()[i], .{
+            .description = item.description.bytes,
+        }));
     }
 }
 
@@ -102,27 +101,27 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .moves => |moves| {
-            const move = try data.moves.getOrPutValue(allocator, moves.index, Move{});
+            const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .description => |_desc| {
                     const desc = try mem.dupe(allocator, u8, _desc);
-                    move.value.description = try Utf8.init(desc);
+                    move.description = try Utf8.init(desc);
                 },
                 else => {},
             }
             return error.ParserFailed;
         },
         .items => |items| {
-            const item = try data.items.getOrPutValue(allocator, items.index, Item{});
+            const item = (try data.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
-                .pocket => |pocket| item.value.pocket = pocket,
+                .pocket => |pocket| item.pocket = pocket,
                 .name => |_name| {
                     const name = try mem.dupe(allocator, u8, _name);
-                    item.value.name = try Utf8.init(name);
+                    item.name = try Utf8.init(name);
                 },
                 .description => |_desc| {
                     const desc = try mem.dupe(allocator, u8, _desc);
-                    item.value.description = try Utf8.init(desc);
+                    item.description = try Utf8.init(desc);
                 },
                 else => {},
             }
@@ -154,15 +153,15 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
 fn randomize(data: Data, seed: u64) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
-    for (data.tms.items()) |*tm|
-        tm.value = util.random.item(random, data.moves.items()).?.key;
-    for (data.hms.items()) |*hm|
-        hm.value = util.random.item(random, data.moves.items()).?.key;
+    for (data.tms.values()) |*tm|
+        tm.* = util.random.item(random, data.moves.keys()).?.*;
+    for (data.hms.values()) |*hm|
+        hm.* = util.random.item(random, data.moves.keys()).?.*;
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;
-    for (data.items.items()) |item| {
-        var description = item.value.description;
+    for (data.items.values()) |item| {
+        var description = item.description;
         while (mem.indexOf(u8, description.bytes, "\n")) |index| {
             const line = Utf8.init(description.bytes[0..index]) catch unreachable;
             max_line_len = math.max(line.len, max_line_len);
@@ -177,19 +176,19 @@ fn randomize(data: Data, seed: u64) !void {
     //       by some amount and hope it is enough for all strings.
     max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
 
-    for (data.items.items()) |*item, i| {
-        if (item.value.pocket != .tms_hms)
+    for (data.items.values()) |*item| {
+        if (item.pocket != .tms_hms)
             continue;
 
-        const is_tm = mem.startsWith(u8, item.value.name.bytes, "TM");
-        const is_hm = mem.startsWith(u8, item.value.name.bytes, "HM");
+        const is_tm = mem.startsWith(u8, item.name.bytes, "TM");
+        const is_hm = mem.startsWith(u8, item.name.bytes, "HM");
         if (is_tm or is_hm) {
-            const number = fmt.parseUnsigned(u8, item.value.name.bytes[2..], 10) catch continue;
+            const number = fmt.parseUnsigned(u8, item.name.bytes[2..], 10) catch continue;
             const machines = if (is_tm) data.tms else data.hms;
             const move_id = machines.get(number - 1) orelse continue;
             const move = data.moves.get(move_id) orelse continue;
             const new_desc = try util.unicode.splitIntoLines(data.allocator, max_line_len, move.description);
-            item.value.description = new_desc.slice(0, item.value.description.len);
+            item.description = new_desc.slice(0, item.description.len);
         }
     }
 }

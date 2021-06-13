@@ -73,15 +73,18 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.items()) |pokemon| {
-        for (pokemon.value.tms.items()) |tm| {
-            try format.write(writer, format.Game.pokemon(pokemon.key, .{
-                .tms = .{ .index = tm.key, .value = tm.value },
+    for (data.pokemons.values()) |pokemon, i| {
+        const species = data.pokemons.keys()[i];
+        for (pokemon.tms.values()) |tm, j| {
+            const tm_index = pokemon.tms.keys()[j];
+            try format.write(writer, format.Game.pokemon(species, .{
+                .tms = .{ .index = tm_index, .value = tm },
             }));
         }
-        for (pokemon.value.hms.items()) |hm| {
-            try format.write(writer, format.Game.pokemon(pokemon.key, .{
-                .hms = .{ .index = hm.key, .value = hm.value },
+        for (pokemon.hms.values()) |hm, j| {
+            const hm_index = pokemon.hms.keys()[j];
+            try format.write(writer, format.Game.pokemon(species, .{
+                .hms = .{ .index = hm_index, .value = hm },
             }));
         }
     }
@@ -91,8 +94,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     const allocator = data.allocator;
     switch (parsed) {
         .pokemons => |pokemons| {
-            const pokemon_entry = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
-            const pokemon = &pokemon_entry.value;
+            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
                 .tms => |tms| _ = try pokemon.tms.put(allocator, tms.index, tms.value),
                 .hms => |hms| _ = try pokemon.hms.put(allocator, hms.index, hms.value),
@@ -121,8 +123,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return;
         },
         .moves => |moves| {
-            const move_entry = try data.moves.getOrPutValue(allocator, moves.index, Move{});
-            const move = &move_entry.value;
+            const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -154,9 +155,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
 fn randomize(data: Data, seed: u64, pref: Preference) !void {
     var random = &rand.DefaultPrng.init(seed).random;
 
-    for (data.pokemons.items()) |pokemon| {
-        try randomizeMachinesLearned(data, pokemon.value, random, pref, data.tms, pokemon.value.tms);
-        try randomizeMachinesLearned(data, pokemon.value, random, pref, data.hms, pokemon.value.hms);
+    for (data.pokemons.values()) |pokemon| {
+        try randomizeMachinesLearned(data, pokemon, random, pref, data.tms, pokemon.tms);
+        try randomizeMachinesLearned(data, pokemon, random, pref, data.hms, pokemon.hms);
     }
 }
 
@@ -168,13 +169,14 @@ fn randomizeMachinesLearned(
     machines: Machines,
     learned: MachinesLearned,
 ) !void {
-    for (learned.items()) |*learned_kv| {
+    for (learned.values()) |*is_learned, i| {
         switch (pref) {
-            .random => learned_kv.value = random.boolean(),
+            .random => is_learned.* = random.boolean(),
             .stab => {
                 const low_chance = 0.1;
                 const chance: f64 = blk: {
-                    const index = machines.get(learned_kv.key) orelse break :blk low_chance;
+                    const tm_index = learned.keys()[i];
+                    const index = machines.get(tm_index) orelse break :blk low_chance;
                     const move = data.moves.get(index) orelse break :blk low_chance;
                     const move_type = move.type orelse break :blk low_chance;
                     if (pokemon.types.get(move_type) == null)
@@ -184,7 +186,7 @@ fn randomizeMachinesLearned(
                     break :blk @as(f64, 1.0 - low_chance);
                 };
 
-                learned_kv.value = random.float(f64) < chance;
+                is_learned.* = random.float(f64) < chance;
             },
         }
     }

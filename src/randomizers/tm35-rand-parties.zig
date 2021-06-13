@@ -1,5 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,8 +15,6 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const algo = util.algorithm;
 
 const Param = clap.Param(clap.Help);
 
@@ -166,14 +165,12 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.trainers.items()) |trainer_kv| {
-        const tid = trainer_kv.key;
-        const trainer = trainer_kv.value;
+    for (data.trainers.values()) |trainer, i| {
+        const tid = data.trainers.keys()[i];
         try format.write(writer, format.Game.trainer(tid, .{ .party_size = trainer.party_size }));
         try format.write(writer, format.Game.trainer(tid, .{ .party_type = trainer.party_type }));
-        for (trainer.party.items()[0..trainer.party_size]) |member_kv| {
-            const pi = member_kv.key;
-            const member = member_kv.value;
+        for (trainer.party.values()[0..trainer.party_size]) |member, j| {
+            const pi = trainer.party.keys()[j];
             if (member.species) |s|
                 try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .species = s })));
             if (member.level) |l|
@@ -182,9 +179,8 @@ fn outputData(writer: anytype, data: Data) !void {
                 try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .item = item })));
             if (member.ability) |ability|
                 try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .ability = @intCast(u4, ability) })));
-            for (member.moves.items()) |move_kv| {
-                const mi = move_kv.key;
-                const move = move_kv.value;
+            for (member.moves.values()) |move, k| {
+                const mi = member.moves.keys()[k];
                 try format.write(writer, format.Game.trainer(
                     tid,
                     format.Trainer.partyMember(pi, .{
@@ -204,7 +200,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = &(try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
+            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
@@ -212,8 +208,8 @@ fn useGame(data: *Data, parsed: format.Game) !void {
                 .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
                 .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.index, ability.value),
                 .moves => |moves| {
-                    const move = try pokemon.lvl_up_moves.getOrPutValue(allocator, moves.index, LvlUpMove{});
-                    format.setField(&move.value, moves.value);
+                    const move = (try pokemon.lvl_up_moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
+                    format.setField(move, moves.value);
                 },
                 .base_exp_yield,
                 .ev_yield,
@@ -233,12 +229,12 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .trainers => |trainers| {
-            const trainer = &(try data.trainers.getOrPutValue(allocator, trainers.index, Trainer{})).value;
+            const trainer = (try data.trainers.getOrPutValue(allocator, trainers.index, .{})).value_ptr;
             switch (trainers.value) {
                 .party_size => |party_size| trainer.party_size = party_size,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party => |party| {
-                    const member = &(try trainer.party.getOrPutValue(allocator, party.index, PartyMember{})).value;
+                    const member = (try trainer.party.getOrPutValue(allocator, party.index, .{})).value_ptr;
                     switch (party.value) {
                         .species => |species| member.species = species,
                         .level => |level| member.level = level,
@@ -270,7 +266,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             => return error.ParserFailed,
         },
         .moves => |moves| {
-            const move = &(try data.moves.getOrPutValue(allocator, moves.index, Move{})).value;
+            const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -344,26 +340,23 @@ fn randomize(ctx: *Context) !void {
         return;
     }
 
-    for (ctx.data.trainers.items()) |*trainer_kv| {
+    for (ctx.data.trainers.values()) |*trainer| {
         // Trainers with 0 party members are considered "invalid" trainers
         // and will not be randomized.
-        if (trainer_kv.value.party_size == 0)
+        if (trainer.party_size == 0)
             continue;
-        try randomizeTrainer(
-            ctx,
-            &trainer_kv.value,
-        );
+        try randomizeTrainer(ctx, trainer);
     }
 }
 
 fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
     const themes = Themes{
         .type = switch (ctx.options.types) {
-            .themed => util.random.item(ctx.random, ctx.species_by_type.items()).?.key,
+            .themed => util.random.item(ctx.random, ctx.species_by_type.keys()).?.*,
             else => undefined,
         },
         .ability = switch (ctx.options.abilities) {
-            .themed => util.random.item(ctx.random, ctx.species_by_ability.items()).?.key,
+            .themed => util.random.item(ctx.random, ctx.species_by_ability.keys()).?.*,
             else => undefined,
         },
     };
@@ -419,8 +412,8 @@ fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
     while (i < trainer.party_size) : (i += 1) {
         const result = try trainer.party.getOrPut(ctx.allocator, i);
         if (!result.found_existing) {
-            const member = trainer.party.items()[party_member].value;
-            result.entry.value = .{
+            const member = trainer.party.values()[party_member];
+            result.value_ptr.* = .{
                 .species = member.species,
                 .item = member.item,
                 .level = member.level,
@@ -431,17 +424,15 @@ fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
         }
     }
 
-    for (trainer.party.items()[0..trainer.party_size]) |*member_kv| {
-        const member = &member_kv.value;
-
+    for (trainer.party.values()[0..trainer.party_size]) |*member| {
         try randomizePartyMember(ctx, themes, trainer.*, member);
         switch (ctx.options.items) {
             .unchanged => {},
             .none => member.item = null,
             .random => member.item = util.random.item(
                 ctx.random,
-                ctx.data.held_items.items(),
-            ).?.key,
+                ctx.data.held_items.keys(),
+            ).?.*,
         }
 
         switch (ctx.options.moves) {
@@ -472,36 +463,34 @@ fn randomizeTrainer(ctx: *Context, trainer: *Trainer) !void {
 
 fn fillWithBestMovesForLevel(random: *rand.Random, all_moves: Moves, pokemon: Pokemon, level: u8, moves: *MemberMoves) void {
     // Before pick best moves, we make sure the Pokémon has no moves.
-    for (moves.items()) |*move_kv|
-        move_kv.value = 0;
+    mem.set(u16, moves.values(), 0);
 
     // Go over all level up moves, and replace the current moves with better moves
     // as we find them
-    for (pokemon.lvl_up_moves.items()) |lvl_up_move_kv| {
-        const lvl_up_move = lvl_up_move_kv.value;
+    for (pokemon.lvl_up_moves.values()) |lvl_up_move| {
         if (lvl_up_move.id == 0)
             continue;
         if (level < lvl_up_move.level)
             continue;
         // Pokémon already have this move. We don't wonna have the same move twice
-        if (hasMove(moves.items(), lvl_up_move.id))
+        if (hasMove(moves.values(), lvl_up_move.id))
             continue;
 
         const this_move = all_moves.get(lvl_up_move.id) orelse continue;
         const this_move_r = RelativeMove.from(pokemon, this_move);
 
-        for (moves.items()) |*move_kv| {
-            const prev_move = all_moves.get(move_kv.value) orelse {
+        for (moves.values()) |*move| {
+            const prev_move = all_moves.get(move.*) orelse {
                 // Could not find info about this move. Assume it's and invalid or bad
                 // move and replace it.
-                move_kv.value = lvl_up_move.id;
+                move.* = lvl_up_move.id;
                 break;
             };
 
             const prev_move_r = RelativeMove.from(pokemon, prev_move);
             if (!this_move_r.lessThan(prev_move_r)) {
                 // We found a move that is better what the Pokémon already have!
-                move_kv.value = lvl_up_move.id;
+                move.* = lvl_up_move.id;
                 break;
             }
         }
@@ -510,27 +499,27 @@ fn fillWithBestMovesForLevel(random: *rand.Random, all_moves: Moves, pokemon: Po
 
 fn fillWithRandomMoves(random: *rand.Random, all_moves: Moves, moves: *MemberMoves) void {
     const has_null_move = all_moves.get(0) != null;
-    for (moves.items()) |*move_kv, i| {
+    for (moves.values()) |*move, i| {
         // We need to have more moves in the game than the party member can have,
         // otherwise, we cannot pick only unique moves. Also, move `0` is the
         // `null` move, so we don't count that as a move we can pick from.
         if (all_moves.count() - @boolToInt(has_null_move) <= i) {
-            move_kv.value = 0;
+            move.* = 0;
             continue;
         }
 
         // Loop until we have picked a move that the party member does not already
         // have.
-        move_kv.value = while (true) {
-            const pick = util.random.item(random, all_moves.items()).?.key;
-            if (pick != 0 and !hasMove(moves.items()[0..i], pick))
+        move.* = while (true) {
+            const pick = util.random.item(random, all_moves.keys()).?.*;
+            if (pick != 0 and !hasMove(moves.values()[0..i], pick))
                 break pick;
         } else unreachable;
     }
 }
 
 fn fillWithRandomLevelUpMoves(random: *rand.Random, lvl_up_moves: LvlUpMoves, moves: *MemberMoves) void {
-    for (moves.items()) |*move_kv, i| {
+    for (moves.values()) |*move, i| {
         // We need to have more moves in the learnset than the party member can have,
         // otherwise, we cannot pick only unique moves.
         // TODO: This code does no take into account that `lvl_up_moves` can contain
@@ -538,15 +527,15 @@ fn fillWithRandomLevelUpMoves(random: *rand.Random, lvl_up_moves: LvlUpMoves, mo
         //       "valid moves" from the learnset and do this check against that
         //       instead.
         if (lvl_up_moves.count() <= i) {
-            move_kv.value = 0;
+            move.* = 0;
             continue;
         }
 
         // Loop until we have picked a move that the party member does not already
         // have.
-        move_kv.value = while (true) {
-            const pick = util.random.item(random, lvl_up_moves.items()).?.value.id;
-            if (pick != 0 and !hasMove(moves.items()[0..i], pick))
+        move.* = while (true) {
+            const pick = util.random.item(random, lvl_up_moves.values()).?.id;
+            if (pick != 0 and !hasMove(moves.values()[0..i], pick))
                 break pick;
         } else unreachable;
     }
@@ -568,7 +557,7 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
             if (pokemon.types.count() == 0)
                 break :blk ctx.species;
 
-            const t = util.random.item(ctx.random, pokemon.types.items()).?.key;
+            const t = util.random.item(ctx.random, pokemon.types.keys()).?.*;
             break :blk ctx.species_by_type.get(t).?;
         },
         .themed => ctx.species_by_type.get(themes.type).?,
@@ -604,8 +593,8 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
         // Find the index of the ability we want the party member to
         // have. If we don't find the ability. The best we can do is
         // just let the Pokémon keep the ability it already has.
-        member.ability = if (findAbility(pokemon.abilities.items(), ability_to_find)) |entry|
-            entry.key
+        member.ability = if (findAbility(pokemon.abilities.iterator(), ability_to_find)) |entry|
+            entry.key_ptr.*
         else
             member.ability;
     };
@@ -649,7 +638,7 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
             member.species = try randomSpeciesWithSimularTotalStats(
                 ctx,
                 pick_from,
-                algo.fold(pokemon.stats, @as(u16, 0), algo.add),
+                it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8),
             );
             return;
         },
@@ -658,7 +647,7 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
 
     // The the above switch doesn't return, the best we can do is just pick a
     // random Pokémon from the pick_from set
-    member.species = util.random.item(ctx.random, pick_from.items()).?.key;
+    member.species = util.random.item(ctx.random, pick_from.keys()).?.*;
 }
 
 fn randomSpeciesWithSimularTotalStats(
@@ -674,11 +663,11 @@ fn randomSpeciesWithSimularTotalStats(
         min -= 5;
         max += 5;
     }) {
-        for (pick_from.items()) |s| {
-            const p = ctx.data.pokemons.get(s.key).?;
-            const total = @intCast(isize, algo.fold(&p.stats, @as(u16, 0), algo.add));
+        for (pick_from.keys()) |s| {
+            const p = ctx.data.pokemons.get(s).?;
+            const total = @intCast(isize, it.fold(it.span(&p.stats), @as(u16, 0), foldu8));
             if (min <= total and total <= max)
-                try ctx.simular.append(ctx.allocator, s.key);
+                try ctx.simular.append(ctx.allocator, s);
         }
     }
 
@@ -701,20 +690,24 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
     return @floatToInt(u16, res);
 }
 
-fn hasMove(moves: []const MemberMoves.Entry, id: u16) bool {
-    return algo.find(moves, id, struct {
-        fn f(m: u16, e: anytype) bool {
-            return m == e.value;
-        }
-    }.f) != null;
-}
-
-fn findAbility(abilities: []const Abilities.Entry, ability: u16) ?*const Abilities.Entry {
-    return algo.find(abilities, ability, struct {
-        fn f(m: u16, e: anytype) bool {
-            return m == e.value;
+fn hasMove(moves: []const u16, id: u16) bool {
+    return it.anyEx(it.span(moves), id, struct {
+        fn f(m: u16, e: u16) bool {
+            return m == e;
         }
     }.f);
+}
+
+fn findAbility(abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
+    return it.findEx(abilities, ability, struct {
+        fn f(m: u16, e: Abilities.Entry) bool {
+            return m == e.value_ptr.*;
+        }
+    }.f);
+}
+
+fn foldu8(a: u16, b: u8) u16 {
+    return a + b;
 }
 
 fn MinMax(comptime T: type) type {
@@ -743,13 +736,14 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(allocator);
 
-        for (d.pokemons.items()) |pokemon| {
-            if (pokemon.value.catch_rate == 0)
+        for (d.pokemons.values()) |pokemon, i| {
+            const species = d.pokemons.keys()[i];
+            if (pokemon.catch_rate == 0)
                 continue;
-            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
+            if (d.pokedex.get(pokemon.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(allocator, pokemon.key, {});
+            _ = try res.put(allocator, species, {});
         }
 
         return res;
@@ -760,9 +754,9 @@ const Data = struct {
             .min = math.maxInt(u16),
             .max = 0,
         };
-        for (species.items()) |s| {
-            const pokemon = d.pokemons.get(s.key).?;
-            const total_stats = algo.fold(pokemon.stats, @as(u16, 0), algo.add);
+        for (species.keys()) |s| {
+            const pokemon = d.pokemons.get(s).?;
+            const total_stats = it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8);
             res.min = math.min(res.min, total_stats);
             res.max = math.max(res.max, total_stats);
         }
@@ -772,16 +766,16 @@ const Data = struct {
     fn speciesByType(d: Data, allocator: *mem.Allocator, species: Set) !SpeciesBy {
         var res = SpeciesBy{};
         errdefer {
-            for (res.items()) |*set|
-                set.value.deinit(allocator);
+            for (res.values()) |*set|
+                set.deinit(allocator);
             res.deinit(allocator);
         }
 
-        for (species.items()) |s| {
-            const pokemon = d.pokemons.get(s.key).?;
-            for (pokemon.types.items()) |t| {
-                const set = try res.getOrPutValue(allocator, t.key, Set{});
-                _ = try set.value.put(allocator, s.key, {});
+        for (species.keys()) |s| {
+            const pokemon = d.pokemons.get(s).?;
+            for (pokemon.types.keys()) |t| {
+                const set = (try res.getOrPutValue(allocator, t, .{})).value_ptr;
+                _ = try set.put(allocator, s, {});
             }
         }
 
@@ -791,18 +785,18 @@ const Data = struct {
     fn speciesByAbility(d: Data, allocator: *mem.Allocator, species: Set) !SpeciesBy {
         var res = SpeciesBy{};
         errdefer {
-            for (res.items()) |*set|
-                set.value.deinit(allocator);
+            for (res.values()) |*set|
+                set.deinit(allocator);
             res.deinit(allocator);
         }
 
-        for (species.items()) |s| {
-            const pokemon = d.pokemons.get(s.key).?;
-            for (pokemon.abilities.items()) |a| {
-                if (a.value == 0)
+        for (species.keys()) |s| {
+            const pokemon = d.pokemons.get(s).?;
+            for (pokemon.abilities.values()) |ability| {
+                if (ability == 0)
                     continue;
-                const set = try res.getOrPutValue(allocator, a.value, Set{});
-                _ = try set.value.put(allocator, s.key, {});
+                const set = (try res.getOrPutValue(allocator, ability, .{})).value_ptr;
+                _ = try set.put(allocator, s, {});
             }
         }
 
@@ -818,8 +812,7 @@ const Trainer = struct {
     fn partyAverageLevel(trainer: Trainer) u8 {
         var count: u16 = 0;
         var sum: u16 = 0;
-        for (trainer.party.items()) |member_kv| {
-            const member = member_kv.value;
+        for (trainer.party.values()) |member| {
             sum += member.level orelse 0;
             count += @boolToInt(member.level != null);
         }

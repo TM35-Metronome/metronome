@@ -1,5 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,8 +15,6 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const algo = util.algorithm;
 
 const Param = clap.Param(clap.Help);
 
@@ -66,14 +65,15 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, pokemons: Pokemons) !void {
-    for (pokemons.items()) |pokemon| {
+    for (pokemons.values()) |pokemon, i| {
+        const species = pokemons.keys()[i];
         inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
-            if (pokemon.value.output[j]) {
-                try format.write(writer, format.Game.pokemon(pokemon.key, .{
+            if (pokemon.output[j]) {
+                try format.write(writer, format.Game.pokemon(species, .{
                     .stats = @unionInit(
                         format.Stats(u8),
                         field.name,
-                        pokemon.value.stats[j],
+                        pokemon.stats[j],
                     ),
                 }));
             }
@@ -86,7 +86,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
     const pokemons = ctx.pokemons;
     switch (parsed) {
         .pokemons => |mons| {
-            const pokemon = &(try pokemons.getOrPutValue(allocator, mons.index, Pokemon{})).value;
+            const pokemon = (try pokemons.getOrPutValue(allocator, mons.index, .{})).value_ptr;
             switch (mons.value) {
                 .stats => |stats| {
                     switch (stats) {
@@ -102,7 +102,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
                 },
                 .evos => |evos| switch (evos.value) {
                     .target => |target| {
-                        const evo_from = &(try pokemons.getOrPutValue(allocator, target, Pokemon{})).value;
+                        const evo_from = (try pokemons.getOrPutValue(allocator, target, .{})).value_ptr;
                         _ = try evo_from.evolves_from.put(allocator, mons.index, {});
                         return error.ParserFailed;
                     },
@@ -159,20 +159,21 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
 
 fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {
     var random = rand.DefaultPrng.init(seed);
-    for (pokemons.items()) |*pokemon| {
-        const old_total = algo.fold(&pokemon.value.stats, @as(usize, 0), algo.add);
-        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.value.stats.len * math.maxInt(u8));
+    for (pokemons.values()) |*pokemon| {
+        const old_total = it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8);
+        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.stats.len * math.maxInt(u8));
         const new_total = if (same_total_stats) old_total else new_random_total;
 
-        var weights: [pokemon.value.stats.len]f32 = undefined;
-        randomWithinSum(&random.random, u8, &pokemon.value.stats, &weights, new_total);
+        var weights: [pokemon.stats.len]f32 = undefined;
+        randomWithinSum(&random.random, u8, &pokemon.stats, &weights, new_total);
     }
 
     if (!follow_evos)
         return;
 
-    for (pokemons.items()) |*pokemon| {
-        randomizeFromChildren(&random.random, pokemons, &pokemon.value, same_total_stats, pokemon.key);
+    for (pokemons.values()) |*pokemon, i| {
+        const species = pokemons.keys()[i];
+        randomizeFromChildren(&random.random, pokemons, pokemon, same_total_stats, species);
     }
 }
 
@@ -188,19 +189,20 @@ fn randomizeFromChildren(
 
     // Get the average stats of all the prevolutions
     var stats = [_]u64{0} ** Pokemon.stats;
-    for (pokemon.evolves_from.items()) |prevolution| {
+    for (pokemon.evolves_from.values()) |*prevolution, i| {
+        const key = pokemon.evolves_from.keys()[i];
         // If prevolution == curr, then we have a cycle.
-        if (prevolution.key == curr)
+        if (key == curr)
             continue;
 
         // TODO: Can this ever happen???
-        //                                             VVVVVVVV
-        const p = pokemons.getEntry(prevolution.key) orelse continue;
+        //                                      VVVVVVVV
+        const p = pokemons.getEntry(key) orelse continue;
 
         // We should randomize prevolution by the same rules.
-        randomizeFromChildren(random, pokemons, &p.value, same_total_stats, curr);
-        for (p.value.stats) |stat, i|
-            stats[i] += stat;
+        randomizeFromChildren(random, pokemons, p.value_ptr, same_total_stats, curr);
+        for (p.value_ptr.stats) |stat, j|
+            stats[j] += stat;
     }
 
     // Average calculated here
@@ -209,8 +211,8 @@ fn randomizeFromChildren(
         stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch math.maxInt(u8);
     }
 
-    const old_total = algo.fold(&pokemon.stats, @as(usize, 0), algo.add);
-    const average_total = algo.fold(&average, @as(usize, 0), algo.add);
+    const old_total = it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8);
+    const average_total = it.fold(it.span(&average), @as(usize, 0), foldu8);
     const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
@@ -239,23 +241,31 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: 
         break :blk weight_buf[0..buf.len];
     };
 
-    const curr = algo.fold(buf, @as(usize, 0), algo.add);
+    const curr = it.fold(it.span(buf), @as(usize, 0), foldu8);
     const max = math.min(s, buf.len * math.maxInt(T));
     if (max < curr)
         return;
 
     const missing = max - curr;
-    const total_weigth = algo.fold(weights, @as(f64, 0), algo.add);
+    const total_weigth = it.fold(it.span(weights), @as(f64, 0), foldf32);
     for (buf) |*item, i| {
         const to_add_f = @intToFloat(f64, missing) * (weights[i] / total_weigth);
         const to_add_max = math.min(to_add_f, math.maxInt(u8));
         item.* = math.add(T, item.*, @floatToInt(u8, to_add_max)) catch math.maxInt(T);
     }
 
-    while (algo.fold(buf, @as(usize, 0), algo.add) < max) {
+    while (it.fold(it.span(buf), @as(usize, 0), foldu8) < max) {
         const item = util.random.item(random, buf).?;
         item.* = math.add(T, item.*, 1) catch item.*;
     }
+}
+
+fn foldu8(a: usize, b: u8) usize {
+    return a + b;
+}
+
+fn foldf32(a: f64, b: f32) f64 {
+    return a + b;
 }
 
 const Evos = std.AutoArrayHashMapUnmanaged(u16, void);

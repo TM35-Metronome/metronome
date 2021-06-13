@@ -1,5 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -14,8 +15,6 @@ const meta = std.meta;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
-
-const algo = util.algorithm;
 
 const Param = clap.Param(clap.Help);
 
@@ -61,16 +60,18 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.wild_pokemons.items()) |zone| {
-        for (zone.value.wild_areas) |area, j| {
+    for (data.wild_pokemons.values()) |zone, i| {
+        const zone_id = data.wild_pokemons.keys()[i];
+        for (zone.wild_areas) |area, j| {
             const aid = @intToEnum(meta.TagType(format.WildPokemons), @intCast(u5, j));
-            for (area.pokemons.items()) |pokemon| {
-                if (pokemon.value.min_level) |l|
-                    try format.write(writer, format.Game.wild_pokemon(zone.key, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon.key, .value = .{ .min_level = l } } })));
-                if (pokemon.value.max_level) |l|
-                    try format.write(writer, format.Game.wild_pokemon(zone.key, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon.key, .value = .{ .max_level = l } } })));
-                if (pokemon.value.species) |s|
-                    try format.write(writer, format.Game.wild_pokemon(zone.key, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon.key, .value = .{ .species = s } } })));
+            for (area.pokemons.values()) |pokemon, k| {
+                const pokemon_id = area.pokemons.keys()[k];
+                if (pokemon.min_level) |l|
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .min_level = l } } })));
+                if (pokemon.max_level) |l|
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .max_level = l } } })));
+                if (pokemon.species) |s|
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .species = s } } })));
             }
         }
     }
@@ -84,7 +85,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = &(try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{})).value;
+            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
@@ -110,13 +111,13 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .wild_pokemons => |wild_areas| {
-            const zone = &(try data.wild_pokemons.getOrPutValue(allocator, wild_areas.index, Zone{})).value;
+            const zone = (try data.wild_pokemons.getOrPutValue(allocator, wild_areas.index, .{})).value_ptr;
             const area = &zone.wild_areas[@enumToInt(wild_areas.value)];
             const wild_area = wild_areas.value.value();
 
             switch (wild_area) {
                 .pokemons => |pokemons| {
-                    const pokemon = &(try area.pokemons.getOrPutValue(allocator, pokemons.index, WildPokemon{})).value;
+                    const pokemon = (try area.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
 
                     // TODO: We're not using min/max level for anything yet
                     switch (pokemons.value) {
@@ -158,20 +159,20 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
     var simular = std.ArrayList(u16).init(data.allocator);
 
     const species = try data.pokedexPokemons();
-    for (data.wild_pokemons.items()) |zone| {
-        for (zone.value.wild_areas) |area| {
-            for (area.pokemons.items()) |*wild_pokemon| {
-                const old_species = wild_pokemon.value.species orelse continue;
+    for (data.wild_pokemons.values()) |zone, i| {
+        for (zone.wild_areas) |area| {
+            for (area.pokemons.values()) |*wild_pokemon| {
+                const old_species = wild_pokemon.species orelse continue;
 
                 if (simular_total_stats) blk: {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
                     const pokemon = data.pokemons.get(old_species) orelse {
-                        wild_pokemon.value.species = util.random.item(random, species.items()).?.key;
+                        wild_pokemon.species = util.random.item(random, species.keys()).?.*;
                         break :blk;
                     };
 
-                    var min = @intCast(i64, algo.fold(&pokemon.stats, @as(usize, 0), algo.add));
+                    var min = @intCast(i64, it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8));
                     var max = min;
 
                     simular.shrinkRetainingCapacity(0);
@@ -179,21 +180,25 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         min -= 5;
                         max += 5;
 
-                        for (species.items()) |s| {
-                            const p = data.pokemons.get(s.key).?;
-                            const total = @intCast(i64, algo.fold(&p.stats, @as(usize, 0), algo.add));
+                        for (species.keys()) |s| {
+                            const p = data.pokemons.get(s).?;
+                            const total = @intCast(i64, it.fold(it.span(&p.stats), @as(usize, 0), foldu8));
                             if (min <= total and total <= max)
-                                try simular.append(s.key);
+                                try simular.append(s);
                         }
                     }
 
-                    wild_pokemon.value.species = util.random.item(random, simular.items).?.*;
+                    wild_pokemon.species = util.random.item(random, simular.items).?.*;
                 } else {
-                    wild_pokemon.value.species = util.random.item(random, species.items()).?.key;
+                    wild_pokemon.species = util.random.item(random, species.keys()).?.*;
                 }
             }
         }
     }
+}
+
+fn foldu8(a: usize, b: u8) usize {
+    return a + b;
 }
 
 const number_of_areas = @typeInfo(format.WildPokemons).Union.fields.len;
@@ -214,13 +219,13 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(d.allocator);
 
-        for (d.pokemons.items()) |pokemon| {
-            if (pokemon.value.catch_rate == 0)
+        for (d.pokemons.values()) |pokemon, i| {
+            if (pokemon.catch_rate == 0)
                 continue;
-            if (d.pokedex.get(pokemon.value.pokedex_entry) == null)
+            if (d.pokedex.get(pokemon.pokedex_entry) == null)
                 continue;
 
-            _ = try res.put(d.allocator, pokemon.key, {});
+            _ = try res.put(d.allocator, d.pokemons.keys()[i], {});
         }
 
         return res;

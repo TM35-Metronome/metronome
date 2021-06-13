@@ -66,8 +66,9 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokeballs.items()) |ball| {
-        try format.write(writer, format.Game.pokeball_item(ball.key, .{ .item = ball.value }));
+    for (data.pokeballs.values()) |ball, i| {
+        const ball_key = data.pokeballs.keys()[i];
+        try format.write(writer, format.Game.pokeball_item(ball_key, .{ .item = ball }));
     }
 }
 
@@ -82,10 +83,10 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             .amount => return error.ParserFailed,
         },
         .items => |items| {
-            const item = try data.items.getOrPutValue(allocator, items.index, Item{});
+            const item = (try data.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
-                .pocket => |pocket| item.value.pocket = pocket,
-                .price => |price| item.value.price = price,
+                .pocket => |pocket| item.pocket = pocket,
+                .price => |price| item.price = price,
                 .name,
                 .description,
                 .battle_effect,
@@ -141,14 +142,15 @@ fn randomize(
     const pick_from = try data.getItems(pocket_blacklist.items);
     const max = pick_from.count();
 
-    outer: for (data.pokeballs.items()) |*ball| {
-        const item = data.items.get(ball.key) orelse continue;
+    outer: for (data.pokeballs.values()) |*ball, i| {
+        const ball_key = data.pokeballs.keys()[i];
+        const item = data.items.get(ball_key) orelse continue;
         for (pocket_blacklist.items) |blacklisted_pocket| {
             if (item.pocket == blacklisted_pocket)
                 continue :outer;
         }
 
-        ball.value = util.random.item(random, pick_from.items()).?.key;
+        ball.* = util.random.item(random, pick_from.keys()).?.*;
     }
 }
 
@@ -165,18 +167,19 @@ const Data = struct {
         var res = Set{};
         errdefer res.deinit(d.allocator);
 
-        outer: for (d.items.items()) |item| {
+        outer: for (d.items.values()) |item, i| {
+            const item_key = d.items.keys()[i];
             // Assume that items in the 'items' pocket with price 0 is
             // none useful or invalid items.
-            if (item.value.price == 0 and item.value.pocket == .items)
+            if (item.price == 0 and item.pocket == .items)
                 continue;
 
             for (pocket_blacklist) |blacklisted_pocket| {
-                if (item.value.pocket == blacklisted_pocket)
+                if (item.pocket == blacklisted_pocket)
                     continue :outer;
             }
 
-            _ = try res.put(d.allocator, item.key, {});
+            _ = try res.put(d.allocator, item_key, {});
         }
 
         return res;

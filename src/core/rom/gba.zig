@@ -1,3 +1,4 @@
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -5,8 +6,6 @@ const ascii = std.ascii;
 const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
-
-const algorithm = util.algorithm;
 
 pub const Header = extern struct {
     rom_entry_point: [4]u8,
@@ -31,22 +30,22 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        if (!algorithm.all(header.game_title.span(), notLower))
+        if (!it.span(header.game_title.span()).pipe(it.all, .{notLower}))
             return error.InvalidGameTitle;
-        if (!algorithm.all(&header.gamecode, ascii.isUpper))
+        if (!it.span(&header.gamecode).pipe(it.all, .{ascii.isUpper}))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
         // const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        // if (!slice.algorithm.all(makercode, ascii.isUpper))
+        // if (!slice.it.span(makercode).pipe(it.all, .{ascii.isUpper}))
         //     return error.InvalidMakercode;
         if (header.fixed_value != 0x96)
             return error.InvalidFixedValue;
 
-        if (!algorithm.all(&header.reserved1, isZero))
+        if (!it.span(&header.reserved1).pipe(it.all, .{isZero}))
             return error.InvalidReserved1;
-        if (!algorithm.all(&header.reserved2, isZero))
+        if (!it.span(&header.reserved2).pipe(it.all, .{isZero}))
             return error.InvalidReserved2;
     }
 

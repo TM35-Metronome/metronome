@@ -1,4 +1,5 @@
 const crc = @import("crc");
+const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -9,8 +10,6 @@ const ascii = std.ascii;
 const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
-
-const algorithm = util.algorithm;
 
 const lu16 = int.lu16;
 const lu32 = int.lu32;
@@ -212,15 +211,15 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        if (!algorithm.all(header.game_title.span(), notLower))
+        if (!it.span(header.game_title.span()).pipe(it.all, .{notLower}))
             return error.InvalidGameTitle;
-        if (!algorithm.all(&header.gamecode, ascii.isUpper))
+        if (!it.span(&header.gamecode).pipe(it.all, .{ascii.isUpper}))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
         //const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        //if (!algorithm.all(u8, makercode, ascii.isUpper))
+        //if (!it.span(makercode).pipe(it.all, .{ascii.isUpper}))
         //    return error.InvalidMakercode;
 
         if (header.unitcode > 0x03)
@@ -228,7 +227,7 @@ pub const Header = extern struct {
         if (header.encryption_seed_select > 0x07)
             return error.InvalidEncryptionSeedSelect;
 
-        //if (!algorithm.all(u8, header.reserved1[0..], isZero))
+        //if (!it.span(header.reserved1[0..]).pipe(it.all, .{isZero}))
         //    return error.InvalidReserved1;
 
         // It seems that arm9 (secure area) is always at 0x4000
@@ -262,17 +261,17 @@ pub const Header = extern struct {
         if (header.rom_header_size.value() != 0x4000)
             return error.InvalidRomHeaderSize;
 
-        //if (!algorithm.all(u8, header.reserved3, isZero))
+        //if (!it.span(header.reserved3).pipe(it.all, .{isZero}))
         //    return error.InvalidReserved3;
-        //if (!algorithm.all(u8, header.reserved4, isZero))
+        //if (!it.span(header.reserved4).pipe(it.all, .{isZero}))
         //    return error.InvalidReserved4;
-        //if (!algorithm.all(u8, header.reserved5, isZero))
+        //if (!it.span(header.reserved5).pipe(it.all, .{isZero}))
         //    return error.InvalidReserved5;
 
         if (header.isDsi()) {
-            //if (!algorithm.all(u8, header.reserved6[0..], isZero))
+            //if (!it.span(header.reserved6[0..]).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved6;
-            //if (!algorithm.all(u8, header.reserved7[0..], isZero))
+            //if (!it.span(header.reserved7[0..]).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved7;
 
             // TODO: (usually same as ARM9 rom offs, 0004000h)
@@ -281,17 +280,17 @@ pub const Header = extern struct {
                 return error.InvalidDigestNtrRegionOffset;
             //if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
             //    return error.InvalidReserved8;
-            //if (!algorithm.all(u8, header.reserved9, isZero))
+            //if (!it.span(header.reserved9).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved9;
             if (!mem.eql(u8, &header.title_id_rest, "\x00\x03\x00"))
                 return error.InvalidTitleIdRest;
-            //if (!algorithm.all(u8, header.reserved12, isZero))
+            //if (!it.span(header.reserved12).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved12;
-            //if (!algorithm.all(u8, header.reserved16, isZero))
+            //if (!it.span(header.reserved16).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved16;
-            //if (!algorithm.all(u8, header.reserved17, isZero))
+            //if (!it.span(header.reserved17).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved17;
-            //if (!algorithm.all(u8, header.reserved18, isZero))
+            //if (!it.span(header.reserved18).pipe(it.all, .{isZero}))
             //    return error.InvalidReserved18;
         }
     }

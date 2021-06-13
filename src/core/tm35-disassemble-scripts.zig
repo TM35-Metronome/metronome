@@ -130,6 +130,7 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
 }
 
 fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, writer: anytype) anyerror!void {
+    @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
         var offsets = std.ArrayList(isize).init(allocator);
@@ -188,6 +189,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, writer: any
 }
 
 fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, writer: anytype) anyerror!void {
+    @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
