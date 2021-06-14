@@ -2,7 +2,6 @@ const clap = @import("clap");
 const format = @import("format");
 const it = @import("ziter");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -35,13 +34,9 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-stats ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes Pokémon stats.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nRandomizes Pokémon stats.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -60,7 +55,7 @@ pub fn main2(
     const follow_evos = args.flag("--follow-evos");
 
     var pokemons = Pokemons{};
-    try format.io(allocator, stdio.in, stdio.out, .{
+    try format.io(allocator, stdio.in, stdio.out, false, .{
         .allocator = allocator,
         .pokemons = &pokemons,
     }, useGame);
@@ -74,7 +69,7 @@ fn outputData(writer: anytype, pokemons: Pokemons) !void {
         const species = pokemons.keys()[i];
         inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
             if (pokemon.output[j]) {
-                try ston.serialize(writer, format.Game.pokemon(species, .{
+                try format.write(writer, format.Game.pokemon(species, .{
                     .stats = @unionInit(
                         format.Stats(u8),
                         field.name,
@@ -165,7 +160,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
 fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {
     var random = rand.DefaultPrng.init(seed);
     for (pokemons.values()) |*pokemon| {
-        const old_total = it.fold(&pokemon.stats, @as(usize, 0), foldu8);
+        const old_total = it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8);
         const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.stats.len * math.maxInt(u8));
         const new_total = if (same_total_stats) old_total else new_random_total;
 
@@ -216,8 +211,8 @@ fn randomizeFromChildren(
         stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch math.maxInt(u8);
     }
 
-    const old_total = it.fold(&pokemon.stats, @as(usize, 0), foldu8);
-    const average_total = it.fold(&average, @as(usize, 0), foldu8);
+    const old_total = it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8);
+    const average_total = it.fold(it.span(&average), @as(usize, 0), foldu8);
     const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
     const new_total = if (same_total_stats) old_total else new_random_total;
 
@@ -246,20 +241,20 @@ fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: 
         break :blk weight_buf[0..buf.len];
     };
 
-    const curr = it.fold(buf, @as(usize, 0), foldu8);
+    const curr = it.fold(it.span(buf), @as(usize, 0), foldu8);
     const max = math.min(s, buf.len * math.maxInt(T));
     if (max < curr)
         return;
 
     const missing = max - curr;
-    const total_weigth = it.fold(weights, @as(f64, 0), foldf32);
+    const total_weigth = it.fold(it.span(weights), @as(f64, 0), foldf32);
     for (buf) |*item, i| {
         const to_add_f = @intToFloat(f64, missing) * (weights[i] / total_weigth);
         const to_add_max = math.min(to_add_f, math.maxInt(u8));
         item.* = math.add(T, item.*, @floatToInt(u8, to_add_max)) catch math.maxInt(T);
     }
 
-    while (it.fold(buf, @as(usize, 0), foldu8) < max) {
+    while (it.fold(it.span(buf), @as(usize, 0), foldu8) < max) {
         const item = util.random.item(random, buf).?;
         item.* = math.add(T, item.*, 1) catch item.*;
     }

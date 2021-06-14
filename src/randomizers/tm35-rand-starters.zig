@@ -1,7 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -62,7 +61,7 @@ pub fn main2(
     const pick_lowest = args.flag("--pick-lowest-evolution");
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
     const random = &rand.DefaultPrng.init(seed).random;
     const pick_from = try getStartersToPickFrom(random, data, pick_lowest, evolutions);
@@ -72,7 +71,7 @@ pub fn main2(
 fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
     for (data.starters.keys()) |starter| {
         const res = util.random.item(random, pick_from.keys()).?.*;
-        try ston.serialize(writer, format.Game.starter(@intCast(u8, starter), res));
+        try format.write(writer, format.Game.starter(@intCast(u8, starter), res));
     }
 }
 

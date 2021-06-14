@@ -22,6 +22,3 @@
 [submodule "lib/ziter"]
 	path = lib/ziter
 	url = https://github.com/Hejsil/ziter.git
-[submodule "lib/ston"]
-	path = lib/ston
-	url = https://github.com/Hejsil/ston.git

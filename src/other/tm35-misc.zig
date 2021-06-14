@@ -35,15 +35,11 @@ const params = blk: {
 };
 
 fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-misc ");
+    try writer.writeAll("Usage: tm35-no-trade-evolutions ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Command to apply miscellaneous changed.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nCommand to apply miscellaneous changed.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -113,6 +109,7 @@ pub fn main2(
         allocator,
         stdio.in,
         stdio.out,
+        false,
         .{ .out = stdio.out, .opt = opt },
         useGame,
     );

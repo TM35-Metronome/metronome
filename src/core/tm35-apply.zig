@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const common = @import("common.zig");
@@ -54,13 +53,9 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-apply ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Applies changes to Pokémon roms.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nApplies changes to Pokémon roms.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -134,7 +129,7 @@ pub fn main2(
     if (patch != .none)
         try old_bytes.appendSlice(game.data());
 
-    try format.io(allocator, stdio.in, std.io.null_writer, .{
+    try format.io(allocator, stdio.in, std.io.null_writer, true, .{
         .out = stdio.out,
         .patch = patch,
         .game = &game,

@@ -1,7 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -32,13 +31,9 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-learned-moves ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes the moves Pokémons can learn.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nRandomizes the moves Pokémons can learn.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -71,7 +66,7 @@ pub fn main2(
         Preference.random;
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
     try randomize(data, seed, pref);
     try outputData(stdio.out, data);
@@ -82,13 +77,13 @@ fn outputData(writer: anytype, data: Data) !void {
         const species = data.pokemons.keys()[i];
         for (pokemon.tms.values()) |tm, j| {
             const tm_index = pokemon.tms.keys()[j];
-            try ston.serialize(writer, format.Game.pokemon(species, .{
+            try format.write(writer, format.Game.pokemon(species, .{
                 .tms = .{ .index = tm_index, .value = tm },
             }));
         }
         for (pokemon.hms.values()) |hm, j| {
             const hm_index = pokemon.hms.keys()[j];
-            try ston.serialize(writer, format.Game.pokemon(species, .{
+            try format.write(writer, format.Game.pokemon(species, .{
                 .hms = .{ .index = hm_index, .value = hm },
             }));
         }

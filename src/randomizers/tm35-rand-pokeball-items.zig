@@ -1,7 +1,6 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -33,13 +32,10 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-pokeball-items ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes the items found in pokeballs lying around. Doesn't work for hg and ss yet.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nRandomizes the items found in pokeballs lying around. " ++
+        "Doesn't work for hg and ss yet.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -58,7 +54,7 @@ pub fn main2(
     const include_key_items = args.flag("--include-key-items");
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
     try randomize(
         data,
@@ -72,7 +68,7 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.pokeballs.values()) |ball, i| {
         const ball_key = data.pokeballs.keys()[i];
-        try ston.serialize(writer, format.Game.pokeball_item(ball_key, .{ .item = ball }));
+        try format.write(writer, format.Game.pokeball_item(ball_key, .{ .item = ball }));
     }
 }
 

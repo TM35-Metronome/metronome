@@ -23,9 +23,9 @@ pub const main = util.generateMain("0.0.0", main2, &params, usage);
 const params = blk: {
     @setEvalBranchQuota(100000);
     break :blk [_]Param{
-        clap.parseParam("-h, --help           Display this help text and exit.    ") catch unreachable,
-        clap.parseParam("-o, --output <FILE>  Override destination path.          ") catch unreachable,
-        clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
+        clap.parseParam("-h, --help                    Display this help text and exit.             ") catch unreachable,
+        clap.parseParam("-o, --output <FILE>           Override destination path.                   ") catch unreachable,
+        clap.parseParam("-v, --version                 Output version information and exit.         ") catch unreachable,
         clap.parseParam("<ROM>") catch unreachable,
     };
 };
@@ -33,13 +33,10 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-nds-extract ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Reads a Nintendo DS rom and extract its file system into a folder.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nReads a Nintendo DS rom and extract its file system " ++
+        "into a folder.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 

@@ -34,15 +34,11 @@ const params = [_]Param{
 };
 
 fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-identify ");
+    try writer.writeAll("Usage: tm35-identify");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Identify which Pokémon game a file is.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nIdentify which Pokémon game a file is.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 

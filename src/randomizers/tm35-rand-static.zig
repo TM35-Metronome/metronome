@@ -2,7 +2,6 @@ const clap = @import("clap");
 const format = @import("format");
 const it = @import("ziter");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -35,13 +34,10 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-starters ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes static, given and hollow Pokémons. Doesn't work for hg and ss yet.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nRandomizes static, given and hollow Pokémons. Doesn't work for " ++
+        "hg and ss yet.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -81,7 +77,7 @@ pub fn main2(
     };
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
     try randomize(data, seed, method, types);
     try outputData(stdio.out, data);
@@ -90,7 +86,7 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.static_mons.values()) |static, i| {
         const static_key = data.static_mons.keys()[i];
-        try ston.serialize(writer, format.Game.static_pokemon(static_key, .{ .species = static }));
+        try format.write(writer, format.Game.static_pokemon(static_key, .{ .species = static }));
     }
     for (data.hidden_hollows.values()) |hollow, i| {
         const hollow_key = data.hidden_hollows.keys()[i];
@@ -104,7 +100,7 @@ fn outputData(writer: anytype, data: Data) !void {
                 for (group.values()) |pokemon, g| {
                     const pokemon_key = group.keys()[g];
                     const si = pokemon.species_index orelse continue;
-                    try ston.serialize(writer, format.Game.hidden_hollow(
+                    try format.write(writer, format.Game.hidden_hollow(
                         hollow_key,
                         format.HiddenHollow.pokemon(
                             version_key,
@@ -289,7 +285,7 @@ fn randomize(
                     // is simular/same as itself.
                     const prev_pokemon = data.pokemons.get(static.*) orelse continue;
 
-                    var min = @intCast(i64, it.fold(&prev_pokemon.stats, @as(usize, 0), foldu8));
+                    var min = @intCast(i64, it.fold(it.span(&prev_pokemon.stats), @as(usize, 0), foldu8));
                     var max = min;
 
                     // For same-stats, we can just make this loop run once, which will
@@ -303,7 +299,7 @@ fn randomize(
                             .random => for (species.keys()) |s| {
                                 const pokemon = data.pokemons.get(s).?;
 
-                                const total = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                                const total = @intCast(i64, it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8));
                                 if (min <= total and total <= max)
                                     try simular.append(s);
                             },
@@ -323,7 +319,7 @@ fn randomize(
                                     for (pokemons_of_type.keys()) |s| {
                                         const pokemon = data.pokemons.get(s).?;
 
-                                        const total = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                                        const total = @intCast(i64, it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8));
                                         if (min <= total and total <= max)
                                             try simular.append(s);
                                     }

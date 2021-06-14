@@ -2,7 +2,6 @@ const clap = @import("clap");
 const format = @import("format");
 const it = @import("ziter");
 const std = @import("std");
-const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -34,13 +33,9 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-wild ");
     try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes wild Pokémon encounters.
-        \\
-        \\Options:
-        \\
-    );
+    try writer.writeAll("\nRandomizes wild Pokémon encounters.\n" ++
+        "\n" ++
+        "Options:\n");
     try clap.help(writer, &params);
 }
 
@@ -58,7 +53,7 @@ pub fn main2(
     const simular_total_stats = args.flag("--simular-total-stats");
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
 
     try randomize(data, seed, simular_total_stats);
     try outputData(stdio.out, data);
@@ -72,11 +67,11 @@ fn outputData(writer: anytype, data: Data) !void {
             for (area.pokemons.values()) |pokemon, k| {
                 const pokemon_id = area.pokemons.keys()[k];
                 if (pokemon.min_level) |l|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .min_level = l } } })));
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .min_level = l } } })));
                 if (pokemon.max_level) |l|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .max_level = l } } })));
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .max_level = l } } })));
                 if (pokemon.species) |s|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .species = s } } })));
+                    try format.write(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .species = s } } })));
             }
         }
     }
@@ -177,7 +172,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         break :blk;
                     };
 
-                    var min = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                    var min = @intCast(i64, it.fold(it.span(&pokemon.stats), @as(usize, 0), foldu8));
                     var max = min;
 
                     simular.shrinkRetainingCapacity(0);
@@ -187,7 +182,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
 
                         for (species.keys()) |s| {
                             const p = data.pokemons.get(s).?;
-                            const total = @intCast(i64, it.fold(&p.stats, @as(usize, 0), foldu8));
+                            const total = @intCast(i64, it.fold(it.span(&p.stats), @as(usize, 0), foldu8));
                             if (min <= total and total <= max)
                                 try simular.append(s);
                         }
