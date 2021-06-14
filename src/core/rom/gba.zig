@@ -30,22 +30,22 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        if (!it.span(header.game_title.span()).pipe(it.all, .{notLower}))
+        if (!it.all(header.game_title.span(), notLower))
             return error.InvalidGameTitle;
-        if (!it.span(&header.gamecode).pipe(it.all, .{ascii.isUpper}))
+        if (!it.all(&header.gamecode, ascii.isUpper))
             return error.InvalidGamecode;
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
         // const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        // if (!slice.it.span(makercode).pipe(it.all, .{ascii.isUpper}))
+        // if (!it.all(makercode, ascii.isUpper))
         //     return error.InvalidMakercode;
         if (header.fixed_value != 0x96)
             return error.InvalidFixedValue;
 
-        if (!it.span(&header.reserved1).pipe(it.all, .{isZero}))
+        if (!it.all(&header.reserved1, isZero))
             return error.InvalidReserved1;
-        if (!it.span(&header.reserved2).pipe(it.all, .{isZero}))
+        if (!it.all(&header.reserved2, isZero))
             return error.InvalidReserved2;
     }
 

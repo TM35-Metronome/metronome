@@ -2,6 +2,7 @@ const clap = @import("clap");
 const format = @import("format");
 const it = @import("ziter");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -40,9 +41,13 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-rand-parties ");
     try clap.usage(writer, &params);
-    try writer.writeAll("\nRandomizes trainer parties.\n" ++
-        "\n" ++
-        "Options:\n");
+    try writer.writeAll(
+        \\
+        \\Randomizes trainer parties.
+        \\
+        \\Options:
+        \\
+    );
     try clap.help(writer, &params);
 }
 
@@ -136,7 +141,7 @@ pub fn main2(
     }
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, false, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
 
     const species = try data.pokedexPokemons(allocator);
     var ctx = Context{
@@ -167,21 +172,21 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.trainers.values()) |trainer, i| {
         const tid = data.trainers.keys()[i];
-        try format.write(writer, format.Game.trainer(tid, .{ .party_size = trainer.party_size }));
-        try format.write(writer, format.Game.trainer(tid, .{ .party_type = trainer.party_type }));
+        try ston.serialize(writer, format.Game.trainer(tid, .{ .party_size = trainer.party_size }));
+        try ston.serialize(writer, format.Game.trainer(tid, .{ .party_type = trainer.party_type }));
         for (trainer.party.values()[0..trainer.party_size]) |member, j| {
             const pi = trainer.party.keys()[j];
             if (member.species) |s|
-                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .species = s })));
+                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .species = s })));
             if (member.level) |l|
-                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .level = l })));
+                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .level = l })));
             if (member.item) |item|
-                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .item = item })));
+                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .item = item })));
             if (member.ability) |ability|
-                try format.write(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .ability = @intCast(u4, ability) })));
+                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .ability = @intCast(u4, ability) })));
             for (member.moves.values()) |move, k| {
                 const mi = member.moves.keys()[k];
-                try format.write(writer, format.Game.trainer(
+                try ston.serialize(writer, format.Game.trainer(
                     tid,
                     format.Trainer.partyMember(pi, .{
                         .moves = .{ .index = mi, .value = move },
@@ -638,7 +643,7 @@ fn randomizePartyMember(ctx: *Context, themes: Themes, trainer: Trainer, member:
             member.species = try randomSpeciesWithSimularTotalStats(
                 ctx,
                 pick_from,
-                it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8),
+                it.fold(&pokemon.stats, @as(u16, 0), foldu8),
             );
             return;
         },
@@ -665,7 +670,7 @@ fn randomSpeciesWithSimularTotalStats(
     }) {
         for (pick_from.keys()) |s| {
             const p = ctx.data.pokemons.get(s).?;
-            const total = @intCast(isize, it.fold(it.span(&p.stats), @as(u16, 0), foldu8));
+            const total = @intCast(isize, it.fold(&p.stats, @as(u16, 0), foldu8));
             if (min <= total and total <= max)
                 try ctx.simular.append(ctx.allocator, s);
         }
@@ -691,7 +696,7 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
 }
 
 fn hasMove(moves: []const u16, id: u16) bool {
-    return it.anyEx(it.span(moves), id, struct {
+    return it.anyEx(moves, id, struct {
         fn f(m: u16, e: u16) bool {
             return m == e;
         }
@@ -756,7 +761,7 @@ const Data = struct {
         };
         for (species.keys()) |s| {
             const pokemon = d.pokemons.get(s).?;
-            const total_stats = it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8);
+            const total_stats = it.fold(&pokemon.stats, @as(u16, 0), foldu8);
             res.min = math.min(res.min, total_stats);
             res.max = math.max(res.max, total_stats);
         }
