@@ -37,12 +37,16 @@ const params = [_]Param{
 };
 
 fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-gen3-disassemble-scripts");
+    try writer.writeAll("Usage: tm35-gen3-disassemble-scripts ");
     try clap.usage(writer, &params);
-    try writer.writeAll("\nFinds all scripts in a generation 3 Pokemon game, " ++
-        "disassembles them and writes them to stdout.\n" ++
-        "\n" ++
-        "Options:\n");
+    try writer.writeAll(
+        \\
+        \\Finds all scripts in a generation 3 Pokemon game, disassembles them and writes
+        \\them to stdout.
+        \\
+        \\Options:
+        \\
+    );
     try clap.help(writer, &params);
 }
 
@@ -934,7 +938,7 @@ const first_pokemons = [_]gen3.BasePokemon{
 
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
-        .gender_ratio = comptime percentFemale(12.5),
+        .gender_ratio = percentFemale(12.5),
         .egg_cycles = 20,
         .base_friendship = 70,
 
@@ -982,7 +986,7 @@ gen3.BasePokemon{
 
     .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
-    .gender_ratio = comptime percentFemale(50),
+    .gender_ratio = percentFemale(50),
     .egg_cycles = 25,
     .base_friendship = 70,
 

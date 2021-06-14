@@ -1,6 +1,7 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -65,7 +66,6 @@ pub fn main2(
         allocator,
         stdio.in,
         stdio.out,
-        true,
         .{ .hms = hms, .data = &data },
         useGame,
     );
@@ -75,11 +75,11 @@ pub fn main2(
 
 fn outputData(writer: anytype, data: Data) !void {
     for (data.tms.values()) |tm, i|
-        try format.write(writer, format.Game.tm(data.tms.keys()[i], tm));
+        try ston.serialize(writer, format.Game.tm(data.tms.keys()[i], tm));
     for (data.hms.values()) |hm, i|
-        try format.write(writer, format.Game.hm(data.hms.keys()[i], hm));
+        try ston.serialize(writer, format.Game.hm(data.hms.keys()[i], hm));
     for (data.items.values()) |item, i| {
-        try format.write(writer, format.Game.item(data.items.keys()[i], .{
+        try ston.serialize(writer, format.Game.item(data.items.keys()[i], .{
             .description = item.description.bytes,
         }));
     }

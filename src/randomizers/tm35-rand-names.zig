@@ -1,6 +1,7 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -33,9 +34,13 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-random-names ");
     try clap.usage(writer, &params);
-    try writer.writeAll("\nRandomizes the names of things." ++
-        "\n" ++
-        "Options:\n");
+    try writer.writeAll(
+        \\
+        \\Randomizes the names of things.
+        \\
+        \\Options:
+        \\
+    );
     try clap.help(writer, &params);
 }
 
@@ -52,7 +57,7 @@ pub fn main2(
     const seed = try util.getSeed(args);
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, true, &data, useGame);
+    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
 
     try randomize(data, seed);
     try outputData(stdio.out, data);
@@ -60,15 +65,15 @@ pub fn main2(
 
 fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |name, i|
-        try format.write(writer, format.Game.pokemon(data.pokemons.keys()[i], .{ .name = name }));
+        try ston.serialize(writer, format.Game.pokemon(data.pokemons.keys()[i], .{ .name = name }));
     for (data.trainers.values()) |name, i|
-        try format.write(writer, format.Game.trainer(data.trainers.keys()[i], .{ .name = name }));
+        try ston.serialize(writer, format.Game.trainer(data.trainers.keys()[i], .{ .name = name }));
     for (data.moves.values()) |name, i|
-        try format.write(writer, format.Game.move(data.moves.keys()[i], .{ .name = name }));
+        try ston.serialize(writer, format.Game.move(data.moves.keys()[i], .{ .name = name }));
     for (data.abilities.values()) |name, i|
-        try format.write(writer, format.Game.ability(data.abilities.keys()[i], .{ .name = name }));
+        try ston.serialize(writer, format.Game.ability(data.abilities.keys()[i], .{ .name = name }));
     for (data.item_names.values()) |name, i|
-        try format.write(writer, format.Game.item(data.item_names.keys()[i], .{ .name = name }));
+        try ston.serialize(writer, format.Game.item(data.item_names.keys()[i], .{ .name = name }));
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {

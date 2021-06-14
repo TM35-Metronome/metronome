@@ -2,6 +2,7 @@ const clap = @import("clap");
 const format = @import("format");
 const it = @import("ziter");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -69,7 +70,7 @@ pub fn main2(
     const replace_cheap = args.flag("--replace-cheap-items");
 
     var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, true, .{
+    try format.io(allocator, stdio.in, stdio.out, .{
         .data = &data,
         .replace_cheap = replace_cheap,
     }, useGame);
@@ -83,25 +84,25 @@ fn outputData(writer: anytype, data: Data) !void {
         const species = data.pokemons.keys()[i];
         for (pokemon.evos.values()) |evo, j| {
             const evo_i = pokemon.evos.keys()[j];
-            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .method = .use_item })));
-            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .param = evo.param })));
-            try format.write(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .target = evo.target })));
+            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .method = .use_item })));
+            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .param = evo.param })));
+            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .target = evo.target })));
         }
     }
     for (data.items.values()) |item, i| {
         const item_id = data.items.keys()[i];
 
         if (item.name.bytes.len != 0)
-            try format.write(writer, format.Game.item(item_id, .{ .name = item.name.bytes }));
+            try ston.serialize(writer, format.Game.item(item_id, .{ .name = item.name.bytes }));
         if (item.description.bytes.len != 0) {
-            try format.write(writer, format.Game.item(item_id, .{
+            try ston.serialize(writer, format.Game.item(item_id, .{
                 .description = item.description.bytes,
             }));
         }
     }
     for (data.pokeball_items.values()) |item, i| {
         const item_id = data.items.keys()[i];
-        try format.write(writer, format.Game.pokeball_item(item_id, .{ .item = item }));
+        try ston.serialize(writer, format.Game.pokeball_item(item_id, .{ .item = item }));
     }
 }
 
@@ -545,7 +546,7 @@ fn randomize(data: Data, seed: usize) !void {
                         else => unreachable,
                     };
                     const number = switch (stone) {
-                        stat_stone => it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8),
+                        stat_stone => it.fold(&pokemon.stats, @as(u16, 0), foldu8),
                         growth_stone => @enumToInt(pokemon.growth_rate),
                         buddy_stone => pokemon.base_friendship,
                         else => unreachable,
@@ -613,7 +614,7 @@ fn filterBy(
 }
 
 fn statsFilter(pokemon: Pokemon, buf: []u16) []const u16 {
-    buf[0] = it.fold(it.span(&pokemon.stats), @as(u16, 0), foldu8);
+    buf[0] = it.fold(&pokemon.stats, @as(u16, 0), foldu8);
     return buf[0..1];
 }
 
