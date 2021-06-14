@@ -31,11 +31,14 @@ const params = blk: {
 fn usage(writer: anytype) !void {
     try writer.writeAll("Usage: tm35-generate-site ");
     try clap.usage(writer, &params);
-    try writer.writeAll("\nGenerates a html web site for games. This is very useful " ++
-        "for getting an overview of what is in the game after heavy randomization " ++
-        "has been apply.\n" ++
-        "\n" ++
-        "Options:\n");
+    try writer.writeAll(
+        \\
+        \\Generates a html web site for games. This is very useful for getting an overview
+        \\of what is in the game after heavy randomization has been apply.
+        \\
+        \\Options:
+        \\
+    );
     try clap.help(writer, &params);
 }
 
@@ -53,7 +56,7 @@ pub fn main2(
 
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     var game = Game{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, true, &game, useGame);
+    try format.io(allocator, stdio.in, stdio.out, &game, useGame);
 
     try stdio.out.context.flush();
 

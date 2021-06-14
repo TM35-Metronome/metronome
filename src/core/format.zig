@@ -1,6 +1,7 @@
 const common = @import("common.zig");
 const mecha = @import("mecha");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const fmt = std.fmt;
@@ -30,7 +31,6 @@ pub fn io(
     allocator: *mem.Allocator,
     reader: anytype,
     writer: anytype,
-    comptime escape: bool,
     ctx: anytype,
     parse: anytype,
 ) !void {
@@ -39,20 +39,20 @@ pub fn io(
 
     while (true) {
         const buf = fifo.readableSlice(0);
+        var tok = ston.tokenize(buf);
 
-        if ((comptime parser(Game, "", escape))(allocator, buf)) |res| {
-            const index = @ptrToInt(res.rest.ptr) - @ptrToInt(buf.ptr);
-            defer fifo.head += index;
-            defer fifo.count -= index;
-            parse(ctx, res.value) catch |err| switch (err) {
+        if (ston.deserializeLine(Game, &tok)) |res| {
+            defer fifo.head += tok.i;
+            defer fifo.count -= tok.i;
+            parse(ctx, res) catch |err| switch (err) {
                 // When `parse` returns `ParserFailed` it communicates to us that they
                 // could not handle the result in any meaningful way, so we are responsible
                 // for writing the parsed string back out.
                 error.ParserFailed => switch (@TypeOf(writer)) {
                     util.io.BufferedWritev.Writer => {
-                        try writer.context.writeAssumeValidUntilFlush(buf[0..index]);
+                        try writer.context.writeAssumeValidUntilFlush(buf[0..tok.i]);
                     },
-                    else => try writer.writeAll(buf[0..index]),
+                    else => try writer.writeAll(buf[0..tok.i]),
                 },
                 else => return err,
             };
@@ -107,284 +107,6 @@ pub fn io(
     }
 }
 
-const until_newline = mecha.many(mecha.ascii.not(mecha.ascii.char('\n')), .{ .collect = false });
-
-fn parser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
-    @setEvalBranchQuota(10000);
-    if (isArray(T))
-        return arrayParser(T, prefix, do_escape);
-    switch (T) {
-        []const u8 => if (do_escape) {
-            // With no '\\' we can assume that string does not need to be unescaped, so we
-            // can avoid doing an allocation.
-            const text = mecha.combine(.{
-                mecha.many(mecha.ascii.not(mecha.oneOf(.{
-                    mecha.ascii.char('\\'),
-                    mecha.ascii.char('\n'),
-                })), .{ .collect = false }),
-            });
-            const escaped_text = mecha.convert([]const u8, struct {
-                fn conv(allocator: *mem.Allocator, str: []const u8) mecha.Error![]const u8 {
-                    return try util.escape.default.unescapeAlloc(allocator, str);
-                }
-            }.conv, until_newline);
-
-            return mecha.combine(.{
-                mecha.string(prefix ++ "="),
-                mecha.oneOf(.{ text, escaped_text }),
-                mecha.ascii.char('\n'),
-            });
-        } else {
-            return mecha.combine(.{
-                mecha.string(prefix ++ "="),
-                until_newline,
-                mecha.ascii.char('\n'),
-            });
-        },
-        else => {},
-    }
-    switch (@typeInfo(T)) {
-        .Int => return intValueParser(T, prefix),
-        .Enum => return mecha.combine(
-            .{ mecha.string(prefix ++ "="), mecha.enumeration(T), mecha.ascii.char('\n') },
-        ),
-        .Bool => {
-            const B = enum { @"false", @"true" };
-            const p = parser(B, prefix, do_escape);
-            return mecha.map(bool, struct {
-                fn map(b: B) bool {
-                    return b == .@"true";
-                }
-            }.map, p);
-        },
-        .Union => return unionParser(T, prefix, do_escape),
-        else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
-    }
-}
-
-const inl = std.builtin.CallOptions{ .modifier = .always_inline };
-
-fn arrayParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
-    const Res = mecha.Result(T);
-    const index_parser = mecha.int(T.Index, .{ .parse_sign = false });
-    const value_parser = parser(T.Value, "]", do_escape);
-    return struct {
-        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            if (!mem.startsWith(u8, str, prefix ++ "["))
-                return error.ParserFailed;
-
-            const index = try @call(inl, index_parser, .{ allocator, str[prefix.len + 1 ..] });
-            const value = try @call(inl, value_parser, .{ allocator, index.rest });
-            return Res{
-                .rest = value.rest,
-                .value = .{
-                    .index = index.value,
-                    .value = value.value,
-                },
-            };
-        }
-    }.p;
-}
-
-fn unionParser(comptime T: type, comptime prefix: []const u8, comptime do_escape: bool) mecha.Parser(T) {
-    const Res = mecha.Result(T);
-    const info = @typeInfo(T).Union;
-
-    const Field = struct {
-        name: []const u8,
-        index: usize,
-    };
-
-    // Get an array of all unique lengths of the fields
-    const lengths = comptime blk: {
-        var res = [_]usize{0} ** info.fields.len;
-        for (info.fields) |f| {
-            if (mem.indexOfScalar(usize, &res, f.name.len) == null) {
-                const i = mem.indexOfScalar(usize, &res, 0) orelse unreachable;
-                res[i] = f.name.len;
-            }
-        }
-
-        const len = mem.indexOfScalar(usize, &res, 0) orelse res.len;
-        std.sort.sort(usize, res[0..len], {}, std.sort.asc(usize));
-        break :blk res[0..len];
-    };
-
-    return struct {
-        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            inline for (lengths) |len| {
-                // For each length, we do a quick check for a terminator
-                // before trying to parse the field. We do this to avoid
-                // trying to check fields that we know will not succeed
-                // parsing further down.
-                const term_index = len + prefix.len + 1;
-                const term = if (str.len > term_index) str[term_index] else 0;
-                const ends_with_term = term == '.' or term == '[' or term == '=';
-                if (ends_with_term) {
-                    // For each field of this length, try to parse it.
-                    inline for (info.fields) |f| {
-                        if (f.name.len != len)
-                            continue;
-
-                        const before_term = prefix ++ "." ++ f.name;
-                        const field_parser = comptime parser(f.field_type, before_term, do_escape);
-                        if (@call(inl, field_parser, .{ allocator, str })) |res| {
-                            return Res{
-                                .rest = res.rest,
-                                .value = @unionInit(T, f.name, res.value),
-                            };
-                        } else |err| switch (err) {
-                            error.ParserFailed => {},
-                            else => return err,
-                        }
-                    }
-
-                    // None of the fields of this length succeeded parsing.
-                    // No reason to try parsing any more fields, as we know
-                    // they will all fail.
-                    return error.ParserFailed;
-                }
-            }
-
-            return error.ParserFailed;
-        }
-    }.p;
-}
-
-fn intValueParser(comptime T: type, comptime prefix: []const u8) mecha.Parser(T) {
-    const Res = mecha.Result(T);
-    const int = mecha.int(T, .{ .parse_sign = false });
-    return struct {
-        fn p(allocator: *mem.Allocator, str: []const u8) mecha.Error!Res {
-            if (!mem.startsWith(u8, str, prefix ++ "="))
-                return error.ParserFailed;
-
-            const res = try @call(inl, int, .{ allocator, str[prefix.len + 1 ..] });
-            if (!mem.startsWith(u8, res.rest, "\n"))
-                return error.ParserFailed;
-
-            return Res{
-                .rest = res.rest[1..],
-                .value = res.value,
-            };
-        }
-    }.p;
-}
-
-test "parse" {
-    const allocator = testing.failing_allocator;
-    const p1 = comptime parser(u8, "", false);
-    try mecha.expectResult(u8, .{ .value = 0, .rest = "" }, p1(allocator, "=0\n"));
-    try mecha.expectResult(u8, .{ .value = 1, .rest = "" }, p1(allocator, "=1\n"));
-    try mecha.expectResult(u8, .{ .value = 111, .rest = "" }, p1(allocator, "=111\n"));
-
-    const p2 = comptime parser(u32, "", false);
-    try mecha.expectResult(u32, .{ .value = 0, .rest = "" }, p2(allocator, "=0\n"));
-    try mecha.expectResult(u32, .{ .value = 1, .rest = "" }, p2(allocator, "=1\n"));
-    try mecha.expectResult(u32, .{ .value = 101010, .rest = "" }, p2(allocator, "=101010\n"));
-
-    const U1 = union(enum) {
-        a: u8,
-        b: u16,
-        c: u32,
-    };
-    const p3 = comptime parser(U1, "", false);
-    try mecha.expectResult(U1, .{ .value = .{ .a = 0 }, .rest = "" }, p3(allocator, ".a=0\n"));
-    try mecha.expectResult(U1, .{ .value = .{ .b = 1 }, .rest = "" }, p3(allocator, ".b=1\n"));
-    try mecha.expectResult(U1, .{ .value = .{ .c = 101010 }, .rest = "" }, p3(allocator, ".c=101010\n"));
-
-    const A1 = Array(u8, u8);
-    const p4 = comptime parser(A1, "", false);
-    try mecha.expectResult(A1, .{ .value = .{ .index = 0, .value = 0 }, .rest = "" }, p4(allocator, "[0]=0\n"));
-    try mecha.expectResult(A1, .{ .value = .{ .index = 1, .value = 2 }, .rest = "" }, p4(allocator, "[1]=2\n"));
-    try mecha.expectResult(A1, .{ .value = .{ .index = 22, .value = 33 }, .rest = "" }, p4(allocator, "[22]=33\n"));
-
-    const U2 = union(enum) {
-        a: Array(u32, union(enum) {
-            a: u8,
-            b: u32,
-        }),
-        b: u16,
-    };
-    const p5 = comptime parser(U2, "", false);
-    try mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 0, .value = .{ .a = 0 } } }, .rest = "" }, p5(allocator, ".a[0].a=0\n"));
-    try mecha.expectResult(U2, .{ .value = .{ .a = .{ .index = 3, .value = .{ .b = 44 } } }, .rest = "" }, p5(allocator, ".a[3].b=44\n"));
-    try mecha.expectResult(U2, .{ .value = .{ .b = 1 }, .rest = "" }, p5(allocator, ".b=1\n"));
-}
-
-pub fn write(writer: anytype, value: anytype) !void {
-    return writeHelper(writer, "", value);
-}
-
-fn writeHelper(writer: anytype, comptime prefix: []const u8, value: anytype) !void {
-    const T = @TypeOf(value);
-    if (comptime isArray(T)) {
-        try writer.print(prefix ++ "[", .{});
-        try fmt.formatInt(value.index, 10, false, .{}, writer);
-        try writeHelper(writer, "]", value.value);
-        return;
-    }
-
-    switch (T) {
-        []const u8 => {
-            try writer.print(prefix ++ "=", .{});
-            try util.escape.default.escapeWrite(writer, value);
-            try writer.print("{c}", .{'\n'});
-            return;
-        },
-        else => {},
-    }
-
-    switch (@typeInfo(T)) {
-        .Bool => if (value) {
-            try writer.print(prefix ++ "=true\n", .{});
-        } else {
-            try writer.print(prefix ++ "=false\n", .{});
-        },
-        .Int => {
-            try writer.print(prefix ++ "=", .{});
-            try fmt.formatInt(value, 10, false, .{}, writer);
-            try writer.print("{c}", .{'\n'});
-        },
-        .Enum => try writeHelper(writer, prefix, @tagName(value)),
-        .Union => |info| {
-            const Tag = meta.TagType(T);
-            inline for (info.fields) |field| {
-                if (@field(Tag, field.name) == value) {
-                    try writeHelper(
-                        writer,
-                        prefix ++ "." ++ field.name,
-                        @field(value, field.name),
-                    );
-                    return;
-                }
-            }
-            unreachable;
-        },
-        else => @compileError("'" ++ @typeName(T) ++ "' is not supported"),
-    }
-}
-
-pub fn Array(comptime _Index: type, comptime _Value: type) type {
-    return struct {
-        pub const Index = _Index;
-        pub const Value = _Value;
-
-        index: Index,
-        value: Value,
-    };
-}
-
-pub fn isArray(comptime T: type) bool {
-    if (@typeInfo(T) != .Struct)
-        return false;
-    if (!@hasDecl(T, "Index") or !@hasDecl(T, "Value"))
-        return false;
-    if (@TypeOf(T.Index) != type or @TypeOf(T.Value) != type)
-        return false;
-    return T == Array(T.Index, T.Value);
-}
-
 /// Takes a struct pointer and a union and sets the structs field with
 /// the same name as the unions active tag to that tags value.
 /// All union field names must exist in the struct, and these union
@@ -424,24 +146,24 @@ pub const Game = union(enum) {
     game_title: []const u8,
     gamecode: []const u8,
     instant_text: bool,
-    starters: Array(u8, u16),
-    text_delays: Array(u8, u8),
-    trainers: Array(u16, Trainer),
-    moves: Array(u16, Move),
-    pokemons: Array(u16, Pokemon),
-    abilities: Array(u16, Ability),
-    types: Array(u8, Type),
-    tms: Array(u8, u16),
-    hms: Array(u8, u16),
-    items: Array(u16, Item),
-    pokedex: Array(u16, Pokedex),
-    maps: Array(u16, Map),
-    wild_pokemons: Array(u16, WildPokemons),
-    static_pokemons: Array(u16, StaticPokemon),
-    given_pokemons: Array(u16, GivenPokemon),
-    pokeball_items: Array(u16, PokeballItem),
-    hidden_hollows: Array(u16, HiddenHollow),
-    text: Array(u16, []const u8),
+    starters: ston.Index(u8, u16),
+    text_delays: ston.Index(u8, u8),
+    trainers: ston.Index(u16, Trainer),
+    moves: ston.Index(u16, Move),
+    pokemons: ston.Index(u16, Pokemon),
+    abilities: ston.Index(u16, Ability),
+    types: ston.Index(u8, Type),
+    tms: ston.Index(u8, u16),
+    hms: ston.Index(u8, u16),
+    items: ston.Index(u16, Item),
+    pokedex: ston.Index(u16, Pokedex),
+    maps: ston.Index(u16, Map),
+    wild_pokemons: ston.Index(u16, WildPokemons),
+    static_pokemons: ston.Index(u16, StaticPokemon),
+    given_pokemons: ston.Index(u16, GivenPokemon),
+    pokeball_items: ston.Index(u16, PokeballItem),
+    hidden_hollows: ston.Index(u16, HiddenHollow),
+    text: ston.Index(u16, []const u8),
 
     pub fn starter(index: u8, value: u16) Game {
         return .{ .starters = .{ .index = index, .value = value } };
@@ -517,10 +239,10 @@ pub const Trainer = union(enum) {
     encounter_music: u8,
     trainer_picture: u8,
     name: []const u8,
-    items: Array(u8, u16),
+    items: ston.Index(u8, u16),
     party_type: PartyType,
     party_size: u8,
-    party: Array(u8, PartyMember),
+    party: ston.Index(u8, PartyMember),
 
     pub fn partyMember(i: u8, member: PartyMember) Trainer {
         return .{ .party = .{ .index = i, .value = member } };
@@ -532,7 +254,7 @@ pub const PartyMember = union(enum) {
     level: u8,
     species: u16,
     item: u16,
-    moves: Array(u8, u16),
+    moves: ston.Index(u8, u16),
 };
 
 pub const Move = union(enum) {
@@ -577,14 +299,14 @@ pub const Pokemon = union(enum) {
     pokedex_entry: u16,
     growth_rate: GrowthRate,
     color: Color,
-    abilities: Array(u8, u8),
-    egg_groups: Array(u8, EggGroup),
-    evos: Array(u8, Evolution),
-    hms: Array(u8, bool),
-    items: Array(u8, u16),
-    moves: Array(u8, LevelUpMove),
-    tms: Array(u8, bool),
-    types: Array(u8, u8),
+    abilities: ston.Index(u8, u8),
+    egg_groups: ston.Index(u8, EggGroup),
+    evos: ston.Index(u8, Evolution),
+    hms: ston.Index(u8, bool),
+    items: ston.Index(u8, u16),
+    moves: ston.Index(u8, LevelUpMove),
+    tms: ston.Index(u8, bool),
+    types: ston.Index(u8, u8),
 
     pub fn evo(i: u8, evolution: Evolution) Pokemon {
         return .{ .evos = .{ .index = i, .value = evolution } };
@@ -719,7 +441,7 @@ pub const WildPokemons = union(enum) {
 
 pub const WildArea = union(enum) {
     encounter_rate: u32,
-    pokemons: Array(u8, WildPokemon),
+    pokemons: ston.Index(u8, WildPokemon),
 };
 
 pub const WildPokemon = union(enum) {
@@ -744,12 +466,12 @@ pub const PokeballItem = union(enum) {
 };
 
 pub const HiddenHollow = union(enum) {
-    versions: Array(u8, union(enum) {
-        groups: Array(u8, union(enum) { pokemons: Array(u8, union(enum) {
+    versions: ston.Index(u8, union(enum) {
+        groups: ston.Index(u8, union(enum) { pokemons: ston.Index(u8, union(enum) {
             species: u16,
         }) }),
     }),
-    items: Array(u8, u16),
+    items: ston.Index(u8, u16),
 
     pub fn pokemon(vi: u8, gi: u8, pi: u8, species: u16) HiddenHollow {
         return .{
