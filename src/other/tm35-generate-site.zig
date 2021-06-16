@@ -15,6 +15,8 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
+const escape = util.escape;
+
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -88,7 +90,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .trainers => |trainers| {
             const trainer = (try game.trainers.getOrPutValue(allocator, trainers.index, .{})).value_ptr;
             switch (trainers.value) {
-                .name => |name| trainer.name = try allocator.dupe(u8, name),
+                .name => |name| trainer.name = try escape.default.unescapeAlloc(allocator, name),
                 .class => |class| trainer.class = class,
                 .encounter_music => |encounter_music| trainer.encounter_music = encounter_music,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
@@ -110,8 +112,8 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .moves => |moves| {
             const move = (try game.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
-                .name => |name| move.name = try allocator.dupe(u8, name),
-                .description => |description| move.description = try allocator.dupe(u8, description),
+                .name => |name| move.name = try escape.default.unescapeAlloc(allocator, name),
+                .description => |description| move.description = try escape.default.unescapeAlloc(allocator, description),
                 .effect => |effect| move.effect = effect,
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -125,7 +127,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .pokemons => |pokemons| {
             const pokemon = (try game.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
-                .name => |name| pokemon.name = try allocator.dupe(u8, name),
+                .name => |name| pokemon.name = try escape.default.unescapeAlloc(allocator, name),
                 .stats => |stats| format.setField(&pokemon.stats, stats),
                 .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
@@ -159,20 +161,20 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .abilities => |abilities| {
             const ability = (try game.abilities.getOrPutValue(allocator, abilities.index, .{})).value_ptr;
             switch (abilities.value) {
-                .name => |name| ability.name = try allocator.dupe(u8, name),
+                .name => |name| ability.name = try escape.default.unescapeAlloc(allocator, name),
             }
         },
         .types => |types| {
             const _type = (try game.types.getOrPutValue(allocator, types.index, .{})).value_ptr;
             switch (types.value) {
-                .name => |name| _type.name = try allocator.dupe(u8, name),
+                .name => |name| _type.name = try escape.default.unescapeAlloc(allocator, name),
             }
         },
         .items => |items| {
             const item = (try game.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
-                .name => |name| item.name = try allocator.dupe(u8, name),
-                .description => |description| item.description = try allocator.dupe(u8, description),
+                .name => |name| item.name = try escape.default.unescapeAlloc(allocator, name),
+                .description => |description| item.description = try escape.default.unescapeAlloc(allocator, description),
                 .price => |price| item.price = price,
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .pocket => |pocket| item.pocket = pocket,
@@ -181,7 +183,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .pokedex => |pokedex| {
             const pokedex_entry = (try game.pokedex.getOrPutValue(allocator, pokedex.index, .{})).value_ptr;
             switch (pokedex.value) {
-                .category => |category| pokedex_entry.category = try allocator.dupe(u8, category),
+                .category => |category| pokedex_entry.category = try escape.default.unescapeAlloc(allocator, category),
                 .height => |height| pokedex_entry.height = height,
                 .weight => |weight| pokedex_entry.weight = weight,
             }
@@ -200,6 +202,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .instant_text,
         => return error.ParserFailed,
     }
+    return error.ParserFailed;
 }
 
 fn generate(writer: anytype, game: Game) !void {

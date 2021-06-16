@@ -68,18 +68,7 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |pokemon, i| {
-        const pid = data.pokemons.keys()[i];
-
-        for (pokemon.evos.values()) |evo, j| {
-            const eid = pokemon.evos.keys()[j];
-
-            if (evo.param) |param|
-                try ston.serialize(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .param = param })));
-            if (evo.method != .unused)
-                try ston.serialize(writer, format.Game.pokemon(pid, format.Pokemon.evo(eid, .{ .method = evo.method })));
-        }
-    }
+    try ston.serialize(writer, .{ .pokemons = data.pokemons });
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {

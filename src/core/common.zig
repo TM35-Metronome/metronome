@@ -245,7 +245,6 @@ pub const EvYield = packed struct {
     speed: u2,
     sp_attack: u2,
     sp_defense: u2,
-    padding: u4,
 
     comptime {
         std.debug.assert(@sizeOf(EvYield) == 2);

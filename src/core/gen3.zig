@@ -66,7 +66,7 @@ pub const BasePokemon = extern struct {
     }
 };
 
-pub const Gender = packed enum(u1) {
+pub const Gender = enum(u1) {
     male = 0,
     female = 1,
 };
@@ -211,7 +211,7 @@ pub const Move = extern struct {
     }
 };
 
-pub const FRLGPocket = packed enum(u8) {
+pub const FRLGPocket = enum(u8) {
     none = 0x00,
     items = 0x01,
     key_items = 0x02,
@@ -220,7 +220,7 @@ pub const FRLGPocket = packed enum(u8) {
     berries = 0x05,
 };
 
-pub const RSEPocket = packed enum(u8) {
+pub const RSEPocket = enum(u8) {
     none = 0x00,
     items = 0x01,
     poke_balls = 0x02,
@@ -614,7 +614,7 @@ pub const Game = struct {
         mem.set(TrainerParty, trainer_parties, TrainerParty{});
 
         for (trainer_parties) |*party, i| {
-            party.size = if (i < trainers.len) trainers[i].partyLen() else 0;
+            party.size = trainers[i].partyLen();
 
             var j: usize = 0;
             while (j < party.size) : (j += 1) {
@@ -634,7 +634,6 @@ pub const Game = struct {
             }
         }
 
-        const map_headers = info.map_headers.slice(gba_rom);
         const ScriptData = struct {
 
             // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
@@ -704,6 +703,7 @@ pub const Game = struct {
         };
         errdefer script_data.deinit();
 
+        const map_headers = info.map_headers.slice(gba_rom);
         @setEvalBranchQuota(100000);
         for (map_headers) |map_header| {
             const scripts = try map_header.map_scripts.toSliceEnd(gba_rom);

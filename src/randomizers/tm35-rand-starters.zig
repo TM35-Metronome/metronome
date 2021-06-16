@@ -66,14 +66,17 @@ pub fn main2(
 
     const random = &rand.DefaultPrng.init(seed).random;
     const pick_from = try getStartersToPickFrom(random, data, pick_lowest, evolutions);
-    try outputData(stdio.out, random, data, pick_from);
+    randomize(random, data, pick_from);
+    try outputData(stdio.out, data);
 }
 
-fn outputData(writer: anytype, random: *rand.Random, data: Data, pick_from: Set) !void {
-    for (data.starters.keys()) |starter| {
-        const res = util.random.item(random, pick_from.keys()).?.*;
-        try ston.serialize(writer, format.Game.starter(@intCast(u8, starter), res));
-    }
+fn outputData(writer: anytype, data: Data) !void {
+    try ston.serialize(writer, .{ .starters = data.starters });
+}
+
+fn randomize(random: *rand.Random, data: Data, pick_from: Set) void {
+    for (data.starters.values()) |*starter|
+        starter.* = util.random.item(random, pick_from.keys()).?.*;
 }
 
 fn getStartersToPickFrom(
@@ -107,7 +110,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .starters => |starters| {
-            _ = try data.starters.put(allocator, starters.index, {});
+            _ = try data.starters.put(allocator, starters.index, starters.value);
             return;
         },
         .pokemons => |pokemons| {
@@ -188,11 +191,12 @@ fn countEvos(data: Data, pokemon: u16) usize {
 const Evolutions = std.AutoArrayHashMapUnmanaged(u16, Set);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+const Starters = std.AutoArrayHashMapUnmanaged(u16, u16);
 
 const Data = struct {
     allocator: *mem.Allocator,
     pokedex: Set = Set{},
-    starters: Set = Set{},
+    starters: Starters = Starters{},
     pokemons: Pokemons = Pokemons{},
     evolves_from: Evolutions = Evolutions{},
     evolves_to: Evolutions = Evolutions{},

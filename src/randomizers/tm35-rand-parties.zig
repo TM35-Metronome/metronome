@@ -170,31 +170,7 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.trainers.values()) |trainer, i| {
-        const tid = data.trainers.keys()[i];
-        try ston.serialize(writer, format.Game.trainer(tid, .{ .party_size = trainer.party_size }));
-        try ston.serialize(writer, format.Game.trainer(tid, .{ .party_type = trainer.party_type }));
-        for (trainer.party.values()[0..trainer.party_size]) |member, j| {
-            const pi = trainer.party.keys()[j];
-            if (member.species) |s|
-                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .species = s })));
-            if (member.level) |l|
-                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .level = l })));
-            if (member.item) |item|
-                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .item = item })));
-            if (member.ability) |ability|
-                try ston.serialize(writer, format.Game.trainer(tid, format.Trainer.partyMember(pi, .{ .ability = @intCast(u4, ability) })));
-            for (member.moves.values()) |move, k| {
-                const mi = member.moves.keys()[k];
-                try ston.serialize(writer, format.Game.trainer(
-                    tid,
-                    format.Trainer.partyMember(pi, .{
-                        .moves = .{ .index = mi, .value = move },
-                    }),
-                ));
-            }
-        }
-    }
+    try ston.serialize(writer, .{ .trainers = data.trainers });
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {
@@ -1082,24 +1058,41 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].ability=0
         \\.trainers[0].party[0].moves[0]=1
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].ability=0
+        \\.trainers[0].party[1].moves[0]=1
         \\.trainers[1].party_size=1
         \\.trainers[1].party_type=none
         \\.trainers[1].party[0].species=0
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].ability=0
         \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].item=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].ability=0
+        \\.trainers[1].party[1].moves[0]=2
         \\.trainers[2].party_size=1
         \\.trainers[2].party_type=none
         \\.trainers[2].party[0].species=0
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].ability=0
         \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[2].party[1].species=2
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].ability=0
+        \\.trainers[2].party[1].moves[0]=3
         \\.trainers[3].party_size=1
         \\.trainers[3].party_type=none
         \\.trainers[3].party[0].species=1
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].ability=0
         \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[3].party[1].species=3
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].ability=0
+        \\.trainers[3].party[1].moves[0]=4
         \\
     );
     try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=minimum" }, test_string, result_prefix ++
@@ -1109,24 +1102,41 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].ability=0
         \\.trainers[0].party[0].moves[0]=1
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].ability=0
+        \\.trainers[0].party[1].moves[0]=1
         \\.trainers[1].party_size=1
         \\.trainers[1].party_type=none
         \\.trainers[1].party[0].species=0
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].ability=0
         \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].item=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].ability=0
+        \\.trainers[1].party[1].moves[0]=2
         \\.trainers[2].party_size=1
         \\.trainers[2].party_type=none
         \\.trainers[2].party[0].species=0
         \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].ability=0
         \\.trainers[2].party[0].moves[0]=3
+        \\.trainers[2].party[1].species=2
+        \\.trainers[2].party[1].level=5
+        \\.trainers[2].party[1].ability=0
+        \\.trainers[2].party[1].moves[0]=3
         \\.trainers[3].party_size=1
         \\.trainers[3].party_type=none
         \\.trainers[3].party[0].species=1
         \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].ability=0
         \\.trainers[3].party[0].moves[0]=4
+        \\.trainers[3].party[1].species=3
+        \\.trainers[3].party[1].level=5
+        \\.trainers[3].party[1].ability=0
+        \\.trainers[3].party[1].moves[0]=4
         \\
     );
     try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--party-size-pick-method=random" }, test_string, result_prefix ++
@@ -1136,12 +1146,21 @@ test "tm35-rand-parties" {
         \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].ability=0
         \\.trainers[0].party[0].moves[0]=1
+        \\.trainers[0].party[1].species=0
+        \\.trainers[0].party[1].level=5
+        \\.trainers[0].party[1].ability=0
+        \\.trainers[0].party[1].moves[0]=1
         \\.trainers[1].party_size=1
         \\.trainers[1].party_type=none
         \\.trainers[1].party[0].species=1
         \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].ability=0
         \\.trainers[1].party[0].moves[0]=2
+        \\.trainers[1].party[1].species=1
+        \\.trainers[1].party[1].item=1
+        \\.trainers[1].party[1].level=5
+        \\.trainers[1].party[1].ability=0
+        \\.trainers[1].party[1].moves[0]=2
         \\.trainers[2].party_size=6
         \\.trainers[2].party_type=none
         \\.trainers[2].party[0].species=6
@@ -1190,13 +1209,13 @@ test "tm35-rand-parties" {
         \\.trainers[1].party_size=2
         \\.trainers[1].party_type=item
         \\.trainers[1].party[0].species=0
-        \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].item=1
+        \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].ability=0
         \\.trainers[1].party[0].moves[0]=2
         \\.trainers[1].party[1].species=1
-        \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].item=1
+        \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].ability=0
         \\.trainers[1].party[1].moves[0]=2
         \\.trainers[2].party_size=2
@@ -1225,49 +1244,49 @@ test "tm35-rand-parties" {
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=item
         \\.trainers[0].party[0].species=2
-        \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].item=1
+        \\.trainers[0].party[0].level=5
         \\.trainers[0].party[0].ability=0
         \\.trainers[0].party[0].moves[0]=1
         \\.trainers[0].party[1].species=0
-        \\.trainers[0].party[1].level=5
         \\.trainers[0].party[1].item=1
+        \\.trainers[0].party[1].level=5
         \\.trainers[0].party[1].ability=0
         \\.trainers[0].party[1].moves[0]=1
         \\.trainers[1].party_size=2
         \\.trainers[1].party_type=item
         \\.trainers[1].party[0].species=3
-        \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].item=4
+        \\.trainers[1].party[0].level=5
         \\.trainers[1].party[0].ability=0
         \\.trainers[1].party[0].moves[0]=2
         \\.trainers[1].party[1].species=1
-        \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].item=3
+        \\.trainers[1].party[1].level=5
         \\.trainers[1].party[1].ability=0
         \\.trainers[1].party[1].moves[0]=2
         \\.trainers[2].party_size=2
         \\.trainers[2].party_type=item
         \\.trainers[2].party[0].species=6
-        \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].item=4
+        \\.trainers[2].party[0].level=5
         \\.trainers[2].party[0].ability=0
         \\.trainers[2].party[0].moves[0]=3
         \\.trainers[2].party[1].species=7
-        \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].item=4
+        \\.trainers[2].party[1].level=5
         \\.trainers[2].party[1].ability=0
         \\.trainers[2].party[1].moves[0]=3
         \\.trainers[3].party_size=2
         \\.trainers[3].party_type=item
         \\.trainers[3].party[0].species=0
-        \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].item=1
+        \\.trainers[3].party[0].level=5
         \\.trainers[3].party[0].ability=0
         \\.trainers[3].party[0].moves[0]=4
         \\.trainers[3].party[1].species=3
-        \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].item=4
+        \\.trainers[3].party[1].level=5
         \\.trainers[3].party[1].ability=0
         \\.trainers[3].party[1].moves[0]=4
         \\

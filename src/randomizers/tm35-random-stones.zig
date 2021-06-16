@@ -17,6 +17,8 @@ const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
+const escape = util.escape;
+
 const Utf8 = util.unicode.Utf8View;
 
 const Param = clap.Param(clap.Help);
@@ -82,28 +84,19 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |pokemon, i| {
         const species = data.pokemons.keys()[i];
-        for (pokemon.evos.values()) |evo, j| {
-            const evo_i = pokemon.evos.keys()[j];
-            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .method = .use_item })));
-            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .param = evo.param })));
-            try ston.serialize(writer, format.Game.pokemon(species, format.Pokemon.evo(evo_i, .{ .target = evo.target })));
-        }
+        try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
+            .evos = pokemon.evos,
+        }) });
     }
     for (data.items.values()) |item, i| {
         const item_id = data.items.keys()[i];
+        try ston.serialize(writer, .{ .items = ston.index(item_id, .{
+            .name = ston.string(escape.default.escapeFmt(item.name)),
+            .description = ston.string(escape.default.escapeFmt(item.desc)),
+        }) });
+    }
 
-        if (item.name.bytes.len != 0)
-            try ston.serialize(writer, format.Game.item(item_id, .{ .name = item.name.bytes }));
-        if (item.description.bytes.len != 0) {
-            try ston.serialize(writer, format.Game.item(item_id, .{
-                .description = item.description.bytes,
-            }));
-        }
-    }
-    for (data.pokeball_items.values()) |item, i| {
-        const item_id = data.items.keys()[i];
-        try ston.serialize(writer, format.Game.pokeball_item(item_id, .{ .item = item }));
-    }
+    try ston.serialize(writer, .{ .pokeball_items = data.pokeball_items });
 }
 
 fn useGame(ctx: anytype, parsed: format.Game) !void {
@@ -150,11 +143,11 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             const item = (try data.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .name => |name| {
-                    item.name = try Utf8.init(try mem.dupe(allocator, u8, name));
+                    item.name = try Utf8.init(try util.escape.default.unescapeAlloc(allocator, name));
                     return;
                 },
                 .description => |desc| {
-                    item.description = try Utf8.init(try mem.dupe(allocator, u8, desc));
+                    item.desc = try Utf8.init(try util.escape.default.unescapeAlloc(allocator, desc));
                     return;
                 },
                 .price => |price| item.price = price,
@@ -166,7 +159,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
         },
         .pokeball_items => |items| switch (items.value) {
             .item => |item| if (replace_cheap) {
-                _ = try data.pokeball_items.put(allocator, items.index, item);
+                _ = try data.pokeball_items.put(allocator, items.index, .{ .item = item });
                 return;
             } else return error.ParserFailed,
             .amount => return error.ParserFailed,
@@ -211,16 +204,16 @@ fn randomize(data: Data, seed: usize) !void {
         pokemon.evos.clearRetainingCapacity();
     }
 
-    // Find the maximum length of a line. Used to split descriptions into lines.
+    // Find the maximum length of a line. Used to split descs into lines.
     var max_line_len: usize = 0;
     for (data.items.values()) |item| {
-        var description = item.description;
-        while (mem.indexOf(u8, description.bytes, "\n")) |index| {
-            const line = Utf8.init(description.bytes[0..index]) catch unreachable;
+        var desc = item.desc;
+        while (mem.indexOf(u8, desc.bytes, "\n")) |index| {
+            const line = Utf8.init(desc.bytes[0..index]) catch unreachable;
             max_line_len = math.max(line.len, max_line_len);
-            description = Utf8.init(description.bytes[index + 1 ..]) catch unreachable;
+            desc = Utf8.init(desc.bytes[index + 1 ..]) catch unreachable;
         }
-        max_line_len = math.max(description.len, max_line_len);
+        max_line_len = math.max(desc.len, max_line_len);
     }
 
     // HACK: The games does not used mono fonts, so actually, using the
@@ -247,7 +240,7 @@ fn randomize(data: Data, seed: usize) !void {
     const buddy_stone = 6;
     const stone_strings = [_]struct {
         names: []const Utf8,
-        descriptions: []const Utf8,
+        descs: []const Utf8,
     }{
         .{
             .names = &[_]Utf8{
@@ -259,7 +252,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("C Rock") catch unreachable,
                 comptime Utf8.init("C Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolve a Pokémon into random Pokémon") catch unreachable),
@@ -280,7 +273,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("St Rock") catch unreachable,
                 comptime Utf8.init("St Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same total stats.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same total stats") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with same total stats") catch unreachable),
@@ -311,7 +304,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("G Rock") catch unreachable,
                 comptime Utf8.init("G Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same growth rate.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same growth rate") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with same growth rate.") catch unreachable),
@@ -340,7 +333,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("T Rock") catch unreachable,
                 comptime Utf8.init("T Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with a common type.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with a common type") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolve a Pokémon into random Pokémon with a common type") catch unreachable),
@@ -373,7 +366,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("S Rock") catch unreachable,
                 comptime Utf8.init("S Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with a common ability.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with a common ability") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolve a Pokémon into random Pokémon with a common ability") catch unreachable),
@@ -408,7 +401,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("E Rock") catch unreachable,
                 comptime Utf8.init("E Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon in the same egg group.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon in the same egg group") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolve a Pokémon into random Pokémon in the same egg group") catch unreachable),
@@ -441,7 +434,7 @@ fn randomize(data: Data, seed: usize) !void {
                 comptime Utf8.init("F Rock") catch unreachable,
                 comptime Utf8.init("F Rck") catch unreachable,
             },
-            .descriptions = &[_]Utf8{
+            .descs = &[_]Utf8{
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship.") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship") catch unreachable),
                 try util.unicode.splitIntoLines(data.allocator, max_line_len, comptime Utf8.init("Evolves a Pokémon into random Pokémon with the same base friendship") catch unreachable),
@@ -480,7 +473,7 @@ fn randomize(data: Data, seed: usize) !void {
         // items name/desc as the limits and pick something that fits.
         item.* = Item{
             .name = pickString(item.name.len, strs.names),
-            .description = pickString(item.description.len, strs.descriptions),
+            .desc = pickString(item.desc.len, strs.descs),
         };
     }
 
@@ -576,11 +569,11 @@ fn randomize(data: Data, seed: usize) !void {
 
     // Replace cheap pokeball items with random stones.
     const number_of_stones = math.min(math.min(stones.count(), stone_strings.len), data.max_evolutions);
-    for (data.pokeball_items.values()) |*item_id| {
-        const item = data.items.get(item_id.*) orelse continue;
+    for (data.pokeball_items.values()) |*ball| {
+        const item = data.items.get(ball.item) orelse continue;
         if (item.price == 0 or item.price > 600)
             continue;
-        item_id.* = util.random.item(random, stones.keys()).?.*;
+        ball.item = util.random.item(random, stones.keys()).?.*;
     }
 }
 
@@ -655,7 +648,7 @@ fn foldu8(a: u16, b: u8) u16 {
 
 const Evolutions = std.AutoArrayHashMapUnmanaged(u8, Evolution);
 const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
-const PokeballItems = std.AutoArrayHashMapUnmanaged(u16, u16);
+const PokeballItems = std.AutoArrayHashMapUnmanaged(u16, PokeballItem);
 const PokemonBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
@@ -699,7 +692,7 @@ const Pokemon = struct {
 
 const Item = struct {
     name: Utf8 = Utf8.init("") catch unreachable,
-    description: Utf8 = Utf8.init("") catch unreachable,
+    desc: Utf8 = Utf8.init("") catch unreachable,
     price: usize = 0,
 };
 
@@ -707,6 +700,10 @@ const Evolution = struct {
     method: format.Evolution.Method = .unused,
     param: u16 = 0,
     target: u16 = 0,
+};
+
+const PokeballItem = struct {
+    item: u16,
 };
 
 test "tm35-random stones" {

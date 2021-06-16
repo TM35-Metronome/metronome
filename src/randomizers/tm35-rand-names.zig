@@ -18,6 +18,8 @@ const unicode = std.unicode;
 
 const Utf8 = util.unicode.Utf8View;
 
+const escape = util.escape;
+
 const Param = clap.Param(clap.Help);
 
 pub const main = util.generateMain("0.0.0", main2, &params, usage);
@@ -64,16 +66,13 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |name, i|
-        try ston.serialize(writer, format.Game.pokemon(data.pokemons.keys()[i], .{ .name = name }));
-    for (data.trainers.values()) |name, i|
-        try ston.serialize(writer, format.Game.trainer(data.trainers.keys()[i], .{ .name = name }));
-    for (data.moves.values()) |name, i|
-        try ston.serialize(writer, format.Game.move(data.moves.keys()[i], .{ .name = name }));
-    for (data.abilities.values()) |name, i|
-        try ston.serialize(writer, format.Game.ability(data.abilities.keys()[i], .{ .name = name }));
-    for (data.item_names.values()) |name, i|
-        try ston.serialize(writer, format.Game.item(data.item_names.keys()[i], .{ .name = name }));
+    try ston.serialize(writer, .{
+        .pokemons = data.pokemons,
+        .trainers = data.trainers,
+        .moves = data.moves,
+        .abilities = data.abilities,
+        .items = data.items,
+    });
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {
@@ -81,7 +80,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     switch (parsed) {
         .pokemons => |pokemons| switch (pokemons.value) {
             .name => |name| {
-                _ = try data.pokemons.put(allocator, pokemons.index, try mem.dupe(allocator, u8, name));
+                _ = try data.pokemons.put(allocator, pokemons.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+                });
                 return;
             },
             .stats,
@@ -106,7 +107,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
         },
         .trainers => |trainers| switch (trainers.value) {
             .name => |name| {
-                _ = try data.trainers.put(allocator, trainers.index, try mem.dupe(allocator, u8, name));
+                _ = try data.trainers.put(allocator, trainers.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+                });
                 return;
             },
             .class,
@@ -120,7 +123,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
         },
         .moves => |moves| switch (moves.value) {
             .name => |name| {
-                _ = try data.moves.put(allocator, moves.index, try mem.dupe(allocator, u8, name));
+                _ = try data.moves.put(allocator, moves.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+                });
                 return;
             },
             .description,
@@ -136,13 +141,17 @@ fn useGame(data: *Data, parsed: format.Game) !void {
         },
         .abilities => |abilities| switch (abilities.value) {
             .name => |name| {
-                _ = try data.abilities.put(allocator, abilities.index, try mem.dupe(allocator, u8, name));
+                _ = try data.abilities.put(allocator, abilities.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+                });
                 return;
             },
         },
         .items => |items| switch (items.value) {
             .name => |name| {
-                _ = try data.item_names.put(allocator, items.index, try mem.dupe(allocator, u8, name));
+                _ = try data.items.put(allocator, items.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+                });
                 return;
             },
             .battle_effect,
@@ -181,7 +190,7 @@ fn randomize(data: Data, seed: usize) !void {
         data.trainers,
         data.moves,
         data.abilities,
-        data.item_names,
+        data.items,
     }) |set| {
         var max: usize = 0;
         var pairs = CodepointPairs{};
@@ -190,7 +199,7 @@ fn randomize(data: Data, seed: usize) !void {
         // where CX is a codepoint and N is the number of times C2 was seen after C1.
         // This map will be used to generate names later.
         for (set.values()) |item| {
-            const view = unicode.Utf8View.init(item) catch continue;
+            const view = unicode.Utf8View.init(item.name.value) catch continue;
 
             var node = (try pairs.getOrPutValue(data.allocator, start_of_string, .{})).value_ptr;
             var it = view.iterator();
@@ -204,7 +213,7 @@ fn randomize(data: Data, seed: usize) !void {
             const occurance = (try node.codepoints.getOrPutValue(data.allocator, end_of_string, 0)).value_ptr;
             occurance.* += 1;
             node.total += 1;
-            max = math.max(max, item.len);
+            max = math.max(max, item.name.value.len);
         }
 
         // Generate our random names from our pair map. This is done by picking a C2
@@ -231,7 +240,7 @@ fn randomize(data: Data, seed: usize) !void {
                 node = pairs.get(pick).?;
             }
 
-            name.* = new_name.toOwnedSlice();
+            name.name.value = new_name.toOwnedSlice();
         }
     }
 }
@@ -240,7 +249,7 @@ const end_of_string = "\x00";
 const start_of_string = "\x01";
 
 const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
-const NameSet = std.AutoArrayHashMapUnmanaged(u16, []const u8);
+const NameSet = std.AutoArrayHashMapUnmanaged(u16, Name);
 
 const Data = struct {
     allocator: *mem.Allocator,
@@ -248,7 +257,11 @@ const Data = struct {
     trainers: NameSet = NameSet{},
     moves: NameSet = NameSet{},
     abilities: NameSet = NameSet{},
-    item_names: NameSet = NameSet{},
+    items: NameSet = NameSet{},
+};
+
+const Name = struct {
+    name: ston.String([]const u8),
 };
 
 const Occurences = struct {

@@ -70,10 +70,7 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokeballs.values()) |ball, i| {
-        const ball_key = data.pokeballs.keys()[i];
-        try ston.serialize(writer, format.Game.pokeball_item(ball_key, .{ .item = ball }));
-    }
+    try ston.serialize(writer, .{ .pokeball_items = data.pokeballs });
 }
 
 fn useGame(data: *Data, parsed: format.Game) !void {
@@ -81,7 +78,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     switch (parsed) {
         .pokeball_items => |items| switch (items.value) {
             .item => |item| {
-                _ = try data.pokeballs.put(allocator, items.index, item);
+                _ = try data.pokeballs.put(allocator, items.index, .{ .item = item });
                 return;
             },
             .amount => return error.ParserFailed,
@@ -154,12 +151,12 @@ fn randomize(
                 continue :outer;
         }
 
-        ball.* = util.random.item(random, pick_from.keys()).?.*;
+        ball.item = util.random.item(random, pick_from.keys()).?.*;
     }
 }
 
 const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
-const Pokeballs = std.AutoArrayHashMapUnmanaged(u16, u16);
+const Pokeballs = std.AutoArrayHashMapUnmanaged(u16, Pokeball);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const Data = struct {
@@ -193,6 +190,10 @@ const Data = struct {
 const Item = struct {
     pocket: format.Pocket = .none,
     price: usize = 1,
+};
+
+const Pokeball = struct {
+    item: u16,
 };
 
 test "tm35-rand-pokeball-items" {

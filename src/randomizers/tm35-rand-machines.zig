@@ -18,6 +18,7 @@ const unicode = std.unicode;
 
 const Utf8 = util.unicode.Utf8View;
 
+const escape = util.escape;
 const parse = util.parse;
 
 const Param = clap.Param(clap.Help);
@@ -74,14 +75,14 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.tms.values()) |tm, i|
-        try ston.serialize(writer, format.Game.tm(data.tms.keys()[i], tm));
-    for (data.hms.values()) |hm, i|
-        try ston.serialize(writer, format.Game.hm(data.hms.keys()[i], hm));
+    try ston.serialize(writer, .{
+        .tms = data.tms,
+        .hms = data.hms,
+    });
     for (data.items.values()) |item, i| {
-        try ston.serialize(writer, format.Game.item(data.items.keys()[i], .{
-            .description = item.description.bytes,
-        }));
+        try ston.serialize(writer, .{ .items = ston.index(data.items.keys()[i], .{
+            .description = ston.string(escape.default.escapeFmt(item.description)),
+        }) });
     }
 }
 
@@ -104,7 +105,7 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .description => |_desc| {
-                    const desc = try mem.dupe(allocator, u8, _desc);
+                    const desc = try escape.default.unescapeAlloc(allocator, _desc);
                     move.description = try Utf8.init(desc);
                 },
                 else => {},
@@ -116,11 +117,11 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             switch (items.value) {
                 .pocket => |pocket| item.pocket = pocket,
                 .name => |_name| {
-                    const name = try mem.dupe(allocator, u8, _name);
+                    const name = try escape.default.unescapeAlloc(allocator, _name);
                     item.name = try Utf8.init(name);
                 },
                 .description => |_desc| {
-                    const desc = try mem.dupe(allocator, u8, _desc);
+                    const desc = try escape.default.unescapeAlloc(allocator, _desc);
                     item.description = try Utf8.init(desc);
                 },
                 else => {},

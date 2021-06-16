@@ -80,18 +80,10 @@ pub fn main2(
 fn outputData(writer: anytype, data: Data) !void {
     for (data.pokemons.values()) |pokemon, i| {
         const species = data.pokemons.keys()[i];
-        for (pokemon.tms.values()) |tm, j| {
-            const tm_index = pokemon.tms.keys()[j];
-            try ston.serialize(writer, format.Game.pokemon(species, .{
-                .tms = .{ .index = tm_index, .value = tm },
-            }));
-        }
-        for (pokemon.hms.values()) |hm, j| {
-            const hm_index = pokemon.hms.keys()[j];
-            try ston.serialize(writer, format.Game.pokemon(species, .{
-                .hms = .{ .index = hm_index, .value = hm },
-            }));
-        }
+        try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
+            .tms = pokemon.tms,
+            .hms = pokemon.hms,
+        }) });
     }
 }
 
