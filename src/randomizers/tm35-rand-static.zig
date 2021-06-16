@@ -88,32 +88,27 @@ pub fn main2(
 }
 
 fn outputData(writer: anytype, data: Data) !void {
-    for (data.static_mons.values()) |static, i| {
-        const static_key = data.static_mons.keys()[i];
-        try ston.serialize(writer, format.Game.static_pokemon(static_key, .{ .species = static }));
-    }
+    try ston.serialize(writer, .{ .static_pokemons = data.static_mons });
+
     for (data.hidden_hollows.values()) |hollow, i| {
         const hollow_key = data.hidden_hollows.keys()[i];
 
-        for (hollow.values()) |version, j| {
-            const version_key = hollow.keys()[j];
+        for (hollow.values()) |group, j| {
+            const group_key = hollow.keys()[j];
 
-            for (version.values()) |group, k| {
-                const group_key = version.keys()[k];
+            for (group.values()) |pokemon, g| {
+                const pokemon_key = group.keys()[g];
+                const si = pokemon.species_index orelse continue;
 
-                for (group.values()) |pokemon, g| {
-                    const pokemon_key = group.keys()[g];
-                    const si = pokemon.species_index orelse continue;
-                    try ston.serialize(writer, format.Game.hidden_hollow(
-                        hollow_key,
-                        format.HiddenHollow.pokemon(
-                            version_key,
-                            group_key,
-                            pokemon_key,
-                            data.hollow_mons.get(si).?,
-                        ),
-                    ));
-                }
+                try ston.serialize(writer, .{
+                    .hidden_hollows = ston.index(hollow_key, .{
+                        .groups = ston.index(group_key, .{
+                            .pokemons = ston.index(pokemon_key, .{
+                                .species = data.hollow_mons.get(si).?,
+                            }),
+                        }),
+                    }),
+                });
             }
         }
     }
@@ -127,7 +122,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon_kv = try data.pokemons.getOrPutValue(allocator, pokemons.index, Pokemon{});
+            const pokemon_kv = try data.pokemons.getOrPutValue(allocator, pokemons.index, .{});
             const pokemon = pokemon_kv.value_ptr;
             switch (pokemons.value) {
                 .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
@@ -164,43 +159,37 @@ fn useGame(data: *Data, parsed: format.Game) !void {
         },
         .static_pokemons => |pokemons| switch (pokemons.value) {
             .species => |species| {
-                _ = try data.static_mons.put(allocator, pokemons.index, species);
+                _ = try data.static_mons.put(allocator, pokemons.index, .{ .species = species });
                 return;
             },
             .level => return error.ParserFailed,
         },
         .given_pokemons => |pokemons| switch (pokemons.value) {
             .species => |species| {
-                _ = try data.given_mons.put(allocator, pokemons.index, species);
+                _ = try data.given_mons.put(allocator, pokemons.index, .{ .species = species });
                 return;
             },
             .level => return error.ParserFailed,
         },
         .hidden_hollows => |hollows| {
-            const versions_kv = try data.hidden_hollows.getOrPutValue(allocator, hollows.index, HollowVersions{});
-            const versions = versions_kv.value_ptr;
+            const groups_kv = try data.hidden_hollows.getOrPutValue(allocator, hollows.index, .{});
+            const groups = groups_kv.value_ptr;
             switch (hollows.value) {
-                .versions => |version| {
-                    const groups_kv = try versions.getOrPutValue(allocator, version.index, HollowGroups{});
-                    const groups = groups_kv.value_ptr;
-                    switch (version.value) {
-                        .groups => |group| {
-                            const pokemons_kv = try groups.getOrPutValue(allocator, group.index, HollowPokemons{});
-                            const pokemons = pokemons_kv.value_ptr;
-                            switch (group.value) {
-                                .pokemons => |mon| {
-                                    const pokemon_kv = try pokemons.getOrPutValue(allocator, mon.index, HollowMon{});
-                                    const pokemon = pokemon_kv.value_ptr;
-                                    switch (mon.value) {
-                                        .species => |species| {
-                                            const index = @intCast(u16, data.hollow_mons.count());
-                                            _ = try data.hollow_mons.put(allocator, index, species);
-                                            pokemon.species_index = index;
-                                        },
-                                    }
-                                    return;
+                .groups => |group| {
+                    const pokemons_kv = try groups.getOrPutValue(allocator, group.index, .{});
+                    const pokemons = pokemons_kv.value_ptr;
+                    switch (group.value) {
+                        .pokemons => |mon| {
+                            const pokemon_kv = try pokemons.getOrPutValue(allocator, mon.index, .{});
+                            const pokemon = pokemon_kv.value_ptr;
+                            switch (mon.value) {
+                                .species => |species| {
+                                    const index = @intCast(u16, data.hollow_mons.count());
+                                    _ = try data.hollow_mons.put(allocator, index, .{ .species = species });
+                                    pokemon.species_index = index;
                                 },
                             }
+                            return;
                         },
                     }
                 },
@@ -253,12 +242,12 @@ fn randomize(
                         return;
 
                     for (static_mons.values()) |*static|
-                        static.* = util.random.item(random, species.keys()).?.*;
+                        static.species = util.random.item(random, species.keys()).?.*;
                 },
                 .same => {
                     const by_type = try data.getSpeciesByType(&species);
                     for (static_mons.values()) |*static| {
-                        const pokemon = data.pokemons.get(static.*).?;
+                        const pokemon = data.pokemons.get(static.species).?;
                         const type_max = pokemon.types.count();
                         if (type_max == 0)
                             continue;
@@ -266,7 +255,7 @@ fn randomize(
                         const t = util.random.item(random, pokemon.types.keys()).?.*;
                         const pokemons = by_type.get(t).?;
                         const max = pokemons.count();
-                        static.* = util.random.item(random, pokemons.keys()).?.*;
+                        static.species = util.random.item(random, pokemons.keys()).?.*;
                     }
                 },
             },
@@ -287,7 +276,7 @@ fn randomize(
                     // its stats with other Pokémons. The only thing we can
                     // assume is that the Pokémon it currently is
                     // is simular/same as itself.
-                    const prev_pokemon = data.pokemons.get(static.*) orelse continue;
+                    const prev_pokemon = data.pokemons.get(static.species) orelse continue;
 
                     var min = @intCast(i64, it.fold(&prev_pokemon.stats, @as(usize, 0), foldu8));
                     var max = min;
@@ -315,7 +304,7 @@ fn randomize(
                                 // Pokémon.
                                 const type_max = prev_pokemon.types.count();
                                 if (type_max == 0) {
-                                    try simular.append(static.*);
+                                    try simular.append(static.species);
                                     break;
                                 }
                                 for (prev_pokemon.types.keys()) |t| {
@@ -332,7 +321,7 @@ fn randomize(
                         }
                     }
 
-                    static.* = util.random.item(random, simular.items).?.*;
+                    static.species = util.random.item(random, simular.items).?.*;
                 }
             },
             .@"legendary-with-legendary" => {
@@ -410,8 +399,8 @@ fn randomize(
                 };
 
                 for (static_mons.values()) |*static| {
-                    const pokemon = data.pokemons.get(static.*) orelse continue;
-                    const rating = ratings.get(static.*) orelse continue;
+                    const pokemon = data.pokemons.get(static.species) orelse continue;
+                    const rating = ratings.get(static.species) orelse continue;
                     const pick_from = switch (_type) {
                         .random => if (rating >= rating_to_be_legendary) legendaries else rest,
                         .same => blk: {
@@ -429,7 +418,7 @@ fn randomize(
                     const max = pick_from.count();
                     if (max == 0)
                         continue;
-                    static.* = util.random.item(random, pick_from.keys()).?.*;
+                    static.species = util.random.item(random, pick_from.keys()).?.*;
                 }
             },
         }
@@ -439,12 +428,11 @@ fn randomize(
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const SpeciesByType = std.AutoArrayHashMapUnmanaged(u16, Set);
-const StaticMons = std.AutoArrayHashMapUnmanaged(u16, u16);
+const StaticMons = std.AutoArrayHashMapUnmanaged(u16, StaticMon);
 
-const HiddenHollows = std.AutoArrayHashMapUnmanaged(u16, HollowVersions);
+const HiddenHollows = std.AutoArrayHashMapUnmanaged(u16, HollowGroups);
 const HollowGroups = std.AutoArrayHashMapUnmanaged(u8, HollowPokemons);
 const HollowPokemons = std.AutoArrayHashMapUnmanaged(u8, HollowMon);
-const HollowVersions = std.AutoArrayHashMapUnmanaged(u8, HollowGroups);
 
 const Data = struct {
     allocator: *mem.Allocator,
@@ -508,6 +496,10 @@ const Pokemon = struct {
     egg_group: format.EggGroup = .invalid,
     types: Set = Set{},
     evos: Set = Set{},
+};
+
+const StaticMon = struct {
+    species: u16,
 };
 
 test "tm35-rand-static" {

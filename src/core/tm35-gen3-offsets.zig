@@ -888,7 +888,6 @@ const first_pokemons = [_]gen3.BasePokemon{
             .speed = 0,
             .sp_attack = 0,
             .sp_defense = 0,
-            .padding = 0,
         },
 
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
@@ -933,7 +932,6 @@ const first_pokemons = [_]gen3.BasePokemon{
             .speed = 0,
             .sp_attack = 1,
             .sp_defense = 0,
-            .padding = 0,
         },
 
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
@@ -981,7 +979,6 @@ gen3.BasePokemon{
         .speed = 0,
         .sp_attack = 1,
         .sp_defense = 1,
-        .padding = 0,
     },
 
     .items = [_]lu16{ lu16.init(0), lu16.init(0) },

@@ -1,7 +1,6 @@
-const algo = @import("algorithm.zig");
 const std = @import("std");
 
-const ascii = std.ascii;
+const fmt = std.fmt;
 const mem = std.mem;
 const unicode = std.unicode;
 
@@ -14,14 +13,6 @@ pub const Utf8View = struct {
         return Utf8View{
             .bytes = str,
             .len = try utf8Len(str),
-        };
-    }
-
-    pub fn initAscii(str: []const u8) Utf8View {
-        std.debug.assert(algo.all(str, ascii.isASCII));
-        return Utf8View{
-            .bytes = str,
-            .len = str.len,
         };
     }
 
@@ -45,6 +36,21 @@ pub const Utf8View = struct {
     pub fn iterator(view: Utf8View) unicode.Utf8Iterator {
         return unicode.Utf8View.initUnchecked(view.bytes).iterator();
     }
+
+    pub fn format(
+        self: @This(),
+        comptime fmt_str: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) @TypeOf(writer).Error!void {
+        try fmt.formatType(
+            self.bytes,
+            fmt_str,
+            options,
+            writer,
+            fmt.default_max_depth,
+        );
+    }
 };
 
 /// Given a string of words, this function will split the string into lines where
@@ -52,9 +58,6 @@ pub const Utf8View = struct {
 pub fn splitIntoLines(allocator: *mem.Allocator, max_line_len: usize, string: Utf8View) !Utf8View {
     var res = std.ArrayList(u8).init(allocator);
     errdefer res.deinit();
-
-    // A decent estimate that will most likely ensure that we only do one allocation.
-    try res.ensureCapacity(string.len + (string.len / max_line_len) + 1);
 
     var curr_line_len: usize = 0;
     var it = mem.tokenize(string.bytes, " \n");

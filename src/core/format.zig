@@ -10,6 +10,8 @@ const mem = std.mem;
 const meta = std.meta;
 const testing = std.testing;
 
+const escape = util.escape;
+
 // The tm35 format in 8 lines of cfg:
 // Line <- Suffix* '=' .*
 //
@@ -164,74 +166,6 @@ pub const Game = union(enum) {
     pokeball_items: ston.Index(u16, PokeballItem),
     hidden_hollows: ston.Index(u16, HiddenHollow),
     text: ston.Index(u16, []const u8),
-
-    pub fn starter(index: u8, value: u16) Game {
-        return .{ .starters = .{ .index = index, .value = value } };
-    }
-
-    pub fn text_delay(index: u8, value: u8) Game {
-        return .{ .text_delays = .{ .index = index, .value = value } };
-    }
-
-    pub fn trainer(index: u16, value: Trainer) Game {
-        return .{ .trainers = .{ .index = index, .value = value } };
-    }
-
-    pub fn move(index: u16, value: Move) Game {
-        return .{ .moves = .{ .index = index, .value = value } };
-    }
-
-    pub fn pokemon(index: u16, value: Pokemon) Game {
-        return .{ .pokemons = .{ .index = index, .value = value } };
-    }
-
-    pub fn ability(index: u16, value: Ability) Game {
-        return .{ .abilities = .{ .index = index, .value = value } };
-    }
-
-    pub fn typ(index: u8, value: Type) Game {
-        return .{ .types = .{ .index = index, .value = value } };
-    }
-
-    pub fn tm(index: u8, value: u16) Game {
-        return .{ .tms = .{ .index = index, .value = value } };
-    }
-
-    pub fn hm(index: u8, value: u16) Game {
-        return .{ .hms = .{ .index = index, .value = value } };
-    }
-
-    pub fn item(index: u16, value: Item) Game {
-        return .{ .items = .{ .index = index, .value = value } };
-    }
-
-    pub fn pokede(index: u16, value: Pokedex) Game {
-        return .{ .pokedes = .{ .index = index, .value = value } };
-    }
-
-    pub fn map(index: u16, value: Map) Game {
-        return .{ .maps = .{ .index = index, .value = value } };
-    }
-
-    pub fn wild_pokemon(index: u16, value: WildPokemons) Game {
-        return .{ .wild_pokemons = .{ .index = index, .value = value } };
-    }
-
-    pub fn static_pokemon(index: u16, value: StaticPokemon) Game {
-        return .{ .static_pokemons = .{ .index = index, .value = value } };
-    }
-
-    pub fn given_pokemon(index: u16, value: GivenPokemon) Game {
-        return .{ .given_pokemons = .{ .index = index, .value = value } };
-    }
-
-    pub fn pokeball_item(index: u16, value: PokeballItem) Game {
-        return .{ .pokeball_items = .{ .index = index, .value = value } };
-    }
-
-    pub fn hidden_hollow(index: u16, value: HiddenHollow) Game {
-        return .{ .hidden_hollows = .{ .index = index, .value = value } };
-    }
 };
 
 pub const Trainer = union(enum) {
@@ -243,10 +177,6 @@ pub const Trainer = union(enum) {
     party_type: PartyType,
     party_size: u8,
     party: ston.Index(u8, PartyMember),
-
-    pub fn partyMember(i: u8, member: PartyMember) Trainer {
-        return .{ .party = .{ .index = i, .value = member } };
-    }
 };
 
 pub const PartyMember = union(enum) {
@@ -307,10 +237,6 @@ pub const Pokemon = union(enum) {
     moves: ston.Index(u8, LevelUpMove),
     tms: ston.Index(u8, bool),
     types: ston.Index(u8, u8),
-
-    pub fn evo(i: u8, evolution: Evolution) Pokemon {
-        return .{ .evos = .{ .index = i, .value = evolution } };
-    }
 };
 
 pub const Evolution = union(enum) {
@@ -466,29 +392,10 @@ pub const PokeballItem = union(enum) {
 };
 
 pub const HiddenHollow = union(enum) {
-    versions: ston.Index(u8, union(enum) {
-        groups: ston.Index(u8, union(enum) { pokemons: ston.Index(u8, union(enum) {
+    groups: ston.Index(u8, union(enum) {
+        pokemons: ston.Index(u8, union(enum) {
             species: u16,
-        }) }),
+        }),
     }),
     items: ston.Index(u8, u16),
-
-    pub fn pokemon(vi: u8, gi: u8, pi: u8, species: u16) HiddenHollow {
-        return .{
-            .versions = .{
-                .index = vi,
-                .value = .{
-                    .groups = .{
-                        .index = gi,
-                        .value = .{
-                            .pokemons = .{
-                                .index = pi,
-                                .value = .{ .species = species },
-                            },
-                        },
-                    },
-                },
-            },
-        };
-    }
 };

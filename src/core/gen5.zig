@@ -223,7 +223,7 @@ pub const Evolution = extern struct {
         debug.assert(@sizeOf(@This()) == 6);
     }
 
-    pub const Method = packed enum(u8) {
+    pub const Method = enum(u8) {
         unused = 0x00,
         friend_ship = 0x01,
         unknown_0x02 = 0x02,
@@ -315,16 +315,16 @@ pub const WildPokemons = extern struct {
     }
 };
 
-pub const Pocket = packed enum(u4) {
+pub const Pocket = enum(u4) {
     items = 0x00,
     tms_hms = 0x01,
     key_items = 0x02,
-    balls = 0x08,
+    poke_balls = 0x08,
     _,
 };
 
 // https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
-pub const Item = packed struct {
+pub const Item = extern struct {
     price: lu16,
     battle_effect: u8,
     gain: u8,
@@ -333,8 +333,10 @@ pub const Item = packed struct {
     fling_power: u8,
     natural_gift_power: u8,
     flag: u8,
-    pocket: Pocket,
-    unknown: u4,
+    pocket: packed struct {
+        pocket: Pocket,
+        pad: u4,
+    },
     type: u8,
     category: u8,
     category2: lu16,
@@ -517,7 +519,7 @@ pub const MapHeader = extern struct {
 };
 
 const HiddenHollow = extern struct {
-    pokemons: [2][4]HollowPokemons,
+    pokemons: [8]HollowPokemons,
     items: [6]lu16,
 
     comptime {

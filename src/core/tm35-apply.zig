@@ -806,12 +806,12 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .description, .name => unreachable,
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
-                .pocket => |pocket| item.pocket = switch (pocket) {
+                .pocket => |pocket| item.pocket.pocket = switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,
                     .tms_hms => .tms_hms,
                     .berries => .berries,
-                    .poke_balls => .balls,
+                    .poke_balls => .poke_balls,
                     .none => return error.ParserFailed,
                 },
             }
@@ -1390,10 +1390,10 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     ) catch {};
                     try applyGen5String(item_names, items.index, name);
                 },
-                .pocket => |pocket| item.pocket = switch (pocket) {
+                .pocket => |pocket| item.pocket.pocket = switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,
-                    .poke_balls => .balls,
+                    .poke_balls => .poke_balls,
                     .tms_hms => .tms_hms,
                     .berries,
                     .none,
@@ -1527,26 +1527,18 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const hollow = &hollows[hidden_hollows.index];
             switch (hidden_hollows.value) {
-                .versions => |versions| {
-                    if (versions.index >= hollow.pokemons.len)
-                        return error.IndexOutOfBound;
+                .groups => |groups| {
+                    if (groups.index >= hollow.pokemons.len)
+                        return error.Error;
 
-                    const version = &hollow.pokemons[versions.index];
-                    switch (versions.value) {
-                        .groups => |groups| {
-                            if (groups.index >= version.len)
-                                return error.Error;
+                    const group = &hollow.pokemons[groups.index];
+                    switch (groups.value) {
+                        .pokemons => |pokemons| {
+                            if (pokemons.index >= group.species.len)
+                                return error.IndexOutOfBound;
 
-                            const group = &version[groups.index];
-                            switch (groups.value) {
-                                .pokemons => |pokemons| {
-                                    if (pokemons.index >= group.species.len)
-                                        return error.IndexOutOfBound;
-
-                                    switch (pokemons.value) {
-                                        .species => |species| group.species[pokemons.index] = lu16.init(species),
-                                    }
-                                },
+                            switch (pokemons.value) {
+                                .species => |species| group.species[pokemons.index] = lu16.init(species),
                             }
                         },
                     }

@@ -69,15 +69,11 @@ fn outputData(writer: anytype, data: Data) !void {
         const zone_id = data.wild_pokemons.keys()[i];
         for (zone.wild_areas) |area, j| {
             const aid = @intToEnum(meta.TagType(format.WildPokemons), @intCast(u5, j));
-            for (area.pokemons.values()) |pokemon, k| {
-                const pokemon_id = area.pokemons.keys()[k];
-                if (pokemon.min_level) |l|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .min_level = l } } })));
-                if (pokemon.max_level) |l|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .max_level = l } } })));
-                if (pokemon.species) |s|
-                    try ston.serialize(writer, format.Game.wild_pokemon(zone_id, format.WildPokemons.init(aid, .{ .pokemons = .{ .index = pokemon_id, .value = .{ .species = s } } })));
-            }
+            try ston.serialize(writer, .{
+                .wild_pokemons = ston.index(zone_id, ston.field(@tagName(aid), .{
+                    .pokemons = area.pokemons,
+                })),
+            });
         }
     }
 }

@@ -98,6 +98,10 @@ pub fn generate(comptime escapes: []const Escape) type {
             return res.toOwnedSlice();
         }
 
+        pub fn escapeFmt(value: anytype) Format(@TypeOf(value), .escape) {
+            return .{ .value = value };
+        }
+
         pub fn unescapeWrite(writer: anytype, str: []const u8) !void {
             var esc = unescapingWriter(writer);
             try esc.writer().writeAll(str);
@@ -109,6 +113,36 @@ pub fn generate(comptime escapes: []const Escape) type {
             try unescapeWrite(res.writer(), str);
             return res.toOwnedSlice();
         }
+
+        pub fn unescapeFmt(value: anytype) Format(@TypeOf(value), .unescape) {
+            return .{ .value = value };
+        }
+
+        pub fn Format(comptime T: type, comptime kind: enum { escape, unescape }) type {
+            return struct {
+                value: T,
+
+                pub fn format(
+                    self: @This(),
+                    comptime fmt_str: []const u8,
+                    options: std.fmt.FormatOptions,
+                    writer: anytype,
+                ) @TypeOf(writer).Error!void {
+                    var esc = switch (kind) {
+                        .escape => escapingWriter(writer),
+                        .unescape => unescapeWriter(writer),
+                    };
+                    try fmt.formatType(
+                        self.value,
+                        fmt_str,
+                        options,
+                        esc.writer(),
+                        fmt.default_max_depth,
+                    );
+                    try esc.finish();
+                }
+            };
+        }
     };
 }
 
@@ -116,7 +150,7 @@ pub const Replacement = struct {
     find: []const u8,
     replace: []const u8,
 
-    fn findLessThan(ctx: void, a: Replacement, b: Replacement) bool {
+    fn lessThan(ctx: void, a: Replacement, b: Replacement) bool {
         return mem.lessThan(u8, a.find, b.find);
     }
 };
@@ -136,7 +170,7 @@ const State = struct {
 };
 
 /// replacements must be sorted.
-fn transion(comptime replacements: []const Replacement, byte: u8, state: State) ?State {
+fn transion(replacements: []const Replacement, byte: u8, state: State) ?State {
     const start = for (replacements[state.start..state.end]) |rep, i| {
         const rest = rep.find[state.index..];
         if (rest.len != 0 and rest[0] == byte)
@@ -171,7 +205,7 @@ test "transion" {
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
     @setEvalBranchQuota(1000000);
     var replacements_sorted = replacements[0..replacements.len].*;
-    std.sort.sort(Replacement, &replacements_sorted, {}, Replacement.findLessThan);
+    std.sort.sort(Replacement, &replacements_sorted, {}, Replacement.lessThan);
 
     return struct {
         child_writer: ChildWriter,

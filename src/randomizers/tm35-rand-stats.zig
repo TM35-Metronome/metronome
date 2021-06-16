@@ -74,13 +74,9 @@ fn outputData(writer: anytype, pokemons: Pokemons) !void {
         const species = pokemons.keys()[i];
         inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
             if (pokemon.output[j]) {
-                try ston.serialize(writer, format.Game.pokemon(species, .{
-                    .stats = @unionInit(
-                        format.Stats(u8),
-                        field.name,
-                        pokemon.stats[j],
-                    ),
-                }));
+                try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
+                    .stats = ston.field(field.name, pokemon.stats[j]),
+                }) });
             }
         }
     }
