@@ -1,27 +1,27 @@
 [submodule "lib/zig-crc"]
 	path = lib/zig-crc
-	url = https://github.com/Hejsil/zig-crc.git
+	url = ../zig-crc.git
 [submodule "lib/zig-bench"]
 	path = lib/zig-bench
-	url = https://github.com/Hejsil/zig-bench.git
+	url = ../zig-bench.git
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
-	url = https://github.com/Hejsil/zig-clap.git
+	url = ../zig-clap.git
 [submodule "lib/nuklear"]
 	path = lib/nuklear
-	url = https://github.com/Hejsil/Nuklear-1.git
+	url = ../Nuklear-1.git
 [submodule "lib/nativefiledialog"]
 	path = lib/nativefiledialog
 	url = https://github.com/mlabbe/nativefiledialog.git
 [submodule "lib/mecha"]
 	path = lib/mecha
-	url = https://github.com/Hejsil/mecha.git
+	url = ../mecha.git
 [submodule "lib/known-folders"]
 	path = lib/known-folders
 	url = https://github.com/ziglibs/known-folders.git
 [submodule "lib/ziter"]
 	path = lib/ziter
-	url = https://github.com/Hejsil/ziter.git
+	url = ../ziter.git
 [submodule "lib/ston"]
 	path = lib/ston
-	url = https://github.com/Hejsil/ston.git
+	url = ../ston.git
