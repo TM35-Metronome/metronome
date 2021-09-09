@@ -33,16 +33,11 @@ test {
 }
 
 pub fn getSeed(args: anytype) !u64 {
-    if (args.option("--seed")) |seed| {
-        return fmt.parseUnsigned(u64, seed, 10) catch |err| {
-            log.err("'{s}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
-            return error.InvalidSeed;
-        };
-    } else {
-        var buf: [8]u8 = undefined;
-        os.getrandom(buf[0..]) catch return @as(u64, 0);
-        return mem.readInt(u64, &buf, .Little);
-    }
+    const seed = args.option("--seed") orelse return std.crypto.random.int(u64);
+    return fmt.parseUnsigned(u64, seed, 10) catch |err| {
+        log.err("'{s}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
+        return error.InvalidSeed;
+    };
 }
 
 pub fn generateMain(
