@@ -872,12 +872,12 @@ test "tm35-rand-parties" {
         ) []const u8 {
             return ".pokedex[" ++ id ++ "].height=0\n" ++
                 ".pokemons[" ++ id ++ "].pokedex_entry=" ++ id ++ "\n" ++
-                ".pokemons[" ++ id ++ "].hp=" ++ stat ++ "\n" ++
-                ".pokemons[" ++ id ++ "].attack=" ++ stat ++ "\n" ++
-                ".pokemons[" ++ id ++ "].defense=" ++ stat ++ "\n" ++
-                ".pokemons[" ++ id ++ "].speed=" ++ stat ++ "\n" ++
-                ".pokemons[" ++ id ++ "].sp_attack=" ++ stat ++ "\n" ++
-                ".pokemons[" ++ id ++ "].sp_defense=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.hp=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.attack=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.defense=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.speed=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.sp_attack=" ++ stat ++ "\n" ++
+                ".pokemons[" ++ id ++ "].stats.sp_defense=" ++ stat ++ "\n" ++
                 ".pokemons[" ++ id ++ "].types[0]=" ++ types ++ "\n" ++
                 ".pokemons[" ++ id ++ "].types[1]=" ++ types ++ "\n" ++
                 ".pokemons[" ++ id ++ "].abilities[0]=" ++ ability ++ "\n" ++

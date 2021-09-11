@@ -36,44 +36,50 @@ pub fn io(
     ctx: anytype,
     parse: anytype,
 ) !void {
+    var tok: ston.Tokenizer = undefined;
+    var des = ston.Deserializer(Game){ .tok = &tok };
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     defer fifo.deinit();
 
     while (true) {
         const buf = fifo.readableSlice(0);
-        var tok = ston.tokenize(buf);
+        tok = ston.tokenize(buf);
 
-        if (ston.deserializeLine(Game, &tok)) |res| {
-            defer fifo.head += tok.i;
-            defer fifo.count -= tok.i;
-            parse(ctx, res) catch |err| switch (err) {
-                // When `parse` returns `ParserFailed` it communicates to us that they
-                // could not handle the result in any meaningful way, so we are responsible
-                // for writing the parsed string back out.
-                error.ParserFailed => switch (@TypeOf(writer)) {
-                    util.io.BufferedWritev.Writer => {
-                        try writer.context.writeAssumeValidUntilFlush(buf[0..tok.i]);
+        var start: usize = 0;
+        while (true) {
+            while (des.next()) |res| {
+                parse(ctx, res) catch |err| switch (err) {
+                    // When `parse` returns `ParserFailed` it communicates to us that they
+                    // could not handle the result in any meaningful way, so we are responsible
+                    // for writing the parsed string back out.
+                    error.ParserFailed => switch (@TypeOf(writer)) {
+                        util.io.BufferedWritev.Writer => {
+                            try writer.context.writeAssumeValidUntilFlush(buf[start..tok.i]);
+                        },
+                        else => try writer.writeAll(buf[start..tok.i]),
                     },
-                    else => try writer.writeAll(buf[0..tok.i]),
-                },
-                else => return err,
-            };
-            continue;
-        } else |_| {}
+                    else => return err,
+                };
 
-        // If we couldn't parse a portion of the buffer, then we skip to the next line
-        // and try again. The current line will just be written out again.
-        if (mem.indexOfScalar(u8, buf, '\n')) |index| {
-            defer fifo.head += index + 1;
-            defer fifo.count -= index + 1;
-            const line = buf[0 .. index + 1];
-            switch (@TypeOf(writer)) {
-                util.io.BufferedWritev.Writer => {
-                    try writer.context.writeAssumeValidUntilFlush(line);
-                },
-                else => try writer.writeAll(line),
+                start = tok.i;
+            } else |err| {}
+
+            // If we couldn't parse a portion of the buffer, then we skip to the next line
+            // and try again. The current line will just be written out again.
+            if (mem.indexOfScalarPos(u8, buf, start, '\n')) |index| {
+                const line = buf[start .. index + 1];
+                switch (@TypeOf(writer)) {
+                    util.io.BufferedWritev.Writer => {
+                        try writer.context.writeAssumeValidUntilFlush(line);
+                    },
+                    else => try writer.writeAll(line),
+                }
+
+                start = index + 1;
+                continue;
             }
-            continue;
+
+            break;
         }
 
         // For `BufferedWritev` we should flush here, as we might have called
@@ -85,6 +91,7 @@ pub fn io(
         }
 
         const new_buf = blk: {
+            fifo.discard(start);
             fifo.realign();
             const slice = fifo.writableSlice(0);
             if (slice.len != 0)
@@ -96,15 +103,13 @@ pub fn io(
         fifo.update(num);
 
         if (num == 0) {
-            if (fifo.count != 0) {
-                // If get here, then both parsing and the "index of newline" branches above
-                // failed. Let's terminate the buffer, so that at least the "index of newline"
-                // branch will succeed. Once that succeed, this branch will never be hit again.
-                try fifo.writeItem('\n');
-                continue;
-            }
+            if (fifo.count == 0)
+                return;
 
-            return;
+            // If get here, then both parsing and the "index of newline" branches above
+            // failed. Let's terminate the buffer, so that at least the "index of newline"
+            // branch will succeed. Once that succeed, this branch will never be hit again.
+            try fifo.writeItem('\n');
         }
     }
 }
