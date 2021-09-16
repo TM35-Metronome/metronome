@@ -16,60 +16,58 @@ const path = fs.path;
 
 const nds = rom.nds;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+in: []const u8,
+out: []const u8,
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help           Display this help text and exit.    ") catch unreachable,
-        clap.parseParam("-o, --output <FILE>  Override destination path.          ") catch unreachable,
-        clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
-        clap.parseParam("<ROM>") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Reads a Nintendo DS rom and extract its file system into a folder.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help           Display this help text and exit.    ") catch unreachable,
+    clap.parseParam("-o, --output <FILE>  Override destination path.          ") catch unreachable,
+    clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
+    clap.parseParam("<ROM>") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-nds-extract ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Reads a Nintendo DS rom and extract its file system into a folder.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
-}
-
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
-    const cwd = fs.cwd();
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
-    const out = args.option("--output") orelse blk: {
-        break :blk try fmt.allocPrint(allocator, "{s}.output", .{path.basename(file_name)});
-    };
+    const out = args.option("--output") orelse
+        try fmt.allocPrint(allocator, "{s}.output", .{path.basename(file_name)});
 
-    const rom_file = try cwd.openFile(file_name, .{});
+    return Program{
+        .allocator = allocator,
+        .in = file_name,
+        .out = out,
+    };
+}
+
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    const allocator = program.allocator;
+    const cwd = fs.cwd();
+
+    const rom_file = try cwd.openFile(program.in, .{});
     defer rom_file.close();
     var nds_rom = try nds.Rom.fromFile(rom_file, allocator);
 
-    try cwd.makePath(out);
+    try cwd.makePath(program.out);
 
-    // All dir instances should actually be `const`, but `Dir.close` takes mutable pointer, so we can't
-    // actually do that...
-    var out_dir = try cwd.openDir(out, .{});
+    // All dir instances should actually be `const`, but `Dir.close` takes mutable pointer, so we
+    // can't actually do that...
+    var out_dir = try cwd.openDir(program.out, .{});
     defer out_dir.close();
 
     try out_dir.makeDir("arm9_overlays");
@@ -96,6 +94,8 @@ pub fn main2(
 
     try writeFs(root_dir, file_system, nds.fs.root);
 }
+
+pub fn deinit(program: *Program) void {}
 
 fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!void {
     var it = file_system.iterate(folder);

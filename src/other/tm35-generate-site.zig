@@ -17,48 +17,40 @@ const testing = std.testing;
 
 const escape = util.escape;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+out: []const u8,
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help           Display this help text and exit.") catch unreachable,
-        clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
-        clap.parseParam("-o, --output <FILE>  The file to output the file to. (default: site.html)") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Generates a html web site for games. This is very useful for getting an overview of what is
+    \\in the game after heavy randomization has been apply.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help           Display this help text and exit.") catch unreachable,
+    clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
+    clap.parseParam("-o, --output <FILE>  The file to output the file to. (default: site.html)") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-generate-site ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Generates a html web site for games. This is very useful for getting an overview
-        \\of what is in the game after heavy randomization has been apply.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+    return Program{
+        .allocator = allocator,
+        .out = args.option("--output") orelse "site.html",
+    };
 }
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
 ) anyerror!void {
-    const out = args.option("--output") orelse "site.html";
-
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    var game = Game{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &game, useGame);
+    var game = Game{ .allocator = program.allocator };
+    try format.io(program.allocator, stdio.in, stdio.out, &game, useGame);
 
     try stdio.out.context.flush();
 
@@ -69,7 +61,7 @@ pub fn main2(
         else => stdio.out.context.unbuffered_writer.context.close(),
     }
 
-    const out_file = try fs.cwd().createFile(out, .{
+    const out_file = try fs.cwd().createFile(program.out, .{
         .exclusive = false,
         .truncate = false,
     });
@@ -81,6 +73,8 @@ pub fn main2(
     try out_file.setEndPos(try out_file.getPos());
 }
 
+pub fn deinit(program: *Program) void {}
+
 fn useGame(game: *Game, parsed: format.Game) !void {
     const allocator = game.allocator;
     switch (parsed) {
@@ -90,7 +84,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .trainers => |trainers| {
             const trainer = (try game.trainers.getOrPutValue(allocator, trainers.index, .{})).value_ptr;
             switch (trainers.value) {
-                .name => |name| trainer.name = try escape.default.unescapeAlloc(allocator, name),
+                .name => |str| trainer.name = try escape.default.unescapeAlloc(allocator, str),
                 .class => |class| trainer.class = class,
                 .encounter_music => |encounter_music| trainer.encounter_music = encounter_music,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
@@ -112,8 +106,8 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .moves => |moves| {
             const move = (try game.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
-                .name => |name| move.name = try escape.default.unescapeAlloc(allocator, name),
-                .description => |description| move.description = try escape.default.unescapeAlloc(allocator, description),
+                .name => |str| move.name = try escape.default.unescapeAlloc(allocator, str),
+                .description => |str| move.description = try escape.default.unescapeAlloc(allocator, str),
                 .effect => |effect| move.effect = effect,
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -127,7 +121,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .pokemons => |pokemons| {
             const pokemon = (try game.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
             switch (pokemons.value) {
-                .name => |name| pokemon.name = try escape.default.unescapeAlloc(allocator, name),
+                .name => |str| pokemon.name = try escape.default.unescapeAlloc(allocator, str),
                 .stats => |stats| format.setField(&pokemon.stats, stats),
                 .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
@@ -161,20 +155,20 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .abilities => |abilities| {
             const ability = (try game.abilities.getOrPutValue(allocator, abilities.index, .{})).value_ptr;
             switch (abilities.value) {
-                .name => |name| ability.name = try escape.default.unescapeAlloc(allocator, name),
+                .name => |str| ability.name = try escape.default.unescapeAlloc(allocator, str),
             }
         },
         .types => |types| {
             const _type = (try game.types.getOrPutValue(allocator, types.index, .{})).value_ptr;
             switch (types.value) {
-                .name => |name| _type.name = try escape.default.unescapeAlloc(allocator, name),
+                .name => |str| _type.name = try escape.default.unescapeAlloc(allocator, str),
             }
         },
         .items => |items| {
             const item = (try game.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
-                .name => |name| item.name = try escape.default.unescapeAlloc(allocator, name),
-                .description => |description| item.description = try escape.default.unescapeAlloc(allocator, description),
+                .name => |str| item.name = try escape.default.unescapeAlloc(allocator, str),
+                .description => |str| item.description = try escape.default.unescapeAlloc(allocator, str),
                 .price => |price| item.price = price,
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .pocket => |pocket| item.pocket = pocket,

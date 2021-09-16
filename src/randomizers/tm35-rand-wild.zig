@@ -17,56 +17,57 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+options: struct {
+    seed: u64,
+    simular_total_stats: bool,
+},
+pokedex: Set = Set{},
+pokemons: Pokemons = Pokemons{},
+wild_pokemons: Zones = Zones{},
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-t, --simular-total-stats  Replaced wild Pokémons should have simular total stats.                                   ") catch unreachable,
-        clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes wild Pokémon encounters.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
+    clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+    clap.parseParam("-t, --simular-total-stats  Replaced wild Pokémons should have simular total stats.                                   ") catch unreachable,
+    clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-rand-wild ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes wild Pokémon encounters.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+    return Program{
+        .allocator = allocator,
+        .options = .{
+            .seed = try util.getSeed(args),
+            .simular_total_stats = args.flag("--simular-total-stats"),
+        },
+    };
 }
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
-    const seed = try util.getSeed(args);
-    const simular_total_stats = args.flag("--simular-total-stats");
-
-    var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
-
-    try randomize(data, seed, simular_total_stats);
-    try outputData(stdio.out, data);
+) !void {
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    try program.randomize();
+    try program.output(stdio.out);
 }
 
-fn outputData(writer: anytype, data: Data) !void {
-    for (data.wild_pokemons.values()) |zone, i| {
-        const zone_id = data.wild_pokemons.keys()[i];
+pub fn deinit(program: *Program) void {}
+
+fn output(program: *Program, writer: anytype) !void {
+    for (program.wild_pokemons.values()) |zone, i| {
+        const zone_id = program.wild_pokemons.keys()[i];
         for (zone.wild_areas) |area, j| {
             const aid = @intToEnum(meta.TagType(format.WildPokemons), @intCast(u5, j));
             try ston.serialize(writer, .{
@@ -78,15 +79,16 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn useGame(data: *Data, parsed: format.Game) !void {
-    const allocator = data.allocator;
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokedex => |pokedex| {
-            _ = try data.pokedex.put(allocator, pokedex.index, {});
+            _ = try program.pokedex.put(allocator, pokedex.index, {});
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
+                .value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
@@ -112,13 +114,21 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .wild_pokemons => |wild_areas| {
-            const zone = (try data.wild_pokemons.getOrPutValue(allocator, wild_areas.index, .{})).value_ptr;
+            const zone = (try program.wild_pokemons.getOrPutValue(
+                allocator,
+                wild_areas.index,
+                .{},
+            )).value_ptr;
             const area = &zone.wild_areas[@enumToInt(wild_areas.value)];
             const wild_area = wild_areas.value.value();
 
             switch (wild_area) {
                 .pokemons => |pokemons| {
-                    const pokemon = (try area.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
+                    const pokemon = (try area.pokemons.getOrPutValue(
+                        allocator,
+                        pokemons.index,
+                        .{},
+                    )).value_ptr;
 
                     // TODO: We're not using min/max level for anything yet
                     switch (pokemons.value) {
@@ -155,20 +165,21 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     unreachable;
 }
 
-fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
-    const random = &rand.DefaultPrng.init(seed).random;
-    var simular = std.ArrayList(u16).init(data.allocator);
+fn randomize(program: *Program) !void {
+    const allocator = program.allocator;
+    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    var simular = std.ArrayList(u16).init(allocator);
 
-    const species = try data.pokedexPokemons();
-    for (data.wild_pokemons.values()) |zone, i| {
+    const species = try pokedexPokemons(allocator, program.pokemons, program.pokedex);
+    for (program.wild_pokemons.values()) |zone, i| {
         for (zone.wild_areas) |area| {
             for (area.pokemons.values()) |*wild_pokemon| {
                 const old_species = wild_pokemon.species orelse continue;
 
-                if (simular_total_stats) blk: {
+                if (program.options.simular_total_stats) blk: {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
                     // We therefor just pick a random pokemon and continue.
-                    const pokemon = data.pokemons.get(old_species) orelse {
+                    const pokemon = program.pokemons.get(old_species) orelse {
                         wild_pokemon.species = util.random.item(random, species.keys()).?.*;
                         break :blk;
                     };
@@ -182,7 +193,7 @@ fn randomize(data: Data, seed: u64, simular_total_stats: bool) !void {
                         max += 5;
 
                         for (species.keys()) |s| {
-                            const p = data.pokemons.get(s).?;
+                            const p = program.pokemons.get(s).?;
                             const total = @intCast(i64, it.fold(&p.stats, @as(usize, 0), foldu8));
                             if (min <= total and total <= max)
                                 try simular.append(s);
@@ -210,28 +221,21 @@ const WildAreas = [number_of_areas]WildArea;
 const WildPokemons = std.AutoArrayHashMapUnmanaged(u8, WildPokemon);
 const Zones = std.AutoArrayHashMapUnmanaged(u16, Zone);
 
-const Data = struct {
-    allocator: *mem.Allocator,
-    pokedex: Set = Set{},
-    pokemons: Pokemons = Pokemons{},
-    wild_pokemons: Zones = Zones{},
+fn pokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+    var res = Set{};
+    errdefer res.deinit(allocator);
 
-    fn pokedexPokemons(d: Data) !Set {
-        var res = Set{};
-        errdefer res.deinit(d.allocator);
+    for (pokemons.values()) |pokemon, i| {
+        if (pokemon.catch_rate == 0)
+            continue;
+        if (pokedex.get(pokemon.pokedex_entry) == null)
+            continue;
 
-        for (d.pokemons.values()) |pokemon, i| {
-            if (pokemon.catch_rate == 0)
-                continue;
-            if (d.pokedex.get(pokemon.pokedex_entry) == null)
-                continue;
-
-            _ = try res.put(d.allocator, d.pokemons.keys()[i], {});
-        }
-
-        return res;
+        _ = try res.put(allocator, pokemons.keys()[i], {});
     }
-};
+
+    return res;
+}
 
 const Zone = struct {
     wild_areas: WildAreas = [_]WildArea{WildArea{}} ** number_of_areas,
@@ -367,7 +371,7 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[3].grass.pokemons[3].species=0
         \\
     ;
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.wild_pokemons[0].grass.pokemons[0].species=2
         \\.wild_pokemons[0].grass.pokemons[1].species=0
         \\.wild_pokemons[0].grass.pokemons[2].species=0
@@ -386,7 +390,7 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[3].grass.pokemons[3].species=7
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
         \\.wild_pokemons[0].grass.pokemons[0].species=0
         \\.wild_pokemons[0].grass.pokemons[1].species=0
         \\.wild_pokemons[0].grass.pokemons[2].species=0

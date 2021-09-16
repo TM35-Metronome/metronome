@@ -15,70 +15,63 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+pokemons: Pokemons = Pokemons{},
 
-// TODO: Have the tm35-randomizer recognize options with it's help message split onto a new line
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help      Display this help text and exit.") catch unreachable,
-        clap.parseParam("-v, --version   Output version information and exit.") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Replace trade evolutions with non trade versions.
+    \\
+    \\Here is how each trade evolution is replaced:
+    \\* Trade -> Level up 36
+    \\* Trade holding <item> -> Level up holding <item> during daytime
+    \\* Trade with <pokemon> -> Level up with other <pokemon> in party
+    \\
+    \\Certain level up methods might not exist in some game.
+    \\Supported methods are found by looking over all methods used in the game.
+    \\If one method doesn't exist, 'Level up 36' is used as a fallback.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help      Display this help text and exit.") catch unreachable,
+    clap.parseParam("-v, --version   Output version information and exit.") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-no-trade-evolutions ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Replace trade evolutions with non trade versions.
-        \\
-        \\Here is how each trade evolution is replaced:
-        \\* Trade -> Level up 36
-        \\* Trade holding <item> -> Level up holding <item> during daytime
-        \\* Trade with <pokemon> -> Level up with other <pokemon> in party
-        \\
-        \\Certain level up methods might not exist in some game.
-        \\Supported methods are found by looking over all methods used in the game.
-        \\If one method doesn't exist, 'Level up 36' is used as a fallback.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) error{}!Program {
+    return Program{ .allocator = allocator };
 }
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
-    var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
-
-    removeTradeEvolutions(data);
-    try outputData(stdio.out, data);
+) !void {
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    program.removeTradeEvolutions();
+    try program.output(stdio.out);
 }
 
-fn outputData(writer: anytype, data: Data) !void {
-    try ston.serialize(writer, .{ .pokemons = data.pokemons });
+pub fn deinit(program: *Program) void {}
+
+fn output(program: *Program, writer: anytype) !void {
+    try ston.serialize(writer, .{ .pokemons = program.pokemons });
 }
 
-fn useGame(data: *Data, parsed: format.Game) !void {
-    const allocator = data.allocator;
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokemons => |pokemons| {
-            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
+                .value_ptr;
             switch (pokemons.value) {
                 .evos => |evos| {
-                    const evo = (try pokemon.evos.getOrPutValue(allocator, evos.index, .{})).value_ptr;
+                    const evo = (try pokemon.evos.getOrPutValue(allocator, evos.index, .{}))
+                        .value_ptr;
                     switch (evos.value) {
                         .param => |param| evo.param = param,
                         .method => |method| evo.method = method,
@@ -131,31 +124,45 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     }
 }
 
-fn removeTradeEvolutions(data: Data) void {
+fn removeTradeEvolutions(program: *Program) void {
     // Find methods that exists in the game.
     var has_level_up = false;
     var has_level_up_holding = false;
     var has_level_up_party = false;
-    for (data.pokemons.values()) |pokemon| {
+    for (program.pokemons.values()) |pokemon| {
         for (pokemon.evos.values()) |evo| {
             if (evo.method == .unused)
                 continue;
             has_level_up = has_level_up or evo.method == .level_up;
-            has_level_up_holding = has_level_up_holding or evo.method == .level_up_holding_item_during_daytime;
-            has_level_up_party = has_level_up_party or evo.method == .level_up_with_other_pokemon_in_party;
+            has_level_up_holding = has_level_up_holding or
+                evo.method == .level_up_holding_item_during_daytime;
+            has_level_up_party = has_level_up_party or
+                evo.method == .level_up_with_other_pokemon_in_party;
         }
     }
 
     const M = format.Evolution.Method;
     const trade_method_replace: ?M = if (has_level_up) .level_up else null;
-    const trade_method_holding_replace: ?M = if (has_level_up_holding) .level_up_holding_item_during_daytime else trade_method_replace;
-    const trade_method_pokemon_replace: ?M = if (has_level_up_party) .level_up_with_other_pokemon_in_party else trade_method_replace;
+    const trade_method_holding_replace: ?M = if (has_level_up_holding)
+        .level_up_holding_item_during_daytime
+    else
+        trade_method_replace;
+    const trade_method_pokemon_replace: ?M = if (has_level_up_party)
+        .level_up_with_other_pokemon_in_party
+    else
+        trade_method_replace;
 
     const trade_param_replace: ?u16 = if (has_level_up) @as(usize, 36) else null;
-    const trade_param_holding_replace: ?u16 = if (has_level_up_holding) null else trade_param_replace;
-    const trade_param_pokemon_replace: ?u16 = if (has_level_up_party) null else trade_param_replace;
+    const trade_param_holding_replace: ?u16 = if (has_level_up_holding)
+        null
+    else
+        trade_param_replace;
+    const trade_param_pokemon_replace: ?u16 = if (has_level_up_party)
+        null
+    else
+        trade_param_replace;
 
-    for (data.pokemons.values()) |pokemon| {
+    for (program.pokemons.values()) |pokemon| {
         for (pokemon.evos.values()) |*evo| {
             if (evo.method == .unused)
                 continue;
@@ -210,11 +217,6 @@ fn removeTradeEvolutions(data: Data) void {
 const Evolutions = std.AutoArrayHashMapUnmanaged(u8, Evolution);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 
-const Data = struct {
-    allocator: *mem.Allocator,
-    pokemons: Pokemons = Pokemons{},
-};
-
 const Pokemon = struct {
     evos: Evolutions = Evolutions{},
 };
@@ -242,8 +244,7 @@ test "tm35-no-trade-evolutions" {
         H.evo("3", "trade_with_pokemon", "1");
 
     try util.testing.testProgram(
-        main2,
-        &params,
+        Program,
         &[_][]const u8{},
         test_string,
         H.evo("0", "level_up", "12") ++
@@ -252,8 +253,7 @@ test "tm35-no-trade-evolutions" {
             H.evo("3", "level_up", "36"),
     );
     try util.testing.testProgram(
-        main2,
-        &params,
+        Program,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
@@ -264,8 +264,7 @@ test "tm35-no-trade-evolutions" {
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
     );
     try util.testing.testProgram(
-        main2,
-        &params,
+        Program,
         &[_][]const u8{},
         test_string ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),

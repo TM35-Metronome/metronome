@@ -22,30 +22,18 @@ pub const unicode = @import("unicode.zig");
 pub const unsafe = @import("unsafe.zig");
 
 test {
-    _ = bit;
-    _ = escape;
-    _ = io;
-    _ = random;
-    _ = set;
-    _ = testing;
-    _ = unicode;
-    _ = unsafe;
+    std.testing.refAllDecls(@This());
 }
 
 pub fn getSeed(args: anytype) !u64 {
     const seed = args.option("--seed") orelse return std.crypto.random.int(u64);
     return fmt.parseUnsigned(u64, seed, 10) catch |err| {
-        log.err("'{s}' could not be parsed as a number to --seed: {}\n", .{ seed, err });
+        log.err("'{s}' could not be parsed as a number to --seed: {}", .{ seed, err });
         return error.InvalidSeed;
     };
 }
 
-pub fn generateMain(
-    version: []const u8,
-    comptime main2: anytype,
-    comptime params: []const clap.Param(clap.Help),
-    comptime usage: anytype,
-) fn () anyerror!void {
+pub fn generateMain(comptime Program: type) fn () anyerror!void {
     return struct {
         fn main() anyerror!void {
 
@@ -54,7 +42,7 @@ pub fn generateMain(
             // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
-            var args = clap.parse(clap.Help, params, .{ .diagnostic = &diag }) catch |err| {
+            var args = clap.parse(clap.Help, Program.params, .{ .diagnostic = &diag }) catch |err| {
                 var stderr = io.bufferedWriter(std.io.getStdErr().writer());
                 diag.report(stderr.writer(), err) catch {};
                 usage(stderr.writer()) catch {};
@@ -71,19 +59,33 @@ pub fn generateMain(
 
             if (args.flag("--version")) {
                 var stdout = io.bufferedWriter(std.io.getStdOut().writer());
-                try stdout.writer().print("{s}\n", .{version});
+                try stdout.writer().print("{s}\n", .{Program.version});
                 try stdout.flush();
                 return;
             }
 
             var stdout = io.bufferedWriter(std.io.getStdOut().writer());
-            const res = main2(&arena.allocator, std.fs.File.Reader, @TypeOf(stdout.writer()), .{
+            var program = try Program.init(&arena.allocator, args);
+            defer program.deinit();
+
+            try program.run(std.fs.File.Reader, @TypeOf(stdout.writer()), .{
                 .in = std.io.getStdIn().reader(),
                 .out = stdout.writer(),
-            }, args);
+            });
 
             try stdout.flush();
-            return res;
+        }
+
+        fn usage(writer: anytype) !void {
+            try writer.print("Usage: {s} ", .{@typeName(Program)});
+            try clap.usage(writer, Program.params);
+            try writer.print(
+                \\
+                \\{s}
+                \\Options:
+                \\
+            , .{Program.description});
+            try clap.help(writer, Program.params);
         }
     }.main;
 }

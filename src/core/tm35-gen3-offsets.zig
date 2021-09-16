@@ -23,52 +23,55 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
-const TypeId = builtin.TypeId;
-const TypeInfo = builtin.TypeInfo;
+const Program = @This();
 
-const Param = clap.Param(clap.Help);
+allocator: *mem.Allocator,
+files: []const []const u8,
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Finds the offsets of specific structures in a gen3 rom and writes those offsets to stdout.
+    \\
+;
 
-const params = [_]Param{
+pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
     clap.parseParam("<ROM>") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-gen3-disassemble-scripts ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Finds all scripts in a generation 3 Pokemon game, disassembles them and writes
-        \\them to stdout.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+    return Program{ .allocator = allocator, .files = args.positionals() };
 }
 
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
 ) anyerror!void {
-    for (args.positionals()) |file_name, i| {
+    const allocator = program.allocator;
+    for (program.files) |file_name, i| {
         const data = try fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize));
         defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
             return error.FileToSmall;
 
         const header = mem.bytesAsSlice(gba.Header, data[0..@sizeOf(gba.Header)])[0];
-        const version = try getVersion(&header.gamecode);
-        const info = try getOffsets(data, version, header.gamecode, header.game_title, header.software_version);
+        const v = try getVersion(&header.gamecode);
+        const info = try getOffsets(
+            data,
+            v,
+            header.gamecode,
+            header.game_title,
+            header.software_version,
+        );
         try outputInfo(stdio.out, i, info);
     }
 }
+
+pub fn deinit(program: *Program) void {}
 
 fn outputInfo(writer: anytype, i: usize, info: offsets.Info) !void {
     try writer.print(".game[{}].game_title={}\n", .{ i, info.game_title });
@@ -143,7 +146,7 @@ fn getVersion(gamecode: []const u8) !common.Version {
 
 fn getOffsets(
     data: []u8,
-    version: common.Version,
+    game_version: common.Version,
     gamecode: [4]u8,
     game_title: util.TerminatedArray(12, u8, 0),
     software_version: u8,
@@ -205,7 +208,7 @@ fn getOffsets(
     const TypeNames = Searcher([7]u8, &[_][]const []const u8{});
     const Strings = Searcher(u8, &[_][]const []const u8{});
 
-    const text_delay = switch (version) {
+    const text_delay = switch (game_version) {
         .emerald,
         .fire_red,
         .leaf_green,
@@ -216,7 +219,7 @@ fn getOffsets(
         else => unreachable,
     };
 
-    const trainers = switch (version) {
+    const trainers = switch (game_version) {
         .emerald => try Trainers.find4(data, &em_first_trainers, &em_last_trainers),
         .ruby,
         .sapphire,
@@ -249,7 +252,7 @@ fn getOffsets(
 
     const pokemon_names = try PokemonNames.find4(data, &first_pokemon_names, &last_pokemon_names);
     const ability_names = try AbilityNames.find4(data, &first_ability_names, &last_ability_names);
-    const move_names = switch (version) {
+    const move_names = switch (game_version) {
         .emerald => try MoveNames.find4(data, &e_first_move_names, &last_move_names),
         .ruby,
         .sapphire,
@@ -272,7 +275,7 @@ fn getOffsets(
         &species_to_national_dex_end,
     );
 
-    const pokedex: gen3.Pokedex = switch (version) {
+    const pokedex: gen3.Pokedex = switch (game_version) {
         .emerald => .{
             .emerald = try EmeraldPokedex.find4(data, &emerald_pokedex_start, &emerald_pokedex_end),
         },
@@ -289,7 +292,7 @@ fn getOffsets(
         else => unreachable,
     };
 
-    const items = switch (version) {
+    const items = switch (game_version) {
         .emerald => try Items.find4(data, &em_first_items, &em_last_items),
         .ruby,
         .sapphire,
@@ -300,7 +303,7 @@ fn getOffsets(
         else => unreachable,
     };
 
-    const wild_pokemon_headers = switch (version) {
+    const wild_pokemon_headers = switch (game_version) {
         .emerald => try WildPokemonHeaders.find4(data, &em_first_wild_mon_headers, &em_last_wild_mon_headers),
         .ruby,
         .sapphire,
@@ -311,7 +314,7 @@ fn getOffsets(
         else => unreachable,
     };
 
-    const map_headers = switch (version) {
+    const map_headers = switch (game_version) {
         .emerald => try MapHeaders.find4(data, &em_first_map_headers, &em_last_map_headers),
         .ruby,
         .sapphire,
@@ -325,7 +328,7 @@ fn getOffsets(
     return offsets.Info{
         .game_title = game_title,
         .gamecode = gamecode,
-        .version = version,
+        .version = game_version,
         .software_version = software_version,
 
         .starters = undefined,
@@ -340,7 +343,7 @@ fn getOffsets(
         .type_effectiveness = undefined,
         .hms = offsets.HmSection.init(data, hms_slice),
         .tms = offsets.TmSection.init(data, tms_slice),
-        .pokedex = switch (version) {
+        .pokedex = switch (game_version) {
             .emerald => .{
                 .emerald = offsets.EmeraldPokedexSection.init(data, pokedex.emerald),
             },

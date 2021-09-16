@@ -21,88 +21,90 @@ const Utf8 = util.unicode.Utf8View;
 const escape = util.escape;
 const parse = util.parse;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
-
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help        Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("    --hms         Also randomize hms (this may break your game).                                            ") catch unreachable,
-        clap.parseParam("-s, --seed <INT>  The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version     Output version information and exit.                                                      ") catch unreachable,
-    };
-};
-
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-rand-machines ");
-    try clap.usage(writer, &params);
-    try writer.writeAll("\nRandomizes the moves of tms.\n" ++
-        "\n" ++
-        "Options:\n");
-    try clap.help(writer, &params);
-}
+allocator: *mem.Allocator,
+options: struct {
+    seed: u64,
+    hms: bool,
+},
+items: Items = Items{},
+moves: Moves = Moves{},
+tms: Machines = Machines{},
+hms: Machines = Machines{},
 
 const Preference = enum {
     random,
     stab,
 };
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes the moves of tms.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help        Display this help text and exit.                                                          ") catch unreachable,
+    clap.parseParam("    --hms         Also randomize hms (this may break your game).                                            ") catch unreachable,
+    clap.parseParam("-s, --seed <INT>  The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+    clap.parseParam("-v, --version     Output version information and exit.                                                      ") catch unreachable,
+};
+
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const seed = try util.getSeed(args);
     const hms = args.flag("--hms");
 
-    var data = Data{ .allocator = allocator };
-    try format.io(
-        allocator,
-        stdio.in,
-        stdio.out,
-        .{ .hms = hms, .data = &data },
-        useGame,
-    );
-    try randomize(data, seed);
-    try outputData(stdio.out, data);
+    return Program{
+        .allocator = allocator,
+        .options = .{
+            .seed = seed,
+            .hms = hms,
+        },
+    };
 }
 
-fn outputData(writer: anytype, data: Data) !void {
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    try program.randomize();
+    try program.output(stdio.out);
+}
+
+fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{
-        .tms = data.tms,
-        .hms = data.hms,
+        .tms = program.tms,
+        .hms = program.hms,
     });
-    for (data.items.values()) |item, i| {
-        try ston.serialize(writer, .{ .items = ston.index(data.items.keys()[i], .{
+    for (program.items.values()) |item, i| {
+        try ston.serialize(writer, .{ .items = ston.index(program.items.keys()[i], .{
             .description = ston.string(escape.default.escapeFmt(item.description)),
         }) });
     }
 }
 
-fn useGame(ctx: anytype, parsed: format.Game) !void {
-    const hms = ctx.hms;
-    const data = ctx.data;
-    const allocator = data.allocator;
+pub fn deinit(program: *Program) void {}
+
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .tms => |tms| {
-            _ = try data.tms.put(allocator, tms.index, tms.value);
+            _ = try program.tms.put(allocator, tms.index, tms.value);
             return;
         },
-        .hms => |ms| if (hms) {
-            _ = try data.hms.put(allocator, ms.index, ms.value);
+        .hms => |ms| if (program.options.hms) {
+            _ = try program.hms.put(allocator, ms.index, ms.value);
             return;
         } else {
             return error.ParserFailed;
         },
         .moves => |moves| {
-            const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
+            const move = (try program.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .description => |_desc| {
                     const desc = try escape.default.unescapeAlloc(allocator, _desc);
@@ -113,12 +115,12 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .items => |items| {
-            const item = (try data.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
+            const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .pocket => |pocket| item.pocket = pocket,
                 .name => |_name| {
-                    const name = try escape.default.unescapeAlloc(allocator, _name);
-                    item.name = try Utf8.init(name);
+                    const unescaped_name = try escape.default.unescapeAlloc(allocator, _name);
+                    item.name = try Utf8.init(unescaped_name);
                 },
                 .description => |_desc| {
                     const desc = try escape.default.unescapeAlloc(allocator, _desc);
@@ -151,22 +153,23 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
     unreachable;
 }
 
-fn randomize(data: Data, seed: u64) !void {
-    var random = &rand.DefaultPrng.init(seed).random;
+fn randomize(program: *Program) !void {
+    const allocator = program.allocator;
+    const random = &rand.DefaultPrng.init(program.options.seed).random;
 
-    for (data.tms.values()) |*tm|
-        tm.* = util.random.item(random, data.moves.keys()).?.*;
-    for (data.hms.values()) |*hm|
-        hm.* = util.random.item(random, data.moves.keys()).?.*;
+    for (program.tms.values()) |*tm|
+        tm.* = util.random.item(random, program.moves.keys()).?.*;
+    for (program.hms.values()) |*hm|
+        hm.* = util.random.item(random, program.moves.keys()).?.*;
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;
-    for (data.items.values()) |item| {
-        var description = item.description;
-        while (mem.indexOf(u8, description.bytes, "\n")) |index| {
-            const line = Utf8.init(description.bytes[0..index]) catch unreachable;
+    for (program.items.values()) |item| {
+        var desc = item.description;
+        while (mem.indexOf(u8, desc.bytes, "\n")) |index| {
+            const line = Utf8.init(desc.bytes[0..index]) catch unreachable;
             max_line_len = math.max(line.len, max_line_len);
-            description = Utf8.init(description.bytes[index + 1 ..]) catch unreachable;
+            desc = Utf8.init(desc.bytes[index + 1 ..]) catch unreachable;
         }
         max_line_len = math.max(description.len, max_line_len);
     }
@@ -175,9 +178,9 @@ fn randomize(data: Data, seed: u64) !void {
     //       max_line_len to destribute newlines will not actually be totally
     //       correct. The best I can do here is to just reduce the max_line_len
     //       by some amount and hope it is enough for all strings.
-    max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
+    max_line_len = math.sub(usize, max_line_len, 5) catch 0;
 
-    for (data.items.values()) |*item| {
+    for (program.items.values()) |*item| {
         if (item.pocket != .tms_hms)
             continue;
 
@@ -185,10 +188,14 @@ fn randomize(data: Data, seed: u64) !void {
         const is_hm = mem.startsWith(u8, item.name.bytes, "HM");
         if (is_tm or is_hm) {
             const number = fmt.parseUnsigned(u8, item.name.bytes[2..], 10) catch continue;
-            const machines = if (is_tm) data.tms else data.hms;
+            const machines = if (is_tm) program.tms else program.hms;
             const move_id = machines.get(number - 1) orelse continue;
-            const move = data.moves.get(move_id) orelse continue;
-            const new_desc = try util.unicode.splitIntoLines(data.allocator, max_line_len, move.description);
+            const move = program.moves.get(move_id) orelse continue;
+            const new_desc = try util.unicode.splitIntoLines(
+                allocator,
+                max_line_len,
+                move.description,
+            );
             item.description = new_desc.slice(0, item.description.len);
         }
     }
@@ -197,14 +204,6 @@ fn randomize(data: Data, seed: u64) !void {
 const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
 const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
-
-const Data = struct {
-    allocator: *mem.Allocator,
-    items: Items = Items{},
-    moves: Moves = Moves{},
-    tms: Machines = Machines{},
-    hms: Machines = Machines{},
-};
 
 const Item = struct {
     pocket: format.Pocket = .none,
@@ -235,7 +234,7 @@ test "tm35-rand-machines" {
         \\.hms[2]=5
         \\
     ;
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.hms[0]=1
         \\.hms[1]=3
         \\.hms[2]=5
@@ -244,7 +243,7 @@ test "tm35-rand-machines" {
         \\.tms[2]=0
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
         \\.tms[0]=1
         \\.tms[1]=0
         \\.tms[2]=0

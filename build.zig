@@ -71,6 +71,7 @@ const format_pkg = Pkg{
 const pkgs = [_]Pkg{
     clap_pkg,
     crc_pkg,
+    folders_pkg,
     format_pkg,
     mecha_pkg,
     ston_pkg,

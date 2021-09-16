@@ -128,6 +128,7 @@ pub fn setField(struct_ptr: anytype, union_val: anytype) void {
             return;
         }
     }
+    unreachable;
 }
 
 fn getUnionValue(

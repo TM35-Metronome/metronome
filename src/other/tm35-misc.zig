@@ -15,37 +15,18 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
-
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("    --allow-biking <unchanged|nowhere|everywhere>   Change where biking is allowed (gen3 only) (default: unchanged).") catch unreachable,
-        clap.parseParam("    --allow-running <unchanged|nowhere|everywhere>  Change where running is allowed (gen3 only) (default: unchanged).") catch unreachable,
-        clap.parseParam("    --fast-text                                     Change text speed to fastest possible for the game.") catch unreachable,
-        clap.parseParam("    --exp-yield-scaling <FLOAT>                     Scale The amount of exp Pokémons give. (default: 1.0).") catch unreachable,
-        clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
-        clap.parseParam("    --trainer-level-scaling <FLOAT>                 Scale trainer Pokémon levels by this number. (default: 1.0).") catch unreachable,
-        clap.parseParam("    --wild-level-scaling <FLOAT>                    Scale wild Pokémon levels by this number. (default: 1.0).") catch unreachable,
-        clap.parseParam("-h, --help                                          Display this help text and exit.") catch unreachable,
-        clap.parseParam("-v, --version                                       Output version information and exit.") catch unreachable,
-    };
-};
-
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-misc ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Command to apply miscellaneous changed.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
-}
+allocator: *mem.Allocator,
+options: struct {
+    fast_text: bool,
+    biking: Allow,
+    running: Allow,
+    exp_scale: f64,
+    static_scale: f64,
+    trainer_scale: f64,
+    wild_scale: f64,
+},
 
 const Allow = enum {
     unchanged,
@@ -53,16 +34,26 @@ const Allow = enum {
     everywhere,
 };
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Command to apply miscellaneous changed.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("    --allow-biking <unchanged|nowhere|everywhere>   Change where biking is allowed (gen3 only) (default: unchanged).") catch unreachable,
+    clap.parseParam("    --allow-running <unchanged|nowhere|everywhere>  Change where running is allowed (gen3 only) (default: unchanged).") catch unreachable,
+    clap.parseParam("    --fast-text                                     Change text speed to fastest possible for the game.") catch unreachable,
+    clap.parseParam("    --exp-yield-scaling <FLOAT>                     Scale The amount of exp Pokémons give. (default: 1.0).") catch unreachable,
+    clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
+    clap.parseParam("    --trainer-level-scaling <FLOAT>                 Scale trainer Pokémon levels by this number. (default: 1.0).") catch unreachable,
+    clap.parseParam("    --wild-level-scaling <FLOAT>                    Scale wild Pokémon levels by this number. (default: 1.0).") catch unreachable,
+    clap.parseParam("-h, --help                                          Display this help text and exit.") catch unreachable,
+    clap.parseParam("-v, --version                                       Output version information and exit.") catch unreachable,
+};
+
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";
     const running_arg = args.option("--allow-running") orelse "unchanged";
     const exp_scale_arg = args.option("--exp-yield-scaling") orelse "1.0";
@@ -83,7 +74,7 @@ pub fn main2(
         .{ .arg = "--allow-running", .value = running_arg, .check = running },
     }) |arg| {
         if (arg.check == null) {
-            log.err("Invalid value for {s}: {s}\n", .{ arg.arg, arg.value });
+            log.err("Invalid value for {s}: {s}", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
     }
@@ -95,49 +86,52 @@ pub fn main2(
         .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
     }) |arg| {
         if (arg.check) |_| {} else |err| {
-            log.err("Invalid value for {s}: {s}\n", .{ arg.arg, arg.value });
+            log.err("Invalid value for {s}: {s}", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
     }
 
-    const opt = Options{
-        .fast_text = fast_text,
-        .biking = biking.?,
-        .running = running.?,
-        .exp_scale = exp_scale catch unreachable,
-        .static_scale = static_scale catch unreachable,
-        .trainer_scale = trainer_scale catch unreachable,
-        .wild_scale = wild_scale catch unreachable,
+    return Program{
+        .allocator = allocator,
+        .options = .{
+            .fast_text = fast_text,
+            .biking = biking.?,
+            .running = running.?,
+            .exp_scale = exp_scale catch unreachable,
+            .static_scale = static_scale catch unreachable,
+            .trainer_scale = trainer_scale catch unreachable,
+            .wild_scale = wild_scale catch unreachable,
+        },
     };
+}
+
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) !void {
     try format.io(
-        allocator,
+        program.allocator,
         stdio.in,
         stdio.out,
-        .{ .out = stdio.out, .opt = opt },
+        .{ .out = stdio.out, .program = program },
         useGame,
     );
 }
 
-const Options = struct {
-    fast_text: bool,
-    running: Allow,
-    biking: Allow,
-    exp_scale: f64,
-    static_scale: f64,
-    trainer_scale: f64,
-    wild_scale: f64,
-};
+pub fn deinit(program: *Program) void {}
 
 fn useGame(ctx: anytype, game: format.Game) !void {
     const out = ctx.out;
-    const opt = ctx.opt;
+    const program = ctx.program;
     switch (game) {
-        .instant_text => |_| if (opt.fast_text) {
+        .instant_text => |_| if (program.options.fast_text) {
             return out.print(".instant_text=true\n", .{});
         } else {
             return error.ParserFailed;
         },
-        .text_delays => |delay| if (opt.fast_text) {
+        .text_delays => |delay| if (program.options.fast_text) {
             const new_delay = switch (delay.index) {
                 0 => @as(usize, 2),
                 1 => @as(usize, 1),
@@ -148,8 +142,8 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| switch (pokemons.value) {
-            .base_exp_yield => |yield| if (opt.exp_scale != 1.0) {
-                const new_yield_float = math.floor(@intToFloat(f64, yield) * opt.exp_scale);
+            .base_exp_yield => |yield| if (program.options.exp_scale != 1.0) {
+                const new_yield_float = math.floor(@intToFloat(f64, yield) * program.options.exp_scale);
                 const new_yield = @floatToInt(u16, new_yield_float);
                 return out.print(".pokemons[{}].base_exp_yield={}\n", .{
                     pokemons.index,
@@ -181,7 +175,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         .maps => |maps| {
             switch (maps.value) {
                 .allow_cycling, .allow_running => {
-                    const allow = if (maps.value == .allow_running) opt.running else opt.biking;
+                    const allow = if (maps.value == .allow_running) program.options.running else program.options.biking;
                     if (allow == .unchanged)
                         return error.ParserFailed;
 
@@ -204,8 +198,8 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         },
         .trainers => |trainers| switch (trainers.value) {
             .party => |party| switch (party.value) {
-                .level => |level| if (opt.trainer_scale != 1.0) {
-                    const new_level_float = math.floor(@intToFloat(f64, level) * opt.trainer_scale);
+                .level => |level| if (program.options.trainer_scale != 1.0) {
+                    const new_level_float = math.floor(@intToFloat(f64, level) * program.options.trainer_scale);
                     const new_level = @floatToInt(u8, math.min(new_level_float, 100));
                     return out.print(".trainers[{}].party[{}].level={}\n", .{
                         trainers.index,
@@ -231,36 +225,11 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             => return error.ParserFailed,
         },
         .wild_pokemons => |wild_areas| {
-            const wild_area = switch (wild_areas.value) {
-                .grass,
-                .grass_morning,
-                .grass_day,
-                .grass_night,
-                .dark_grass,
-                .rustling_grass,
-                .land,
-                .surf,
-                .ripple_surf,
-                .rock_smash,
-                .fishing,
-                .ripple_fishing,
-                .swarm_replace,
-                .day_replace,
-                .night_replace,
-                .radar_replace,
-                .unknown_replace,
-                .gba_replace,
-                .sea_unknown,
-                .old_rod,
-                .good_rod,
-                .super_rod,
-                => |*res| res,
-            };
-
-            switch (wild_area.*) {
+            const wild_area = wild_areas.value.value();
+            switch (wild_area) {
                 .pokemons => |pokemons| switch (pokemons.value) {
-                    .min_level, .max_level => |level| if (opt.wild_scale != 1.0) {
-                        const new_level_float = math.floor(@intToFloat(f64, level) * opt.wild_scale);
+                    .min_level, .max_level => |level| if (program.options.wild_scale != 1.0) {
+                        const new_level_float = math.floor(@intToFloat(f64, level) * program.options.wild_scale);
                         const new_level = @floatToInt(u8, math.min(new_level_float, 100));
                         return out.print(".wild_pokemons[{}].{s}.pokemons[{}].{s}={}\n", .{
                             wild_areas.index,
@@ -278,8 +247,10 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             }
         },
         .static_pokemons => |pokemons| switch (pokemons.value) {
-            .level => |level| if (opt.static_scale != 1.0) {
-                const new_level_float = math.floor(@intToFloat(f64, level) * opt.static_scale);
+            .level => |level| if (program.options.static_scale != 1.0) {
+                const new_level_float = math.floor(
+                    @intToFloat(f64, level) * program.options.static_scale,
+                );
                 const new_level = @floatToInt(u8, math.min(new_level_float, 100));
                 return out.print(".static_pokemons[{}].level={}\n", .{ pokemons.index, new_level });
             } else {
@@ -308,7 +279,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
 }
 
 test "tm35-misc" {
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=everywhere"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=everywhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -317,7 +288,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=nowhere"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=nowhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -326,7 +297,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=false
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-biking=unchanged"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=unchanged"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -335,7 +306,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=everywhere"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=everywhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -344,7 +315,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=nowhere"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=nowhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -353,7 +324,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=false
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--allow-running=unchanged"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=unchanged"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -362,7 +333,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--fast-text"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--fast-text"},
         \\.instant_text=false
         \\.instant_text=true
         \\.text_delays[0]=10
@@ -379,7 +350,7 @@ test "tm35-misc" {
         \\.text_delays[3]=0
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--static-level-scaling=0.5"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--static-level-scaling=0.5"},
         \\.static_pokemons[0].level=20
         \\.static_pokemons[1].level=30
         \\
@@ -388,7 +359,7 @@ test "tm35-misc" {
         \\.static_pokemons[1].level=15
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--trainer-level-scaling=0.5"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--trainer-level-scaling=0.5"},
         \\.trainers[0].party[0].level=20
         \\.trainers[10].party[10].level=10
         \\
@@ -397,7 +368,7 @@ test "tm35-misc" {
         \\.trainers[10].party[10].level=5
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--wild-level-scaling=0.5"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--wild-level-scaling=0.5"},
         \\.wild_pokemons[0].grass.pokemons[0].min_level=10
         \\.wild_pokemons[0].grass.pokemons[0].max_level=20
         \\.wild_pokemons[0].fishing.pokemons[0].min_level=20
@@ -410,7 +381,7 @@ test "tm35-misc" {
         \\.wild_pokemons[0].fishing.pokemons[0].max_level=20
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--exp-yield-scaling=0.5"},
+    try util.testing.testProgram(Program, &[_][]const u8{"--exp-yield-scaling=0.5"},
         \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].base_exp_yield=20
         \\.pokemons[1].base_exp_yield=40

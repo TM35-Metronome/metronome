@@ -9,8 +9,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 pub fn testProgram(
-    comptime main: anytype,
-    comptime params: []const clap.Param(clap.Help),
+    comptime Program: type,
     args: []const []const u8,
     in: []const u8,
     out: []const u8,
@@ -21,7 +20,7 @@ pub fn testProgram(
     var stdin = io.fixedBufferStream(in);
     var stdout = io.fixedBufferStream(&out_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
-    const clap_args = try clap.parseEx(clap.Help, params, &arg_iter, .{});
+    const clap_args = try clap.parseEx(clap.Help, Program.params, &arg_iter, .{});
     defer clap_args.deinit();
 
     const StdIo = util.CustomStdIoStreams(
@@ -29,15 +28,14 @@ pub fn testProgram(
         io.FixedBufferStream([]u8).Writer,
     );
 
-    const res = try main(
-        &fba.allocator,
+    var program = try Program.init(&fba.allocator, clap_args);
+    try program.run(
         StdIo.Reader,
         StdIo.Writer,
         StdIo{
             .in = stdin.reader(),
             .out = stdout.writer(),
         },
-        clap_args,
     );
     try testing.expectEqualStrings(out, stdout.getWritten());
 }

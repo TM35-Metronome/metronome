@@ -13,16 +13,9 @@ pub fn intersect(comptime Out: type, allocator: *mem.Allocator, a: anytype, b: a
 
 /// Stores the intersection of `a` and `b` in `out`.
 pub fn intersectInline(out: anytype, a: anytype, b: anytype) !void {
-    if (a.count() < b.count())
-        return intersectImpl(out, b, a);
-    return intersectImpl(out, a, b);
-}
-
-fn intersectImpl(out: anytype, biggest: anytype, smallest: anytype) !void {
-    debug.assert(biggest.count() >= smallest.count());
-    var it = biggest.iterator();
+    var it = a.iterator();
     while (it.next()) |entry| {
-        if (smallest.get(entry.key_ptr.*) != null)
+        if (b.get(entry.key_ptr.*) != null)
             _ = try out.put(entry.key_ptr.*, {});
     }
 }

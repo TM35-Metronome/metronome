@@ -30,40 +30,42 @@ const escape = util.escape;
 
 const Game = format.Game;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+file: []const u8,
 
-const params = [_]Param{
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Load data from Pokémon games.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
     clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
     clap.parseParam("<ROM>          The rom to apply the changes to.    ") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-load ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Load data from Pokémon games.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
-}
-
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
-    const file = try fs.cwd().openFile(file_name, .{});
+    return Program{
+        .allocator = allocator,
+        .file = file_name,
+    };
+}
+
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    const allocator = program.allocator;
+    const file = try fs.cwd().openFile(program.file, .{});
     defer file.close();
 
     const gen3_error = if (gen3.Game.fromFile(file, allocator)) |*game| {
@@ -86,23 +88,25 @@ pub fn main2(
             return;
         } else |err| err;
 
-        log.info("Successfully loaded '{s}' as a nds rom.\n", .{file_name});
-        log.err("Failed to load '{s}' as a gen4 game: {}\n", .{ file_name, gen4_error });
-        log.err("Failed to load '{s}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        log.info("Successfully loaded '{s}' as a nds rom.", .{program.file});
+        log.err("Failed to load '{s}' as a gen4 game: {}", .{ program.file, gen4_error });
+        log.err("Failed to load '{s}' as a gen5 game: {}", .{ program.file, gen5_error });
         return gen5_error;
     } else |nds_error| {
-        log.err("Failed to load '{s}' as a gen3 game: {}\n", .{ file_name, gen3_error });
-        log.err("Failed to load '{s}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+        log.err("Failed to load '{s}' as a gen3 game: {}", .{ program.file, gen3_error });
+        log.err("Failed to load '{s}' as a gen4/gen5 game: {}", .{ program.file, nds_error });
         return nds_error;
     }
 }
+
+pub fn deinit(program: *Program) void {}
 
 fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     var buf: [mem.page_size]u8 = undefined;
 
     for (game.starters) |starter, index| {
         if (starter.value() != game.starters_repeat[index].value())
-            debug.warn("warning: repeated starters don't match.\n", .{});
+            log.warn("repeated starters don't match.", .{});
     }
 
     try ston.serialize(writer, .{
@@ -121,14 +125,14 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     for (game.trainers) |trainer, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &trainer.name, fbs.writer());
-        const name = fbs.getWritten();
+        const decoded_name = fbs.getWritten();
 
         const party = game.trainer_parties[i];
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .class = trainer.class,
             .encounter_music = trainer.encounter_music.music,
             .trainer_picture = trainer.trainer_picture,
-            .name = ston.string(escape.default.escapeFmt(name)),
+            .name = ston.string(escape.default.escapeFmt(decoded_name)),
             .items = trainer.items,
             .party_type = trainer.party_type,
             .party_size = trainer.partyLen(),
@@ -249,9 +253,9 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }
     }
 
-    for (game.pokemon_names) |name, i| {
+    for (game.pokemon_names) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
-        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -259,9 +263,9 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ability_names) |name, i| {
+    for (game.ability_names) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
-        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .abilities = ston.index(i, .{
@@ -269,9 +273,9 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.move_names) |name, i| {
+    for (game.move_names) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
-        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
@@ -279,9 +283,9 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.type_names) |name, i| {
+    for (game.type_names) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
-        try gen3.encodings.decode(.en_us, &name, fbs.writer());
+        try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .types = ston.index(i, .{
@@ -308,16 +312,16 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         {
             var fbs = io.fixedBufferStream(&buf);
             try gen3.encodings.decode(.en_us, &item.name, fbs.writer());
-            const name = fbs.getWritten();
+            const decoded_name = fbs.getWritten();
 
             try ston.serialize(writer, .{ .items = ston.index(i, .{
-                .name = ston.string(escape.default.escapeFmt(name)),
+                .name = ston.string(escape.default.escapeFmt(decoded_name)),
             }) });
         }
 
-        if (item.description.toSliceZ(game.data)) |description| {
+        if (item.description.toSliceZ(game.data)) |str| {
             var fbs = io.fixedBufferStream(&buf);
-            try gen3.encodings.decode(.en_us, description, fbs.writer());
+            try gen3.encodings.decode(.en_us, str, fbs.writer());
             const decoded_description = fbs.getWritten();
 
             try ston.serialize(writer, .{ .items = ston.index(i, .{

@@ -20,68 +20,67 @@ const Utf8 = util.unicode.Utf8View;
 
 const escape = util.escape;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+seed: u64,
+pokemons: NameSet = NameSet{},
+trainers: NameSet = NameSet{},
+moves: NameSet = NameSet{},
+abilities: NameSet = NameSet{},
+items: NameSet = NameSet{},
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes the names of things.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
+    clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+    clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-random-names ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes the names of things.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+    const seed = try util.getSeed(args);
+    return Program{
+        .allocator = allocator,
+        .seed = seed,
+    };
 }
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
 ) anyerror!void {
-    const seed = try util.getSeed(args);
-
-    var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
-
-    try randomize(data, seed);
-    try outputData(stdio.out, data);
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    try program.randomize();
+    try program.output(stdio.out);
 }
 
-fn outputData(writer: anytype, data: Data) !void {
+fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{
-        .pokemons = data.pokemons,
-        .trainers = data.trainers,
-        .moves = data.moves,
-        .abilities = data.abilities,
-        .items = data.items,
+        .pokemons = program.pokemons,
+        .trainers = program.trainers,
+        .moves = program.moves,
+        .abilities = program.abilities,
+        .items = program.items,
     });
 }
 
-fn useGame(data: *Data, parsed: format.Game) !void {
-    const allocator = data.allocator;
+pub fn deinit(program: *Program) void {}
+
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokemons => |pokemons| switch (pokemons.value) {
-            .name => |name| {
-                _ = try data.pokemons.put(allocator, pokemons.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+            .name => |str| {
+                _ = try program.pokemons.put(allocator, pokemons.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
                 });
                 return;
             },
@@ -106,9 +105,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             => return error.ParserFailed,
         },
         .trainers => |trainers| switch (trainers.value) {
-            .name => |name| {
-                _ = try data.trainers.put(allocator, trainers.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+            .name => |str| {
+                _ = try program.trainers.put(allocator, trainers.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
                 });
                 return;
             },
@@ -122,9 +121,9 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             => return error.ParserFailed,
         },
         .moves => |moves| switch (moves.value) {
-            .name => |name| {
-                _ = try data.moves.put(allocator, moves.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+            .name => |str| {
+                _ = try program.moves.put(allocator, moves.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
                 });
                 return;
             },
@@ -140,17 +139,17 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             => return error.ParserFailed,
         },
         .abilities => |abilities| switch (abilities.value) {
-            .name => |name| {
-                _ = try data.abilities.put(allocator, abilities.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+            .name => |str| {
+                _ = try program.abilities.put(allocator, abilities.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
                 });
                 return;
             },
         },
         .items => |items| switch (items.value) {
-            .name => |name| {
-                _ = try data.items.put(allocator, items.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, name) },
+            .name => |str| {
+                _ = try program.items.put(allocator, items.index, .{
+                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
                 });
                 return;
             },
@@ -182,15 +181,16 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     unreachable;
 }
 
-fn randomize(data: Data, seed: usize) !void {
-    const random = &rand.DefaultPrng.init(seed).random;
+fn randomize(program: *Program) !void {
+    const allocator = program.allocator;
+    const random = &rand.DefaultPrng.init(program.seed).random;
 
     for ([_]NameSet{
-        data.pokemons,
-        data.trainers,
-        data.moves,
-        data.abilities,
-        data.items,
+        program.pokemons,
+        program.trainers,
+        program.moves,
+        program.abilities,
+        program.items,
     }) |set| {
         var max: usize = 0;
         var pairs = CodepointPairs{};
@@ -201,16 +201,18 @@ fn randomize(data: Data, seed: usize) !void {
         for (set.values()) |item| {
             const view = unicode.Utf8View.init(item.name.value) catch continue;
 
-            var node = (try pairs.getOrPutValue(data.allocator, start_of_string, .{})).value_ptr;
+            var node = (try pairs.getOrPutValue(allocator, start_of_string, .{})).value_ptr;
             var it = view.iterator();
             while (it.nextCodepointSlice()) |code| {
-                const occurance = (try node.codepoints.getOrPutValue(data.allocator, code, 0)).value_ptr;
+                const occurance = (try node.codepoints.getOrPutValue(allocator, code, 0))
+                    .value_ptr;
                 occurance.* += 1;
                 node.total += 1;
-                node = (try pairs.getOrPutValue(data.allocator, code, .{})).value_ptr;
+                node = (try pairs.getOrPutValue(allocator, code, .{})).value_ptr;
             }
 
-            const occurance = (try node.codepoints.getOrPutValue(data.allocator, end_of_string, 0)).value_ptr;
+            const occurance = (try node.codepoints.getOrPutValue(allocator, end_of_string, 0))
+                .value_ptr;
             occurance.* += 1;
             node.total += 1;
             max = math.max(max, item.name.value.len);
@@ -219,8 +221,8 @@ fn randomize(data: Data, seed: usize) !void {
         // Generate our random names from our pair map. This is done by picking a C2
         // based on our current C1. C2 is chosen by using the occurnaces of C2 as weights
         // and picking at random from here.
-        for (set.values()) |*name| {
-            var new_name = std.ArrayList(u8).init(data.allocator);
+        for (set.values()) |*str| {
+            var new_name = std.ArrayList(u8).init(allocator);
             var node = pairs.get(start_of_string).?;
 
             while (new_name.items.len < max) {
@@ -240,7 +242,7 @@ fn randomize(data: Data, seed: usize) !void {
                 node = pairs.get(pick).?;
             }
 
-            name.name.value = new_name.toOwnedSlice();
+            str.name.value = new_name.toOwnedSlice();
         }
     }
 }
@@ -250,15 +252,6 @@ const start_of_string = "\x01";
 
 const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
 const NameSet = std.AutoArrayHashMapUnmanaged(u16, Name);
-
-const Data = struct {
-    allocator: *mem.Allocator,
-    pokemons: NameSet = NameSet{},
-    trainers: NameSet = NameSet{},
-    moves: NameSet = NameSet{},
-    abilities: NameSet = NameSet{},
-    items: NameSet = NameSet{},
-};
 
 const Name = struct {
     name: ston.String([]const u8),

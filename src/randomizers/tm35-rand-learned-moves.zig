@@ -15,48 +15,36 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
-
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-h, --help                      Display this help text and exit.                                                                ") catch unreachable,
-        clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
-        clap.parseParam("-s, --seed <INT>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
-        clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
-    };
-};
-
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-rand-learned-moves ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes the moves Pokémons can learn.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
-}
+allocator: *mem.Allocator,
+seed: u64,
+preference: Preference,
+pokemons: Pokemons = Pokemons{},
+moves: Moves = Moves{},
+tms: Machines = Machines{},
+hms: Machines = Machines{},
 
 const Preference = enum {
     random,
     stab,
 };
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes the moves Pokémons can learn.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-h, --help                      Display this help text and exit.                                                                ") catch unreachable,
+    clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
+    clap.parseParam("-s, --seed <INT>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
+    clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
+};
+
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const seed = try util.getSeed(args);
     const pref = if (args.option("--preference")) |pref|
         if (mem.eql(u8, pref, "random"))
@@ -64,22 +52,36 @@ pub fn main2(
         else if (mem.eql(u8, pref, "stab"))
             Preference.stab
         else {
-            log.err("--preference does not support '{s}'\n", .{pref});
+            log.err("--preference does not support '{s}'", .{pref});
             return error.InvalidArgument;
         }
     else
         Preference.random;
 
-    var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
-
-    try randomize(data, seed, pref);
-    try outputData(stdio.out, data);
+    return Program{
+        .allocator = allocator,
+        .seed = seed,
+        .preference = pref,
+    };
 }
 
-fn outputData(writer: anytype, data: Data) !void {
-    for (data.pokemons.values()) |pokemon, i| {
-        const species = data.pokemons.keys()[i];
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+
+    try program.randomize();
+    try program.output(stdio.out);
+}
+
+pub fn deinit(program: *Program) void {}
+
+fn output(program: *Program, writer: anytype) !void {
+    for (program.pokemons.values()) |pokemon, i| {
+        const species = program.pokemons.keys()[i];
         try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
             .tms = pokemon.tms,
             .hms = pokemon.hms,
@@ -87,11 +89,12 @@ fn outputData(writer: anytype, data: Data) !void {
     }
 }
 
-fn useGame(data: *Data, parsed: format.Game) !void {
-    const allocator = data.allocator;
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokemons => |pokemons| {
-            const pokemon = (try data.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
+                .value_ptr;
             switch (pokemons.value) {
                 .tms => |tms| _ = try pokemon.tms.put(allocator, tms.index, tms.value),
                 .hms => |hms| _ = try pokemon.hms.put(allocator, hms.index, hms.value),
@@ -120,7 +123,7 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return;
         },
         .moves => |moves| {
-            const move = (try data.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
+            const move = (try program.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
             switch (moves.value) {
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -137,11 +140,11 @@ fn useGame(data: *Data, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .tms => |tms| {
-            _ = try data.tms.put(allocator, tms.index, tms.value);
+            _ = try program.tms.put(allocator, tms.index, tms.value);
             return error.ParserFailed;
         },
         .hms => |hms| {
-            _ = try data.hms.put(allocator, hms.index, hms.value);
+            _ = try program.hms.put(allocator, hms.index, hms.value);
             return error.ParserFailed;
         },
         else => return error.ParserFailed,
@@ -149,32 +152,31 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     unreachable;
 }
 
-fn randomize(data: Data, seed: u64, pref: Preference) !void {
-    var random = &rand.DefaultPrng.init(seed).random;
+fn randomize(program: *Program) !void {
+    var random = &rand.DefaultPrng.init(program.seed).random;
 
-    for (data.pokemons.values()) |pokemon| {
-        try randomizeMachinesLearned(data, pokemon, random, pref, data.tms, pokemon.tms);
-        try randomizeMachinesLearned(data, pokemon, random, pref, data.hms, pokemon.hms);
+    for (program.pokemons.values()) |pokemon| {
+        try randomizeMachinesLearned(program, pokemon, random, program.tms, pokemon.tms);
+        try randomizeMachinesLearned(program, pokemon, random, program.hms, pokemon.hms);
     }
 }
 
 fn randomizeMachinesLearned(
-    data: Data,
+    program: *Program,
     pokemon: Pokemon,
     random: *rand.Random,
-    pref: Preference,
     machines: Machines,
     learned: MachinesLearned,
 ) !void {
     for (learned.values()) |*is_learned, i| {
-        switch (pref) {
+        switch (program.preference) {
             .random => is_learned.* = random.boolean(),
             .stab => {
                 const low_chance = 0.1;
                 const chance: f64 = blk: {
                     const tm_index = learned.keys()[i];
                     const index = machines.get(tm_index) orelse break :blk low_chance;
-                    const move = data.moves.get(index) orelse break :blk low_chance;
+                    const move = program.moves.get(index) orelse break :blk low_chance;
                     const move_type = move.type orelse break :blk low_chance;
                     if (pokemon.types.get(move_type) == null)
                         break :blk low_chance;
@@ -189,19 +191,11 @@ fn randomizeMachinesLearned(
     }
 }
 
-const Machines = std.AutoArrayHashMapUnmanaged(u16, u16);
 const MachinesLearned = std.AutoArrayHashMapUnmanaged(u8, bool);
+const Machines = std.AutoArrayHashMapUnmanaged(u16, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
-
-const Data = struct {
-    allocator: *mem.Allocator,
-    pokemons: Pokemons = Pokemons{},
-    moves: Moves = Moves{},
-    tms: Machines = Machines{},
-    hms: Machines = Machines{},
-};
 
 const Pokemon = struct {
     types: Set = Set{},
@@ -251,7 +245,7 @@ test "tm35-rand-learned-moves" {
         \\.pokemons[0].hms[2]=false
         \\
     ;
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
         \\.pokemons[0].tms[1]=false
         \\.pokemons[0].tms[2]=true
@@ -260,7 +254,7 @@ test "tm35-rand-learned-moves" {
         \\.pokemons[0].hms[2]=false
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
         \\.pokemons[0].tms[1]=true
         \\.pokemons[0].tms[2]=true

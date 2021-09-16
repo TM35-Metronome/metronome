@@ -10,8 +10,6 @@ const gen4 = @import("gen4.zig");
 const gen5 = @import("gen5.zig");
 const rom = @import("rom.zig");
 
-const builtin = std.builtin;
-const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
@@ -27,42 +25,21 @@ const nds = rom.nds;
 
 const bit = util.bit;
 
-const li16 = rom.int.li16;
 const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 const lu64 = rom.int.lu64;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
-
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.                                                         ") catch unreachable,
-        clap.parseParam("-h, --help                    Display this help text and exit.                                                                      ") catch unreachable,
-        clap.parseParam("-n, --no-output               Don't output the file.                                                                                ") catch unreachable,
-        clap.parseParam("-o, --output <FILE>           Override destination path.                                                                            ") catch unreachable,
-        clap.parseParam("-p, --patch <none|live|full>  Output patch data to stdout when not 'none'. 'live' = patch after each line. 'full' = patch when done.") catch unreachable,
-        clap.parseParam("-r, --replace                 Replace output file if it already exists.                                                             ") catch unreachable,
-        clap.parseParam("-v, --version                 Output version information and exit.                                                                  ") catch unreachable,
-        clap.parseParam("<ROM>                         The rom to apply the changes to.                                                                  ") catch unreachable,
-    };
-};
-
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-apply ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Applies changes to Pokémon roms.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
-}
+allocator: *mem.Allocator,
+patch: PatchOption,
+no_output: bool,
+replace: bool,
+abort_on_first_warning: bool,
+out: []const u8,
+game: Game,
+old_bytes: std.ArrayListUnmanaged(u8),
 
 const PatchOption = enum {
     none,
@@ -70,30 +47,32 @@ const PatchOption = enum {
     full,
 };
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Applies changes to Pokémon roms.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.                                                         ") catch unreachable,
+    clap.parseParam("-h, --help                    Display this help text and exit.                                                                      ") catch unreachable,
+    clap.parseParam("-n, --no-output               Don't output the file.                                                                                ") catch unreachable,
+    clap.parseParam("-o, --output <FILE>           Override destination path.                                                                            ") catch unreachable,
+    clap.parseParam("-p, --patch <none|live|full>  Output patch data to stdout when not 'none'. 'live' = patch after each line. 'full' = patch when done.") catch unreachable,
+    clap.parseParam("-r, --replace                 Replace output file if it already exists.                                                             ") catch unreachable,
+    clap.parseParam("-v, --version                 Output version information and exit.                                                                  ") catch unreachable,
+    clap.parseParam("<ROM>                         The rom to apply the changes to.                                                                  ") catch unreachable,
+};
+
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
     const patch_arg = args.option("--patch") orelse "none";
     const patch = std.meta.stringToEnum(PatchOption, patch_arg) orelse {
-        log.err("--patch does not support '{s}'\n", .{patch_arg});
+        log.err("--patch does not support '{s}'", .{patch_arg});
         return error.InvalidArgument;
-    };
-
-    const no_output = args.flag("--no-output");
-    const abort_on_first_warning = args.flag("--abort-on-first-warning");
-    const replace = args.flag("--replace");
-    const out = args.option("--output") orelse blk: {
-        break :blk try fmt.allocPrint(allocator, "{s}.modified", .{path.basename(file_name)});
     };
 
     var nds_rom: nds.Rom = undefined;
@@ -107,8 +86,8 @@ pub fn main2(
 
         try file.seekTo(0);
         nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
-            log.err("Failed to load '{s}' as a gen3 game: {}\n", .{ file_name, gen3_error });
-            log.err("Failed to load '{s}' as a gen4/gen5 game: {}\n", .{ file_name, nds_error });
+            log.err("Failed to load '{s}' as a gen3 game: {}", .{ file_name, gen3_error });
+            log.err("Failed to load '{s}' as a gen4/gen5 game: {}", .{ file_name, nds_error });
             return error.InvalidRom;
         };
 
@@ -120,52 +99,74 @@ pub fn main2(
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
-        log.err("Successfully loaded '{s}' as a nds rom.\n", .{file_name});
-        log.err("Failed to load '{s}' as a gen4 game: {}\n", .{ file_name, gen4_error });
-        log.err("Failed to load '{s}' as a gen5 game: {}\n", .{ file_name, gen5_error });
+        log.err("Successfully loaded '{s}' as a nds rom.", .{file_name});
+        log.err("Failed to load '{s}' as a gen4 game: {}", .{ file_name, gen4_error });
+        log.err("Failed to load '{s}' as a gen5 game: {}", .{ file_name, gen5_error });
         return error.InvalidRom;
     };
-    defer game.deinit();
+    errdefer game.deinit();
 
     // When --patch is passed, we store a copy of the games old state, so that we
     // can generate binary patches between old and new versions.
-    var old_bytes = std.ArrayList(u8).init(allocator);
-    defer old_bytes.deinit();
+    var old_bytes = std.ArrayListUnmanaged(u8){};
+    errdefer old_bytes.deinit(allocator);
     if (patch != .none)
-        try old_bytes.appendSlice(game.data());
+        try old_bytes.appendSlice(allocator, game.data());
 
-    try format.io(allocator, stdio.in, std.io.null_writer, .{
-        .out = stdio.out,
+    return Program{
+        .allocator = allocator,
+        .no_output = args.flag("--no-output"),
+        .replace = args.flag("--replace"),
+        .abort_on_first_warning = args.flag("--abort-on-first-warning"),
+        .out = args.option("--output") orelse
+            try fmt.allocPrint(allocator, "{s}.modified", .{path.basename(file_name)}),
         .patch = patch,
-        .game = &game,
-        .old_bytes = &old_bytes,
+        .game = game,
+        .old_bytes = old_bytes,
+    };
+}
+
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    try format.io(program.allocator, stdio.in, std.io.null_writer, .{
+        .program = program,
+        .out = stdio.out,
     }, useGame);
 
-    if (patch == .full) {
+    if (program.patch == .full) {
         var it = common.PatchIterator{
-            .old = old_bytes.items,
-            .new = game.data(),
+            .old = program.old_bytes.items,
+            .new = program.game.data(),
         };
         while (it.next()) |p| {
             try stdio.out.print("[{}]={x}\n", .{
                 p.offset,
-                std.fmt.fmtSliceHexLower(p.replacement),
+                fmt.fmtSliceHexLower(p.replacement),
             });
         }
     }
 
-    if (no_output)
+    if (program.no_output)
         return;
 
-    const out_file = try fs.cwd().createFile(out, .{
-        .exclusive = !replace,
+    const out_file = try fs.cwd().createFile(program.out, .{
+        .exclusive = !program.replace,
         .truncate = false,
     });
-    try game.apply();
-    try game.write(out_file.writer());
+    try program.game.apply();
+    try program.game.write(out_file.writer());
 
-    const len = game.data().len;
+    const len = program.game.data().len;
     try out_file.setEndPos(len);
+}
+
+pub fn deinit(program: *Program) void {
+    program.game.deinit();
+    program.old_bytes.deinit(program.allocator);
 }
 
 const Game = union(enum) {
@@ -213,78 +214,39 @@ const Game = union(enum) {
 };
 
 fn useGame(ctx: anytype, game: format.Game) !void {
-    switch (ctx.game.*) {
+    const program = ctx.program;
+    switch (program.game) {
         .gen3 => |*gen3_game| try applyGen3(gen3_game, game),
         .gen4 => |*gen4_game| try applyGen4(gen4_game.*, game),
         .gen5 => |*gen5_game| try applyGen5(gen5_game.*, game),
     }
 
-    if (ctx.patch == .live) {
-        try ctx.game.apply();
+    if (program.patch == .live) {
+        try program.game.apply();
         var it = common.PatchIterator{
-            .old = ctx.old_bytes.items,
-            .new = ctx.game.data(),
+            .old = program.old_bytes.items,
+            .new = program.game.data(),
         };
         while (it.next()) |p| {
             try ctx.out.print("[{}]={x}\n", .{
                 p.offset,
-                std.fmt.fmtSliceHexLower(p.replacement),
+                fmt.fmtSliceHexLower(p.replacement),
             });
 
-            try ctx.old_bytes.resize(math.max(
-                ctx.old_bytes.items.len,
+            try program.old_bytes.resize(program.allocator, math.max(
+                program.old_bytes.items.len,
                 p.offset + p.replacement.len,
             ));
-            common.patch(ctx.old_bytes.items, &[_]common.Patch{p});
+            common.patch(program.old_bytes.items, &[_]common.Patch{p});
         }
         try ctx.out.context.flush();
     }
 }
 
-fn toInt(
-    comptime Int: type,
-    comptime endian: builtin.Endian,
-) fn ([]const u8) ?rom.int.Int(Int, endian) {
-    return struct {
-        const Res = rom.int.Int(Int, endian);
-        fn func(str: []const u8) ?Res {
-            const i = parse.toInt(Int, 10)(str) orelse return null;
-            return Res.init(i);
-        }
-    }.func;
-}
-
-pub const parseli16v = parse.value(li16, toInt(i16, .Little));
-pub const parselu16v = parse.value(lu16, toInt(u16, .Little));
-pub const parselu32v = parse.value(lu32, toInt(u32, .Little));
-pub const parselu64v = parse.value(lu64, toInt(u64, .Little));
-
-pub const converters = .{
-    parse.toBool,
-    parse.toEnum(common.EggGroup),
-    parse.toEnum(common.EvoMethod),
-    parse.toEnum(common.MoveCategory),
-    parse.toEnum(gen4.Pocket),
-    parse.toEnum(gen5.Evolution.Method),
-    parse.toEnum(gen5.Pocket),
-    parse.toInt(u1, 10),
-    parse.toInt(u2, 10),
-    parse.toInt(u4, 10),
-    parse.toInt(u7, 10),
-    parse.toInt(u8, 10),
-    parse.toInt(u9, 10),
-    parse.toInt(u16, 10),
-    parse.toInt(u32, 10),
-    parse.toInt(u64, 10),
-    toInt(u16, .Little),
-    toInt(u32, .Little),
-    toInt(u64, .Little),
-};
-
 fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
     switch (parsed) {
-        .version => |version| {
-            if (version != game.version)
+        .version => |v| {
+            if (v != game.version)
                 return error.VersionDontMatch;
         },
         .game_title => |title| {
@@ -318,7 +280,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
-                .name => |name| try gen3.encodings.encode(.en_us, name, &trainer.name),
+                .name => |str| try gen3.encodings.encode(.en_us, str, &trainer.name),
                 .items => |items| {
                     if (items.index >= trainer.items.len)
                         return error.OutOfBound;
@@ -349,8 +311,9 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 return error.Error;
 
             const move = &game.moves[moves.index];
+            const move_name = &game.move_names[moves.index];
             switch (moves.value) {
-                .name => |name| try gen3.encodings.encode(.en_us, name, &game.move_names[moves.index]),
+                .name => |str| try gen3.encodings.encode(.en_us, str, move_name),
                 .effect => |effect| move.effect = effect,
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -469,10 +432,10 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     const learnset = &game.machine_learnsets[pokemons.index];
                     learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, index), ms.value));
                 },
-                .name => |name| {
+                .name => |str| {
                     if (pokemons.index >= game.pokemon_names.len)
                         return error.Error;
-                    try gen3.encodings.encode(.en_us, name, &game.pokemon_names[pokemons.index]);
+                    try gen3.encodings.encode(.en_us, str, &game.pokemon_names[pokemons.index]);
                 },
                 .pokedex_entry => |entry| {
                     if (pokemons.index == 0 or pokemons.index - 1 >= game.species_to_national_dex.len)
@@ -485,16 +448,18 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             if (abilities.index >= game.ability_names.len)
                 return error.Error;
 
+            const ability_name = &game.ability_names[abilities.index];
             switch (abilities.value) {
-                .name => |name| try gen3.encodings.encode(.en_us, name, &game.ability_names[abilities.index]),
+                .name => |str| try gen3.encodings.encode(.en_us, str, ability_name),
             }
         },
         .types => |types| {
             if (types.index >= game.type_names.len)
                 return error.Error;
 
+            const type_name = &game.type_names[types.index];
             switch (types.value) {
-                .name => |name| try gen3.encodings.encode(.en_us, name, &game.type_names[types.index]),
+                .name => |str| try gen3.encodings.encode(.en_us, str, type_name),
             }
         },
         .tms, .hms => |ms| {
@@ -516,11 +481,11 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             switch (items.value) {
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
-                .name => |name| try gen3.encodings.encode(.en_us, name, &item.name),
-                .description => |description| {
+                .name => |str| try gen3.encodings.encode(.en_us, str, &item.name),
+                .description => |str| {
                     const desc_small = try item.description.toSliceZ(game.data);
                     const desc = try item.description.toSlice(game.data, desc_small.len + 1);
-                    try gen3.encodings.encode(.en_us, description, desc);
+                    try gen3.encodings.encode(.en_us, str, desc);
                 },
                 .pocket => |pocket| switch (game.version) {
                     .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{
@@ -709,8 +674,8 @@ fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !v
 fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
     const header = game.rom.header();
     switch (parsed) {
-        .version => |version| {
-            if (version != game.info.version)
+        .version => |v| {
+            if (v != game.info.version)
                 return error.VersionDontMatch;
         },
         .game_title => |game_title| {
@@ -773,10 +738,12 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             if (moves.index >= game.ptrs.moves.len)
                 return error.Error;
 
+            const descriptions = game.owned.strings.move_descriptions;
+            const names = game.owned.strings.move_names;
             const move = &game.ptrs.moves[moves.index];
             switch (moves.value) {
-                .description => |description| try applyGen4String(game.owned.strings.move_descriptions, moves.index, description),
-                .name => |name| try applyGen4String(game.owned.strings.move_names, moves.index, name),
+                .description => |str| try applyGen4String(descriptions, moves.index, str),
+                .name => |str| try applyGen4String(names, moves.index, str),
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
                 .accuracy => |accuracy| move.accuracy = accuracy,
@@ -789,9 +756,11 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             }
         },
         .items => |items| {
+            const descriptions = game.owned.strings.item_descriptions;
+            const names = game.owned.strings.item_names;
             switch (items.value) {
-                .description => |description| return applyGen4String(game.owned.strings.item_descriptions, items.index, description),
-                .name => |name| return applyGen4String(game.owned.strings.item_names, items.index, name),
+                .description => |str| return applyGen4String(descriptions, items.index, str),
+                .name => |str| return applyGen4String(names, items.index, str),
                 .price,
                 .battle_effect,
                 .pocket,
@@ -832,19 +801,22 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             }
         },
         .abilities => |abilities| {
+            const names = game.owned.strings.ability_names;
             switch (abilities.value) {
-                .name => |name| try applyGen4String(game.owned.strings.ability_names, abilities.index, name),
+                .name => |str| try applyGen4String(names, abilities.index, str),
             }
         },
         .types => |types| {
+            const names = game.owned.strings.type_names;
             switch (types.value) {
-                .name => |name| try applyGen4String(game.owned.strings.type_names, types.index, name),
+                .name => |str| try applyGen4String(names, types.index, str),
             }
         },
         .pokemons => |pokemons| {
             if (pokemons.index >= game.ptrs.pokemons.len)
                 return error.Error;
 
+            const names = game.owned.strings.pokemon_names;
             const pokemon = &game.ptrs.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
@@ -876,7 +848,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .color => |color| pokemon.color.color = color,
-                .name => |name| try applyGen4String(game.owned.strings.pokemon_names, pokemons.index, name),
+                .name => |str| try applyGen4String(names, pokemons.index, str),
                 .tms, .hms => |ms| {
                     const is_tms = pokemons.value == .tms;
                     const len = if (is_tms) game.ptrs.tms.len else game.ptrs.hms.len;
@@ -1175,8 +1147,8 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
 fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
     const header = game.rom.header();
     switch (parsed) {
-        .version => |version| {
-            if (version != game.info.version)
+        .version => |v| {
+            if (v != game.info.version)
                 return error.VersionDontMatch;
         },
         .game_title => |game_title| {
@@ -1201,10 +1173,11 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (trainers.index == 0 or trainers.index - 1 >= game.ptrs.trainers.len)
                 return error.Error;
 
+            const names = game.owned.strings.trainer_names;
             const trainer = &game.ptrs.trainers[trainers.index - 1];
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
-                .name => |name| try applyGen5String(game.owned.strings.trainer_names, trainers.index, name),
+                .name => |str| try applyGen5String(names, trainers.index, str),
                 .items => |items| {
                     if (items.index >= trainer.items.len)
                         return error.IndexOutOfBound;
@@ -1240,6 +1213,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (pokemons.index >= game.ptrs.pokemons.fat.len)
                 return error.Error;
 
+            const names = game.owned.strings.pokemon_names;
             const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
@@ -1271,7 +1245,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = lu16.init(base_exp_yield),
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .color => |color| pokemon.color.color = color,
-                .name => |name| try applyGen5String(game.owned.strings.pokemon_names, pokemons.index, name),
+                .name => |str| try applyGen5String(names, pokemons.index, str),
                 .tms, .hms => |ms| {
                     const is_tms = pokemons.value == .tms;
                     const len = if (is_tms) game.ptrs.tms1.len + game.ptrs.tms2.len else game.ptrs.hms.len;
@@ -1367,12 +1341,14 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (items.index >= game.ptrs.items.len)
                 return error.IndexOutOfBound;
 
+            const descriptions = game.owned.strings.item_descriptions;
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
                 .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
-                .description => |description| try applyGen5String(game.owned.strings.item_descriptions, items.index, description),
-                .name => |name| {
+                .description => |str| try applyGen5String(descriptions, items.index, str),
+                .name => |str| {
+                    const names_on_ground = game.owned.strings.item_names_on_the_ground;
                     const item_names = game.owned.strings.item_names;
                     if (items.index >= item_names.keys.len)
                         return error.Error;
@@ -1382,13 +1358,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     // table. The way we do this is to search for the item name in the
                     // ground string, and if it exists, we replace it and apply this new
                     // string
-                    applyGen5StringReplace(
-                        game.owned.strings.item_names_on_the_ground,
-                        items.index,
-                        old_name,
-                        name,
-                    ) catch {};
-                    try applyGen5String(item_names, items.index, name);
+                    applyGen5StringReplace(names_on_ground, items.index, old_name, str) catch {};
+                    try applyGen5String(item_names, items.index, str);
                 },
                 .pocket => |pocket| item.pocket.pocket = switch (pocket) {
                     .items => .items,
@@ -1402,12 +1373,9 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             }
         },
         .pokedex => |pokedex| {
+            const names = game.owned.strings.pokedex_category_names;
             switch (pokedex.value) {
-                .category => |category| try applyGen5String(
-                    game.owned.strings.pokedex_category_names,
-                    pokedex.index,
-                    category,
-                ),
+                .category => |category| try applyGen5String(names, pokedex.index, category),
                 .height,
                 .weight,
                 => return error.ParserFailed,
@@ -1417,10 +1385,12 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (moves.index >= game.ptrs.moves.len)
                 return error.IndexOutOfBound;
 
+            const names = game.owned.strings.move_names;
+            const descriptions = game.owned.strings.move_descriptions;
             const move = &game.ptrs.moves[moves.index];
             switch (moves.value) {
-                .description => |description| try applyGen5String(game.owned.strings.move_descriptions, moves.index, description),
-                .name => |name| try applyGen5String(game.owned.strings.move_names, moves.index, name),
+                .description => |str| try applyGen5String(descriptions, moves.index, str),
+                .name => |str| try applyGen5String(names, moves.index, str),
                 .effect => |effect| move.effect = lu16.init(effect),
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -1432,13 +1402,15 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             }
         },
         .abilities => |abilities| {
+            const names = game.owned.strings.ability_names;
             switch (abilities.value) {
-                .name => |name| try applyGen5String(game.owned.strings.ability_names, abilities.index, name),
+                .name => |str| try applyGen5String(names, abilities.index, str),
             }
         },
         .types => |types| {
+            const names = game.owned.strings.type_names;
             switch (types.value) {
-                .name => |name| try applyGen5String(game.owned.strings.type_names, types.index, name),
+                .name => |str| try applyGen5String(names, types.index, str),
             }
         },
         .maps => |maps| {
@@ -1559,11 +1531,16 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
     }
 }
 
-fn applyGen5Area(area: format.WildArea, comptime name: []const u8, index: usize, wilds: *gen5.WildPokemons) !void {
+fn applyGen5Area(
+    area: format.WildArea,
+    comptime field: []const u8,
+    index: usize,
+    wilds: *gen5.WildPokemons,
+) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| wilds.rates[index] = try math.cast(u8, encounter_rate),
         .pokemons => |pokemons| {
-            const wild_area = &@field(wilds, name);
+            const wild_area = &@field(wilds, field);
             if (pokemons.index >= wild_area.len)
                 return error.Error;
 

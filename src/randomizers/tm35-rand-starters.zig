@@ -16,114 +16,128 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+options: struct {
+    seed: u64,
+    evolutions: usize,
+    pick_lowest: bool,
+},
+pokedex: Set = Set{},
+starters: Starters = Starters{},
+pokemons: Pokemons = Pokemons{},
+evolves_from: Evolutions = Evolutions{},
+evolves_to: Evolutions = Evolutions{},
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-e, --evolutions <INT>       Only pick starters with NUM or more evolutions. (default: 0)                              ") catch unreachable,
-        clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
-        clap.parseParam("-s, --seed <INT>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes starter Pokémons.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-e, --evolutions <INT>       Only pick starters with NUM or more evolutions. (default: 0)                              ") catch unreachable,
+    clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
+    clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
+    clap.parseParam("-s, --seed <INT>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+    clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-rand-starters ");
-    try clap.usage(writer, &params);
-    try writer.writeAll("\nRandomizes starter Pokémons.\n" ++
-        "\n" ++
-        "Options:\n");
-    try clap.help(writer, &params);
-}
-
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
-    comptime Reader: type,
-    comptime Writer: type,
-    stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
-) anyerror!void {
-    const seed = try util.getSeed(args);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const evolutions = if (args.option("--evolutions")) |evos|
         fmt.parseUnsigned(usize, evos, 10) catch |err| {
-            log.err("'{s}' could not be parsed as a number to --evolutions: {}\n", .{ evos, err });
+            log.err("'{s}' could not be parsed as a number to --evolutions: {}", .{ evos, err });
             return error.InvalidArgument;
         }
     else
         0;
 
-    const pick_lowest = args.flag("--pick-lowest-evolution");
-
-    var data = Data{ .allocator = allocator };
-    try format.io(allocator, stdio.in, stdio.out, &data, useGame);
-
-    const random = &rand.DefaultPrng.init(seed).random;
-    const pick_from = try getStartersToPickFrom(random, data, pick_lowest, evolutions);
-    randomize(random, data, pick_from);
-    try outputData(stdio.out, data);
+    return Program{
+        .allocator = allocator,
+        .options = .{
+            .seed = try util.getSeed(args),
+            .pick_lowest = args.flag("--pick-lowest-evolution"),
+            .evolutions = evolutions,
+        },
+    };
 }
 
-fn outputData(writer: anytype, data: Data) !void {
-    try ston.serialize(writer, .{ .starters = data.starters });
+pub fn run(
+    program: *Program,
+    comptime Reader: type,
+    comptime Writer: type,
+    stdio: util.CustomStdIoStreams(Reader, Writer),
+) anyerror!void {
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    try program.randomize();
+    try program.output(stdio.out);
 }
 
-fn randomize(random: *rand.Random, data: Data, pick_from: Set) void {
-    for (data.starters.values()) |*starter|
+pub fn deinit(program: *Program) void {}
+
+fn output(program: *Program, writer: anytype) !void {
+    try ston.serialize(writer, .{ .starters = program.starters });
+}
+
+fn randomize(program: *Program) !void {
+    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const pick_from = try program.getStartersToPickFrom(random);
+    for (program.starters.values()) |*starter|
         starter.* = util.random.item(random, pick_from.keys()).?.*;
 }
 
-fn getStartersToPickFrom(
-    random: *rand.Random,
-    data: Data,
-    pick_lowest: bool,
-    evolutions: usize,
-) !Set {
-    const dex_mons = try data.pokedexPokemons();
+fn getStartersToPickFrom(program: *Program, random: *rand.Random) !Set {
+    const allocator = program.allocator;
+    const dex_mons = try pokedexPokemons(allocator, program.pokemons, program.pokedex);
     var res = Set{};
     for (dex_mons.keys()) |species| {
         // Only pick lowest evo species if pick_lowest is true
-        if (pick_lowest and data.evolves_from.get(species) != null)
+        if (program.options.pick_lowest and program.evolves_from.get(species) != null)
             continue;
-        if (countEvos(data, species) < evolutions)
+        if (countEvos(program.evolves_to, species) < program.options.evolutions)
             continue;
 
-        _ = try res.put(data.allocator, species, {});
+        _ = try res.put(allocator, species, {});
     }
     if (res.count() == 0)
-        _ = try res.put(data.allocator, 0, {});
+        _ = try res.put(allocator, 0, {});
 
     return res;
 }
 
-fn useGame(data: *Data, parsed: format.Game) !void {
-    const allocator = data.allocator;
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokedex => |pokedex| {
-            _ = try data.pokedex.put(allocator, pokedex.index, {});
+            _ = try program.pokedex.put(allocator, pokedex.index, {});
             return error.ParserFailed;
         },
         .starters => |starters| {
-            _ = try data.starters.put(allocator, starters.index, starters.value);
+            _ = try program.starters.put(allocator, starters.index, starters.value);
             return;
         },
         .pokemons => |pokemons| {
             const evolves_from = pokemons.index;
-            const pokemon = (try data.pokemons.getOrPutValue(allocator, evolves_from, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, evolves_from, .{}))
+                .value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
                 .evos => |evos| switch (evos.value) {
                     .target => |evolves_to| {
-                        const from_set = (try data.evolves_from.getOrPutValue(allocator, evolves_to, .{})).value_ptr;
-                        const to_set = (try data.evolves_to.getOrPutValue(allocator, evolves_from, .{})).value_ptr;
-                        _ = try data.pokemons.getOrPutValue(allocator, evolves_to, .{});
+                        const from_set = (try program.evolves_from.getOrPutValue(
+                            allocator,
+                            evolves_to,
+                            .{},
+                        )).value_ptr;
+                        const to_set = (try program.evolves_to.getOrPutValue(
+                            allocator,
+                            evolves_from,
+                            .{},
+                        )).value_ptr;
+                        _ = try program.pokemons.getOrPutValue(allocator, evolves_to, .{});
                         _ = try from_set.put(allocator, evolves_from, {});
                         _ = try to_set.put(allocator, evolves_to, {});
                     },
@@ -175,13 +189,13 @@ fn useGame(data: *Data, parsed: format.Game) !void {
     unreachable;
 }
 
-fn countEvos(data: Data, pokemon: u16) usize {
+fn countEvos(evolves_to: Evolutions, pokemon: u16) usize {
     var res: usize = 0;
-    const evolves_to = data.evolves_to.get(pokemon) orelse return 0;
+    const evolutions = evolves_to.get(pokemon) orelse return 0;
 
     // TODO: We don't handle cycles here.
-    for (evolves_to.keys()) |evo| {
-        const evos = countEvos(data, evo) + 1;
+    for (evolutions.keys()) |evo| {
+        const evos = countEvos(evolves_to, evo) + 1;
         res = math.max(res, evos);
     }
 
@@ -193,31 +207,22 @@ const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const Starters = std.AutoArrayHashMapUnmanaged(u16, u16);
 
-const Data = struct {
-    allocator: *mem.Allocator,
-    pokedex: Set = Set{},
-    starters: Starters = Starters{},
-    pokemons: Pokemons = Pokemons{},
-    evolves_from: Evolutions = Evolutions{},
-    evolves_to: Evolutions = Evolutions{},
+fn pokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+    var res = Set{};
+    errdefer res.deinit(allocator);
 
-    fn pokedexPokemons(d: Data) !Set {
-        var res = Set{};
-        errdefer res.deinit(d.allocator);
+    for (pokemons.values()) |pokemon, i| {
+        const species = pokemons.keys()[i];
+        if (pokemon.catch_rate == 0)
+            continue;
+        if (pokedex.get(pokemon.pokedex_entry) == null)
+            continue;
 
-        for (d.pokemons.values()) |pokemon, i| {
-            const species = d.pokemons.keys()[i];
-            if (pokemon.catch_rate == 0)
-                continue;
-            if (d.pokedex.get(pokemon.pokedex_entry) == null)
-                continue;
-
-            _ = try res.put(d.allocator, species, {});
-        }
-
-        return res;
+        _ = try res.put(allocator, species, {});
     }
-};
+
+    return res;
+}
 
 const Pokemon = struct {
     pokedex_entry: u16 = math.maxInt(u16),
@@ -250,25 +255,25 @@ test "tm35-rand-starters" {
         \\
     ;
 
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
         \\.starters[0]=1
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=3
         \\.starters[2]=0
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++
         \\.starters[0]=0
         \\.starters[1]=0
         \\.starters[2]=0

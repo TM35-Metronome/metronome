@@ -17,61 +17,58 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const Param = clap.Param(clap.Help);
+const Program = @This();
 
-pub const main = util.generateMain("0.0.0", main2, &params, usage);
+allocator: *mem.Allocator,
+options: struct {
+    seed: u64,
+    same_total_stats: bool,
+    follow_evos: bool,
+},
+pokemons: Pokemons = Pokemons{},
 
-const params = blk: {
-    @setEvalBranchQuota(100000);
-    break :blk [_]Param{
-        clap.parseParam("-f, --follow-evos       Evolution will use the none evolved form as a base for its own stats.                     ") catch unreachable,
-        clap.parseParam("-h, --help              Display this help text and exit.                                                          ") catch unreachable,
-        clap.parseParam("-s, --seed <INT>        The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-        clap.parseParam("-t, --same-total-stats  Pokémons will have the same total stats after randomization.                              ") catch unreachable,
-        clap.parseParam("-v, --version           Output version information and exit.                                                      ") catch unreachable,
-    };
+pub const main = util.generateMain(Program);
+pub const version = "0.0.0";
+pub const description =
+    \\Randomizes Pokémon stats.
+    \\
+;
+
+pub const params = &[_]clap.Param(clap.Help){
+    clap.parseParam("-f, --follow-evos       Evolution will use the none evolved form as a base for its own stats.                     ") catch unreachable,
+    clap.parseParam("-h, --help              Display this help text and exit.                                                          ") catch unreachable,
+    clap.parseParam("-s, --seed <INT>        The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
+    clap.parseParam("-t, --same-total-stats  Pokémons will have the same total stats after randomization.                              ") catch unreachable,
+    clap.parseParam("-v, --version           Output version information and exit.                                                      ") catch unreachable,
 };
 
-fn usage(writer: anytype) !void {
-    try writer.writeAll("Usage: tm35-rand-stats ");
-    try clap.usage(writer, &params);
-    try writer.writeAll(
-        \\
-        \\Randomizes Pokémon stats.
-        \\
-        \\Options:
-        \\
-    );
-    try clap.help(writer, &params);
+pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+    return Program{
+        .allocator = allocator,
+        .options = .{
+            .seed = try util.getSeed(args),
+            .same_total_stats = args.flag("--same-total-stats"),
+            .follow_evos = args.flag("--follow-evos"),
+        },
+    };
 }
 
-/// TODO: This function actually expects an allocator that owns all the memory allocated, such
-///       as ArenaAllocator or FixedBufferAllocator. Can we either make this requirement explicit
-///       or move the Arena into this function?
-pub fn main2(
-    allocator: *mem.Allocator,
+pub fn run(
+    program: *Program,
     comptime Reader: type,
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
-    args: anytype,
 ) anyerror!void {
-    const seed = try util.getSeed(args);
-    const same_total_stats = args.flag("--same-total-stats");
-    const follow_evos = args.flag("--follow-evos");
-
-    var pokemons = Pokemons{};
-    try format.io(allocator, stdio.in, stdio.out, .{
-        .allocator = allocator,
-        .pokemons = &pokemons,
-    }, useGame);
-
-    randomize(pokemons, seed, same_total_stats, follow_evos);
-    try outputData(stdio.out, pokemons);
+    try format.io(program.allocator, stdio.in, stdio.out, program, useGame);
+    program.randomize();
+    try program.output(stdio.out);
 }
 
-fn outputData(writer: anytype, pokemons: Pokemons) !void {
-    for (pokemons.values()) |pokemon, i| {
-        const species = pokemons.keys()[i];
+pub fn deinit(program: *Program) void {}
+
+fn output(program: *Program, writer: anytype) !void {
+    for (program.pokemons.values()) |pokemon, i| {
+        const species = program.pokemons.keys()[i];
         inline for (@typeInfo(format.Stats(u8)).Union.fields) |field, j| {
             if (pokemon.output[j]) {
                 try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
@@ -82,12 +79,12 @@ fn outputData(writer: anytype, pokemons: Pokemons) !void {
     }
 }
 
-fn useGame(ctx: anytype, parsed: format.Game) !void {
-    const allocator = ctx.allocator;
-    const pokemons = ctx.pokemons;
+fn useGame(program: *Program, parsed: format.Game) !void {
+    const allocator = program.allocator;
     switch (parsed) {
         .pokemons => |mons| {
-            const pokemon = (try pokemons.getOrPutValue(allocator, mons.index, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, mons.index, .{}))
+                .value_ptr;
             switch (mons.value) {
                 .stats => |stats| {
                     switch (stats) {
@@ -103,7 +100,11 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
                 },
                 .evos => |evos| switch (evos.value) {
                     .target => |target| {
-                        const evo_from = (try pokemons.getOrPutValue(allocator, target, .{})).value_ptr;
+                        const evo_from = (try program.pokemons.getOrPutValue(
+                            allocator,
+                            target,
+                            .{},
+                        )).value_ptr;
                         _ = try evo_from.evolves_from.put(allocator, mons.index, {});
                         return error.ParserFailed;
                     },
@@ -158,31 +159,31 @@ fn useGame(ctx: anytype, parsed: format.Game) !void {
     unreachable;
 }
 
-fn randomize(pokemons: Pokemons, seed: u64, same_total_stats: bool, follow_evos: bool) void {
-    var random = rand.DefaultPrng.init(seed);
-    for (pokemons.values()) |*pokemon| {
+fn randomize(program: *Program) void {
+    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    for (program.pokemons.values()) |*pokemon| {
         const old_total = it.fold(&pokemon.stats, @as(usize, 0), foldu8);
-        const new_random_total = random.random.intRangeAtMost(u64, 0, pokemon.stats.len * math.maxInt(u8));
-        const new_total = if (same_total_stats) old_total else new_random_total;
+        const max_total = pokemon.stats.len * math.maxInt(u8);
+        const new_random_total = random.intRangeAtMost(u64, 0, max_total);
+        const new_total = if (program.options.same_total_stats) old_total else new_random_total;
 
         var weights: [pokemon.stats.len]f32 = undefined;
-        randomWithinSum(&random.random, u8, &pokemon.stats, &weights, new_total);
+        randomWithinSum(random, u8, &pokemon.stats, &weights, new_total);
     }
 
-    if (!follow_evos)
+    if (!program.options.follow_evos)
         return;
 
-    for (pokemons.values()) |*pokemon, i| {
-        const species = pokemons.keys()[i];
-        randomizeFromChildren(&random.random, pokemons, pokemon, same_total_stats, species);
+    for (program.pokemons.values()) |*pokemon, i| {
+        const species = program.pokemons.keys()[i];
+        program.randomizeFromChildren(random, pokemon, species);
     }
 }
 
 fn randomizeFromChildren(
+    program: *Program,
     random: *rand.Random,
-    pokemons: Pokemons,
     pokemon: *Pokemon,
-    same_total_stats: bool,
     curr: usize,
 ) void {
     if (pokemon.evolves_from.count() == 0)
@@ -196,12 +197,10 @@ fn randomizeFromChildren(
         if (key == curr)
             continue;
 
-        // TODO: Can this ever happen???
-        //                                      VVVVVVVV
-        const p = pokemons.getEntry(key) orelse continue;
+        const p = program.pokemons.getEntry(key) orelse unreachable;
 
         // We should randomize prevolution by the same rules.
-        randomizeFromChildren(random, pokemons, p.value_ptr, same_total_stats, curr);
+        program.randomizeFromChildren(random, p.value_ptr, curr);
         for (p.value_ptr.stats) |stat, j|
             stats[j] += stat;
     }
@@ -209,13 +208,15 @@ fn randomizeFromChildren(
     // Average calculated here
     var average = [_]u8{0} ** Pokemon.stats;
     for (average) |*stat, i| {
-        stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch math.maxInt(u8);
+        stat.* = math.cast(u8, stats[i] / math.max(pokemon.evolves_from.count(), 1)) catch
+            math.maxInt(u8);
     }
 
     const old_total = it.fold(&pokemon.stats, @as(usize, 0), foldu8);
     const average_total = it.fold(&average, @as(usize, 0), foldu8);
-    const new_random_total = random.intRangeAtMost(u64, average_total, stats.len * math.maxInt(u8));
-    const new_total = if (same_total_stats) old_total else new_random_total;
+    const max_total = pokemon.stats.len * math.maxInt(u8);
+    const new_random_total = random.intRangeAtMost(u64, average_total, max_total);
+    const new_total = if (program.options.same_total_stats) old_total else new_random_total;
 
     pokemon.stats = average;
     var weights: [pokemon.stats.len]f32 = undefined;
@@ -226,12 +227,24 @@ fn randomizeFromChildren(
         debug.assert(average[i] <= pokemon.stats[i]);
 }
 
-fn randomWithinSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: []f32, s: u64) void {
+fn randomWithinSum(
+    random: *rand.Random,
+    comptime T: type,
+    buf: []T,
+    weight_buf: []f32,
+    s: u64,
+) void {
     mem.set(T, buf, 0);
     randomUntilSum(random, T, buf, weight_buf, s);
 }
 
-fn randomUntilSum(random: *rand.Random, comptime T: type, buf: []T, weight_buf: []f32, s: u64) void {
+fn randomUntilSum(
+    random: *rand.Random,
+    comptime T: type,
+    buf: []T,
+    weight_buf: []f32,
+    s: u64,
+) void {
     // TODO: In this program, we will never pass buf.len > 6, so we can
     //       statically have this buffer. If this function is to be more
     //       general, we problably have to accept an allpocator.
@@ -314,7 +327,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=40
         \\
     ;
-    try util.testing.testProgram(main2, &params, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -341,7 +354,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=89
         \\.pokemons[0].stats.attack=18
         \\.pokemons[0].stats.defense=76
@@ -368,7 +381,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=67
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9
@@ -395,7 +408,7 @@ test "tm35-rand-stats" {
         \\.pokemons[3].stats.sp_defense=47
         \\
     );
-    try util.testing.testProgram(main2, &params, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
         \\.pokemons[0].stats.hp=11
         \\.pokemons[0].stats.attack=2
         \\.pokemons[0].stats.defense=9
