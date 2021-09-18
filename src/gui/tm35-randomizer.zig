@@ -26,15 +26,12 @@ const bug_message = "Hi user. You have just hit a bug/limitation in the program.
     "If you care about this program, please report this to the issue tracker here: " ++
     "https://github.com/TM35-Metronome/metronome/issues/new";
 
-const WINDOW_HEIGHT = 600;
-const WINDOW_WIDTH = 800;
 const fps = 60;
 const frame_time = time.ns_per_s / fps;
 
 usingnamespace switch (std.Target.current.os.tag) {
     .windows => struct {
-        pub extern "user32" fn ShowWindow(hwnd: std.os.windows.HANDLE, nCmdShow: c_int) callconv(.Stdcall) std.os.windows.BOOL;
-        pub extern "kernel32" fn GetConsoleWindow() callconv(.Stdcall) std.os.windows.HANDLE;
+        pub extern "kernel32" fn GetConsoleWindow() callconv(std.os.windows.WINAPI) std.os.windows.HWND;
     },
     else => struct {},
 };
@@ -50,7 +47,7 @@ pub fn main() anyerror!void {
     //       I use this solution:
     //       https://stackoverflow.com/a/9618984
     switch (std.Target.current.os.tag) {
-        .windows => _ = ShowWindow(GetConsoleWindow(), 0),
+        .windows => _ = std.os.windows.user32.showWindow(GetConsoleWindow(), 0),
         else => {},
     }
 
@@ -59,7 +56,7 @@ pub fn main() anyerror!void {
     // Set up essetial state for the program to run. If any of these
     // fail, the only thing we can do is exit.
     var timer = try time.Timer.start();
-    const ctx: *nk.Context = c.nkInit(WINDOW_WIDTH, WINDOW_HEIGHT) orelse return error.CouldNotInitNuklear;
+    const ctx: *nk.Context = c.nkInit(800, 600) orelse return error.CouldNotInitNuklear;
     defer c.nkDeinit(ctx);
 
     {
