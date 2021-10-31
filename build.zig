@@ -120,7 +120,8 @@ pub fn build(b: *Builder) void {
                 exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", lib_cflags);
                 exe.linkSystemLibrary("user32");
                 exe.linkSystemLibrary("gdi32");
-                exe.linkSystemLibrary("Msimg32");
+                exe.linkSystemLibrary("uuid");
+                exe.linkSystemLibrary("msimg32");
             },
             .linux => {
                 exe.addIncludeDir("lib/nuklear/demo/x11_xft");

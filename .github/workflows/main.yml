@@ -20,7 +20,7 @@ jobs:
           version: 0.8.0
       - run: zig build test
       - run: zig build test -Drelease
-      - run: zig build -Dbuild-ui=false
+      - run: zig build
   lint:
     runs-on: ubuntu-latest
     steps:
