@@ -108,18 +108,8 @@ pub fn main() anyerror!void {
     }
 
     // From this point on, we can report errors to the user. This is done
-    // with this 'Popups' struct. If an error occurs, it should be appended
-    // with 'popups.err("error str {}", arg1, arg2...)'.
-    // It is also possible to report a fatal error with
-    // 'popups.fatal("error str {}", arg1, arg2...)'. A fatal error means, that
-    // the only way to recover is to exit. This error is reported to the user,
-    // after which the only option they have is to quit the program.
-    // Finally, we can also just inform the user of something with
-    // 'popups.info("info str {}", arg1, arg2...)'.
-    var popups = Popups{
-        .errors = std.ArrayList([]const u8).init(allocator),
-        .infos = std.ArrayList([]const u8).init(allocator),
-    };
+    // with this 'Popups' struct.
+    var popups = Popups{ .allocator = allocator };
     defer popups.deinit();
 
     const exes = Exes.find(allocator) catch |err| blk: {
@@ -369,7 +359,7 @@ pub fn drawOptions(
             continue;
         }
         if (mem.eql(u8, value, "FILE")) {
-            if (!nk.button(ctx, arg.toSliceConst()))
+            if (!nk.button(ctx, arg.span()))
                 continue;
 
             var m_out_path: ?[*:0]u8 = null;
@@ -392,7 +382,7 @@ pub fn drawOptions(
             }
         }
         if (mem.indexOfScalar(u8, value, '|')) |_| {
-            const selected_name = arg.toSliceConst();
+            const selected_name = arg.span();
             const selected_ui_name = toUserfriendly(&tmp_buf, selected_name[0..math.min(selected_name.len, tmp_buf.len)]);
             if (c.nkComboBeginText(ctx, selected_ui_name.ptr, @intCast(c_int, selected_ui_name.len), &nk.vec2(prompt_width, 500)) != 0) {
                 c.nk_layout_row_dynamic(ctx, 0, 1);
@@ -493,7 +483,7 @@ pub fn drawActions(
         },
         else => unreachable,
     };
-    const selected_path_slice = selected_path.toSliceConst();
+    const selected_path_slice = selected_path.span();
 
     switch (file_browser_kind) {
         .load_rom => {
@@ -503,7 +493,7 @@ pub fn drawActions(
             const result = std.ChildProcess.exec(.{
                 .allocator = exes.allocator,
                 .argv = &[_][]const u8{
-                    exes.identify.toSliceConst(),
+                    exes.identify.span(),
                     selected_path_slice,
                 },
             }) catch |err| {
@@ -528,8 +518,8 @@ pub fn drawActions(
         .randomize => {
             // in should never be null here as the "Randomize" button is inactive when
             // it is.
-            const in_path = rom.?.path.toSliceConst();
-            const out_path = selected_path.toSliceConst();
+            const in_path = rom.?.path.span();
+            const out_path = selected_path.span();
 
             const stderr = std.io.getStdErr();
             outputScript(stderr.writer(), exes, settings, in_path, out_path) catch {};
@@ -543,24 +533,24 @@ pub fn drawActions(
             popups.info("Rom has been randomized!", .{});
         },
         .load_settings => {
-            const file = fs.cwd().openFile(selected_path.toSliceConst(), .{}) catch |err| {
-                popups.err("Could not open '{s}': {}", .{ selected_path.toSliceConst(), err });
+            const file = fs.cwd().openFile(selected_path.span(), .{}) catch |err| {
+                popups.err("Could not open '{s}': {}", .{ selected_path.span(), err });
                 return rom;
             };
             defer file.close();
             settings.load(exes, file.reader()) catch |err| {
-                popups.err("Failed to load from '{s}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Failed to load from '{s}': {}", .{ selected_path.span(), err });
                 return rom;
             };
         },
         .save_settings => {
-            const file = fs.cwd().createFile(selected_path.toSliceConst(), .{}) catch |err| {
-                popups.err("Could not open '{s}': {}", .{ selected_path.toSliceConst(), err });
+            const file = fs.cwd().createFile(selected_path.span(), .{}) catch |err| {
+                popups.err("Could not open '{s}': {}", .{ selected_path.span(), err });
                 return rom;
             };
             defer file.close();
             settings.save(exes, file.writer()) catch |err| {
-                popups.err("Failed to write to '{s}': {}", .{ selected_path.toSliceConst(), err });
+                popups.err("Failed to write to '{s}': {}", .{ selected_path.span(), err });
                 return rom;
             };
         },
@@ -629,11 +619,11 @@ pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
             if (fatal_err) |_|
                 return error.FatalError;
             if (is_err) {
-                popups.errors.allocator.free(popups.errors.pop());
+                popups.allocator.free(popups.errors.pop());
                 c.nk_popup_close(ctx);
             }
             if (is_info) {
-                popups.infos.allocator.free(popups.infos.pop());
+                popups.allocator.free(popups.infos.pop());
                 c.nk_popup_close(ctx);
             }
         },
@@ -641,10 +631,18 @@ pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
     }
 }
 
+/// The structure that keeps track of errors that need to be reported as popups to the user.
+/// If an error occurs, it should be appended with 'popups.err("error str {}", arg1, arg2...)'.
+/// It is also possible to report a fatal error with
+/// 'popups.fatal("error str {}", arg1, arg2...)'. A fatal error means, that the only way to
+/// recover is to exit. This error is reported to the user, after which the only option they
+/// have is to quit the program. Finally, we can also just inform the user of something with
+/// 'popups.info("info str {}", arg1, arg2...)'.
 const Popups = struct {
+    allocator: *mem.Allocator,
     fatal_error: [127:0]u8 = ("\x00" ** 127).*,
-    errors: std.ArrayList([]const u8),
-    infos: std.ArrayList([]const u8),
+    errors: std.ArrayListUnmanaged([]const u8) = std.ArrayListUnmanaged([]const u8){},
+    infos: std.ArrayListUnmanaged([]const u8) = std.ArrayListUnmanaged([]const u8){},
 
     fn err(popups: *Popups, comptime fmt: []const u8, args: anytype) void {
         popups.append(&popups.errors, fmt, args);
@@ -662,12 +660,17 @@ const Popups = struct {
         return popups.infos.items[popups.infos.items.len - 1];
     }
 
-    fn append(popups: *Popups, list: *std.ArrayList([]const u8), comptime fmt: []const u8, args: anytype) void {
-        const msg = std.fmt.allocPrint(list.allocator, fmt, args) catch {
+    fn append(
+        popups: *Popups,
+        list: *std.ArrayListUnmanaged([]const u8),
+        comptime fmt: []const u8,
+        args: anytype,
+    ) void {
+        const msg = std.fmt.allocPrint(popups.allocator, fmt, args) catch {
             return popups.fatal("Allocation failed", .{});
         };
-        list.append(msg) catch {
-            list.allocator.free(msg);
+        list.append(popups.allocator, msg) catch {
+            popups.allocator.free(msg);
             return popups.fatal("Allocation failed", .{});
         };
     }
@@ -683,13 +686,13 @@ const Popups = struct {
         return res;
     }
 
-    fn deinit(popups: Popups) void {
+    fn deinit(popups: *Popups) void {
         for (popups.errors.items) |e|
-            popups.errors.allocator.free(e);
+            popups.allocator.free(e);
         for (popups.infos.items) |i|
-            popups.infos.allocator.free(i);
-        popups.errors.deinit();
-        popups.infos.deinit();
+            popups.allocator.free(i);
+        popups.errors.deinit(popups.allocator);
+        popups.infos.deinit(popups.allocator);
     }
 };
 
@@ -729,21 +732,21 @@ fn randomize(exes: Exes, settings: Settings, in: []const u8, out: []const u8) !v
         .windows => blk: {
             const cache_dir = try util.dir.folder(.cache);
             const program_cache_dir = util.path.join(&[_][]const u8{
-                cache_dir.toSliceConst(),
+                cache_dir.span(),
                 program_name,
             });
             const script_file_name = util.path.join(&[_][]const u8{
-                program_cache_dir.toSliceConst(),
+                program_cache_dir.span(),
                 "tmp_scipt.bat",
             });
             {
-                try fs.cwd().makePath(program_cache_dir.toSliceConst());
-                const file = try fs.cwd().createFile(script_file_name.toSliceConst(), .{});
+                try fs.cwd().makePath(program_cache_dir.span());
+                const file = try fs.cwd().createFile(script_file_name.span(), .{});
                 defer file.close();
                 try outputScript(file.writer(), exes, settings, in, out);
             }
 
-            const cmd = try std.ChildProcess.init(&[_][]const u8{ "cmd", "/c", "call", script_file_name.toSliceConst() }, exes.allocator);
+            const cmd = try std.ChildProcess.init(&[_][]const u8{ "cmd", "/c", "call", script_file_name.span() }, exes.allocator);
             defer cmd.deinit();
 
             break :blk try cmd.spawnAndWait();
@@ -779,7 +782,7 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
 
     var escaping_writer = escape.generate(&escapes).escapingWriter(writer);
     try writer.writeAll(quotes);
-    try escaping_writer.writer().writeAll(exes.load.toSliceConst());
+    try escaping_writer.writer().writeAll(exes.load.span());
     try escaping_writer.finish();
     try writer.writeAll(quotes ++ " " ++ quotes);
     try escaping_writer.writer().writeAll(in);
@@ -811,7 +814,7 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
             try writer.writeAll(quotes);
             if (param.takes_value != .none) {
                 try writer.writeAll(" " ++ quotes);
-                try escaping_writer.writer().writeAll(arg.toSliceConst());
+                try escaping_writer.writer().writeAll(arg.span());
                 try escaping_writer.finish();
                 try writer.writeAll(quotes);
             }
@@ -821,7 +824,7 @@ fn outputScript(writer: anytype, exes: Exes, settings: Settings, in: []const u8,
     }
 
     try writer.writeAll(quotes);
-    try escaping_writer.writer().writeAll(exes.apply.toSliceConst());
+    try escaping_writer.writer().writeAll(exes.apply.span());
     try escaping_writer.finish();
     try writer.writeAll(quotes ++ " --replace --output " ++ quotes);
     try escaping_writer.writer().writeAll(out);
@@ -968,7 +971,7 @@ const Settings = struct {
                 try csv_escape.escapeWrite(writer, param_name);
                 if (param.takes_value != .none) {
                     try writer.writeAll(",");
-                    try csv_escape.escapeWrite(writer, arg.toSliceConst());
+                    try csv_escape.escapeWrite(writer, arg.span());
                 }
             }
             try writer.writeAll("\n");
@@ -1114,7 +1117,7 @@ const Exes = struct {
     }
 
     fn findCore(tool: []const u8) !util.Path {
-        const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
+        const self_exe_dir = (try util.dir.selfExeDir()).span();
 
         return joinAccess(&[_][]const u8{ self_exe_dir, "core", tool }) catch
             joinAccess(&[_][]const u8{ self_exe_dir, tool }) catch
@@ -1137,11 +1140,11 @@ const Exes = struct {
         defer fifo.deinit();
         while (try util.io.readLine(command_file.reader(), &fifo)) |line| {
             if (fs.path.isAbsolute(line)) {
-                const command = pathToCommand(allocator, line, cwd.toSliceConst(), &env_map) catch continue;
+                const command = pathToCommand(allocator, line, cwd.span(), &env_map) catch continue;
                 try res.append(command);
             } else {
                 const command_path = findCommand(line) catch continue;
-                const command = pathToCommand(allocator, command_path.toSliceConst(), cwd.toSliceConst(), &env_map) catch continue;
+                const command = pathToCommand(allocator, command_path.span(), cwd.span(), &env_map) catch continue;
                 try res.append(command);
             }
         }
@@ -1150,9 +1153,9 @@ const Exes = struct {
     }
 
     fn findCommand(name: []const u8) !util.Path {
-        const self_exe_dir = (try util.dir.selfExeDir()).toSliceConst();
-        const config_dir = (try util.dir.folder(.local_configuration)).toSliceConst();
-        const cwd = (try util.dir.cwd()).toSliceConst();
+        const self_exe_dir = (try util.dir.selfExeDir()).span();
+        const config_dir = (try util.dir.folder(.local_configuration)).span();
+        const cwd = (try util.dir.cwd()).span();
         return joinAccess(&[_][]const u8{ cwd, name }) catch
             joinAccess(&[_][]const u8{ config_dir, program_name, name }) catch
             joinAccess(&[_][]const u8{ self_exe_dir, "randomizers", name }) catch
@@ -1162,12 +1165,12 @@ const Exes = struct {
 
     fn openCommandFile() !fs.File {
         const cwd = fs.cwd();
-        const config_dir = (try util.dir.folder(.local_configuration)).toSliceConst();
+        const config_dir = (try util.dir.folder(.local_configuration)).span();
         const command_path = util.path.join(&[_][]const u8{
             config_dir,
             program_name,
             command_file_name,
-        }).toSliceConst();
+        }).span();
 
         // TODO: When we want to enable plugin support, readd this
         //if (cwd.openFile(command_path, .{})) |file| {
@@ -1250,7 +1253,7 @@ fn findInPath(name: []const u8) !util.Path {
 
 fn joinAccess(paths: []const []const u8) !util.Path {
     const res = util.path.join(paths);
-    try fs.cwd().access(res.toSliceConst(), .{});
+    try fs.cwd().access(res.span(), .{});
     return res;
 }
 

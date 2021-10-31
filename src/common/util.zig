@@ -146,12 +146,16 @@ pub fn StackArrayList(comptime size: usize, comptime T: type) type {
             return res;
         }
 
-        pub fn toSlice(list: *@This()) []T {
+        pub fn span(list: anytype) Span(@TypeOf(list)) {
             return list.items[0..list.len];
         }
 
-        pub fn toSliceConst(list: *const @This()) []const T {
-            return list.items[0..list.len];
+        fn Span(comptime List: type) type {
+            var info = @typeInfo(List);
+            info.Pointer.size = .Slice;
+            info.Pointer.child = T;
+            info.Pointer.alignment = @alignOf(T);
+            return @Type(info);
         }
     };
 }
