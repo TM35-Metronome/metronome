@@ -75,8 +75,7 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
         return error.InvalidArgument;
     };
 
-    var nds_rom: nds.Rom = undefined;
-    var game: Game = blk: {
+    var game = blk: {
         const file = try fs.cwd().openFile(file_name, .{});
         defer file.close();
 
@@ -85,17 +84,22 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
         } else |err| err;
 
         try file.seekTo(0);
-        nds_rom = nds.Rom.fromFile(file, allocator) catch |nds_error| {
+
+        const nds_rom = try allocator.create(nds.Rom);
+        errdefer allocator.destroy(nds_rom);
+
+        nds_rom.* = nds.Rom.fromFile(file, allocator) catch |nds_error| {
             log.err("Failed to load '{s}' as a gen3 game: {}", .{ file_name, gen3_error });
             log.err("Failed to load '{s}' as a gen4/gen5 game: {}", .{ file_name, nds_error });
             return error.InvalidRom;
         };
+        errdefer nds_rom.deinit();
 
-        const gen4_error = if (gen4.Game.fromRom(allocator, &nds_rom)) |game| {
+        const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |game| {
             break :blk Game{ .gen4 = game };
         } else |err| err;
 
-        const gen5_error = if (gen5.Game.fromRom(allocator, &nds_rom)) |game| {
+        const gen5_error = if (gen5.Game.fromRom(allocator, nds_rom)) |game| {
             break :blk Game{ .gen5 = game };
         } else |err| err;
 
@@ -203,10 +207,12 @@ const Game = union(enum) {
             .gen3 => |g| g.deinit(),
             .gen4 => |g| {
                 g.rom.deinit();
+                g.allocator.destroy(g.rom);
                 g.deinit();
             },
             .gen5 => |g| {
                 g.rom.deinit();
+                g.allocator.destroy(g.rom);
                 g.deinit();
             },
         }
