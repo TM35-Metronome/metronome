@@ -52,42 +52,24 @@ pub fn io(
                     // When `parse` returns `ParserFailed` it communicates to us that they
                     // could not handle the result in any meaningful way, so we are responsible
                     // for writing the parsed string back out.
-                    error.ParserFailed => switch (@TypeOf(writer)) {
-                        util.io.BufferedWritev.Writer => {
-                            try writer.context.writeAssumeValidUntilFlush(buf[start..tok.i]);
-                        },
-                        else => try writer.writeAll(buf[start..tok.i]),
-                    },
+                    error.ParserFailed => try writer.writeAll(buf[start..tok.i]),
                     else => return err,
                 };
 
                 start = tok.i;
-            } else |err| {}
+            } else |_| {}
 
             // If we couldn't parse a portion of the buffer, then we skip to the next line
             // and try again. The current line will just be written out again.
             if (mem.indexOfScalarPos(u8, buf, start, '\n')) |index| {
                 const line = buf[start .. index + 1];
-                switch (@TypeOf(writer)) {
-                    util.io.BufferedWritev.Writer => {
-                        try writer.context.writeAssumeValidUntilFlush(line);
-                    },
-                    else => try writer.writeAll(line),
-                }
+                try writer.writeAll(line);
 
                 start = index + 1;
                 continue;
             }
 
             break;
-        }
-
-        // For `BufferedWritev` we should flush here, as we might have called
-        // `writeAssumeValidUntilFlush` on parts of `buf`. If we don't flush here,
-        // then the buffers will be invalidate and we get some fun™ behavior.
-        switch (@TypeOf(writer)) {
-            util.io.BufferedWritev.Writer => try writer.context.flush(),
-            else => {},
         }
 
         const new_buf = blk: {
@@ -119,7 +101,6 @@ pub fn io(
 /// All union field names must exist in the struct, and these union
 /// field types must be able to coirse to the struct fields type.
 pub fn setField(struct_ptr: anytype, union_val: anytype) void {
-    const Struct = @TypeOf(struct_ptr.*);
     const Union = @TypeOf(union_val);
 
     inline for (@typeInfo(Union).Union.fields) |field| {

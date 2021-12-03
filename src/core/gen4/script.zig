@@ -810,7 +810,7 @@ pub const Command = packed struct {
         cmd_346: Cmd_346,
         display_floor: DisplayFloor,
     };
-    pub const Kind = packed enum(u16) {
+    pub const Kind = enum(u16) {
         nop0 = lu16.init(0x0).inner,
         nop1 = lu16.init(0x1).inner,
         end = lu16.init(0x2).inner,
@@ -2702,7 +2702,7 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const HmFunctions = packed struct {
-        a: packed enum(u8) {
+        a: enum(u8) {
             @"1" = 1,
             @"2" = 2,
         },
@@ -2913,7 +2913,7 @@ pub const Command = packed struct {
         a: u8,
     };
     pub const Cmd_21d = packed struct {
-        a: packed enum(u16) {
+        a: enum(u16) {
             @"0" = lu16.init(0).inner,
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
@@ -3000,7 +3000,7 @@ pub const Command = packed struct {
         a: lu16,
     };
     pub const CheckFurniture = packed struct {
-        a: packed enum(u16) {
+        a: enum(u16) {
             @"0" = lu16.init(0).inner,
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
@@ -3074,7 +3074,7 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Cmd_23e = packed struct {
-        a: packed enum(u16) {
+        a: enum(u16) {
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
             @"3" = lu16.init(3).inner,

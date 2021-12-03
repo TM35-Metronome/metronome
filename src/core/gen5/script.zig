@@ -1,12 +1,12 @@
-const std = @import("std");
 const rom = @import("../rom.zig");
 const script = @import("../script.zig");
+const std = @import("std");
 
 const mem = std.mem;
 
+const li32 = rom.int.li32;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
-const li32 = rom.int.li32;
 
 pub fn getScriptOffsets(data: []const u8) []const li32 {
     var len: usize = 0;
@@ -249,7 +249,7 @@ pub const Command = packed struct {
         unknown_1b7: Arg1(lu16),
         unknown_1b8: Arg1(lu16),
     };
-    pub const Kind = packed enum(u16) {
+    pub const Kind = enum(u16) {
         nop1 = lu16.init(0x00).value(),
         nop2 = lu16.init(0x01).value(),
         end = lu16.init(0x02).value(),

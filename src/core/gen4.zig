@@ -170,27 +170,27 @@ pub const Trainer = extern struct {
             .diamond,
             .pearl,
             => switch (trainer.party_type) {
-                .none => trainer.partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
-                .item => trainer.partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
-                .moves => trainer.partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
-                .both => trainer.partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
+                .none => partyMemberHelper(party, @sizeOf(PartyMemberNone), i),
+                .item => partyMemberHelper(party, @sizeOf(PartyMemberItem), i),
+                .moves => partyMemberHelper(party, @sizeOf(PartyMemberMoves), i),
+                .both => partyMemberHelper(party, @sizeOf(PartyMemberBoth), i),
             },
 
             .platinum,
             .heart_gold,
             .soul_silver,
             => switch (trainer.party_type) {
-                .none => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberNone)), i),
-                .item => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberItem)), i),
-                .moves => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberMoves)), i),
-                .both => trainer.partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberBoth)), i),
+                .none => partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberNone)), i),
+                .item => partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberItem)), i),
+                .moves => partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberMoves)), i),
+                .both => partyMemberHelper(party, @sizeOf(HgSsPlatMember(PartyMemberBoth)), i),
             },
 
             else => unreachable,
         };
     }
 
-    fn partyMemberHelper(trainer: Trainer, party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
+    fn partyMemberHelper(party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
         const start = i * member_size;
         const end = start + member_size;
         if (party.len < end)
@@ -477,14 +477,6 @@ pub const EncryptedStringTable = struct {
 };
 
 fn decryptAndDecode(data: []const lu16, key: u16, out: anytype) !void {
-    const H = struct {
-        fn output(out2: anytype, char: u16) !bool {
-            if (char == 0xffff)
-                return true;
-            return false;
-        }
-    };
-
     const first = decryptChar(key, @intCast(u32, 0), data[0].value());
     const compressed = first == 0xF100;
     const start = @boolToInt(compressed);
@@ -642,6 +634,7 @@ pub const Game = struct {
         pokedex_weights: []lu32,
         species_to_national_dex: []lu16,
 
+        text: nds.fs.Fs,
         scripts: nds.fs.Fs,
         static_pokemons: []StaticPokemon,
         given_pokemons: []StaticPokemon,
@@ -814,6 +807,7 @@ pub const Game = struct {
                 .pokedex_weights = mem.bytesAsSlice(lu32, pokedex.fileData(.{ .i = info.pokedex_weights })),
                 .species_to_national_dex = mem.bytesAsSlice(lu16, pokedex.fileData(.{ .i = info.species_to_national_dex })),
 
+                .text = text,
                 .scripts = scripts,
                 .static_pokemons = commands.static_pokemons,
                 .given_pokemons = commands.given_pokemons,
@@ -841,7 +835,6 @@ pub const Game = struct {
     }
 
     fn applyTrainerParties(game: Game) !void {
-        const allocator = game.allocator;
         const file_system = game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
         const trainer_parties = game.owned.trainer_parties;
@@ -909,10 +902,9 @@ pub const Game = struct {
         // First, we construct an array of all tables we have decrypted. We do
         // this to avoid code duplication in many cases. This table type erases
         // the tables.
-        const allocator = game.allocator;
-        const info = game.info;
         const file_system = game.rom.fileSystem();
         const old_text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
+
         const old_text = try nds.fs.Fs.fromNarc(old_text_bytes);
 
         // We then calculate the size of the content for our new narc
@@ -929,7 +921,7 @@ pub const Game = struct {
         const text = try nds.fs.Fs.fromNarc(buf);
 
         // First, resize all tables that need a resize
-        for (game.owned.strings.asArray()) |table, i| {
+        for (game.owned.strings.asArray()) |table| {
             const new_file_size = table.encryptedSize();
             const file = &text.fat[table.file_this_was_extracted_from];
 
@@ -971,7 +963,7 @@ pub const Game = struct {
             }));
 
             const start_of_entry_table = writer.context.pos;
-            for (@as([*]void, undefined)[0..table.number_of_strings]) |_, j| {
+            for (@as([*]void, undefined)[0..table.number_of_strings]) |_| {
                 try writer.writeAll(&mem.toBytes(nds.Slice{
                     .start = lu32.init(0),
                     .len = lu32.init(0),
@@ -1035,7 +1027,7 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.fat) |fat, script_i| {
+        for (scripts.fat) |fat| {
             const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.shrinkRetainingCapacity(0);
 

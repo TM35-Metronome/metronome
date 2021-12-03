@@ -88,7 +88,7 @@ pub const PartyMemberBase = extern struct {
 };
 
 pub const PartyMemberNone = extern struct {
-    base: PartyMemberBase = PartyMemmberBase{},
+    base: PartyMemberBase = PartyMemberBase{},
 
     comptime {
         debug.assert(@sizeOf(@This()) == 8);
@@ -96,7 +96,7 @@ pub const PartyMemberNone = extern struct {
 };
 
 pub const PartyMemberItem = extern struct {
-    base: PartyMemberBase = PartyMemmberBase{},
+    base: PartyMemberBase = PartyMemberBase{},
     item: lu16 = lu16.init(0),
 
     comptime {
@@ -105,7 +105,7 @@ pub const PartyMemberItem = extern struct {
 };
 
 pub const PartyMemberMoves = extern struct {
-    base: PartyMemberBase = PartyMemmberBase{},
+    base: PartyMemberBase = PartyMemberBase{},
     moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
 
     comptime {
@@ -556,12 +556,11 @@ const EncryptedStringTable = struct {
         return table.header().sections.value();
     }
 
-    fn entryCount(table: EncryptedStringTable, section: usize) u16 {
+    fn entryCount(table: EncryptedStringTable) u16 {
         return table.header().entries.value();
     }
 
     fn getEncryptedString(table: EncryptedStringTable, section_i: usize, entry_i: usize) []lu16 {
-        const h = table.header();
         const section_offset = table.sectionOffsets()[section_i].value();
         const entry = table.entries(section_offset)[entry_i];
         const offset = section_offset + entry.offset.value();
@@ -594,7 +593,7 @@ const EncryptedStringTable = struct {
 
     fn entries(table: EncryptedStringTable, section_offset: u32) []Entry {
         const h = table.header();
-        const unknown = mem.bytesAsValue(lu32, table.data[section_offset..][0..@sizeOf(lu32)]);
+        _ = mem.bytesAsValue(lu32, table.data[section_offset..][0..@sizeOf(lu32)]);
         const rest = table.data[section_offset + @sizeOf(lu32) ..];
         return mem.bytesAsSlice(Entry, rest[0 .. @sizeOf(Entry) * h.entries.value()]);
     }
@@ -702,7 +701,7 @@ fn encode(data: []const u8, out: anytype) !void {
 
 fn encrypt(data: []lu16, _key: u16) void {
     var key = _key;
-    for (data) |*c, i| {
+    for (data) |*c| {
         c.* = lu16.init(c.value() ^ key);
         key = ((key << 3) | (key >> 13)) & 0xffff;
     }
@@ -967,7 +966,7 @@ pub const Game = struct {
 
         const map_file = try file_system.getNarc(info.map_file);
         const scripts = try file_system.getNarc(info.scripts);
-        const commands = try findScriptCommands(info.version, scripts, allocator);
+        const commands = try findScriptCommands(scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
             allocator.free(commands.given_pokemons);
@@ -1046,7 +1045,6 @@ pub const Game = struct {
         const PNone = PartyMemberNone;
         const PItem = PartyMemberItem;
         const PMoves = PartyMemberMoves;
-        const allocator = game.allocator;
 
         const file_system = game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(nds.fs.root, game.info.parties);
@@ -1105,8 +1103,6 @@ pub const Game = struct {
 
     /// Applies all decrypted strings to the game.
     fn applyStrings(game: Game) !void {
-        const allocator = game.allocator;
-        const info = game.info;
         const file_system = game.rom.fileSystem();
         const old_text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
         const old_text = try nds.fs.Fs.fromNarc(old_text_bytes);
@@ -1124,7 +1120,7 @@ pub const Game = struct {
         const buf = try game.rom.resizeSection(old_text_bytes, old_text_bytes.len + extra_bytes);
         const text = try nds.fs.Fs.fromNarc(buf);
 
-        for (game.owned.strings.asArray()) |table, i| {
+        for (game.owned.strings.asArray()) |table| {
             const new_file_size = table.encryptedSize();
             const file = &text.fat[table.file_this_was_extracted_from];
 
@@ -1175,7 +1171,7 @@ pub const Game = struct {
                 (@sizeOf(Entry) + bytes_per_entry))) catch unreachable;
 
             const start_of_entry_table = writer.context.pos;
-            for (@as([*]void, undefined)[0..number_of_entries]) |_, j| {
+            for (@as([*]void, undefined)[0..number_of_entries]) |_| {
                 writer.writeAll(&mem.toBytes(Entry{
                     .offset = lu32.init(0),
                     .count = lu16.init(0),
@@ -1220,7 +1216,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
         var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
         var given_pokemons = std.ArrayList(StaticPokemon).init(allocator);
@@ -1231,7 +1227,7 @@ pub const Game = struct {
         var script_offsets = std.ArrayList(isize).init(allocator);
         defer script_offsets.deinit();
 
-        for (scripts.fat) |fat, script_i| {
+        for (scripts.fat) |fat| {
             const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.shrinkRetainingCapacity(0);
 
@@ -1325,7 +1321,7 @@ pub const Game = struct {
         const table = EncryptedStringTable{ .data = text.fileData(.{ .i = file }) };
         debug.assert(table.sectionCount() == 1);
 
-        const count = table.entryCount(0);
+        const count = table.entryCount();
         const res = try StringTable.create(
             allocator,
             file,

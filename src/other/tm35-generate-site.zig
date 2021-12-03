@@ -56,10 +56,7 @@ pub fn run(
 
     // We are now completly done with stdout, so we close it. This gives programs further down the
     // pipeline the ability to finish up what they need to do while we generate the site.
-    switch (std.builtin.os.tag) {
-        .linux => stdio.out.context.file.close(),
-        else => stdio.out.context.unbuffered_writer.context.close(),
-    }
+    stdio.out.context.unbuffered_writer.context.close();
 
     const out_file = try fs.cwd().createFile(program.out, .{
         .exclusive = false,
@@ -67,7 +64,7 @@ pub fn run(
     });
     defer out_file.close();
 
-    var writer = util.io.bufferedWriter(out_file.writer());
+    var writer = std.io.bufferedWriter(out_file.writer());
     try generate(writer.writer(), game);
     try writer.flush();
     try out_file.setEndPos(try out_file.getPos());

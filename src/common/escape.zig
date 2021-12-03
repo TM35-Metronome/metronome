@@ -130,7 +130,7 @@ pub fn generate(comptime escapes: []const Escape) type {
                 ) @TypeOf(writer).Error!void {
                     var esc = switch (kind) {
                         .escape => escapingWriter(writer),
-                        .unescape => unescapeWriter(writer),
+                        .unescape => unescapingWriter(writer),
                     };
                     try fmt.formatType(
                         self.value,
@@ -150,7 +150,7 @@ pub const Replacement = struct {
     find: []const u8,
     replace: []const u8,
 
-    fn lessThan(ctx: void, a: Replacement, b: Replacement) bool {
+    fn lessThan(_: void, a: Replacement, b: Replacement) bool {
         return mem.lessThan(u8, a.find, b.find);
     }
 };
@@ -204,7 +204,7 @@ test "transion" {
 
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
     @setEvalBranchQuota(1000000);
-    var replacements_sorted = replacements[0..replacements.len].*;
+    comptime var replacements_sorted = replacements[0..replacements.len].*;
     std.sort.sort(Replacement, &replacements_sorted, {}, Replacement.lessThan);
 
     return struct {

@@ -43,7 +43,7 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
             var args = clap.parse(clap.Help, Program.params, .{ .diagnostic = &diag }) catch |err| {
-                var stderr = io.bufferedWriter(std.io.getStdErr().writer());
+                var stderr = std.io.bufferedWriter(std.io.getStdErr().writer());
                 diag.report(stderr.writer(), err) catch {};
                 usage(stderr.writer()) catch {};
                 stderr.flush() catch {};
@@ -51,20 +51,20 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             };
 
             if (args.flag("--help")) {
-                var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+                var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try usage(stdout.writer());
                 try stdout.flush();
                 return;
             }
 
             if (args.flag("--version")) {
-                var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+                var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try stdout.writer().print("{s}\n", .{Program.version});
                 try stdout.flush();
                 return;
             }
 
-            var stdout = io.bufferedWriter(std.io.getStdOut().writer());
+            var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
             var program = try Program.init(&arena.allocator, args);
             defer program.deinit();
 

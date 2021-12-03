@@ -20,17 +20,17 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
     }
 }.isEnd);
 
-pub const STD_OBTAIN_ITEM = 0;
+pub const STD_10 = 10;
 pub const STD_FIND_ITEM = 1;
+pub const STD_MSG_BOX_AUTO_CLOSE = 6;
+pub const STD_MSG_BOX_DEFAULT = 4;
+pub const STD_MSG_BOX_GET_POINTS = 9;
 pub const STD_MSG_BOX_NPC = 2;
 pub const STD_MSG_BOX_SIGN = 3;
-pub const STD_MSG_BOX_DEFAULT = 4;
 pub const STD_MSG_BOX_YES_NO = 5;
-pub const STD_MSG_BOX_AUTO_CLOSE = 6;
 pub const STD_OBTAIN_DECORATION = 7;
+pub const STD_OBTAIN_ITEM = 0;
 pub const STD_REGISTER_MATCH_CALL = 8;
-pub const STD_MSG_BOX_GET_POINTS = 9;
-pub const STD_10 = 10;
 
 pub const Command = packed struct {
     tag: Kind,
@@ -644,7 +644,7 @@ pub const Command = packed struct {
         bufferitemnameplural: bufferitemnameplural,
     };
 
-    pub const Kind = packed enum(u8) {
+    pub const Kind = enum(u8) {
         nop = 0x00,
         nop1 = 0x01,
         end = 0x02,
@@ -1178,7 +1178,7 @@ pub const Command = packed struct {
         direction: u8,
     };
 
-    pub const TrainerBattleType = packed enum(u8) {
+    pub const TrainerBattleType = enum(u8) {
         trainer_battle_single = 0,
         trainer_battle_continue_script_no_music = 1,
         trainer_battle_continue_script = 2,

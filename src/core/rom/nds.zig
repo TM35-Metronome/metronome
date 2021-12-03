@@ -187,7 +187,6 @@ pub const Rom = struct {
     /// Decodes the arm9 section and returns it to the caller. The caller
     /// owns the memory.
     pub fn getDecodedArm9(rom: Rom, allocator: *mem.Allocator) ![]u8 {
-        const h = rom.header();
         const arm9_bytes = rom.arm9();
 
         return blz.decode(arm9_bytes, allocator) catch |err| switch (err) {
@@ -271,7 +270,7 @@ pub const Rom = struct {
             const new_rom_len = old_rom_len + extra_bytes;
             try data.resize(math.max(data.items.len, new_rom_len));
 
-            for (sections[section_index + 1 ..]) |section, i| {
+            for (sections[section_index + 1 ..]) |section| {
                 const section_slice = section.toSlice(data.items);
                 section.set(data.items, Slice.init(
                     section_slice.start.value() + extra_bytes,
@@ -394,7 +393,6 @@ pub const Rom = struct {
     fn buildSectionTable(rom: Rom, allocator: *mem.Allocator) ![]Section {
         const h = rom.header();
 
-        const nitro_footer = rom.nitroFooter();
         const file_system = rom.fileSystem();
         const fat = file_system.fat;
 

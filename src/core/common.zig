@@ -121,7 +121,7 @@ pub const Version = enum {
     }
 };
 
-pub const PartyType = packed enum(u8) {
+pub const PartyType = enum(u8) {
     none = 0b00,
     item = 0b10,
     moves = 0b01,
@@ -149,13 +149,13 @@ pub const Stats = extern struct {
     }
 };
 
-pub const MoveCategory = packed enum(u8) {
+pub const MoveCategory = enum(u8) {
     physical = 0x00,
     status = 0x01,
     special = 0x02,
 };
 
-pub const GrowthRate = packed enum(u8) {
+pub const GrowthRate = enum(u8) {
     medium_fast = 0x00,
     erratic = 0x01,
     fluctuating = 0x02,
@@ -164,7 +164,7 @@ pub const GrowthRate = packed enum(u8) {
     slow = 0x05,
 };
 
-pub const EggGroup = packed enum(u8) {
+pub const EggGroup = enum(u8) {
     invalid = 0x00, // TODO: Figure out if there is a 0x00 egg group
     monster = 0x01,
     water1 = 0x02,
@@ -184,7 +184,7 @@ pub const EggGroup = packed enum(u8) {
     _,
 };
 
-pub const ColorKind = packed enum(u7) {
+pub const ColorKind = enum(u7) {
     red = 0x00,
     blue = 0x01,
     yellow = 0x02,
@@ -204,7 +204,7 @@ pub const Color = packed struct {
 };
 
 // Common between gen3-4
-pub const EvoMethod = packed enum(u8) {
+pub const EvoMethod = enum(u8) {
     unused = 0x00,
     friend_ship = 0x01,
     friend_ship_during_day = 0x02,

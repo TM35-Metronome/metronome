@@ -116,7 +116,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
             return @as(usize, i.bits / 8);
         },
         .Enum => return packedLength(@enumToInt(value)) catch unreachable,
-        .Array => |a| {
+        .Array => {
             var res: usize = 0;
             for (value) |item|
                 res += try packedLength(item);

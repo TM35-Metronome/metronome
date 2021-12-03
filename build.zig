@@ -96,18 +96,18 @@ pub fn build(b: *Builder) void {
     testIt(b, test_step, mode, "src/test.zig");
 
     const options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
-    for (core_exes) |name, i|
+    for (core_exes) |name|
         buildProgram(b, name, b.fmt("src/core/{s}.zig", .{name}), options);
-    for (randomizer_exes) |name, i|
+    for (randomizer_exes) |name|
         buildProgram(b, name, b.fmt("src/randomizers/{s}.zig", .{name}), options);
-    for (other_exes) |name, i|
+    for (other_exes) |name|
         buildProgram(b, name, b.fmt("src/other/{s}.zig", .{name}), options);
 
     const lib_cflags = &[_][]const u8{
         "-D_POSIX_C_SOURCE=200809L",
         "-fno-sanitize=undefined", // Nuklear trips the undefined sanitizer https://github.com/Immediate-Mode-UI/Nuklear/issues/94
     };
-    for (gui_exes) |tool, i| {
+    for (gui_exes) |tool| {
         const source = b.fmt("src/gui/{s}.zig", .{tool});
         const exe = b.addExecutable(tool, source);
         for (pkgs) |pkg|

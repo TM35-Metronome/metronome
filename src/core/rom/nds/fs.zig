@@ -109,7 +109,7 @@ pub const Fs = struct {
 
         const start = fs.fat[first].start.value();
         var end = start;
-        for (fs.fat[first..]) |fat, i| {
+        for (fs.fat[first..]) |fat| {
             const fat_start = fat.start.value();
             if (fat_start != end)
                 return error.FsIsNotSequential;
@@ -518,7 +518,7 @@ test "Builder" {
     defer testing.allocator.free(fs.fnt);
     defer testing.allocator.free(fs.fat);
 
-    for (paths) |path, i|
+    for (paths) |path|
         _ = try fs.openFile(root, path);
     try testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
     try testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));

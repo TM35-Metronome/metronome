@@ -18,17 +18,17 @@ pub fn Offset(comptime _T: type) type {
 
         offset: usize,
 
-        pub fn init(data_slice: []const u8, ptr: *const T) @This() {
+        pub fn init(data_slice: []const u8, p: *const T) @This() {
             const data_ptr = @ptrToInt(data_slice.ptr);
-            const item_ptr = @ptrToInt(items.ptr);
+            const item_ptr = @ptrToInt(p);
             debug.assert(data_ptr <= item_ptr);
-            debug.assert(item_ptr + @sizeOf(Item) <= data_ptr + data_slice.len);
+            debug.assert(item_ptr + @sizeOf(T) <= data_ptr + data_slice.len);
 
             return @This(){ .offset = item_ptr - data_ptr };
         }
 
         pub fn end(offset: @This()) usize {
-            return sec.offset + @sizeOf(T);
+            return offset.offset + @sizeOf(T);
         }
 
         pub fn ptr(offset: @This(), data: []u8) *T {

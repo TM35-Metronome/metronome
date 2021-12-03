@@ -83,18 +83,15 @@ fn utf8Len(s: []const u8) !usize {
     var res: usize = 0;
     var i: usize = 0;
     while (i < s.len) : (res += 1) {
-        if (unicode.utf8ByteSequenceLength(s[i])) |cp_len| {
-            if (i + cp_len > s.len) {
-                return error.InvalidUtf8;
-            }
-
-            if (unicode.utf8Decode(s[i .. i + cp_len])) |_| {} else |_| {
-                return error.InvalidUtf8;
-            }
-            i += cp_len;
-        } else |err| {
+        const cp_len = try unicode.utf8ByteSequenceLength(s[i]);
+        if (i + cp_len > s.len) {
             return error.InvalidUtf8;
         }
+
+        if (unicode.utf8Decode(s[i .. i + cp_len])) |_| {} else |_| {
+            return error.InvalidUtf8;
+        }
+        i += cp_len;
     }
     return res;
 }

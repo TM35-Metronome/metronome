@@ -675,13 +675,13 @@ pub const Game = struct {
                     },
                     .loadword => switch (data.loadword.destination) {
                         0 => {
-                            const v = data.loadword.value.toSliceZ(gba_data) catch return;
+                            _ = data.loadword.value.toSliceZ(gba_data) catch return;
                             try script_data.text.append(&data.loadword.value);
                         },
                         else => {},
                     },
                     .message => {
-                        const v = data.message.text.toSliceZ(gba_data) catch return;
+                        _ = data.message.text.toSliceZ(gba_data) catch return;
                         try script_data.text.append(&data.message.text);
                     },
                     else => {},
@@ -800,7 +800,6 @@ pub const Game = struct {
     }
 
     fn applyTrainerParties(game: *Game) !void {
-        const allocator = game.allocator;
         const trainer_parties = game.trainer_parties;
         const trainers = game.trainers;
 
@@ -883,6 +882,7 @@ pub const Game = struct {
 
     pub fn deinit(game: Game) void {
         game.allocator.free(game.data);
+
         game.allocator.free(game.static_pokemons);
         game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
