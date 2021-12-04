@@ -1,11 +1,11 @@
 const std = @import("std");
 
-const mem = std.mem;
 const debug = std.debug;
 const math = std.math;
+const mem = std.mem;
 
-const threshold = 2;
 const default_mask = 0x80;
+const threshold = 2;
 
 // TODO: Tests
 
@@ -149,7 +149,7 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
         const best = search(raw_buffer[0..raw_end], raw);
         const pos_best = @ptrToInt(raw_buffer[raw..].ptr) - @ptrToInt(best.ptr);
         const len_best = blk: {
-            if (mode == Mode.Best) {
+            if (mode == .best) {
                 if (best.len > threshold) {
                     if (raw + best.len < raw_end) {
                         raw += best.len;
@@ -235,11 +235,11 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
             new_result[pak] = 0xFF;
         }
 
-        mem.writeInt(new_result[pak..], @intCast(u32, enc_len + hdr_len), @import("builtin").Endian.Little);
+        mem.writeIntLittle(u32, new_result[pak..][0..4], @intCast(u32, enc_len + hdr_len));
         pak += 3;
         new_result[pak] = @truncate(u8, hdr_len);
         pak += 1;
-        mem.writeInt(new_result[pak..], @intCast(u32, inc_len - hdr_len), @import("builtin").Endian.Little);
+        mem.writeIntLittle(u32, new_result[pak..][0..4], @intCast(u32, inc_len - hdr_len));
         pak += 4;
 
         return new_result[0..pak];
@@ -252,7 +252,8 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
 ///       We only do this so that we are binary equivalent with blz.c.
 ///       When we don't need blz.c anymore, change this behavior.
 fn searchMatch(data: []const u8, match: []const u8) []const u8 {
-    var best = data[0..0];
+    var z: usize = 0;
+    var best = data[z..z];
 
     var pos = @as(usize, 0);
     while (pos < data.len) : (pos += 1) {

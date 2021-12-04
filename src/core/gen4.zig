@@ -822,6 +822,7 @@ pub const Game = struct {
             try game.rom.resizeSection(game.rom.arm9(), game.owned.arm9.len),
             game.owned.arm9,
         );
+
         try game.applyTrainerParties();
         try game.applyStrings();
         game.ptrs.deinit(game.allocator);

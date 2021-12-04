@@ -1021,11 +1021,16 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
+        const arm9 = try rom.nds.blz.encode(game.owned.arm9, .normal, true, game.allocator);
+        defer game.allocator.free(arm9);
+
+        std.log.info("{}", .{mem.indexOfDiff(u8, game.rom.arm9(), arm9)});
         mem.copy(
             u8,
-            try game.rom.resizeSection(game.rom.arm9(), game.owned.arm9.len),
-            game.owned.arm9,
+            try game.rom.resizeSection(game.rom.arm9(), arm9.len),
+            arm9,
         );
+
         try game.applyTrainerParties();
         try game.applyStrings();
         game.ptrs.deinit(game.allocator);
