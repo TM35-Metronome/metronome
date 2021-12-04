@@ -60,7 +60,7 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
 
     mem.copy(u8, result, data[0..lengths.dec]);
     mem.copy(u8, pak_buffer, data);
-    invert(pak_buffer[lengths.dec .. lengths.dec + lengths.pak]);
+    mem.reverse(u8, pak_buffer[lengths.dec .. lengths.dec + lengths.pak]);
 
     const pak_end = lengths.dec + lengths.pak;
     var pak = lengths.dec;
@@ -104,7 +104,7 @@ pub fn decode(data: []const u8, allocator: *mem.Allocator) ![]u8 {
 
     if (raw != lengths.raw) return error.UnexpectedEnd;
 
-    invert(result[lengths.dec..lengths.raw]);
+    mem.reverse(u8, result[lengths.dec..lengths.raw]);
     return result[0..raw];
 }
 
@@ -135,7 +135,7 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
     defer allocator.free(raw_buffer);
     mem.copy(u8, raw_buffer, data);
 
-    invert(raw_buffer[0..data.len]);
+    mem.reverse(u8, raw_buffer[0..data.len]);
 
     while (raw < raw_end) {
         mask = mask >> 1;
@@ -197,8 +197,8 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
 
     pak_len = pak;
 
-    invert(raw_buffer[0..data.len]);
-    invert(result[0..pak_len]);
+    mem.reverse(u8, raw_buffer[0..data.len]);
+    mem.reverse(u8, result[0..pak_len]);
 
     if (pak_tmp == 0 or data.len + 4 < ((pak_tmp + raw_tmp + 3) & 0xFFFFFFFC) + 8) {
         mem.copy(u8, result[0..data.len], raw_buffer[0..data.len]);
@@ -247,25 +247,22 @@ pub fn encode(data: []const u8, mode: Mode, arm9: bool, allocator: *mem.Allocato
 }
 
 /// Searches for ::match in ::data, and returns a slice to the best match.
-/// TODO: This function finds the last best match, aka if two matches are
-///       the same len, the last in ::data will be returned.
-///       We only do this so that we are binary equivalent with blz.c.
-///       When we don't need blz.c anymore, change this behavior.
 fn searchMatch(data: []const u8, match: []const u8) []const u8 {
-    var z: usize = 0;
-    var best = data[z..z];
-
-    var pos = @as(usize, 0);
+    var pos: usize = 0;
+    var best = data[pos..pos];
     while (pos < data.len) : (pos += 1) {
-        const max = math.min(match.len, data.len - pos);
+        pos = mem.indexOfScalarPos(u8, data, pos, match[0]) orelse break;
 
-        var len = @as(usize, 0);
+        const max = math.min(match.len, data.len - pos);
+        var len: usize = 1;
         while (len < max) : (len += 1) {
             if (data[pos + len] != match[len]) break;
         }
 
-        if (best.len <= len) {
+        if (best.len < len) {
             best = data[pos..][0..len];
+            if (best.len == match.len)
+                break;
         }
     }
 
@@ -280,18 +277,4 @@ fn search(data: []const u8, raw: usize) []const u8 {
     const d = data[raw - max .. raw];
 
     return searchMatch(d, pattern);
-}
-
-// TODO: Remove in favor of `mem.reverse`
-fn invert(data: []u8) void {
-    var bottom = data.len - 1;
-    var i = @as(usize, 0);
-    while (i < bottom) : ({
-        i += 1;
-        bottom -= 1;
-    }) {
-        const tmp = data[i];
-        data[i] = data[bottom];
-        data[bottom] = tmp;
-    }
 }
