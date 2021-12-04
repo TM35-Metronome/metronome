@@ -1024,7 +1024,6 @@ pub const Game = struct {
         const arm9 = try rom.nds.blz.encode(game.owned.arm9, .normal, true, game.allocator);
         defer game.allocator.free(arm9);
 
-        std.log.info("{}", .{mem.indexOfDiff(u8, game.rom.arm9(), arm9)});
         mem.copy(
             u8,
             try game.rom.resizeSection(game.rom.arm9(), arm9.len),
