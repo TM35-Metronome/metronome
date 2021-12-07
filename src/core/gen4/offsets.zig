@@ -14,6 +14,7 @@ pub const Info = struct {
     game_title: [11:0]u8,
     gamecode: [4]u8,
     version: common.Version,
+    arm9_is_encoded: bool,
 
     starters: StarterLocation,
     instant_text_patch: []const common.Patch,
@@ -57,6 +58,7 @@ const hg_info = Info{
     .game_title = "POKEMON HG\x00".*,
     .gamecode = "IPKE".*,
     .version = .heart_gold,
+    .arm9_is_encoded = true,
 
     .starters = StarterLocation{ .arm9 = 0x00108514 },
     .instant_text_patch = &[_]common.Patch{
@@ -98,6 +100,7 @@ const ss_info = Info{
     .game_title = "POKEMON SS\x00".*,
     .gamecode = "IPGE".*,
     .version = .soul_silver,
+    .arm9_is_encoded = true,
 
     .starters = hg_info.starters,
     .instant_text_patch = hg_info.instant_text_patch,
@@ -133,6 +136,7 @@ const diamond_info = Info{
     .game_title = "POKEMON D\x00\x00".*,
     .gamecode = "ADAE".*,
     .version = .diamond,
+    .arm9_is_encoded = false,
 
     .starters = StarterLocation{
         .overlay9 = StarterLocation.Overlay{
@@ -173,6 +177,7 @@ const pearl_info = Info{
     .game_title = "POKEMON P\x00\x00".*,
     .gamecode = "APAE".*,
     .version = .pearl,
+    .arm9_is_encoded = false,
 
     .starters = diamond_info.starters,
     .instant_text_patch = diamond_info.instant_text_patch,
@@ -208,6 +213,7 @@ const platinum_info = Info{
     .game_title = "POKEMON PL\x00".*,
     .gamecode = "CPUE".*,
     .version = .platinum,
+    .arm9_is_encoded = false,
 
     .starters = StarterLocation{
         .overlay9 = StarterLocation.Overlay{
@@ -250,6 +256,6 @@ const platinum_info = Info{
     .type_names = 624,
 };
 
-pub const tm_count = 92;
 pub const hm_count = 8;
 pub const starters_len = 12;
+pub const tm_count = 92;

@@ -82,7 +82,10 @@ pub fn run(
     defer root_dir.close();
 
     try out_dir.writeFile("arm9", nds_rom.arm9());
-    try out_dir.writeFile("arm9_decoded", try nds_rom.getDecodedArm9(allocator));
+    if (rom.nds.blz.decode(allocator, nds_rom.arm9())) |arm9| {
+        try out_dir.writeFile("arm9_decoded", arm9);
+    } else |_| {}
+
     try out_dir.writeFile("arm7", nds_rom.arm7());
     try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
     if (nds_rom.banner()) |banner|
@@ -120,7 +123,7 @@ fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Over
         try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
 
         const data = file_system.fileData(.{ .i = overlay.file_id.value() });
-        if (nds.blz.decode(data, allocator)) |d| {
+        if (nds.blz.decode(allocator, data)) |d| {
             std.log.info("Decompressed overlay {}", .{i});
             try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, d);
         } else |_| {

@@ -31,6 +31,11 @@ pub const Fs = struct {
     fat: []nds.Range,
     data: []u8,
 
+    pub fn openNarc(fs: nds.fs.Fs, dir: Dir, path: []const u8) !nds.fs.Fs {
+        const file = try fs.openFileData(dir, path);
+        return try nds.fs.Fs.fromNarc(file);
+    }
+
     pub fn openFileData(fs: Fs, dir: Dir, path: []const u8) ![]u8 {
         const file = try fs.openFile(dir, path);
         return fs.fileData(file);
@@ -175,11 +180,6 @@ pub const Fs = struct {
             return error.InvalidNarcHeader;
 
         return Fs.fromFnt(fnt, fat, data[fbs.pos..]);
-    }
-
-    pub fn getNarc(fs: nds.fs.Fs, path: []const u8) !nds.fs.Fs {
-        const file = try fs.openFileData(nds.fs.root, path);
-        return try nds.fs.Fs.fromNarc(file);
     }
 };
 

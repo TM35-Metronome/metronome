@@ -189,13 +189,13 @@ test "en_us" {
     try rom.encoding.testCharMap(&en_us, "{PK}{PKMN}", "\x53\x53\x54");
 }
 
-pub fn encode(lang: gen3.Language, str: []const u8, out: []u8) !void {
+pub fn encode(lang: gen3.Language, reader: anytype, out: []u8) !void {
     const map = switch (lang) {
         .en_us => &en_us,
     };
 
     var fos = io.fixedBufferStream(out);
-    try rom.encoding.encode(map, 0, str, fos.writer());
+    try rom.encoding.encodeEx(map, 0, reader, fos.writer());
     try fos.writer().writeByte(0xff);
 }
 

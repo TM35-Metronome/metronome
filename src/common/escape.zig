@@ -82,7 +82,7 @@ pub fn generate(comptime escapes: []const Escape) type {
             return ReplacingReader(find_replace_escaped, ChildReader);
         }
 
-        pub fn unescapingReader(child_reader: anytype) EscapingReader(@TypeOf(child_reader)) {
+        pub fn unescapingReader(child_reader: anytype) UnescapingReader(@TypeOf(child_reader)) {
             return .{ .child_reader = child_reader };
         }
 
@@ -296,7 +296,7 @@ pub fn ReplacingReader(comptime replacements: []const Replacement, comptime Chil
 
             // We might have leftovers from a replacement that didn't
             // quite finish. We need to make sure that gets written now.
-            const l = fbs.write(self.leftovers) catch 0;
+            const l = fbs.write(self.leftovers) catch return 0;
             self.leftovers = self.leftovers[l..];
             if (self.leftovers.len != 0)
                 return l;
@@ -308,15 +308,15 @@ pub fn ReplacingReader(comptime replacements: []const Replacement, comptime Chil
                     if (self.start != i)
                         break;
 
+                    i += replacements[rep].find.len;
+                    self.start = i;
+
                     const replace = replacements[rep].replace;
                     const res = fbs.write(replace) catch 0;
                     if (replace.len != res) {
                         self.leftovers = replace[res..];
                         break;
                     }
-
-                    i += replacements[rep].find.len;
-                    self.start = i;
                 } else {
                     i += 1;
                 }

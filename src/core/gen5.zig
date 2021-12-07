@@ -778,6 +778,7 @@ pub const Game = struct {
     // These fields are owned by the game and will be applied to
     // the rom oppon calling `apply`.
     pub const Owned = struct {
+        old_arm_len: usize,
         arm9: []u8,
         trainer_parties: [][6]PartyMemberBoth,
         strings: Strings,
@@ -867,12 +868,12 @@ pub const Game = struct {
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         const file_system = nds_rom.fileSystem();
         const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
-        const arm9 = try nds_rom.getDecodedArm9(allocator);
+        const arm9 = try nds.blz.decode(allocator, nds_rom.arm9());
         errdefer allocator.free(arm9);
 
-        const text = try file_system.getNarc(info.text);
-        const trainers = try (try file_system.getNarc(info.trainers)).toSlice(1, Trainer);
-        const trainer_parties_narc = try file_system.getNarc(info.parties);
+        const text = try file_system.openNarc(nds.fs.root, info.text);
+        const trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(1, Trainer);
+        const trainer_parties_narc = try file_system.openNarc(nds.fs.root, info.parties);
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
         errdefer allocator.free(trainer_parties);
 
@@ -932,6 +933,7 @@ pub const Game = struct {
         errdefer move_descriptions.destroy(allocator);
 
         return fromRomEx(allocator, nds_rom, info, .{
+            .old_arm_len = nds_rom.arm9().len,
             .arm9 = arm9,
             .trainer_parties = trainer_parties,
             .strings = .{
@@ -964,8 +966,8 @@ pub const Game = struct {
         const hm_tm_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, arm9[hm_tm_index..][0..hm_tm_len]);
 
-        const map_file = try file_system.getNarc(info.map_file);
-        const scripts = try file_system.getNarc(info.scripts);
+        const map_file = try file_system.openNarc(nds.fs.root, info.map_file);
+        const scripts = try file_system.openNarc(nds.fs.root, info.scripts);
         const commands = try findScriptCommands(scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -999,10 +1001,10 @@ pub const Game = struct {
 
                     break :blk res;
                 },
-                .moves = try (try file_system.getNarc(info.moves)).toSlice(0, Move),
-                .trainers = try (try file_system.getNarc(info.trainers)).toSlice(1, Trainer),
-                .items = try (try file_system.getNarc(info.itemdata)).toSlice(0, Item),
-                .evolutions = try (try file_system.getNarc(info.evolutions)).toSlice(0, EvolutionTable),
+                .moves = try (try file_system.openNarc(nds.fs.root, info.moves)).toSlice(0, Move),
+                .trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(1, Trainer),
+                .items = try (try file_system.openNarc(nds.fs.root, info.itemdata)).toSlice(0, Item),
+                .evolutions = try (try file_system.openNarc(nds.fs.root, info.evolutions)).toSlice(0, EvolutionTable),
                 .map_headers = mem.bytesAsSlice(MapHeader, map_header_bytes[0..]),
                 .tms1 = hm_tms[0..92],
                 .hms = hm_tms[92..98],
@@ -1011,18 +1013,32 @@ pub const Game = struct {
                 .given_pokemons = commands.given_pokemons,
                 .pokeball_items = commands.pokeball_items,
 
-                .wild_pokemons = try file_system.getNarc(info.wild_pokemons),
-                .pokemons = try file_system.getNarc(info.pokemons),
-                .level_up_moves = try file_system.getNarc(info.level_up_moves),
-                .hidden_hollows = if (info.hidden_hollows) |h| try (try file_system.getNarc(h)).toSlice(0, HiddenHollow) else null,
+                .wild_pokemons = try file_system.openNarc(nds.fs.root, info.wild_pokemons),
+                .pokemons = try file_system.openNarc(nds.fs.root, info.pokemons),
+                .level_up_moves = try file_system.openNarc(nds.fs.root, info.level_up_moves),
+                .hidden_hollows = if (info.hidden_hollows) |h| try (try file_system.openNarc(nds.fs.root, h)).toSlice(0, HiddenHollow) else null,
                 .scripts = scripts,
             },
         };
     }
 
     pub fn apply(game: *Game) !void {
-        const arm9 = try rom.nds.blz.encode(game.owned.arm9, .normal, true, game.allocator);
+        const arm9 = try nds.blz.encode(game.allocator, game.owned.arm9, 0x4000);
         defer game.allocator.free(arm9);
+
+        // In the secure area, there is an offset that points to the end of the compressed arm9.
+        // We have to find that offset and replace it with the new size.
+        const secure_area = arm9[0..0x4000];
+
+        var len_bytes: [3]u8 = undefined;
+        mem.writeIntLittle(u24, &len_bytes, @intCast(u24, game.owned.old_arm_len + 0x4000));
+        if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
+            mem.writeIntLittle(
+                u24,
+                secure_area[off..][0..3],
+                @intCast(u24, arm9.len + 0x4000),
+            );
+        }
 
         mem.copy(
             u8,
@@ -1059,7 +1075,7 @@ pub const Game = struct {
         const size = nds.fs.narcSize(trainer_parties.len, content_size);
 
         const buf = try game.rom.resizeSection(trainer_parties_narc, size);
-        const trainers = try (try file_system.getNarc(game.info.trainers)).toSlice(1, Trainer);
+        const trainers = try (try file_system.openNarc(nds.fs.root, game.info.trainers)).toSlice(1, Trainer);
 
         var builder = nds.fs.SimpleNarcBuilder.init(buf, trainer_parties.len);
 

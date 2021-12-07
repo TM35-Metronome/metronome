@@ -574,6 +574,7 @@ pub const Game = struct {
     // These fields are owned by the game and will be applied to
     // the rom oppon calling `apply`.
     pub const Owned = struct {
+        old_arm_len: usize,
         arm9: []u8,
         trainer_parties: [][6]PartyMemberBoth,
         strings: Strings,
@@ -663,11 +664,16 @@ pub const Game = struct {
 
     pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
         const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
-        const arm9 = try nds_rom.getDecodedArm9(allocator);
+        const arm9 = if (info.arm9_is_encoded)
+            try nds.blz.decode(allocator, nds_rom.arm9())
+        else
+            try allocator.dupe(u8, nds_rom.arm9());
+        errdefer allocator.free(arm9);
+
         const file_system = nds_rom.fileSystem();
 
-        const trainers = try (try file_system.getNarc(info.trainers)).toSlice(0, Trainer);
-        const trainer_parties_narc = try file_system.getNarc(info.parties);
+        const trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(0, Trainer);
+        const trainer_parties_narc = try file_system.openNarc(nds.fs.root, info.parties);
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
         mem.set([6]PartyMemberBoth, trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
 
@@ -693,7 +699,7 @@ pub const Game = struct {
             }
         }
 
-        const text = try file_system.getNarc(info.text);
+        const text = try file_system.openNarc(nds.fs.root, info.text);
         const type_names = try decryptStringTable(allocator, 16, text, info.type_names);
         errdefer type_names.destroy(allocator);
         const pokemon_names = try decryptStringTable(allocator, 16, text, info.pokemon_names);
@@ -711,6 +717,7 @@ pub const Game = struct {
         const move_descriptions = try decryptStringTable(allocator, 256, text, info.move_descriptions);
         errdefer move_descriptions.destroy(allocator);
         return fromRomEx(allocator, nds_rom, info, .{
+            .old_arm_len = nds_rom.arm9().len,
             .arm9 = arm9,
             .trainer_parties = trainer_parties,
             .strings = .{
@@ -740,9 +747,9 @@ pub const Game = struct {
         const hm_tms_len = (offsets.tm_count + offsets.hm_count) * @sizeOf(u16);
         const hm_tms = mem.bytesAsSlice(lu16, owned.arm9[hm_tm_index..][0..hm_tms_len]);
 
-        const text = try file_system.getNarc(info.text);
-        const scripts = try file_system.getNarc(info.scripts);
-        const pokedex = try file_system.getNarc(info.pokedex);
+        const text = try file_system.openNarc(nds.fs.root, info.text);
+        const scripts = try file_system.openNarc(nds.fs.root, info.scripts);
+        const pokedex = try file_system.openNarc(nds.fs.root, info.pokedex);
         const commands = try findScriptCommands(info.version, scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
@@ -779,13 +786,13 @@ pub const Game = struct {
                         };
                     },
                 },
-                .pokemons = try (try file_system.getNarc(info.pokemons)).toSlice(0, BasePokemon),
-                .moves = try (try file_system.getNarc(info.moves)).toSlice(0, Move),
-                .trainers = try (try file_system.getNarc(info.trainers)).toSlice(0, Trainer),
-                .items = try (try file_system.getNarc(info.itemdata)).toSlice(0, Item),
-                .evolutions = try (try file_system.getNarc(info.evolutions)).toSlice(0, EvolutionTable),
+                .pokemons = try (try file_system.openNarc(nds.fs.root, info.pokemons)).toSlice(0, BasePokemon),
+                .moves = try (try file_system.openNarc(nds.fs.root, info.moves)).toSlice(0, Move),
+                .trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(0, Trainer),
+                .items = try (try file_system.openNarc(nds.fs.root, info.itemdata)).toSlice(0, Item),
+                .evolutions = try (try file_system.openNarc(nds.fs.root, info.evolutions)).toSlice(0, EvolutionTable),
                 .wild_pokemons = blk: {
-                    const narc = try file_system.getNarc(info.wild_pokemons);
+                    const narc = try file_system.openNarc(nds.fs.root, info.wild_pokemons);
                     switch (info.version) {
                         .diamond,
                         .pearl,
@@ -800,7 +807,7 @@ pub const Game = struct {
                 .tms = hm_tms[0..92],
                 .hms = hm_tms[92..],
 
-                .level_up_moves = try file_system.getNarc(info.level_up_moves),
+                .level_up_moves = try file_system.openNarc(nds.fs.root, info.level_up_moves),
 
                 .pokedex = pokedex,
                 .pokedex_heights = mem.bytesAsSlice(lu32, pokedex.fileData(.{ .i = info.pokedex_heights })),
@@ -817,11 +824,35 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
-        mem.copy(
-            u8,
-            try game.rom.resizeSection(game.rom.arm9(), game.owned.arm9.len),
-            game.owned.arm9,
-        );
+        if (game.info.arm9_is_encoded) {
+            const arm9 = try nds.blz.encode(game.allocator, game.owned.arm9, 0x4000);
+            defer game.allocator.free(arm9);
+
+            // In the secure area, there is an offset that points to the end of the compressed arm9.
+            // We have to find that offset and replace it with the new size.
+            const secure_area = arm9[0..0x4000];
+
+            var len_bytes: [3]u8 = undefined;
+            mem.writeIntLittle(u24, &len_bytes, @intCast(u24, game.owned.old_arm_len));
+            if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
+                mem.writeIntLittle(
+                    u24,
+                    secure_area[off..][0..3],
+                    @intCast(u24, arm9.len),
+                );
+            }
+            mem.copy(
+                u8,
+                try game.rom.resizeSection(game.rom.arm9(), arm9.len),
+                arm9,
+            );
+        } else {
+            mem.copy(
+                u8,
+                try game.rom.resizeSection(game.rom.arm9(), game.owned.arm9.len),
+                game.owned.arm9,
+            );
+        }
 
         try game.applyTrainerParties();
         try game.applyStrings();
@@ -845,7 +876,7 @@ pub const Game = struct {
         const size = nds.fs.narcSize(trainer_parties.len, content_size);
 
         const buf = try game.rom.resizeSection(trainer_parties_narc, size);
-        const trainers = try (try file_system.getNarc(game.info.trainers)).toSlice(0, Trainer);
+        const trainers = try (try file_system.openNarc(nds.fs.root, game.info.trainers)).toSlice(0, Trainer);
 
         var builder = nds.fs.SimpleNarcBuilder.init(
             buf,
@@ -975,7 +1006,7 @@ pub const Game = struct {
             for (entries) |*entry, j| {
                 const start_of_str = writer.context.pos;
                 const str = table.getSpan(j);
-                try encodings.encode(str, writer);
+                encodings.encode(str, writer) catch unreachable;
                 try writer.writeAll("\xff\xff");
 
                 const end_of_str = writer.context.pos;

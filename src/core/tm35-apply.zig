@@ -286,7 +286,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
-                .name => |str| try gen3.encodings.encode(.en_us, str, &trainer.name),
+                .name => |str| try applyGen3String(&trainer.name, str),
                 .items => |items| {
                     if (items.index >= trainer.items.len)
                         return error.OutOfBound;
@@ -319,7 +319,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             const move = &game.moves[moves.index];
             const move_name = &game.move_names[moves.index];
             switch (moves.value) {
-                .name => |str| try gen3.encodings.encode(.en_us, str, move_name),
+                .name => |str| try applyGen3String(move_name, str),
                 .effect => |effect| move.effect = effect,
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
@@ -441,7 +441,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .name => |str| {
                     if (pokemons.index >= game.pokemon_names.len)
                         return error.Error;
-                    try gen3.encodings.encode(.en_us, str, &game.pokemon_names[pokemons.index]);
+                    try applyGen3String(&game.pokemon_names[pokemons.index], str);
                 },
                 .pokedex_entry => |entry| {
                     if (pokemons.index == 0 or pokemons.index - 1 >= game.species_to_national_dex.len)
@@ -456,7 +456,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const ability_name = &game.ability_names[abilities.index];
             switch (abilities.value) {
-                .name => |str| try gen3.encodings.encode(.en_us, str, ability_name),
+                .name => |str| try applyGen3String(ability_name, str),
             }
         },
         .types => |types| {
@@ -465,7 +465,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const type_name = &game.type_names[types.index];
             switch (types.value) {
-                .name => |str| try gen3.encodings.encode(.en_us, str, type_name),
+                .name => |str| try applyGen3String(type_name, str),
             }
         },
         .tms, .hms => |ms| {
@@ -487,11 +487,11 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             switch (items.value) {
                 .price => |price| item.price = lu16.init(try math.cast(u16, price)),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
-                .name => |str| try gen3.encodings.encode(.en_us, str, &item.name),
+                .name => |str| try applyGen3String(&item.name, str),
                 .description => |str| {
                     const desc_small = try item.description.toSliceZ(game.data);
                     const desc = try item.description.toSlice(game.data, desc_small.len + 1);
-                    try gen3.encodings.encode(.en_us, str, desc);
+                    applyGen3String(desc, str) catch unreachable;
                 },
                 .pocket => |pocket| switch (game.version) {
                     .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{
@@ -652,7 +652,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             // Slice to include the sentinel inside the slice.
             const text = text_slice[0 .. text_slice.len + 1];
-            try gen3.encodings.encode(.en_us, texts.value, text);
+            try applyGen3String(text, texts.value);
         },
         .hidden_hollows,
         .instant_text,
@@ -675,6 +675,12 @@ fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !v
             }
         },
     }
+}
+
+fn applyGen3String(out: []u8, str: []const u8) !void {
+    var fbs = io.fixedBufferStream(str);
+    var unescape = util.escape.default.unescapingReader(fbs.reader());
+    try gen3.encodings.encode(.en_us, unescape.reader(), out);
 }
 
 fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
@@ -1143,7 +1149,7 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try writer.writeAll(value);
+    try writer.print("{s}", .{util.escape.default.unescapeFmt(value)});
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)
@@ -1577,7 +1583,7 @@ fn applyGen5StringReplace(
     var buf: [1024]u8 = undefined;
     const writer = io.fixedBufferStream(&buf).writer();
     try writer.writeAll(before);
-    try writer.writeAll(replace_with);
+    try writer.print("{s}", .{util.escape.default.unescapeFmt(replace_with)});
     try writer.writeAll(after);
     _ = writer.write("\x00") catch undefined;
 
@@ -1599,7 +1605,7 @@ fn applyGen5String(strs: gen5.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try writer.writeAll(value);
+    try writer.print("{s}", .{util.escape.default.unescapeFmt(value)});
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)

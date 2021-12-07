@@ -2016,7 +2016,8 @@ gen3.MapHeader{
 fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
     @setEvalBranchQuota(100000);
     var res = [_]u8{0} ** len;
-    gen3.encodings.encode(.en_us, str, &res) catch unreachable;
+    var fbs = io.fixedBufferStream(str);
+    gen3.encodings.encode(.en_us, fbs.reader(), &res) catch unreachable;
     return res;
 }
 

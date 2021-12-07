@@ -184,23 +184,6 @@ pub const Rom = struct {
         );
     }
 
-    /// Decodes the arm9 section and returns it to the caller. The caller
-    /// owns the memory.
-    pub fn getDecodedArm9(rom: Rom, allocator: *mem.Allocator) ![]u8 {
-        const arm9_bytes = rom.arm9();
-
-        return blz.decode(arm9_bytes, allocator) catch |err| switch (err) {
-            error.WrongDecodedLength,
-            error.Overflow,
-            error.BadLength,
-            error.BadHeaderLength,
-            error.BadHeader,
-            // Assume bad encoded format means that arm9 wasn't encoded.
-            => return mem.dupe(allocator, u8, arm9_bytes),
-            else => |e| return e,
-        };
-    }
-
     pub fn resizeSection(rom: *Rom, old: []const u8, new_size: usize) ![]u8 {
         const data = &rom.data;
         var buf: [1 * (1024 * 1024)]u8 = undefined;
@@ -250,7 +233,9 @@ pub const Rom = struct {
             const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
             const new_start = mem.alignForward(last_section_end, 128);
-            try data.resize(math.max(data.items.len, new_start + new_size));
+            if (new_start + new_size > data.items.len)
+                try data.resize(data.items.len * 2);
+
             mem.copy(
                 u8,
                 data.items[new_start..][0..new_size],
@@ -267,8 +252,7 @@ pub const Rom = struct {
             const extra_bytes = new_size - old.len;
             const old_rom_len = data.items.len;
             const old_sec_end = old_slice.end();
-            const new_rom_len = old_rom_len + extra_bytes;
-            try data.resize(math.max(data.items.len, new_rom_len));
+            const old_rom_end = sections[sections.len - 1].toSlice(data.items).end();
 
             for (sections[section_index + 1 ..]) |section| {
                 const section_slice = section.toSlice(data.items);
@@ -281,22 +265,29 @@ pub const Rom = struct {
             const section = sections[section_index];
             section.set(data.items, Slice.init(old_start, new_size));
 
+            const new_rom_end = sections[sections.len - 1].toSlice(data.items).end();
+            if (new_rom_end > data.items.len)
+                try data.resize(data.items.len * 2);
+
             mem.copyBackwards(
                 u8,
                 data.items[old_sec_end + extra_bytes ..],
-                data.items[old_sec_end..old_rom_len],
+                data.items[old_sec_end..old_rom_end],
             );
             break :blk old_start;
         };
 
+        const last_section = sections[sections.len - 1];
+        const end = last_section.toSlice(data.items).end();
+
         // Update header after resize
         const h = rom.header();
-        h.total_used_rom_size = lu32.init(@intCast(u32, data.items.len));
+        h.total_used_rom_size = lu32.init(@intCast(u32, end));
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
-            const size = h.total_used_rom_size.value();
+            const size = data.items.len;
             var device_cap: u6 = 0;
-            while (@shlExact(@as(u64, 128000), device_cap) < size) : (device_cap += 1) {}
+            while (@shlExact(@as(u64, 128 * 1024), device_cap) < size) : (device_cap += 1) {}
 
             break :blk device_cap;
         };
