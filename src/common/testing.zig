@@ -15,7 +15,7 @@ pub fn testProgram(
     out: []const u8,
 ) !void {
     var alloc_buf: [1024 * 50]u8 = undefined;
-    var out_buf: [1024 * 10]u8 = undefined;
+    var out_buf: [1024 * 20]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&alloc_buf);
     var stdin = io.fixedBufferStream(in);
     var stdout = io.fixedBufferStream(&out_buf);
@@ -32,10 +32,7 @@ pub fn testProgram(
     try program.run(
         StdIo.Reader,
         StdIo.Writer,
-        StdIo{
-            .in = stdin.reader(),
-            .out = stdout.writer(),
-        },
+        .{ .in = stdin.reader(), .out = stdout.writer() },
     );
     try testing.expectEqualStrings(out, stdout.getWritten());
 }

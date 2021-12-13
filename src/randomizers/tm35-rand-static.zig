@@ -96,7 +96,10 @@ pub fn run(
 pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
-    try ston.serialize(writer, .{ .static_pokemons = program.static_mons });
+    try ston.serialize(writer, .{
+        .static_pokemons = program.static_mons,
+        .given_pokemons = program.given_mons,
+    });
 
     for (program.hidden_hollows.values()) |hollow, i| {
         const hollow_key = program.hidden_hollows.keys()[i];
@@ -112,7 +115,7 @@ fn output(program: *Program, writer: anytype) !void {
                     .hidden_hollows = ston.index(hollow_key, .{
                         .groups = ston.index(group_key, .{
                             .pokemons = ston.index(pokemon_key, .{
-                                .species = program.hollow_mons.get(si).?,
+                                .species = program.hollow_mons.get(si).?.species,
                             }),
                         }),
                     }),
@@ -508,7 +511,7 @@ const StaticMon = struct {
     species: u16,
 };
 
-test "tm35-rand-static" {
+fn testIt(comptime prefix: []const u8) !void {
     const H = struct {
         fn pokemon(
             comptime id: []const u8,
@@ -541,7 +544,7 @@ test "tm35-rand-static" {
             comptime id: []const u8,
             comptime species: []const u8,
         ) []const u8 {
-            return ".static_pokemons[" ++ id ++ "].species=" ++ species ++ "\n";
+            return prefix ++ "[" ++ id ++ "].species=" ++ species ++ "\n";
         }
     };
 
@@ -582,75 +585,65 @@ test "tm35-rand-static" {
         H.static("5", "21");
 
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.static_pokemons[0].species=6
-        \\.static_pokemons[1].species=0
-        \\.static_pokemons[2].species=1
-        \\.static_pokemons[3].species=5
-        \\.static_pokemons[4].species=8
-        \\.static_pokemons[5].species=18
-        \\
-    );
+        prefix ++ "[0].species=6\n" ++
+        prefix ++ "[1].species=0\n" ++
+        prefix ++ "[2].species=1\n" ++
+        prefix ++ "[3].species=5\n" ++
+        prefix ++ "[4].species=8\n" ++
+        prefix ++ "[5].species=18\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=0
-        \\.static_pokemons[1].species=1
-        \\.static_pokemons[2].species=2
-        \\.static_pokemons[3].species=3
-        \\.static_pokemons[4].species=9
-        \\.static_pokemons[5].species=21
-        \\
-    );
+        prefix ++ "[0].species=0\n" ++
+        prefix ++ "[1].species=1\n" ++
+        prefix ++ "[2].species=2\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=9\n" ++
+        prefix ++ "[5].species=21\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=2
-        \\.static_pokemons[1].species=13
-        \\.static_pokemons[2].species=0
-        \\.static_pokemons[3].species=3
-        \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=9
-        \\
-    );
+        prefix ++ "[0].species=2\n" ++
+        prefix ++ "[1].species=13\n" ++
+        prefix ++ "[2].species=0\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=9\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=0
-        \\.static_pokemons[1].species=11
-        \\.static_pokemons[2].species=2
-        \\.static_pokemons[3].species=1
-        \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=7
-        \\
-    );
+        prefix ++ "[0].species=0\n" ++
+        prefix ++ "[1].species=11\n" ++
+        prefix ++ "[2].species=2\n" ++
+        prefix ++ "[3].species=1\n" ++
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=7\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=2
-        \\.static_pokemons[1].species=11
-        \\.static_pokemons[2].species=6
-        \\.static_pokemons[3].species=13
-        \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=18
-        \\
-    );
+        prefix ++ "[0].species=2\n" ++
+        prefix ++ "[1].species=11\n" ++
+        prefix ++ "[2].species=6\n" ++
+        prefix ++ "[3].species=13\n" ++
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=18\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=0
-        \\.static_pokemons[1].species=3
-        \\.static_pokemons[2].species=2
-        \\.static_pokemons[3].species=3
-        \\.static_pokemons[4].species=9
-        \\.static_pokemons[5].species=7
-        \\
-    );
+        prefix ++ "[0].species=0\n" ++
+        prefix ++ "[1].species=3\n" ++
+        prefix ++ "[2].species=2\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=9\n" ++
+        prefix ++ "[5].species=7\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=8
-        \\.static_pokemons[1].species=0
-        \\.static_pokemons[2].species=8
-        \\.static_pokemons[3].species=3
-        \\.static_pokemons[4].species=7
-        \\.static_pokemons[5].species=15
-        \\
-    );
+        prefix ++ "[0].species=8\n" ++
+        prefix ++ "[1].species=0\n" ++
+        prefix ++ "[2].species=8\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=7\n" ++
+        prefix ++ "[5].species=15\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
-        \\.static_pokemons[0].species=6
-        \\.static_pokemons[1].species=3
-        \\.static_pokemons[2].species=2
-        \\.static_pokemons[3].species=3
-        \\.static_pokemons[4].species=4
-        \\.static_pokemons[5].species=20
-        \\
-    );
+        prefix ++ "[0].species=6\n" ++
+        prefix ++ "[1].species=3\n" ++
+        prefix ++ "[2].species=2\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=20\n");
+}
+
+test "tm35-rand-static" {
+    try testIt(".static_pokemons");
+    try testIt(".given_pokemons");
+    try testIt(".hidden_hollows[0].groups[0].pokemons");
 }

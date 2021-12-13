@@ -47,7 +47,7 @@ pub fn io(
 
         var start: usize = 0;
         while (true) {
-            while (des.next()) |res| {
+            const err = while (des.next()) |res| {
                 parse(ctx, res) catch |err| switch (err) {
                     // When `parse` returns `ParserFailed` it communicates to us that they
                     // could not handle the result in any meaningful way, so we are responsible
@@ -57,7 +57,7 @@ pub fn io(
                 };
 
                 start = tok.i;
-            } else |_| {}
+            } else |err| err;
 
             // If we couldn't parse a portion of the buffer, then we skip to the next line
             // and try again. The current line will just be written out again.
@@ -66,6 +66,7 @@ pub fn io(
                 try writer.writeAll(line);
 
                 start = index + 1;
+                std.log.warn("{s}: {s}", .{ @errorName(err), line[0..index] });
                 continue;
             }
 
