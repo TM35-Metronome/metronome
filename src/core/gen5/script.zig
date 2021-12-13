@@ -23,6 +23,7 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
         switch (cmd.tag) {
             .end,
             .jump,
+            .end_function,
             => return true,
             else => return false,
         }
@@ -155,7 +156,7 @@ pub const Command = packed struct {
         face_player: void,
         release: Release,
         release_all: void,
-        lock: Lock,
+        lock_77: Lock,
         unknown_78: Unknown_78,
         unknown_79: Unknown_79,
         move_n_p_c_to: MoveNPCTo,
@@ -240,7 +241,10 @@ pub const Command = packed struct {
         set_badge: SetBadge,
         store_badge_number: StoreBadgeNumber,
         check_money: CheckMoney,
-        give_pokemon: GivePokemon,
+        store_party_number_minimum: StorePartyNumberMinimum,
+        give_pokemon_1: GivePokemon1,
+        give_pokemon_2: GivePokemon2,
+        give_pokemon_3: GivePokemon3,
         boot_p_c_sound: void,
         unknown_136: Arg1(lu16),
         wild_battle: WildBattle,
@@ -248,6 +252,8 @@ pub const Command = packed struct {
         fade_into_black: void,
         unknown_1b7: Arg1(lu16),
         unknown_1b8: Arg1(lu16),
+        lock_24f: void,
+        give_pokemon_4: GivePokemon4,
     };
     pub const Kind = enum(u16) {
         nop1 = lu16.init(0x00).value(),
@@ -361,7 +367,7 @@ pub const Command = packed struct {
         face_player = lu16.init(0x74).value(),
         release = lu16.init(0x75).value(),
         release_all = lu16.init(0x76).value(),
-        lock = lu16.init(0x77).value(),
+        lock_77 = lu16.init(0x77).value(),
         unknown_78 = lu16.init(0x78).value(),
         unknown_79 = lu16.init(0x79).value(),
         move_n_p_c_to = lu16.init(0x7B).value(),
@@ -442,7 +448,10 @@ pub const Command = packed struct {
         set_badge = lu16.init(0xD6).value(),
         store_badge_number = lu16.init(0xD7).value(),
         check_money = lu16.init(0xFB).value(),
-        give_pokemon = lu16.init(0x10C).value(),
+        store_party_number_minimum = lu16.init(0x103).value(),
+        give_pokemon_1 = lu16.init(0x10C).value(),
+        give_pokemon_2 = lu16.init(0x10E).value(),
+        give_pokemon_3 = lu16.init(0x10F).value(),
         boot_p_c_sound = lu16.init(0x130).value(),
         unknown_136 = lu16.init(0x136).value(),
         wild_battle = lu16.init(0x174).value(),
@@ -454,13 +463,15 @@ pub const Command = packed struct {
         fade_into_black = lu16.init(0x1AC).value(),
         unknown_1b7 = lu16.init(0x1b7).value(),
         unknown_1b8 = lu16.init(0x1b8).value(),
+        lock_24f = lu16.init(0x24f).value(),
+        give_pokemon_4 = lu16.init(0x2ea).value(),
     };
 
     pub fn Arg1(comptime T: type) type {
         return packed struct { arg: T };
     }
     pub const CallRoutine = packed struct {
-        arg: li32,
+        offset: li32,
     };
     pub const CompareTo = packed struct {
         value: lu16,
@@ -1039,10 +1050,38 @@ pub const Command = packed struct {
         storage: lu16,
         value: lu16,
     };
-    pub const GivePokemon = packed struct {
+    pub const StorePartyNumberMinimum = packed struct {
+        result: lu16,
+        number: lu16,
+    };
+    pub const GivePokemon1 = packed struct {
         species: lu16,
         item: lu16,
         level: lu16,
+    };
+    pub const GivePokemon2 = packed struct {
+        result: lu16,
+        species: lu16,
+        form: lu16,
+        level: lu16,
+        unknown_0: lu16,
+        unknown_1: lu16,
+        unknown_2: lu16,
+        unknown_3: lu16,
+        unknown_4: lu16,
+    };
+    pub const GivePokemon3 = packed struct {
+        result: lu16,
+        species: lu16,
+        is_full: lu16,
+    };
+    pub const GivePokemon4 = packed struct {
+        result: lu16,
+        species: lu16,
+        level: lu16,
+        unknown_0: lu16,
+        unknown_1: lu16,
+        unknown_2: lu16,
     };
     pub const WildBattle = packed struct {
         species: lu16,

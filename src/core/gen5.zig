@@ -1268,9 +1268,9 @@ pub const Game = struct {
             while (offset_i < script_offsets.items.len) : (offset_i += 1) {
                 const offset = script_offsets.items[offset_i];
                 if (@intCast(isize, script_data.len) < offset)
-                    return error.Error;
+                    continue;
                 if (offset < 0)
-                    return error.Error;
+                    continue;
 
                 var decoder = script.CommandDecoder{
                     .bytes = script_data,
@@ -1293,9 +1293,17 @@ pub const Game = struct {
                             .species = &command.data().wild_battle_store_result.species,
                             .level = &command.data().wild_battle_store_result.level,
                         }),
-                        .give_pokemon => try given_pokemons.append(.{
-                            .species = &command.data().give_pokemon.species,
-                            .level = &command.data().give_pokemon.level,
+                        .give_pokemon_1 => try given_pokemons.append(.{
+                            .species = &command.data().give_pokemon_1.species,
+                            .level = &command.data().give_pokemon_1.level,
+                        }),
+                        .give_pokemon_2 => try given_pokemons.append(.{
+                            .species = &command.data().give_pokemon_2.species,
+                            .level = &command.data().give_pokemon_2.level,
+                        }),
+                        .give_pokemon_4 => try given_pokemons.append(.{
+                            .species = &command.data().give_pokemon_4.species,
+                            .level = &command.data().give_pokemon_4.level,
                         }),
 
                         // In scripts, field items are two set_var_eq_val commands
@@ -1307,17 +1315,18 @@ pub const Game = struct {
                             0x800C => var_800C_tmp = &command.data().set_var_eq_val.value,
                             0x800D => if (var_800C) |item| {
                                 const amount = &command.data().set_var_eq_val.value;
-                                try pokeball_items.append(PokeballItem{
+                                try pokeball_items.append(.{
                                     .item = item,
                                     .amount = amount,
                                 });
                             },
                             else => {},
                         },
-                        .jump, .@"if" => {
+                        .jump, .@"if", .call_routine => {
                             const off = switch (command.tag) {
                                 .jump => command.data().jump.offset.value(),
                                 .@"if" => command.data().@"if".offset.value(),
+                                .call_routine => command.data().call_routine.offset.value(),
                                 else => unreachable,
                             };
                             const location = off + @intCast(isize, decoder.i);

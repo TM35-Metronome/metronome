@@ -217,9 +217,9 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, writer: any
             const offset = offsets.items[offset_i];
             try writer.print("script[{}]@0x{x}:\n", .{ script_i, offset });
             if (@intCast(isize, script_data.len) < offset)
-                return error.Error;
+                continue;
             if (offset < 0)
-                return error.Error;
+                continue;
 
             var decoder = gen5.script.CommandDecoder{
                 .bytes = script_data,
@@ -236,15 +236,18 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, writer: any
                 try printCommand(writer, command.*, decoder);
 
                 switch (command.tag) {
-                    .jump, .@"if" => {
+                    .jump, .@"if", .call_routine => {
                         const off = switch (command.tag) {
                             .jump => command.data().jump.offset.value(),
                             .@"if" => command.data().@"if".offset.value(),
+                            .call_routine => command.data().call_routine.offset.value(),
                             else => unreachable,
                         };
+
                         const location = off + @intCast(isize, decoder.i);
-                        if (mem.indexOfScalar(isize, offsets.items, location) == null)
+                        if (mem.indexOfScalar(isize, offsets.items, location) == null) {
                             try offsets.append(location);
+                        }
                     },
                     else => {},
                 }
