@@ -66,7 +66,7 @@ pub fn io(
                 try writer.writeAll(line);
 
                 start = index + 1;
-                std.log.warn("{s}: {s}", .{ @errorName(err), line[0..index] });
+                std.log.warn("{s}: {s}", .{ @errorName(err), line[0 .. line.len - 1] });
                 continue;
             }
 

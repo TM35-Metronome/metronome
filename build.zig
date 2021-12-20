@@ -90,18 +90,17 @@ pub fn build(b: *Builder) void {
     });
 
     const strip = b.option(bool, "strip", "") orelse false;
-    const build_ui = b.option(bool, "build-ui", "") orelse true;
 
     const test_step = b.step("test", "Run all tests");
     testIt(b, test_step, mode, "src/test.zig");
 
     const options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
     for (core_exes) |name|
-        buildProgram(b, name, b.fmt("src/core/{s}.zig", .{name}), options);
+        _ = buildProgram(b, name, b.fmt("src/core/{s}.zig", .{name}), options);
     for (randomizer_exes) |name|
-        buildProgram(b, name, b.fmt("src/randomizers/{s}.zig", .{name}), options);
+        _ = buildProgram(b, name, b.fmt("src/randomizers/{s}.zig", .{name}), options);
     for (other_exes) |name|
-        buildProgram(b, name, b.fmt("src/other/{s}.zig", .{name}), options);
+        _ = buildProgram(b, name, b.fmt("src/other/{s}.zig", .{name}), options);
 
     const lib_cflags = &[_][]const u8{
         "-D_POSIX_C_SOURCE=200809L",
@@ -109,9 +108,7 @@ pub fn build(b: *Builder) void {
     };
     for (gui_exes) |tool| {
         const source = b.fmt("src/gui/{s}.zig", .{tool});
-        const exe = b.addExecutable(tool, source);
-        for (pkgs) |pkg|
-            exe.addPackage(pkg);
+        const exe = buildProgram(b, tool, source, options);
 
         switch (target.getOsTag()) {
             .windows => {
@@ -142,12 +139,6 @@ pub fn build(b: *Builder) void {
         exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
         exe.linkSystemLibrary("c");
         exe.linkSystemLibrary("m");
-
-        exe.setTarget(target);
-        exe.setBuildMode(mode);
-        exe.single_threaded = true;
-        if (build_ui)
-            exe.install();
     }
 }
 
@@ -163,7 +154,7 @@ fn buildProgram(
     name: []const u8,
     src: []const u8,
     opt: BuildProgramOptions,
-) void {
+) *LibExeObjStep {
     const step = b.step(b.fmt("build-{s}", .{name}), "");
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
@@ -171,12 +162,15 @@ fn buildProgram(
 
     if (opt.install)
         step.dependOn(&b.addInstallArtifact(exe).step);
+
     exe.setTarget(opt.target);
     exe.setBuildMode(opt.mode);
     exe.single_threaded = true;
     exe.strip = opt.strip;
     step.dependOn(&exe.step);
     b.default_step.dependOn(step);
+
+    return exe;
 }
 
 fn testIt(b: *Builder, parent_step: *Step, mode: std.builtin.Mode, src: []const u8) void {
