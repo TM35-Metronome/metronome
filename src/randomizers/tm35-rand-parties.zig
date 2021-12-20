@@ -5,6 +5,7 @@ const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
 
+const ascii = std.ascii;
 const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -16,6 +17,8 @@ const mem = std.mem;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
+
+const escape = util.escape;
 
 const Program = @This();
 
@@ -32,6 +35,7 @@ options: struct {
     party_size_method: PartySizeMethod,
     stats: StatsOption,
     types: ThemeOption,
+    excluded_pokemons: []const []const u8,
 },
 
 pokedex: Set = Set{},
@@ -92,17 +96,55 @@ pub const description =
 ;
 
 pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help                                                                Display this help text and exit.") catch unreachable,
-    clap.parseParam("-i, --items <none|unchanged|random>                                       The method used to picking held items. (default: none)") catch unreachable,
-    clap.parseParam("-o, --moves <none|unchanged|best|best_for_level|random_learnable|random>  The method used to picking moves. (default: none)") catch unreachable,
-    clap.parseParam("-m, --party-size-min <INT>                                                The minimum size each trainers party is allowed to be. (default: 1)") catch unreachable,
-    clap.parseParam("-M, --party-size-max <INT>                                                The maximum size each trainers party is allowed to be. (default: 6)") catch unreachable,
-    clap.parseParam("-p, --party-size-pick-method <unchanged|minimum|random>                   The method used to pick the trainer party size. (default: unchanged)") catch unreachable,
-    clap.parseParam("-s, --seed <INT>                                                          The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-    clap.parseParam("-S, --stats <random|simular|follow_level>                                 The total stats the picked pokemon should have. (default: random)") catch unreachable,
-    clap.parseParam("-t, --types <random|same|themed>                                          Which types each trainer should use. (default: random)") catch unreachable,
-    clap.parseParam("-a, --abilities <random|same|themed>                                      Which ability each party member should have. (default: random)") catch unreachable,
-    clap.parseParam("-v, --version                                                             Output version information and exit.") catch unreachable,
+    clap.parseParam(
+        "-h, --help " ++
+            "Display this help text and exit.",
+    ) catch unreachable,
+    clap.parseParam(
+        "-i, --items <none|unchanged|random> " ++
+            "The method used to picking held items. (default: none)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-o, --moves <none|unchanged|best|best_for_level|random_learnable|random> " ++
+            "  The method used to picking moves. (default: none)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-m, --party-size-min <INT> " ++
+            "The minimum size each trainers party is allowed to be. (default: 1)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-M, --party-size-max <INT> " ++
+            "The maximum size each trainers party is allowed to be. (default: 6)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-p, --party-size <unchanged|minimum|random> " ++
+            "The method used to pick the trainer party size. (default: unchanged)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-s, --seed <INT> " ++
+            "The seed to use for random numbers. A random seed will be picked if this is not " ++
+            "specified.",
+    ) catch unreachable,
+    clap.parseParam(
+        "-S, --stats <random|simular|follow_level> " ++
+            "The total stats the picked pokemon should have. (default: random)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-t, --types <random|same|themed> " ++
+            "Which types each trainer should use. (default: random)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-a, --abilities <random|same|themed> " ++
+            "Which ability each party member should have. (default: random)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-e, --exclude <STRING>... " ++
+            "List of pokemons to never pick. Case insensitive. Supports wildcards like 'nido*'.",
+    ) catch unreachable,
+    clap.parseParam(
+        "-v, --version " ++
+            "Output version information and exit.",
+    ) catch unreachable,
 };
 
 pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
@@ -111,10 +153,11 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
     const items_arg = args.option("--items") orelse "none";
     const moves_arg = args.option("--moves") orelse "none";
     const party_size_max_arg = args.option("--party-size-max") orelse "6";
-    const party_size_method_arg = args.option("--party-size-pick-method") orelse "unchanged";
+    const party_size_method_arg = args.option("--party-size") orelse "unchanged";
     const party_size_min_arg = args.option("--party-size-min") orelse "1";
     const stats_arg = args.option("--stats") orelse "random";
     const types_arg = args.option("--types") orelse "random";
+    const excluded_pokemons_arg = args.options("--exclude");
 
     const party_size_min = fmt.parseUnsigned(u8, party_size_min_arg, 10);
     const party_size_max = fmt.parseUnsigned(u8, party_size_max_arg, 10);
@@ -126,7 +169,10 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
         log.err("--items does not support '{s}'", .{items_arg});
         return error.InvalidArgument;
     };
-    const party_size_method = std.meta.stringToEnum(PartySizeMethod, party_size_method_arg) orelse {
+    const party_size_method = std.meta.stringToEnum(
+        PartySizeMethod,
+        party_size_method_arg,
+    ) orelse {
         log.err("--party-size-pick-method does not support '{s}'", .{party_size_method_arg});
         return error.InvalidArgument;
     };
@@ -152,6 +198,11 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
         }
     }
 
+    var excluded_pokemons = try std.ArrayList([]const u8)
+        .initCapacity(allocator, excluded_pokemons_arg.len);
+    for (excluded_pokemons_arg) |exclude|
+        excluded_pokemons.appendAssumeCapacity(try ascii.allocLowerString(allocator, exclude));
+
     return Program{
         .allocator = allocator,
         .random = undefined, // Initialized in `run`
@@ -166,6 +217,7 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
             .party_size_method = party_size_method,
             .stats = stats,
             .types = types,
+            .excluded_pokemons = excluded_pokemons.toOwnedSlice(),
         },
     };
 }
@@ -179,7 +231,12 @@ pub fn run(
     const allocator = program.allocator;
     try format.io(allocator, stdio.in, stdio.out, program, useGame);
 
-    const species = try pokedexPokemons(allocator, program.pokedex, program.pokemons);
+    const species = try pokedexPokemons(
+        allocator,
+        program.pokedex,
+        program.pokemons,
+        program.options.excluded_pokemons,
+    );
     program.random = &rand.DefaultPrng.init(program.options.seed).random;
     program.species = species;
     program.species_by_ability = try speciesByAbility(allocator, program.pokemons, species);
@@ -204,13 +261,31 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             return error.ParserFailed;
         },
         .pokemons => |pokemons| {
-            const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
+            const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
+                .value_ptr;
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
-                .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .name => |name| {
+                    pokemon.name = try escape.default.unescapeAlloc(allocator, name);
+                    for (pokemon.name) |*c|
+                        c.* = ascii.toLower(c.*);
+                },
+                .stats => |stats| {
+                    const stat = @enumToInt(stats);
+                    if (pokemon.stats[stat] > stats.value()) {
+                        pokemon.total_stats -= pokemon.stats[stat] - stats.value();
+                    } else {
+                        pokemon.total_stats += stats.value() - pokemon.stats[stat];
+                    }
+                    pokemon.stats[stat] = stats.value();
+                },
                 .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
-                .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.index, ability.value),
+                .abilities => |ability| _ = try pokemon.abilities.put(
+                    allocator,
+                    ability.index,
+                    ability.value,
+                ),
                 .moves => |moves| {
                     const move = (try pokemon.lvl_up_moves.getOrPutValue(
                         allocator,
@@ -231,7 +306,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .evos,
                 .tms,
                 .hms,
-                .name,
                 => return error.ParserFailed,
             }
             return error.ParserFailed;
@@ -447,7 +521,13 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
     }
 }
 
-fn fillWithBestMovesForLevel(random: *rand.Random, all_moves: Moves, pokemon: Pokemon, level: u8, moves: *MemberMoves) void {
+fn fillWithBestMovesForLevel(
+    random: *rand.Random,
+    all_moves: Moves,
+    pokemon: Pokemon,
+    level: u8,
+    moves: *MemberMoves,
+) void {
     // Before pick best moves, we make sure the Pokémon has no moves.
     mem.set(u16, moves.values(), 0);
 
@@ -504,7 +584,11 @@ fn fillWithRandomMoves(random: *rand.Random, all_moves: Moves, moves: *MemberMov
     }
 }
 
-fn fillWithRandomLevelUpMoves(random: *rand.Random, lvl_up_moves: LvlUpMoves, moves: *MemberMoves) void {
+fn fillWithRandomLevelUpMoves(
+    random: *rand.Random,
+    lvl_up_moves: LvlUpMoves,
+    moves: *MemberMoves,
+) void {
     for (moves.values()) |*move, i| {
         // We need to have more moves in the learnset than the party member can have,
         // otherwise, we cannot pick only unique moves.
@@ -575,24 +659,26 @@ fn randomizePartyMember(
         .random => program.species,
     };
 
-    // The intersection between the type_set and ability_set will give
-    // us all pokémons that have a certain type+ability pair. This is
-    // the set we will pick from.
-    var intersection = program.intersection.promote(allocator);
-    intersection.clearRetainingCapacity();
-    try util.set.intersectInline(
-        &intersection,
-        // HACK: `ArrayHashMapUnmanaged` does not have the `iterator` function,
-        //       but `ArrayHashMap` does. We just promote them to get access to
-        //       this function
-        ability_set.promote(allocator),
-        type_set.promote(allocator),
-    );
-    program.intersection = intersection.unmanaged;
+    if (program.options.abilities != .random and program.options.types != .random) {
+        // The intersection between the type_set and ability_set will give
+        // us all pokémons that have a certain type+ability pair. This is
+        // the set we will pick from.
+        var intersection = program.intersection.promote(allocator);
+        intersection.clearRetainingCapacity();
+        try util.set.intersectInline(
+            &intersection,
+            // HACK: `ArrayHashMapUnmanaged` does not have the `iterator` function,
+            //       but `ArrayHashMap` does. We just promote them to get access to
+            //       this function
+            ability_set.promote(allocator),
+            type_set.promote(allocator),
+        );
+        program.intersection = intersection.unmanaged;
+    }
 
     // Pick the first set that has items in it.
-    const pick_from = if (intersection.count() != 0)
-        intersection.unmanaged
+    const pick_from = if (program.intersection.count() != 0)
+        program.intersection
     else if (program.options.abilities != .random and ability_set.count() != 0)
         ability_set
     else if (program.options.types != .random and type_set.count() != 0)
@@ -627,7 +713,7 @@ fn randomizePartyMember(
             member.species = try randomSpeciesWithSimularTotalStats(
                 program,
                 pick_from,
-                it.fold(&pokemon.stats, @as(u16, 0), foldu8),
+                pokemon.total_stats,
             );
             return;
         } else {},
@@ -651,7 +737,7 @@ fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_s
     }) {
         for (pick_from.keys()) |s| {
             const p = program.pokemons.get(s).?;
-            const total = @intCast(isize, it.fold(&p.stats, @as(u16, 0), foldu8));
+            const total = @intCast(isize, p.total_stats);
             if (min <= total and total <= max)
                 try program.simular.append(allocator, s);
         }
@@ -692,10 +778,6 @@ fn findAbility(abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
     }.f);
 }
 
-fn foldu8(a: u16, b: u8) u16 {
-    return a + b;
-}
-
 fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
 }
@@ -710,16 +792,26 @@ const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const SpeciesBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const Trainers = std.AutoArrayHashMapUnmanaged(u16, Trainer);
 
-fn pokedexPokemons(allocator: *mem.Allocator, pokedex: Set, pokemons: Pokemons) !Set {
+fn pokedexPokemons(
+    allocator: *mem.Allocator,
+    pokedex: Set,
+    pokemons: Pokemons,
+    excluded_pokemons: []const []const u8,
+) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    outer: for (pokemons.values()) |pokemon, i| {
         const species = pokemons.keys()[i];
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)
             continue;
+
+        for (excluded_pokemons) |glob| {
+            if (util.glob.match(glob, pokemon.name))
+                continue :outer;
+        }
 
         _ = try res.put(allocator, species, {});
     }
@@ -734,9 +826,8 @@ fn minMaxStats(pokemons: Pokemons, species: Set) MinMax(u16) {
     };
     for (species.keys()) |s| {
         const pokemon = pokemons.get(s).?;
-        const total_stats = it.fold(&pokemon.stats, @as(u16, 0), foldu8);
-        res.min = math.min(res.min, total_stats);
-        res.max = math.max(res.max, total_stats);
+        res.min = math.min(res.min, pokemon.total_stats);
+        res.max = math.max(res.max, pokemon.total_stats);
     }
     return res;
 }
@@ -849,11 +940,13 @@ const RelativeMove = struct {
 
 const Pokemon = struct {
     stats: [6]u8 = [_]u8{0} ** 6,
+    total_stats: u16 = 0,
     types: Set = Set{},
     abilities: Abilities = Abilities{},
     lvl_up_moves: LvlUpMoves = LvlUpMoves{},
     catch_rate: usize = 1,
     pokedex_entry: u16 = math.maxInt(u16),
+    name: []u8 = "",
 };
 
 test "tm35-rand-parties" {
@@ -865,6 +958,7 @@ test "tm35-rand-parties" {
             comptime ability: []const u8,
             comptime move_: []const u8,
             comptime catch_rate: []const u8,
+            comptime name: []const u8,
         ) []const u8 {
             return ".pokedex[" ++ id ++ "].height=0\n" ++
                 ".pokemons[" ++ id ++ "].pokedex_entry=" ++ id ++ "\n" ++
@@ -879,25 +973,33 @@ test "tm35-rand-parties" {
                 ".pokemons[" ++ id ++ "].abilities[0]=" ++ ability ++ "\n" ++
                 ".pokemons[" ++ id ++ "].moves[0].id=" ++ move_ ++ "\n" ++
                 ".pokemons[" ++ id ++ "].moves[0].level=0\n" ++
-                ".pokemons[" ++ id ++ "].catch_rate=" ++ catch_rate ++ "\n";
+                ".pokemons[" ++ id ++ "].catch_rate=" ++ catch_rate ++ "\n" ++
+                ".pokemons[" ++ id ++ "].name=" ++ name ++ "\n";
         }
-        fn trainer(comptime id: []const u8, comptime species: []const u8, comptime item_: ?[]const u8, comptime move_: ?[]const u8) []const u8 {
+        fn trainer(
+            comptime id: []const u8,
+            comptime species: []const u8,
+            comptime item_: ?[]const u8,
+            comptime move_: ?[]const u8,
+        ) []const u8 {
+            const prefix = ".trainers[" ++ id ++ "]";
             const _type: []const u8 = if (move_ != null and item_ != null) "both" //
             else if (move_) |_| "moves" //
             else if (item_) |_| "item" //
             else "none";
-            return ".trainers[" ++ id ++ "].party_size=2\n" ++
-                ".trainers[" ++ id ++ "].party_type=" ++ _type ++ "\n" ++
-                ".trainers[" ++ id ++ "].party[0].species=" ++ species ++ "\n" ++
-                ".trainers[" ++ id ++ "].party[0].level=5\n" ++
-                ".trainers[" ++ id ++ "].party[0].ability=0\n" ++
-                (if (item_) |i| ".trainers[" ++ id ++ "].party[0].item=" ++ i ++ "\n" else "") ++
-                (if (move_) |m| ".trainers[" ++ id ++ "].party[0].moves[0]=" ++ m ++ "\n" else "") ++
-                ".trainers[" ++ id ++ "].party[1].species=" ++ species ++ "\n" ++
-                ".trainers[" ++ id ++ "].party[1].level=5\n" ++
-                ".trainers[" ++ id ++ "].party[1].ability=0\n" ++
-                (if (item_) |i| ".trainers[" ++ id ++ "].party[1].item=" ++ i ++ "\n" else "") ++
-                (if (move_) |m| ".trainers[" ++ id ++ "].party[1].moves[0]=" ++ m ++ "\n" else "");
+
+            return prefix ++ ".party_size=2\n" ++
+                prefix ++ ".party_type=" ++ _type ++ "\n" ++
+                prefix ++ ".party[0].species=" ++ species ++ "\n" ++
+                prefix ++ ".party[0].level=5\n" ++
+                prefix ++ ".party[0].ability=0\n" ++
+                (if (item_) |i| prefix ++ ".party[0].item=" ++ i ++ "\n" else "") ++
+                (if (move_) |m| prefix ++ ".party[0].moves[0]=" ++ m ++ "\n" else "") ++
+                prefix ++ ".party[1].species=" ++ species ++ "\n" ++
+                prefix ++ ".party[1].level=5\n" ++
+                prefix ++ ".party[1].ability=0\n" ++
+                (if (item_) |i| prefix ++ ".party[1].item=" ++ i ++ "\n" else "") ++
+                (if (move_) |m| prefix ++ ".party[1].moves[0]=" ++ m ++ "\n" else "");
         }
         fn move(
             comptime id: []const u8,
@@ -919,15 +1021,15 @@ test "tm35-rand-parties" {
         }
     };
 
-    const result_prefix = comptime H.pokemon("0", "10", "0", "0", "1", "1") ++
-        H.pokemon("1", "15", "16", "1", "2", "1") ++
-        H.pokemon("2", "20", "2", "2", "3", "1") ++
-        H.pokemon("3", "25", "12", "3", "4", "1") ++
-        H.pokemon("4", "30", "10", "1", "5", "1") ++
-        H.pokemon("5", "35", "11", "2", "6", "1") ++
-        H.pokemon("6", "40", "5", "3", "7", "1") ++
-        H.pokemon("7", "45", "4", "1", "8", "1") ++
-        H.pokemon("8", "45", "4", "2", "8", "0") ++
+    const result_prefix = comptime H.pokemon("0", "10", "0", "0", "1", "1", "pokemon 0") ++
+        H.pokemon("1", "15", "16", "1", "2", "1", "pokemon 1") ++
+        H.pokemon("2", "20", "2", "2", "3", "1", "pokemon 2") ++
+        H.pokemon("3", "25", "12", "3", "4", "1", "pokemon 3") ++
+        H.pokemon("4", "30", "10", "1", "5", "1", "pokemon 4") ++
+        H.pokemon("5", "35", "11", "2", "6", "1", "pokemon 5") ++
+        H.pokemon("6", "40", "5", "3", "7", "1", "pokemon 6") ++
+        H.pokemon("7", "45", "4", "1", "8", "1", "pokemon 7") ++
+        H.pokemon("8", "45", "4", "2", "8", "0", "pokemon 8") ++
         H.move("0", "0", "0", "0", "0") ++
         H.move("1", "10", "0", "10", "255") ++
         H.move("2", "10", "16", "10", "255") ++
@@ -949,7 +1051,9 @@ test "tm35-rand-parties" {
         H.trainer("2", "2", null, "3") ++
         H.trainer("3", "3", null, "4");
 
-    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -992,7 +1096,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--party-size-min=3" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--party-size-min=3",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=3
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1047,7 +1154,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[2].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--party-size-max=1" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--party-size-max=1",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1091,7 +1201,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--party-size-pick-method=minimum" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--party-size=minimum",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1135,7 +1248,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--party-size-pick-method=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--party-size=random",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=1
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=0
@@ -1191,7 +1307,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--items=unchanged" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--items=unchanged",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1236,7 +1355,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--items=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--items=random",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=item
         \\.trainers[0].party[0].species=2
@@ -1287,7 +1409,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--moves=unchanged" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--moves=unchanged",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1373,9 +1498,18 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=6
         \\
     ;
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--moves=best" }, test_string, result_prefix ++ moves_result);
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--moves=best_for_level" }, test_string, result_prefix ++ moves_result);
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--moves=random_learnable" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--moves=best",
+    }, test_string, result_prefix ++ moves_result);
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--moves=best_for_level",
+    }, test_string, result_prefix ++ moves_result);
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--moves=random_learnable",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1418,7 +1552,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--moves=random" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--moves=random",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=moves
         \\.trainers[0].party[0].species=2
@@ -1461,7 +1598,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=2
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--types=same",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=0
@@ -1504,7 +1644,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--types=themed" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--types=themed",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1547,7 +1690,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--abilities=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--abilities=same",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=2
@@ -1590,7 +1736,10 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--abilities=themed" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--seed=0",
+        "--abilities=themed",
+    }, test_string, result_prefix ++
         \\.trainers[0].party_size=2
         \\.trainers[0].party_type=none
         \\.trainers[0].party[0].species=1
@@ -1633,4 +1782,21 @@ test "tm35-rand-parties" {
         \\.trainers[3].party[1].moves[0]=4
         \\
     );
+
+    // Test excluding system by running 100 seeds and checking that none of them pick the
+    // excluded pokemons
+    var seed: u8 = 0;
+    while (seed < 100) : (seed += 1) {
+        var buf: [100]u8 = undefined;
+        const seed_arg = try fmt.bufPrint(&buf, "--seed={}", .{seed});
+        const out = try util.testing.runProgram(Program, &[_][]const u8{
+            "--exclude=pokemon 2",
+            "--exclude=pokemon 4",
+            seed_arg,
+        }, test_string);
+        defer testing.allocator.free(out);
+
+        try testing.expect(mem.indexOf(u8, out, ".species=2") == null);
+        try testing.expect(mem.indexOf(u8, out, ".species=4") == null);
+    }
 }

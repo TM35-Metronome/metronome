@@ -14,25 +14,36 @@ pub fn testProgram(
     in: []const u8,
     out: []const u8,
 ) !void {
-    var alloc_buf: [1024 * 50]u8 = undefined;
-    var out_buf: [1024 * 20]u8 = undefined;
-    var fba = heap.FixedBufferAllocator.init(&alloc_buf);
+    const res = try runProgram(Program, args, in);
+    defer testing.allocator.free(res);
+
+    try testing.expectEqualStrings(out, res);
+}
+
+pub fn runProgram(
+    comptime Program: type,
+    args: []const []const u8,
+    in: []const u8,
+) ![]const u8 {
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+
+    var stdout = std.ArrayList(u8).init(testing.allocator);
     var stdin = io.fixedBufferStream(in);
-    var stdout = io.fixedBufferStream(&out_buf);
     var arg_iter = clap.args.SliceIterator{ .args = args };
     const clap_args = try clap.parseEx(clap.Help, Program.params, &arg_iter, .{});
     defer clap_args.deinit();
 
     const StdIo = util.CustomStdIoStreams(
         std.io.FixedBufferStream([]const u8).Reader,
-        io.FixedBufferStream([]u8).Writer,
+        std.ArrayList(u8).Writer,
     );
 
-    var program = try Program.init(&fba.allocator, clap_args);
+    var program = try Program.init(&arena_state.allocator, clap_args);
     try program.run(
         StdIo.Reader,
         StdIo.Writer,
         .{ .in = stdin.reader(), .out = stdout.writer() },
     );
-    try testing.expectEqualStrings(out, stdout.getWritten());
+    return stdout.toOwnedSlice();
 }

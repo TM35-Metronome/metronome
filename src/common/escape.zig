@@ -92,6 +92,12 @@ pub fn generate(comptime escapes: []const Escape) type {
             try esc.finish();
         }
 
+        pub fn escapePrint(writer: anytype, comptime format: []const u8, args: anytype) !void {
+            var esc = escapingWriter(writer);
+            try esc.writer().print(format, args);
+            try esc.finish();
+        }
+
         pub fn escapeAlloc(allocator: *mem.Allocator, str: []const u8) ![]u8 {
             var res = std.ArrayList(u8).init(allocator);
             try escapeWrite(res.writer(), str);
@@ -105,6 +111,12 @@ pub fn generate(comptime escapes: []const Escape) type {
         pub fn unescapeWrite(writer: anytype, str: []const u8) !void {
             var esc = unescapingWriter(writer);
             try esc.writer().writeAll(str);
+            try esc.finish();
+        }
+
+        pub fn unescapePrint(writer: anytype, comptime format: []const u8, args: anytype) !void {
+            var esc = unescapingWriter(writer);
+            try esc.writer().print(format, args);
             try esc.finish();
         }
 

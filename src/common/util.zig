@@ -14,6 +14,7 @@ const os = std.os;
 
 pub const bit = @import("bit.zig");
 pub const escape = @import("escape.zig");
+pub const glob = @import("glob.zig");
 pub const io = @import("io.zig");
 pub const random = @import("random.zig");
 pub const set = @import("set.zig");
