@@ -23,7 +23,7 @@ const Utf8 = util.unicode.Utf8View;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     replace_cheap: bool,
@@ -61,7 +61,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
@@ -81,8 +81,6 @@ pub fn run(
     try program.randomize();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     for (program.pokemons.values()) |pokemon, i| {
@@ -191,7 +189,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 fn randomize(program: *Program) !void {
     @setEvalBranchQuota(1000000000);
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
 
     // First, let's find items that are used for evolving Pokémons.
     // We will use these items as our stones.
@@ -570,7 +568,6 @@ fn randomize(program: *Program) !void {
     }
 
     // Replace cheap pokeball items with random stones.
-    const number_of_stones = math.min(math.min(stones.count(), stone_strings.len), program.max_evolutions);
     for (program.pokeball_items.values()) |*ball| {
         const item = program.items.get(ball.item) orelse continue;
         if (item.price == 0 or item.price > 600)
@@ -591,7 +588,7 @@ fn pickString(len: usize, strings: []const Utf8) Utf8 {
 }
 
 fn filterBy(
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     species: Set,
     pokemons: Pokemons,
     filter: fn (Pokemon, []u16) []const u16,
@@ -654,7 +651,7 @@ const PokemonBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
-fn pokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
 

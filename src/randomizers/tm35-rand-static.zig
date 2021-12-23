@@ -19,7 +19,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     type: Type,
@@ -59,7 +59,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version                                                            Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const type_arg = args.option("--types") orelse "random";
     const types = std.meta.stringToEnum(Type, type_arg) orelse {
         log.err("--types does not support '{s}'", .{type_arg});
@@ -92,8 +92,6 @@ pub fn run(
     try program.randomize();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{
@@ -241,7 +239,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
     const species = try getPokedexPokemons(allocator, program.pokemons, program.pokedex);
 
     for ([_]StaticMons{
@@ -269,7 +267,6 @@ fn randomize(program: *Program) !void {
 
                         const t = util.random.item(random, pokemon.types.keys()).?.*;
                         const pokemons = by_type.get(t).?;
-                        const max = pokemons.count();
                         static.species = util.random.item(random, pokemons.keys()).?.*;
                     }
                 },
@@ -453,7 +450,7 @@ const HiddenHollows = std.AutoArrayHashMapUnmanaged(u16, HollowGroups);
 const HollowGroups = std.AutoArrayHashMapUnmanaged(u8, HollowPokemons);
 const HollowPokemons = std.AutoArrayHashMapUnmanaged(u8, HollowMon);
 
-fn getPokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+fn getPokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
 
@@ -469,7 +466,7 @@ fn getPokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Se
     return res;
 }
 
-fn getSpeciesByType(allocator: *mem.Allocator, pokemons: Pokemons, _species: Set) !SpeciesByType {
+fn getSpeciesByType(allocator: mem.Allocator, pokemons: Pokemons, _species: Set) !SpeciesByType {
     var res = SpeciesByType{};
     errdefer {
         for (res.values()) |*v|
@@ -585,61 +582,61 @@ fn testIt(comptime prefix: []const u8) !void {
         H.static("5", "21");
 
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        prefix ++ "[0].species=6\n" ++
-        prefix ++ "[1].species=0\n" ++
-        prefix ++ "[2].species=1\n" ++
-        prefix ++ "[3].species=5\n" ++
-        prefix ++ "[4].species=8\n" ++
-        prefix ++ "[5].species=18\n");
+        prefix ++ "[0].species=7\n" ++
+        prefix ++ "[1].species=8\n" ++
+        prefix ++ "[2].species=7\n" ++
+        prefix ++ "[3].species=0\n" ++
+        prefix ++ "[4].species=10\n" ++
+        prefix ++ "[5].species=0\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--types=same" }, test_string, result_prefix ++
         prefix ++ "[0].species=0\n" ++
         prefix ++ "[1].species=1\n" ++
         prefix ++ "[2].species=2\n" ++
         prefix ++ "[3].species=3\n" ++
-        prefix ++ "[4].species=9\n" ++
-        prefix ++ "[5].species=21\n");
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=13\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
-        prefix ++ "[0].species=2\n" ++
-        prefix ++ "[1].species=13\n" ++
+        prefix ++ "[0].species=12\n" ++
+        prefix ++ "[1].species=11\n" ++
         prefix ++ "[2].species=0\n" ++
-        prefix ++ "[3].species=3\n" ++
-        prefix ++ "[4].species=4\n" ++
-        prefix ++ "[5].species=9\n");
+        prefix ++ "[3].species=11\n" ++
+        prefix ++ "[4].species=5\n" ++
+        prefix ++ "[5].species=19\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
-        prefix ++ "[0].species=0\n" ++
-        prefix ++ "[1].species=11\n" ++
+        prefix ++ "[0].species=11\n" ++
+        prefix ++ "[1].species=2\n" ++
         prefix ++ "[2].species=2\n" ++
-        prefix ++ "[3].species=1\n" ++
-        prefix ++ "[4].species=4\n" ++
-        prefix ++ "[5].species=7\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
-        prefix ++ "[0].species=2\n" ++
-        prefix ++ "[1].species=11\n" ++
-        prefix ++ "[2].species=6\n" ++
-        prefix ++ "[3].species=13\n" ++
+        prefix ++ "[3].species=3\n" ++
         prefix ++ "[4].species=4\n" ++
         prefix ++ "[5].species=18\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
-        prefix ++ "[0].species=0\n" ++
-        prefix ++ "[1].species=3\n" ++
-        prefix ++ "[2].species=2\n" ++
-        prefix ++ "[3].species=3\n" ++
-        prefix ++ "[4].species=9\n" ++
-        prefix ++ "[5].species=7\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
-        prefix ++ "[0].species=8\n" ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
+        prefix ++ "[0].species=10\n" ++
         prefix ++ "[1].species=0\n" ++
-        prefix ++ "[2].species=8\n" ++
-        prefix ++ "[3].species=3\n" ++
-        prefix ++ "[4].species=7\n" ++
+        prefix ++ "[2].species=4\n" ++
+        prefix ++ "[3].species=1\n" ++
+        prefix ++ "[4].species=3\n" ++
         prefix ++ "[5].species=15\n");
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
+        prefix ++ "[0].species=15\n" ++
+        prefix ++ "[1].species=3\n" ++
+        prefix ++ "[2].species=1\n" ++
+        prefix ++ "[3].species=3\n" ++
+        prefix ++ "[4].species=4\n" ++
+        prefix ++ "[5].species=14\n");
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+        prefix ++ "[0].species=0\n" ++
+        prefix ++ "[1].species=6\n" ++
+        prefix ++ "[2].species=8\n" ++
+        prefix ++ "[3].species=8\n" ++
+        prefix ++ "[4].species=6\n" ++
+        prefix ++ "[5].species=11\n");
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
-        prefix ++ "[0].species=6\n" ++
+        prefix ++ "[0].species=1\n" ++
         prefix ++ "[1].species=3\n" ++
         prefix ++ "[2].species=2\n" ++
         prefix ++ "[3].species=3\n" ++
         prefix ++ "[4].species=4\n" ++
-        prefix ++ "[5].species=20\n");
+        prefix ++ "[5].species=21\n");
 }
 
 test "tm35-rand-static" {

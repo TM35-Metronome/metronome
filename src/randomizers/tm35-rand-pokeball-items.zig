@@ -20,7 +20,7 @@ const escape = util.escape;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     include_tms_hms: bool,
@@ -67,7 +67,7 @@ pub const params = &[_]clap.Param(clap.Help){
     ) catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_items_arg = args.options("--exclude");
     var excluded_items = try std.ArrayList([]const u8).initCapacity(
         allocator,
@@ -97,8 +97,6 @@ pub fn run(
     try program.randomize();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{ .pokeball_items = program.pokeballs });
@@ -157,7 +155,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
 
     var z: usize = 0;
     var excluded_pockets_buffer: [2]format.Pocket = undefined;
@@ -176,7 +174,6 @@ fn randomize(program: *Program) !void {
         excluded_pockets.items,
         program.options.excluded_items,
     );
-    const max = pick_from.count();
 
     outer: for (program.pokeballs.values()) |*ball, i| {
         const ball_key = program.pokeballs.keys()[i];
@@ -195,7 +192,7 @@ const Pokeballs = std.AutoArrayHashMapUnmanaged(u16, Pokeball);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
 fn getItems(
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     items: Items,
     excluded_pockets: []const format.Pocket,
     excluded_items: []const []const u8,
@@ -267,19 +264,19 @@ test "tm35-rand-pokeball-items" {
         "--seed=3",
     }, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
-        \\.pokeball_items[1].item=3
+        \\.pokeball_items[1].item=1
         \\.pokeball_items[2].item=2
-        \\.pokeball_items[3].item=1
+        \\.pokeball_items[3].item=3
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{
         "--seed=2",
         "--include-key-items",
     }, test_string, result_prefix ++
-        \\.pokeball_items[0].item=1
-        \\.pokeball_items[1].item=3
+        \\.pokeball_items[0].item=3
+        \\.pokeball_items[1].item=1
         \\.pokeball_items[2].item=2
-        \\.pokeball_items[3].item=3
+        \\.pokeball_items[3].item=1
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{
@@ -287,9 +284,9 @@ test "tm35-rand-pokeball-items" {
         "--include-tms-hms",
     }, test_string, result_prefix ++
         \\.pokeball_items[0].item=0
-        \\.pokeball_items[1].item=2
-        \\.pokeball_items[2].item=3
-        \\.pokeball_items[3].item=3
+        \\.pokeball_items[1].item=3
+        \\.pokeball_items[2].item=2
+        \\.pokeball_items[3].item=2
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{
@@ -297,10 +294,10 @@ test "tm35-rand-pokeball-items" {
         "--include-tms-hms",
         "--include-key-items",
     }, test_string, result_prefix ++
-        \\.pokeball_items[0].item=1
-        \\.pokeball_items[1].item=3
+        \\.pokeball_items[0].item=3
+        \\.pokeball_items[1].item=2
         \\.pokeball_items[2].item=0
-        \\.pokeball_items[3].item=1
+        \\.pokeball_items[3].item=2
         \\
     );
 

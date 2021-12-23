@@ -66,9 +66,7 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             }
 
             var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-            var program = try Program.init(&arena.allocator, args);
-            defer program.deinit();
-
+            var program = try Program.init(arena.allocator(), args);
             try program.run(std.fs.File.Reader, @TypeOf(stdout.writer()), .{
                 .in = std.io.getStdIn().reader(),
                 .out = stdout.writer(),
@@ -171,8 +169,8 @@ pub const path = struct {
         // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
         // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.items);
-        var failing = std.testing.FailingAllocator.init(&fba.allocator, 1);
-        const res_slice = fs.path.join(&failing.allocator, paths) catch unreachable;
+        var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
+        const res_slice = fs.path.join(failing.allocator(), paths) catch unreachable;
         res.len = res_slice.len;
 
         return res;
@@ -185,10 +183,12 @@ pub const path = struct {
         // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
         // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.items);
-        var failing = debug.FailingAllocator.init(&fba.allocator, math.maxInt(usize));
-        const res_slice = try fs.path.resolve(&failing.allocator, paths);
+        var failing = debug.FailingAllocator.init(&fba.allocator, 1);
+        const res_slice = fs.path.resolve(&failing.allocator, paths) catch |err| switch (err) {
+            error.OutOfMemory => unreachable,
+            else => |e| return e,
+        };
         res.len = res_slice.len;
-        debug.assert(failing.allocations == 1);
 
         return res;
     }
@@ -212,8 +212,8 @@ pub const dir = struct {
     pub fn folder(f: folders.KnownFolder) !Path {
         var buf: [fs.MAX_PATH_BYTES * 2]u8 = undefined;
         var fba = heap.FixedBufferAllocator.init(&buf);
-        const res = (try folders.getPath(&fba.allocator, f)) //
-        orelse return error.NotAvailable;
+        const res = (try folders.getPath(fba.allocator(), f)) orelse
+            return error.NotAvailable;
         return Path.fromSlice(res);
     }
 };

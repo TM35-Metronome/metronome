@@ -24,7 +24,7 @@ const nds = rom.nds;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 file: []const u8,
 
 pub const main = util.generateMain(Program);
@@ -40,7 +40,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
@@ -91,8 +91,6 @@ pub fn run(
     }
 }
 
-pub fn deinit(program: Program) void {}
-
 fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
     @setEvalBranchQuota(100000);
     for (game.map_headers) |map_header, map_id| {
@@ -136,7 +134,7 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
     }
 }
 
-fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, writer: anytype) anyerror!void {
+fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
@@ -195,7 +193,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: *mem.Allocator, writer: any
     }
 }
 
-fn outputGen5GameScripts(game: gen5.Game, allocator: *mem.Allocator, writer: anytype) anyerror!void {
+fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
@@ -271,8 +269,8 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
     try writer.writeAll("");
     switch (@typeInfo(T)) {
         .Void => {},
-        .Int => |i| try writer.print("{}", .{value}),
-        .Enum => |e| try writer.print("{s}", .{@tagName(value)}),
+        .Int => try writer.print("{}", .{value}),
+        .Enum => try writer.print("{s}", .{@tagName(value)}),
         .Array => for (value) |v| {
             try printCommandHelper(writer, v);
         },

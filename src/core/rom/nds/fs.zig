@@ -62,7 +62,7 @@ pub const Fs = struct {
             break :blk path[1..];
         } else path;
 
-        var split = mem.split(relative, "/");
+        var split = mem.split(u8, relative, "/");
         while (split.next()) |name| {
             switch (handle) {
                 .file => return error.DoesntExist,
@@ -330,7 +330,7 @@ pub const Builder = struct {
     fat: std.ArrayList(nds.Range),
     file_bytes: u32,
 
-    pub fn init(allocator: *mem.Allocator) !Builder {
+    pub fn init(allocator: mem.Allocator) !Builder {
         var fnt_main = std.ArrayList(FntMainEntry).init(allocator);
         var fnt_sub = std.ArrayList(u8).init(allocator);
         errdefer fnt_main.deinit();
@@ -358,7 +358,7 @@ pub const Builder = struct {
             break :blk path[1..];
         } else path;
 
-        var split = mem.split(relative, "/");
+        var split = mem.split(u8, relative, "/");
         while (split.next()) |name|
             curr = try b.createDir(curr, name);
 
@@ -393,11 +393,11 @@ pub const Builder = struct {
         try fbs.writeIntLittle(u16, id);
 
         const written = fbs.context.getWritten();
-        try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len + 1);
+        try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len + 1);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
         const offset = @intCast(u32, b.fnt_sub.items.len);
-        b.fnt_sub.append(0) catch unreachable;
+        b.fnt_sub.appendAssumeCapacity(0);
 
         for (b.fnt_main.items) |*entry| {
             const old_offset = entry.offset_to_subtable.value();
@@ -440,7 +440,7 @@ pub const Builder = struct {
         try fbs.writeAll(file_name);
 
         const written = fbs.context.getWritten();
-        try b.fnt_sub.ensureCapacity(b.fnt_sub.items.len + written.len);
+        try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
         for (b.fnt_main.items) |*entry, i| {

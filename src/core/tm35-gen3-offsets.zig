@@ -25,7 +25,7 @@ const lu64 = rom.int.lu64;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 files: []const []const u8,
 
 pub const main = util.generateMain(Program);
@@ -41,7 +41,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{ .allocator = allocator, .files = args.positionals() };
 }
 
@@ -70,8 +70,6 @@ pub fn run(
         try outputInfo(stdio.out, i, info);
     }
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn outputInfo(writer: anytype, i: usize, info: offsets.Info) !void {
     try writer.print(".game[{}].game_title={}\n", .{ i, info.game_title });
@@ -878,12 +876,9 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_attack = 0,
             .sp_defense = 0,
         },
-
         .types = [_]u8{ 0, 0 },
-
         .catch_rate = 0,
         .base_exp_yield = 0,
-
         .ev_yield = common.EvYield{
             .hp = 0,
             .attack = 0,
@@ -892,24 +887,18 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_attack = 0,
             .sp_defense = 0,
         },
-
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
-
         .gender_ratio = 0,
         .egg_cycles = 0,
         .base_friendship = 0,
-
         .growth_rate = .medium_fast,
         .egg_groups = [_]common.EggGroup{ .invalid, .invalid },
-
         .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
-
         .color = common.Color{
             .color = .red,
             .flip = false,
         },
-
         .padding = undefined,
     },
     // Bulbasaur
@@ -922,12 +911,9 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_attack = 65,
             .sp_defense = 65,
         },
-
         .types = [_]u8{ 12, 3 },
-
         .catch_rate = 45,
         .base_exp_yield = 64,
-
         .ev_yield = common.EvYield{
             .hp = 0,
             .attack = 0,
@@ -936,24 +922,18 @@ const first_pokemons = [_]gen3.BasePokemon{
             .sp_attack = 1,
             .sp_defense = 0,
         },
-
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
-
         .gender_ratio = percentFemale(12.5),
         .egg_cycles = 20,
         .base_friendship = 70,
-
         .growth_rate = .medium_slow,
         .egg_groups = [_]common.EggGroup{ .monster, .grass },
-
         .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
-
         .color = common.Color{
             .color = .green,
             .flip = false,
         },
-
         .padding = undefined,
     },
 };
@@ -2014,6 +1994,8 @@ gen3.MapHeader{
 }};
 
 fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
+    _ = lang;
+
     @setEvalBranchQuota(100000);
     var res = [_]u8{0} ** len;
     var fbs = io.fixedBufferStream(str);

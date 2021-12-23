@@ -17,7 +17,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     fast_text: bool,
     biking: Allow,
@@ -53,7 +53,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version                                       Output version information and exit.") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const biking_arg = args.option("--allow-biking") orelse "unchanged";
     const running_arg = args.option("--allow-running") orelse "unchanged";
     const exp_scale_arg = args.option("--exp-yield-scaling") orelse "1.0";
@@ -85,7 +85,7 @@ pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
         .{ .arg = "--trainer-level-scaling", .value = trainer_scale_arg, .check = trainer_scale },
         .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
     }) |arg| {
-        if (arg.check) |_| {} else |err| {
+        if (arg.check) |_| {} else |_| {
             log.err("Invalid value for {s}: {s}", .{ arg.arg, arg.value });
             return error.InvalidArgument;
         }
@@ -119,8 +119,6 @@ pub fn run(
         useGame,
     );
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn useGame(ctx: anytype, game: format.Game) !void {
     const out = ctx.out;

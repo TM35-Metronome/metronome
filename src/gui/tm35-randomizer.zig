@@ -32,7 +32,7 @@ const bug_message = "Hi user. You have just hit a bug/limitation in the program.
 const fps = 60;
 const frame_time = time.ns_per_s / fps;
 
-usingnamespace switch (std.Target.current.os.tag) {
+const platform = switch (builtin.target.os.tag) {
     .windows => struct {
         pub extern "kernel32" fn GetConsoleWindow() callconv(std.os.windows.WINAPI) std.os.windows.HWND;
     },
@@ -49,8 +49,8 @@ pub fn main() anyerror!void {
     //       I have no idea how to get the same behavior using the Zig compiler, so instead
     //       I use this solution:
     //       https://stackoverflow.com/a/9618984
-    switch (std.Target.current.os.tag) {
-        .windows => _ = std.os.windows.user32.showWindow(GetConsoleWindow(), 0),
+    switch (builtin.target.os.tag) {
+        .windows => _ = std.os.windows.user32.showWindow(platform.GetConsoleWindow(), 0),
         else => {},
     }
 
@@ -137,7 +137,6 @@ pub fn main() anyerror!void {
 
         const window_rect = nk.rect(0, 0, @intToFloat(f32, c.width), @intToFloat(f32, c.height));
         if (nk.begin(ctx, "", window_rect, c.NK_WINDOW_NO_SCROLLBAR)) {
-            const layout = ctx.current.*.layout;
             const group_height = groupHeight(ctx);
 
             c.nk_layout_row_template_begin(ctx, group_height);
@@ -219,12 +218,12 @@ pub fn drawCommands(
     if (nk.nonPaddedGroupBegin(ctx, "command-buttons", c.NK_WINDOW_NO_SCROLLBAR)) {
         defer nk.nonPaddedGroupEnd(ctx);
         c.nk_layout_row_dynamic(ctx, 0, 1);
-        if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_UP) != 0) {
+        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
             const before = math.sub(usize, selected, 1) catch 0;
             mem.swap(usize, &settings.order[before], &settings.order[selected]);
             selected = before;
         }
-        if (c.nk_button_symbol(ctx, .NK_SYMBOL_TRIANGLE_DOWN) != 0) {
+        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
             const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
             mem.swap(usize, &settings.order[selected], &settings.order[after]);
             selected = after;
@@ -287,7 +286,7 @@ pub fn drawOptions(
     const command = exes.commands[settings.order[selected]];
     const setting = settings.commands[settings.order[selected]];
 
-    var it = mem.split(command.help, "\n");
+    var it = mem.split(u8, command.help, "\n");
     while (it.next()) |line_notrim| {
         const line = mem.trimRight(u8, line_notrim, " ");
         if (line.len == 0)
@@ -396,7 +395,7 @@ pub fn drawOptions(
         var len = @intCast(c_int, value.items.len);
         defer value.items.len = @intCast(usize, len);
 
-        value.ensureUnusedCapacity(&settings.arena.allocator, 10) catch {};
+        value.ensureUnusedCapacity(settings.arena.allocator(), 10) catch {};
         _ = c.nk_edit_string(
             ctx,
             c.NK_EDIT_SIMPLE,
@@ -416,17 +415,17 @@ pub fn drawOptions(
 
         var m_out_path: ?[*:0]u8 = null;
         switch (c.NFD_SaveDialog("", null, &m_out_path)) {
-            .NFD_ERROR => {
+            c.NFD_ERROR => {
                 popups.err("Could not open file browser: {s}", .{c.NFD_GetError()});
                 continue;
             },
-            .NFD_CANCEL => continue,
-            .NFD_OKAY => {
+            c.NFD_CANCEL => continue,
+            c.NFD_OKAY => {
                 const out_path_z = m_out_path.?;
                 const out_path = mem.span(out_path_z);
                 defer std.c.free(out_path_z);
 
-                value.ensureCapacity(&settings.arena.allocator, out_path.len) catch {};
+                value.ensureTotalCapacity(settings.arena.allocator(), out_path.len) catch {};
                 value.shrinkRetainingCapacity(0);
                 value.appendSliceAssumeCapacity(out_path);
             },
@@ -451,7 +450,7 @@ pub fn drawOptions(
         var len = @intCast(c_int, value.items.len);
         defer value.items.len = @intCast(usize, len);
 
-        value.ensureUnusedCapacity(&settings.arena.allocator, 10) catch {};
+        value.ensureUnusedCapacity(settings.arena.allocator(), 10) catch {};
         _ = c.nk_edit_string(
             ctx,
             c.NK_EDIT_SIMPLE | c.NK_EDIT_MULTILINE,
@@ -505,7 +504,6 @@ pub fn drawActions(
     settings: *Settings,
 ) ?Rom {
     var rom = in_rom;
-    const layout = ctx.current.*.layout;
     if (c.nk_group_begin(ctx, "Actions", border_title_group) == 0)
         return rom;
 
@@ -539,12 +537,12 @@ pub fn drawActions(
     };
 
     const selected_path = switch (dialog_result) {
-        .NFD_ERROR => {
+        c.NFD_ERROR => {
             popups.err("Could not open file browser: {s}", .{c.NFD_GetError()});
             return rom;
         },
-        .NFD_CANCEL => return rom,
-        .NFD_OKAY => blk: {
+        c.NFD_CANCEL => return rom,
+        c.NFD_OKAY => blk: {
             const out_path = m_out_path.?;
             defer std.c.free(out_path);
 
@@ -563,7 +561,7 @@ pub fn drawActions(
             var fba = heap.FixedBufferAllocator.init(&buf);
 
             const result = std.ChildProcess.exec(.{
-                .allocator = &fba.allocator,
+                .allocator = fba.allocator(),
                 .argv = &[_][]const u8{
                     exes.identify.span(),
                     selected_path_slice,
@@ -583,7 +581,7 @@ pub fn drawActions(
                     .path = selected_path,
                     .info = info,
                 };
-            } else |err| {
+            } else |_| {
                 popups.err("Output too long", .{});
                 rom = null;
             }
@@ -639,7 +637,7 @@ pub fn drawInfo(ctx: *nk.Context, m_rom: ?Rom) void {
     defer c.nk_group_end(ctx);
     const rom = m_rom orelse return;
 
-    var it = mem.split(rom.info.span(), "\n");
+    var it = mem.split(u8, rom.info.span(), "\n");
     while (it.next()) |line_notrim| {
         const line = mem.trimRight(u8, line_notrim, " ");
         if (line.len == 0)
@@ -673,7 +671,7 @@ pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
         return;
 
     const title = if (fatal_err) |_| "Fatal error!" else if (is_err) "Error" else "Info";
-    if (c.nkPopupBegin(ctx, .NK_POPUP_STATIC, title, border_title_group, &popup_rect) == 0)
+    if (c.nkPopupBegin(ctx, c.NK_POPUP_STATIC, title, border_title_group, &popup_rect) == 0)
         return;
 
     defer c.nk_popup_end(ctx);
@@ -713,7 +711,7 @@ pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
 /// have is to quit the program. Finally, we can also just inform the user of something with
 /// 'popups.info("info str {}", arg1, arg2...)'.
 const Popups = struct {
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     fatal_error: [127:0]u8 = ("\x00" ** 127).*,
     errors: std.ArrayListUnmanaged([]const u8) = std.ArrayListUnmanaged([]const u8){},
     infos: std.ArrayListUnmanaged([]const u8) = std.ArrayListUnmanaged([]const u8){},
@@ -754,7 +752,7 @@ const Popups = struct {
     }
 
     fn fatalError(popups: *const Popups) ?[]const u8 {
-        const res = mem.spanZ(&popups.fatal_error);
+        const res = mem.sliceTo(&popups.fatal_error, 0);
         if (res.len == 0)
             return null;
         return res;
@@ -790,9 +788,9 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
     var buf: [1024 * 40]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
 
-    const term = switch (std.Target.current.os.tag) {
+    const term = switch (builtin.target.os.tag) {
         .linux => blk: {
-            const sh = try std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, &fba.allocator);
+            const sh = try std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, fba.allocator());
             defer sh.deinit();
 
             sh.stdin_behavior = .Pipe;
@@ -825,7 +823,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
 
             const cmd = try std.ChildProcess.init(
                 &[_][]const u8{ "cmd", "/c", "call", script_file_name.span() },
-                &fba.allocator,
+                fba.allocator(),
             );
             defer cmd.deinit();
 
@@ -838,7 +836,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
             if (code != 0)
                 return error.CommandFailed;
         },
-        .Signal, .Stopped, .Unknown => |code| {
+        .Signal, .Stopped, .Unknown => |_| {
             return error.CommandFailed;
         },
     }
@@ -851,7 +849,7 @@ fn outputScript(
     in: []const u8,
     out: []const u8,
 ) !void {
-    const escapes = switch (std.Target.current.os.tag) {
+    const escapes = switch (builtin.target.os.tag) {
         .linux => [_]escape.Escape{
             .{ .escaped = "'\\''", .unescaped = "\'" },
         },
@@ -860,7 +858,7 @@ fn outputScript(
         },
         else => @compileError("Unsupported os"),
     };
-    const quotes = switch (std.Target.current.os.tag) {
+    const quotes = switch (builtin.target.os.tag) {
         .linux => "'",
         .windows => "\"",
         else => @compileError("Unsupported os"),
@@ -929,7 +927,7 @@ fn outputScript(
         for (command.multi_strings) |multi_param, i| {
             const param = command.params[multi_param.i];
 
-            var it = mem.tokenize(setting.multi_strings[i].items, "\r\n");
+            var it = mem.tokenize(u8, setting.multi_strings[i].items, "\r\n");
             while (it.next()) |string| {
                 try writer.writeAll(" " ++ quotes);
                 try outputArgument(writer, esc, param, string, "s");
@@ -1039,11 +1037,11 @@ const Settings = struct {
 
     const String = std.ArrayListUnmanaged(u8);
 
-    fn init(allocator: *mem.Allocator, exes: Executables) !Settings {
+    fn init(allocator: mem.Allocator, exes: Executables) !Settings {
         var res = Settings{ .arena = heap.ArenaAllocator.init(allocator) };
         errdefer res.deinit();
 
-        const arena = &res.arena.allocator;
+        const arena = res.arena.allocator();
         res.order = try arena.alloc(usize, exes.commands.len);
         res.commands = try arena.alloc(Command, exes.commands.len);
 
@@ -1090,14 +1088,14 @@ const Settings = struct {
             for (command.strings) |*string, j| {
                 string.shrinkRetainingCapacity(0);
                 try string.appendSlice(
-                    &settings.arena.allocator,
+                    settings.arena.allocator(),
                     exe_command.strings[j].default,
                 );
             }
             for (command.files) |*string, j| {
                 string.shrinkRetainingCapacity(0);
                 try string.appendSlice(
-                    &settings.arena.allocator,
+                    settings.arena.allocator(),
                     exe_command.files[j].default,
                 );
             }
@@ -1159,7 +1157,7 @@ const Settings = struct {
             for (command.multi_strings) |multi, i| {
                 const param = command.params[multi.i];
                 const value = setting.multi_strings[i];
-                var it = mem.tokenize(value.items, "\r\n");
+                var it = mem.tokenize(u8, value.items, "\r\n");
                 while (it.next()) |string| {
                     try writer.writeAll(",");
                     try outputArgument(writer, csv_escape, param, string, "s");
@@ -1195,7 +1193,7 @@ const Settings = struct {
             pub fn next(iter: *@This()) mem.Allocator.Error!?[]const u8 {
                 const n = iter.separator.next() orelse return null;
                 var fba = std.heap.FixedBufferAllocator.init(&iter.buf);
-                return try csv_escape.unescapeAlloc(&fba.allocator, n);
+                return try csv_escape.unescapeAlloc(fba.allocator(), n);
             }
         };
 
@@ -1241,15 +1239,15 @@ const Settings = struct {
                 } else if (findParam(command.strings, param_i)) |j| {
                     const entry = &setting.strings[j];
                     entry.shrinkRetainingCapacity(0);
-                    try entry.appendSlice(&settings.arena.allocator, arg.value.?);
+                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
                 } else if (findParam(command.files, param_i)) |j| {
                     const entry = &setting.files[j];
                     entry.shrinkRetainingCapacity(0);
-                    try entry.appendSlice(&settings.arena.allocator, arg.value.?);
+                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
                 } else if (findParam(command.multi_strings, param_i)) |j| {
                     const entry = &setting.multi_strings[j];
-                    try entry.appendSlice(&settings.arena.allocator, arg.value.?);
-                    try entry.append(&settings.arena.allocator, '\n');
+                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
+                    try entry.append(settings.arena.allocator(), '\n');
                 }
             }
         }

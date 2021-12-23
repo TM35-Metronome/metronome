@@ -19,7 +19,7 @@ const escape = util.escape;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 out: []const u8,
 
 pub const main = util.generateMain(Program);
@@ -36,7 +36,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-o, --output <FILE>  The file to output the file to. (default: site.html)") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .out = args.option("--output") orelse "site.html",
@@ -69,8 +69,6 @@ pub fn run(
     try writer.flush();
     try out_file.setEndPos(try out_file.getPos());
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn useGame(game: *Game, parsed: format.Game) !void {
     const allocator = game.allocator;
@@ -601,6 +599,8 @@ const HumanizeFormatter = struct {
         options: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
+        _ = f;
+        _ = options;
         try writeHumanized(writer, self.str);
     }
 };
@@ -611,7 +611,7 @@ fn humanize(str: []const u8) HumanizeFormatter {
 
 fn writeHumanized(writer: anytype, str: []const u8) !void {
     var first = true;
-    var it = mem.tokenize(str, "_ ");
+    var it = mem.tokenize(u8, str, "_ ");
     while (it.next()) |word| : (first = false) {
         if (!first)
             try writer.writeAll(" ");
@@ -625,7 +625,7 @@ fn writeHumanized(writer: anytype, str: []const u8) !void {
 const Map = std.AutoArrayHashMapUnmanaged;
 
 const Game = struct {
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     starters: Map(u8, u16) = Map(u8, u16){},
     trainers: Map(u16, Trainer) = Map(u16, Trainer){},
     moves: Map(u16, Move) = Map(u16, Move){},

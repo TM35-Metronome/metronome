@@ -18,7 +18,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     evolutions: usize,
@@ -45,7 +45,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const evolutions = if (args.option("--evolutions")) |evos|
         fmt.parseUnsigned(usize, evos, 10) catch |err| {
             log.err("'{s}' could not be parsed as a number to --evolutions: {}", .{ evos, err });
@@ -75,20 +75,18 @@ pub fn run(
     try program.output(stdio.out);
 }
 
-pub fn deinit(program: *Program) void {}
-
 fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{ .starters = program.starters });
 }
 
 fn randomize(program: *Program) !void {
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
-    const pick_from = try program.getStartersToPickFrom(random);
+    const random = rand.DefaultPrng.init(program.options.seed).random();
+    const pick_from = try program.getStartersToPickFrom();
     for (program.starters.values()) |*starter|
         starter.* = util.random.item(random, pick_from.keys()).?.*;
 }
 
-fn getStartersToPickFrom(program: *Program, random: *rand.Random) !Set {
+fn getStartersToPickFrom(program: *Program) !Set {
     const allocator = program.allocator;
     const dex_mons = try pokedexPokemons(allocator, program.pokemons, program.pokedex);
     var res = Set{};
@@ -207,7 +205,7 @@ const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const Starters = std.AutoArrayHashMapUnmanaged(u16, u16);
 
-fn pokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
 
@@ -256,19 +254,19 @@ test "tm35-rand-starters" {
     ;
 
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
-        \\.starters[0]=1
-        \\.starters[1]=5
+        \\.starters[0]=4
+        \\.starters[1]=4
         \\.starters[2]=0
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
-        \\.starters[0]=0
+        \\.starters[0]=5
         \\.starters[1]=5
         \\.starters[2]=0
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
-        \\.starters[0]=0
+        \\.starters[0]=3
         \\.starters[1]=3
         \\.starters[2]=0
         \\

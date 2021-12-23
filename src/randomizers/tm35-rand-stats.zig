@@ -19,7 +19,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     same_total_stats: bool,
@@ -42,7 +42,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version           Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
@@ -63,8 +63,6 @@ pub fn run(
     program.randomize();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     for (program.pokemons.values()) |pokemon, i| {
@@ -160,7 +158,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 }
 
 fn randomize(program: *Program) void {
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
     for (program.pokemons.values()) |*pokemon| {
         const old_total = it.fold(&pokemon.stats, @as(usize, 0), foldu8);
         const max_total = pokemon.stats.len * math.maxInt(u8);
@@ -182,7 +180,7 @@ fn randomize(program: *Program) void {
 
 fn randomizeFromChildren(
     program: *Program,
-    random: *rand.Random,
+    random: rand.Random,
     pokemon: *Pokemon,
     curr: usize,
 ) void {
@@ -191,7 +189,7 @@ fn randomizeFromChildren(
 
     // Get the average stats of all the prevolutions
     var stats = [_]u64{0} ** Pokemon.stats;
-    for (pokemon.evolves_from.values()) |*prevolution, i| {
+    for (pokemon.evolves_from.values()) |_, i| {
         const key = pokemon.evolves_from.keys()[i];
         // If prevolution == curr, then we have a cycle.
         if (key == curr)
@@ -228,7 +226,7 @@ fn randomizeFromChildren(
 }
 
 fn randomWithinSum(
-    random: *rand.Random,
+    random: rand.Random,
     comptime T: type,
     buf: []T,
     weight_buf: []f32,
@@ -239,7 +237,7 @@ fn randomWithinSum(
 }
 
 fn randomUntilSum(
-    random: *rand.Random,
+    random: rand.Random,
     comptime T: type,
     buf: []T,
     weight_buf: []f32,
@@ -328,111 +326,111 @@ test "tm35-rand-stats" {
         \\
     ;
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.pokemons[0].stats.hp=89
-        \\.pokemons[0].stats.attack=18
-        \\.pokemons[0].stats.defense=76
-        \\.pokemons[0].stats.speed=117
-        \\.pokemons[0].stats.sp_attack=63
-        \\.pokemons[0].stats.sp_defense=119
-        \\.pokemons[1].stats.hp=208
-        \\.pokemons[1].stats.attack=169
-        \\.pokemons[1].stats.defense=255
-        \\.pokemons[1].stats.speed=215
-        \\.pokemons[1].stats.sp_attack=62
-        \\.pokemons[1].stats.sp_defense=255
-        \\.pokemons[2].stats.hp=99
-        \\.pokemons[2].stats.attack=195
-        \\.pokemons[2].stats.defense=196
-        \\.pokemons[2].stats.speed=105
-        \\.pokemons[2].stats.sp_attack=175
-        \\.pokemons[2].stats.sp_defense=150
-        \\.pokemons[3].stats.hp=80
-        \\.pokemons[3].stats.attack=4
-        \\.pokemons[3].stats.defense=115
-        \\.pokemons[3].stats.speed=34
-        \\.pokemons[3].stats.sp_attack=82
-        \\.pokemons[3].stats.sp_defense=67
+        \\.pokemons[0].stats.hp=115
+        \\.pokemons[0].stats.attack=139
+        \\.pokemons[0].stats.defense=35
+        \\.pokemons[0].stats.speed=102
+        \\.pokemons[0].stats.sp_attack=51
+        \\.pokemons[0].stats.sp_defense=54
+        \\.pokemons[1].stats.hp=121
+        \\.pokemons[1].stats.attack=36
+        \\.pokemons[1].stats.defense=9
+        \\.pokemons[1].stats.speed=95
+        \\.pokemons[1].stats.sp_attack=113
+        \\.pokemons[1].stats.sp_defense=107
+        \\.pokemons[2].stats.hp=3
+        \\.pokemons[2].stats.attack=35
+        \\.pokemons[2].stats.defense=13
+        \\.pokemons[2].stats.speed=49
+        \\.pokemons[2].stats.sp_attack=56
+        \\.pokemons[2].stats.sp_defense=43
+        \\.pokemons[3].stats.hp=20
+        \\.pokemons[3].stats.attack=93
+        \\.pokemons[3].stats.defense=101
+        \\.pokemons[3].stats.speed=174
+        \\.pokemons[3].stats.sp_attack=181
+        \\.pokemons[3].stats.sp_defense=24
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--follow-evos" }, test_string, result_prefix ++
-        \\.pokemons[0].stats.hp=89
-        \\.pokemons[0].stats.attack=18
-        \\.pokemons[0].stats.defense=76
-        \\.pokemons[0].stats.speed=117
-        \\.pokemons[0].stats.sp_attack=63
-        \\.pokemons[0].stats.sp_defense=119
-        \\.pokemons[1].stats.hp=255
-        \\.pokemons[1].stats.attack=255
-        \\.pokemons[1].stats.defense=185
+        \\.pokemons[0].stats.hp=115
+        \\.pokemons[0].stats.attack=139
+        \\.pokemons[0].stats.defense=35
+        \\.pokemons[0].stats.speed=102
+        \\.pokemons[0].stats.sp_attack=51
+        \\.pokemons[0].stats.sp_defense=54
+        \\.pokemons[1].stats.hp=134
+        \\.pokemons[1].stats.attack=171
+        \\.pokemons[1].stats.defense=128
         \\.pokemons[1].stats.speed=255
-        \\.pokemons[1].stats.sp_attack=255
-        \\.pokemons[1].stats.sp_defense=255
-        \\.pokemons[2].stats.hp=255
-        \\.pokemons[2].stats.attack=255
-        \\.pokemons[2].stats.defense=191
+        \\.pokemons[1].stats.sp_attack=203
+        \\.pokemons[1].stats.sp_defense=144
+        \\.pokemons[2].stats.hp=161
+        \\.pokemons[2].stats.attack=198
+        \\.pokemons[2].stats.defense=158
         \\.pokemons[2].stats.speed=255
-        \\.pokemons[2].stats.sp_attack=255
-        \\.pokemons[2].stats.sp_defense=255
-        \\.pokemons[3].stats.hp=80
-        \\.pokemons[3].stats.attack=4
-        \\.pokemons[3].stats.defense=115
-        \\.pokemons[3].stats.speed=34
-        \\.pokemons[3].stats.sp_attack=82
-        \\.pokemons[3].stats.sp_defense=67
+        \\.pokemons[2].stats.sp_attack=236
+        \\.pokemons[2].stats.sp_defense=168
+        \\.pokemons[3].stats.hp=20
+        \\.pokemons[3].stats.attack=93
+        \\.pokemons[3].stats.defense=101
+        \\.pokemons[3].stats.speed=174
+        \\.pokemons[3].stats.sp_attack=181
+        \\.pokemons[3].stats.sp_defense=24
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--same-total-stats" }, test_string, result_prefix ++
-        \\.pokemons[0].stats.hp=11
-        \\.pokemons[0].stats.attack=2
-        \\.pokemons[0].stats.defense=9
-        \\.pokemons[0].stats.speed=14
-        \\.pokemons[0].stats.sp_attack=10
-        \\.pokemons[0].stats.sp_defense=14
-        \\.pokemons[1].stats.hp=11
-        \\.pokemons[1].stats.attack=23
-        \\.pokemons[1].stats.defense=17
-        \\.pokemons[1].stats.speed=2
-        \\.pokemons[1].stats.sp_attack=31
-        \\.pokemons[1].stats.sp_defense=36
-        \\.pokemons[2].stats.hp=0
-        \\.pokemons[2].stats.attack=22
-        \\.pokemons[2].stats.defense=49
-        \\.pokemons[2].stats.speed=53
-        \\.pokemons[2].stats.sp_attack=26
-        \\.pokemons[2].stats.sp_defense=30
-        \\.pokemons[3].stats.hp=14
-        \\.pokemons[3].stats.attack=10
-        \\.pokemons[3].stats.defense=54
-        \\.pokemons[3].stats.speed=34
-        \\.pokemons[3].stats.sp_attack=81
-        \\.pokemons[3].stats.sp_defense=47
+        \\.pokemons[0].stats.hp=14
+        \\.pokemons[0].stats.attack=17
+        \\.pokemons[0].stats.defense=4
+        \\.pokemons[0].stats.speed=12
+        \\.pokemons[0].stats.sp_attack=6
+        \\.pokemons[0].stats.sp_defense=7
+        \\.pokemons[1].stats.hp=31
+        \\.pokemons[1].stats.attack=9
+        \\.pokemons[1].stats.defense=3
+        \\.pokemons[1].stats.speed=23
+        \\.pokemons[1].stats.sp_attack=28
+        \\.pokemons[1].stats.sp_defense=26
+        \\.pokemons[2].stats.hp=68
+        \\.pokemons[2].stats.attack=2
+        \\.pokemons[2].stats.defense=24
+        \\.pokemons[2].stats.speed=10
+        \\.pokemons[2].stats.sp_attack=35
+        \\.pokemons[2].stats.sp_defense=41
+        \\.pokemons[3].stats.hp=73
+        \\.pokemons[3].stats.attack=6
+        \\.pokemons[3].stats.defense=8
+        \\.pokemons[3].stats.speed=39
+        \\.pokemons[3].stats.sp_attack=42
+        \\.pokemons[3].stats.sp_defense=72
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--same-total-stats", "--follow-evos" }, test_string, result_prefix ++
-        \\.pokemons[0].stats.hp=11
-        \\.pokemons[0].stats.attack=2
-        \\.pokemons[0].stats.defense=9
-        \\.pokemons[0].stats.speed=14
-        \\.pokemons[0].stats.sp_attack=10
-        \\.pokemons[0].stats.sp_defense=14
-        \\.pokemons[1].stats.hp=19
-        \\.pokemons[1].stats.attack=13
-        \\.pokemons[1].stats.defense=11
-        \\.pokemons[1].stats.speed=28
-        \\.pokemons[1].stats.sp_attack=27
-        \\.pokemons[1].stats.sp_defense=22
-        \\.pokemons[2].stats.hp=23
-        \\.pokemons[2].stats.attack=24
-        \\.pokemons[2].stats.defense=12
-        \\.pokemons[2].stats.speed=37
-        \\.pokemons[2].stats.sp_attack=49
-        \\.pokemons[2].stats.sp_defense=35
-        \\.pokemons[3].stats.hp=14
-        \\.pokemons[3].stats.attack=10
-        \\.pokemons[3].stats.defense=54
-        \\.pokemons[3].stats.speed=34
-        \\.pokemons[3].stats.sp_attack=81
-        \\.pokemons[3].stats.sp_defense=47
+        \\.pokemons[0].stats.hp=14
+        \\.pokemons[0].stats.attack=17
+        \\.pokemons[0].stats.defense=4
+        \\.pokemons[0].stats.speed=12
+        \\.pokemons[0].stats.sp_attack=6
+        \\.pokemons[0].stats.sp_defense=7
+        \\.pokemons[1].stats.hp=22
+        \\.pokemons[1].stats.attack=29
+        \\.pokemons[1].stats.defense=7
+        \\.pokemons[1].stats.speed=16
+        \\.pokemons[1].stats.sp_attack=19
+        \\.pokemons[1].stats.sp_defense=27
+        \\.pokemons[2].stats.hp=28
+        \\.pokemons[2].stats.attack=37
+        \\.pokemons[2].stats.defense=13
+        \\.pokemons[2].stats.speed=30
+        \\.pokemons[2].stats.sp_attack=34
+        \\.pokemons[2].stats.sp_defense=38
+        \\.pokemons[3].stats.hp=73
+        \\.pokemons[3].stats.attack=6
+        \\.pokemons[3].stats.defense=8
+        \\.pokemons[3].stats.speed=39
+        \\.pokemons[3].stats.sp_attack=42
+        \\.pokemons[3].stats.sp_defense=72
         \\
     );
 }

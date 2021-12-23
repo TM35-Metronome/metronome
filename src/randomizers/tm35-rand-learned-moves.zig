@@ -17,7 +17,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 seed: u64,
 preference: Preference,
 pokemons: Pokemons = Pokemons{},
@@ -44,7 +44,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const seed = try util.getSeed(args);
     const pref = if (args.option("--preference")) |pref|
         if (mem.eql(u8, pref, "random"))
@@ -76,8 +76,6 @@ pub fn run(
     try program.randomize();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     for (program.pokemons.values()) |pokemon, i| {
@@ -153,7 +151,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 }
 
 fn randomize(program: *Program) !void {
-    var random = &rand.DefaultPrng.init(program.seed).random;
+    const random = rand.DefaultPrng.init(program.seed).random();
 
     for (program.pokemons.values()) |pokemon| {
         try randomizeMachinesLearned(program, pokemon, random, program.tms, pokemon.tms);
@@ -164,7 +162,7 @@ fn randomize(program: *Program) !void {
 fn randomizeMachinesLearned(
     program: *Program,
     pokemon: Pokemon,
-    random: *rand.Random,
+    random: rand.Random,
     machines: Machines,
     learned: MachinesLearned,
 ) !void {
@@ -247,18 +245,18 @@ test "tm35-rand-learned-moves" {
     ;
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
-        \\.pokemons[0].tms[1]=false
-        \\.pokemons[0].tms[2]=true
+        \\.pokemons[0].tms[1]=true
+        \\.pokemons[0].tms[2]=false
         \\.pokemons[0].hms[0]=false
-        \\.pokemons[0].hms[1]=true
+        \\.pokemons[0].hms[1]=false
         \\.pokemons[0].hms[2]=false
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--preference=stab" }, test_string, result_prefix ++
         \\.pokemons[0].tms[0]=true
-        \\.pokemons[0].tms[1]=true
+        \\.pokemons[0].tms[1]=false
         \\.pokemons[0].tms[2]=true
-        \\.pokemons[0].hms[0]=false
+        \\.pokemons[0].hms[0]=true
         \\.pokemons[0].hms[1]=false
         \\.pokemons[0].hms[2]=true
         \\

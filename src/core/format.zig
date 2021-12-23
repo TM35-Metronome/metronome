@@ -30,7 +30,7 @@ const escape = util.escape;
 /// the result and that `io` should handle it instead. Any other error from `parse` will
 /// be returned from `io` as well.
 pub fn io(
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     reader: anytype,
     writer: anytype,
     ctx: anytype,
@@ -105,7 +105,7 @@ pub fn setField(struct_ptr: anytype, union_val: anytype) void {
     const Union = @TypeOf(union_val);
 
     inline for (@typeInfo(Union).Union.fields) |field| {
-        if (union_val == @field(meta.TagType(Union), field.name)) {
+        if (union_val == @field(meta.Tag(Union), field.name)) {
             @field(struct_ptr, field.name) = @field(union_val, field.name);
             return;
         }
@@ -118,7 +118,7 @@ fn getUnionValue(
 ) @TypeOf(&@field(val, @typeInfo(@TypeOf(val)).Union.fields[0].name)) {
     const T = @TypeOf(val);
     inline for (@typeInfo(T).Union.fields) |field| {
-        if (val == @field(meta.TagType(T), field.name)) {
+        if (val == @field(meta.Tag(T), field.name)) {
             return &@field(val, field.name);
         }
     }
@@ -339,8 +339,8 @@ pub const WildPokemons = union(enum) {
     good_rod: WildArea,
     super_rod: WildArea,
 
-    pub fn init(tag: meta.TagType(WildPokemons), area: WildArea) WildPokemons {
-        const Tag = meta.TagType(WildPokemons);
+    pub fn init(tag: meta.Tag(WildPokemons), area: WildArea) WildPokemons {
+        const Tag = meta.Tag(WildPokemons);
         inline for (@typeInfo(Tag).Enum.fields) |field| {
             if (@field(Tag, field.name) == tag)
                 return @unionInit(WildPokemons, field.name, area);

@@ -19,7 +19,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     simular_total_stats: bool,
@@ -42,7 +42,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
@@ -63,13 +63,11 @@ pub fn run(
     try program.output(stdio.out);
 }
 
-pub fn deinit(program: *Program) void {}
-
 fn output(program: *Program, writer: anytype) !void {
     for (program.wild_pokemons.values()) |zone, i| {
         const zone_id = program.wild_pokemons.keys()[i];
         for (zone.wild_areas) |area, j| {
-            const aid = @intToEnum(meta.TagType(format.WildPokemons), @intCast(u5, j));
+            const aid = @intToEnum(meta.Tag(format.WildPokemons), @intCast(u5, j));
             try ston.serialize(writer, .{
                 .wild_pokemons = ston.index(zone_id, ston.field(@tagName(aid), .{
                     .pokemons = area.pokemons,
@@ -167,11 +165,11 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
     var simular = std.ArrayList(u16).init(allocator);
 
     const species = try pokedexPokemons(allocator, program.pokemons, program.pokedex);
-    for (program.wild_pokemons.values()) |zone, i| {
+    for (program.wild_pokemons.values()) |zone| {
         for (zone.wild_areas) |area| {
             for (area.pokemons.values()) |*wild_pokemon| {
                 const old_species = wild_pokemon.species orelse continue;
@@ -221,7 +219,7 @@ const WildAreas = [number_of_areas]WildArea;
 const WildPokemons = std.AutoArrayHashMapUnmanaged(u8, WildPokemon);
 const Zones = std.AutoArrayHashMapUnmanaged(u16, Zone);
 
-fn pokedexPokemons(allocator: *mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
+fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
 
@@ -373,21 +371,21 @@ test "tm35-rand-wild" {
     ;
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
         \\.wild_pokemons[0].grass.pokemons[0].species=2
-        \\.wild_pokemons[0].grass.pokemons[1].species=0
-        \\.wild_pokemons[0].grass.pokemons[2].species=0
-        \\.wild_pokemons[0].grass.pokemons[3].species=2
-        \\.wild_pokemons[1].grass.pokemons[0].species=3
-        \\.wild_pokemons[1].grass.pokemons[1].species=7
-        \\.wild_pokemons[1].grass.pokemons[2].species=1
-        \\.wild_pokemons[1].grass.pokemons[3].species=6
-        \\.wild_pokemons[2].grass.pokemons[0].species=6
-        \\.wild_pokemons[2].grass.pokemons[1].species=6
-        \\.wild_pokemons[2].grass.pokemons[2].species=8
-        \\.wild_pokemons[2].grass.pokemons[3].species=8
+        \\.wild_pokemons[0].grass.pokemons[1].species=3
+        \\.wild_pokemons[0].grass.pokemons[2].species=3
+        \\.wild_pokemons[0].grass.pokemons[3].species=0
+        \\.wild_pokemons[1].grass.pokemons[0].species=4
+        \\.wild_pokemons[1].grass.pokemons[1].species=0
+        \\.wild_pokemons[1].grass.pokemons[2].species=7
+        \\.wild_pokemons[1].grass.pokemons[3].species=7
+        \\.wild_pokemons[2].grass.pokemons[0].species=2
+        \\.wild_pokemons[2].grass.pokemons[1].species=0
+        \\.wild_pokemons[2].grass.pokemons[2].species=2
+        \\.wild_pokemons[2].grass.pokemons[3].species=0
         \\.wild_pokemons[3].grass.pokemons[0].species=0
         \\.wild_pokemons[3].grass.pokemons[1].species=0
-        \\.wild_pokemons[3].grass.pokemons[2].species=4
-        \\.wild_pokemons[3].grass.pokemons[3].species=7
+        \\.wild_pokemons[3].grass.pokemons[2].species=0
+        \\.wild_pokemons[3].grass.pokemons[3].species=3
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--simular-total-stats" }, test_string, result_prefix ++
@@ -396,17 +394,17 @@ test "tm35-rand-wild" {
         \\.wild_pokemons[0].grass.pokemons[2].species=0
         \\.wild_pokemons[0].grass.pokemons[3].species=0
         \\.wild_pokemons[1].grass.pokemons[0].species=0
-        \\.wild_pokemons[1].grass.pokemons[1].species=1
-        \\.wild_pokemons[1].grass.pokemons[2].species=0
-        \\.wild_pokemons[1].grass.pokemons[3].species=0
+        \\.wild_pokemons[1].grass.pokemons[1].species=0
+        \\.wild_pokemons[1].grass.pokemons[2].species=1
+        \\.wild_pokemons[1].grass.pokemons[3].species=1
         \\.wild_pokemons[2].grass.pokemons[0].species=0
         \\.wild_pokemons[2].grass.pokemons[1].species=0
-        \\.wild_pokemons[2].grass.pokemons[2].species=1
-        \\.wild_pokemons[2].grass.pokemons[3].species=1
+        \\.wild_pokemons[2].grass.pokemons[2].species=0
+        \\.wild_pokemons[2].grass.pokemons[3].species=0
         \\.wild_pokemons[3].grass.pokemons[0].species=0
         \\.wild_pokemons[3].grass.pokemons[1].species=0
         \\.wild_pokemons[3].grass.pokemons[2].species=0
-        \\.wild_pokemons[3].grass.pokemons[3].species=1
+        \\.wild_pokemons[3].grass.pokemons[3].species=0
         \\
     );
 }
