@@ -21,7 +21,7 @@ const nds = rom.nds;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 file: []const u8,
 
 pub const main = util.generateMain(Program);
@@ -37,7 +37,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>          The rom to identify.                ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
@@ -77,5 +77,3 @@ pub fn run(
 
     return error.InvalidRom;
 }
-
-pub fn deinit(program: *Program) void {}

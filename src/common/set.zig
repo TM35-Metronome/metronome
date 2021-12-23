@@ -5,7 +5,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 /// Returns a set of type `Out` which contains the intersection of `a` and `b`.
-pub fn intersect(comptime Out: type, allocator: *mem.Allocator, a: anytype, b: anytype) !Out {
+pub fn intersect(comptime Out: type, allocator: mem.Allocator, a: anytype, b: anytype) !Out {
     var res = Out.init(allocator);
     try intersectInline(&res, a, b);
     return res;
@@ -52,7 +52,7 @@ pub fn putMany(set: anytype, members: anytype) !void {
 
 /// Initializes a set of type `Set` with the members contained in the array/slice
 /// `members`.
-pub fn initWithMembers(comptime Set: type, allocator: *mem.Allocator, members: anytype) !Set {
+pub fn initWithMembers(comptime Set: type, allocator: mem.Allocator, members: anytype) !Set {
     var set = Set.init(allocator);
     errdefer set.deinit();
     try putMany(&set, members);

@@ -22,7 +22,7 @@ const escape = util.escape;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 seed: u64,
 pokemons: NameSet = NameSet{},
 trainers: NameSet = NameSet{},
@@ -43,7 +43,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const seed = try util.getSeed(args);
     return Program{
         .allocator = allocator,
@@ -71,8 +71,6 @@ fn output(program: *Program, writer: anytype) !void {
         .items = program.items,
     });
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn useGame(program: *Program, parsed: format.Game) !void {
     const allocator = program.allocator;
@@ -183,7 +181,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.seed).random;
+    const random = rand.DefaultPrng.init(program.seed).random();
 
     for ([_]NameSet{
         program.pokemons,

@@ -7,7 +7,7 @@ const LibExeObjStep = std.build.LibExeObjStep;
 const Pkg = std.build.Pkg;
 const RunStep = std.build.RunStep;
 const Step = std.build.Step;
-const Target = std.build.Target;
+const Target = std.zig.CrossTarget;
 
 const core_exes = [_][]const u8{
     "tm35-apply",
@@ -41,16 +41,16 @@ const gui_exes = [_][]const u8{
     "tm35-randomizer",
 };
 
-const clap_pkg = Pkg{ .name = "clap", .path = "lib/zig-clap/clap.zig" };
-const crc_pkg = Pkg{ .name = "crc", .path = "lib/zig-crc/crc.zig" };
-const folders_pkg = Pkg{ .name = "folders", .path = "lib/known-folders/known-folders.zig" };
-const mecha_pkg = Pkg{ .name = "mecha", .path = "lib/mecha/mecha.zig" };
-const ston_pkg = Pkg{ .name = "ston", .path = "lib/ston/ston.zig" };
-const ziter_pkg = Pkg{ .name = "ziter", .path = "lib/ziter/ziter.zig" };
+const clap_pkg = Pkg{ .name = "clap", .path = .{ .path = "lib/zig-clap/clap.zig" } };
+const crc_pkg = Pkg{ .name = "crc", .path = .{ .path = "lib/zig-crc/crc.zig" } };
+const folders_pkg = Pkg{ .name = "folders", .path = .{ .path = "lib/known-folders/known-folders.zig" } };
+const mecha_pkg = Pkg{ .name = "mecha", .path = .{ .path = "lib/mecha/mecha.zig" } };
+const ston_pkg = Pkg{ .name = "ston", .path = .{ .path = "lib/ston/ston.zig" } };
+const ziter_pkg = Pkg{ .name = "ziter", .path = .{ .path = "lib/ziter/ziter.zig" } };
 
 const util_pkg = Pkg{
     .name = "util",
-    .path = "src/common/util.zig",
+    .path = .{ .path = "src/common/util.zig" },
     .dependencies = &[_]Pkg{
         clap_pkg,
         folders_pkg,
@@ -60,7 +60,7 @@ const util_pkg = Pkg{
 
 const format_pkg = Pkg{
     .name = "format",
-    .path = "src/core/format.zig",
+    .path = .{ .path = "src/core/format.zig" },
     .dependencies = &[_]Pkg{
         mecha_pkg,
         ston_pkg,

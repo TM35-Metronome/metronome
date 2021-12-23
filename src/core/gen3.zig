@@ -361,7 +361,7 @@ pub const MapHeader = extern struct {
     map_layout: Ptr(*MapLayout),
     map_events: Ptr(*MapEvents),
     map_scripts: Ptr([*]MapScript),
-    map_connections: Ptr(*c_void),
+    map_connections: Ptr(*anyopaque),
     music: lu16,
     map_data_id: lu16,
     map_sec: u8,
@@ -407,11 +407,11 @@ pub const Tileset = extern struct {
     is_compressed: u8,
     is_secondary: u8,
     padding: [2]u8,
-    tiles: Ptr(*c_void),
-    palettes: Ptr(*c_void),
+    tiles: Ptr(*anyopaque),
+    palettes: Ptr(*anyopaque),
     metatiles: Ptr(*lu16),
     metatiles_attributes: Ptr(*[512]lu16),
-    callback: Ptr(*c_void),
+    callback: Ptr(*anyopaque),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 24);
@@ -540,7 +540,7 @@ const TrainerParty = struct {
 };
 
 pub const Game = struct {
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     version: common.Version,
 
     free_offset: usize,
@@ -594,7 +594,7 @@ pub const Game = struct {
         return error.UnknownGame;
     }
 
-    pub fn fromFile(file: fs.File, allocator: *mem.Allocator) !Game {
+    pub fn fromFile(file: fs.File, allocator: mem.Allocator) !Game {
         const reader = file.reader();
         const info = try identify(reader);
         const size = try file.getEndPos();

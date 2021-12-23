@@ -18,7 +18,7 @@ const nds = rom.nds;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 in: []const u8,
 out: []const u8,
 
@@ -36,7 +36,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
@@ -56,6 +56,8 @@ pub fn run(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
 ) anyerror!void {
+    _ = stdio;
+
     const allocator = program.allocator;
     const cwd = fs.cwd();
 
@@ -98,8 +100,6 @@ pub fn run(
     try writeFs(root_dir, file_system, nds.fs.root);
 }
 
-pub fn deinit(program: *Program) void {}
-
 fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!void {
     var it = file_system.iterate(folder);
     while (it.next()) |entry| {
@@ -116,7 +116,7 @@ fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!voi
     }
 }
 
-fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay, allocator: *mem.Allocator) !void {
+fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay, allocator: mem.Allocator) !void {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
 
     for (overlays) |*overlay, i| {

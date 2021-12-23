@@ -17,7 +17,7 @@ const testing = std.testing;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 pokemons: Pokemons = Pokemons{},
 
 pub const main = util.generateMain(Program);
@@ -41,7 +41,8 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version   Output version information and exit.") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) error{}!Program {
+pub fn init(allocator: mem.Allocator, args: anytype) error{}!Program {
+    _ = args;
     return Program{ .allocator = allocator };
 }
 
@@ -55,8 +56,6 @@ pub fn run(
     program.removeTradeEvolutions();
     try program.output(stdio.out);
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn output(program: *Program, writer: anytype) !void {
     try ston.serialize(writer, .{ .pokemons = program.pokemons });

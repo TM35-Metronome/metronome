@@ -207,6 +207,7 @@ pub fn RelativeSlice(
                 .alignment = @typeInfo(Slice).Pointer.alignment,
                 .child = @typeInfo(Slice).Pointer.child,
                 .is_allowzero = @typeInfo(Slice).Pointer.is_allowzero,
+                .address_space = @typeInfo(Slice).Pointer.address_space,
                 .sentinel = @typeInfo(Slice).Pointer.sentinel,
             },
         });

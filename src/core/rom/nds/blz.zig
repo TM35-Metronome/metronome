@@ -8,7 +8,7 @@ const testing = std.testing;
 const default_mask = 0x80;
 const threshold = 2;
 
-pub fn decode(allocator: *mem.Allocator, data: []const u8) ![]u8 {
+pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
     const Lengths = struct {
         enc: u32,
         dec: u32,
@@ -104,7 +104,7 @@ pub fn decode(allocator: *mem.Allocator, data: []const u8) ![]u8 {
     return result[0..raw];
 }
 
-pub fn encode(allocator: *mem.Allocator, data: []const u8, start: usize) ![]u8 {
+pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
     var pos_best: usize = 0;
     var flg: usize = 0;
     var inc_len: usize = 0;

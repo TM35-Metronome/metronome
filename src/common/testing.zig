@@ -39,7 +39,7 @@ pub fn runProgram(
         std.ArrayList(u8).Writer,
     );
 
-    var program = try Program.init(&arena_state.allocator, clap_args);
+    var program = try Program.init(arena_state.allocator(), clap_args);
     try program.run(
         StdIo.Reader,
         StdIo.Writer,

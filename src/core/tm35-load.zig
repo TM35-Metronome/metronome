@@ -32,7 +32,7 @@ const Game = format.Game;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 file: []const u8,
 
 pub const main = util.generateMain(Program);
@@ -48,7 +48,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>          The rom to apply the changes to.    ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
@@ -98,8 +98,6 @@ pub fn run(
         return nds_error;
     }
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     var buf: [mem.page_size]u8 = undefined;
@@ -728,7 +726,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         const first = starter_ptrs[0];
         for (starter_ptrs[1..]) |starter| {
             if (first.value() != starter.value())
-                debug.warn("warning: all starter positions are not the same. {} {}\n", .{ first.value(), starter.value() });
+                log.warn("all starter positions are not the same. {} {}\n", .{ first.value(), starter.value() });
         }
 
         try ston.serialize(writer, .{ .starters = ston.index(i, first) });

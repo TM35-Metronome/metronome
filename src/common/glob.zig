@@ -23,7 +23,7 @@ test "" {
 }
 
 pub fn match(glob: []const u8, str: []const u8) bool {
-    var matches = mem.split(glob, "*");
+    var matches = mem.split(u8, glob, "*");
     const first = matches.next().?;
 
     if (!mem.startsWith(u8, str, first))

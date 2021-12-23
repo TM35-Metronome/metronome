@@ -32,7 +32,7 @@ const lu64 = rom.int.lu64;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 patch: PatchOption,
 no_output: bool,
 replace: bool,
@@ -65,7 +65,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("<ROM>                         The rom to apply the changes to.                                                                  ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const pos = args.positionals();
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
@@ -166,11 +166,6 @@ pub fn run(
 
     const len = program.game.data().len;
     try out_file.setEndPos(len);
-}
-
-pub fn deinit(program: *Program) void {
-    program.game.deinit();
-    program.old_bytes.deinit(program.allocator);
 }
 
 const Game = union(enum) {

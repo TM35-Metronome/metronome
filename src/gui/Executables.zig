@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const clap = @import("clap");
 const std = @import("std");
 const util = @import("util");
@@ -65,7 +66,7 @@ const Command = struct {
 };
 
 pub const program_name = "tm35-randomizer";
-const extension = switch (std.Target.current.os.tag) {
+const extension = switch (builtin.target.os.tag) {
     .linux => "",
     .windows => ".exe",
     else => @compileError("Unsupported os"),
@@ -90,7 +91,7 @@ pub fn deinit(exes: Executables) void {
     exes.arena.deinit();
 }
 
-pub fn find(allocator: *mem.Allocator) !Executables {
+pub fn find(allocator: mem.Allocator) !Executables {
     var arena = heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
@@ -116,12 +117,12 @@ fn findCore(tool: []const u8) !util.Path {
         try findInPath(tool);
 }
 
-const path_env_seperator = switch (std.Target.current.os.tag) {
+const path_env_seperator = switch (builtin.target.os.tag) {
     .linux => ":",
     .windows => ";",
     else => @compileError("Unsupported os"),
 };
-const path_env_name = switch (std.Target.current.os.tag) {
+const path_env_name = switch (builtin.target.os.tag) {
     .linux => "PATH",
     .windows => "Path",
     else => @compileError("Unsupported os"),
@@ -130,9 +131,9 @@ const path_env_name = switch (std.Target.current.os.tag) {
 fn findInPath(name: []const u8) !util.Path {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
-    const path_env = try process.getEnvVarOwned(&fba.allocator, path_env_name);
+    const path_env = try process.getEnvVarOwned(fba.allocator(), path_env_name);
 
-    var iter = mem.tokenize(path_env, path_env_seperator);
+    var iter = mem.tokenize(u8, path_env, path_env_seperator);
     while (iter.next()) |dir|
         return joinAccess(&[_][]const u8{ dir, name }) catch continue;
 
@@ -149,7 +150,7 @@ fn findCommands(arena: *heap.ArenaAllocator) ![]Command {
     const command_file = try openCommandFile();
     defer command_file.close();
 
-    var res = std.ArrayList(Command).init(&arena.allocator);
+    var res = std.ArrayList(Command).init(arena.allocator());
     var fifo = util.io.Fifo(.{ .Static = mem.page_size }).init();
     while (try util.io.readLine(command_file.reader(), &fifo)) |line| {
         if (fs.path.isAbsolute(line)) {
@@ -166,8 +167,8 @@ fn findCommands(arena: *heap.ArenaAllocator) ![]Command {
 }
 
 const Allocators = struct {
-    temp: *mem.Allocator,
-    res: *mem.Allocator,
+    temp: mem.Allocator,
+    res: mem.Allocator,
 };
 
 fn findCommand(name: []const u8) !util.Path {
@@ -203,17 +204,17 @@ fn openCommandFile() !fs.File {
 }
 
 fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command {
-    const help = try execHelp(&arena.allocator, command_path);
-    var flags = std.ArrayList(Command.Flag).init(&arena.allocator);
-    var ints = std.ArrayList(Command.Int).init(&arena.allocator);
-    var floats = std.ArrayList(Command.Float).init(&arena.allocator);
-    var enums = std.ArrayList(Command.Enum).init(&arena.allocator);
-    var strings = std.ArrayList(Command.String).init(&arena.allocator);
-    var files = std.ArrayList(Command.File).init(&arena.allocator);
-    var multi_strings = std.ArrayList(Command.MultiString).init(&arena.allocator);
-    var params = std.ArrayList(clap.Param(clap.Help)).init(&arena.allocator);
+    const help = try execHelp(arena.allocator(), command_path);
+    var flags = std.ArrayList(Command.Flag).init(arena.allocator());
+    var ints = std.ArrayList(Command.Int).init(arena.allocator());
+    var floats = std.ArrayList(Command.Float).init(arena.allocator());
+    var enums = std.ArrayList(Command.Enum).init(arena.allocator());
+    var strings = std.ArrayList(Command.String).init(arena.allocator());
+    var files = std.ArrayList(Command.File).init(arena.allocator());
+    var multi_strings = std.ArrayList(Command.MultiString).init(arena.allocator());
+    var params = std.ArrayList(clap.Param(clap.Help)).init(arena.allocator());
 
-    var it = mem.split(help, "\n");
+    var it = mem.split(u8, help, "\n");
     while (it.next()) |line| {
         const param = clap.parseParam(line) catch continue;
         if (param.names.long == null and param.names.short == null)
@@ -246,8 +247,8 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
 
                 try floats.append(.{ .i = i, .default = default });
             } else if (mem.indexOfScalar(u8, param.id.value, '|') != null) {
-                var options = std.ArrayList([]const u8).init(&arena.allocator);
-                var options_it = mem.split(param.id.value, "|");
+                var options = std.ArrayList([]const u8).init(arena.allocator());
+                var options_it = mem.split(u8, param.id.value, "|");
                 while (options_it.next()) |option|
                     try options.append(option);
 
@@ -285,7 +286,7 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
     }
 
     return Command{
-        .path = try arena.allocator.dupe(u8, command_path),
+        .path = try arena.allocator().dupe(u8, command_path),
         .help = help,
         .flags = flags.toOwnedSlice(),
         .ints = ints.toOwnedSlice(),
@@ -318,12 +319,12 @@ fn findDefaultValue(str: []const u8) ?[]const u8 {
     return mem.trim(u8, str[start..][0..len], " ");
 }
 
-fn execHelp(allocator: *mem.Allocator, exe: []const u8) ![]u8 {
+fn execHelp(allocator: mem.Allocator, exe: []const u8) ![]u8 {
     var buf: [1024 * 40]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
 
     const res = try std.ChildProcess.exec(.{
-        .allocator = &fba.allocator,
+        .allocator = fba.allocator(),
         .argv = &[_][]const u8{ exe, "--help" },
     });
     switch (res.term) {

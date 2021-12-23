@@ -23,7 +23,7 @@ const parse = util.parse;
 
 const Program = @This();
 
-allocator: *mem.Allocator,
+allocator: mem.Allocator,
 options: struct {
     seed: u64,
     hms: bool,
@@ -52,7 +52,7 @@ pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-v, --version     Output version information and exit.                                                      ") catch unreachable,
 };
 
-pub fn init(allocator: *mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const seed = try util.getSeed(args);
     const hms = args.flag("--hms");
 
@@ -87,8 +87,6 @@ fn output(program: *Program, writer: anytype) !void {
         }) });
     }
 }
-
-pub fn deinit(program: *Program) void {}
 
 fn useGame(program: *Program, parsed: format.Game) !void {
     const allocator = program.allocator;
@@ -155,7 +153,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = &rand.DefaultPrng.init(program.options.seed).random;
+    const random = rand.DefaultPrng.init(program.options.seed).random();
 
     for (program.tms.values()) |*tm|
         tm.* = util.random.item(random, program.moves.keys()).?.*;
@@ -239,17 +237,17 @@ test "tm35-rand-machines" {
         \\.hms[1]=3
         \\.hms[2]=5
         \\.tms[0]=1
-        \\.tms[1]=0
-        \\.tms[2]=0
+        \\.tms[1]=2
+        \\.tms[2]=2
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
         \\.tms[0]=1
-        \\.tms[1]=0
-        \\.tms[2]=0
-        \\.hms[0]=1
+        \\.tms[1]=2
+        \\.tms[2]=2
+        \\.hms[0]=0
         \\.hms[1]=2
-        \\.hms[2]=5
+        \\.hms[2]=0
         \\
     );
 }

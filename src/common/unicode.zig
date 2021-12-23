@@ -55,12 +55,12 @@ pub const Utf8View = struct {
 
 /// Given a string of words, this function will split the string into lines where
 /// a maximum of `max_line_len` characters can occure on each line.
-pub fn splitIntoLines(allocator: *mem.Allocator, max_line_len: usize, string: Utf8View) !Utf8View {
+pub fn splitIntoLines(allocator: mem.Allocator, max_line_len: usize, string: Utf8View) !Utf8View {
     var res = std.ArrayList(u8).init(allocator);
     errdefer res.deinit();
 
     var curr_line_len: usize = 0;
-    var it = mem.tokenize(string.bytes, " \n");
+    var it = mem.tokenize(u8, string.bytes, " \n");
     while (it.next()) |word_bytes| {
         const word = Utf8View.init(word_bytes) catch unreachable;
         const next_line_len = word.len + curr_line_len + (1 * @boolToInt(curr_line_len != 0));

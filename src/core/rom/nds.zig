@@ -83,7 +83,7 @@ pub const Overlay = extern struct {
 pub const Rom = struct {
     data: std.ArrayList(u8),
 
-    pub fn new(allocator: *mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
+    pub fn new(allocator: mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
         arm9_size: u32 = 0,
         arm7_size: u32 = 0,
         files: u32 = 0,
@@ -187,8 +187,8 @@ pub const Rom = struct {
     pub fn resizeSection(rom: *Rom, old: []const u8, new_size: usize) ![]u8 {
         const data = &rom.data;
         var buf: [1 * (1024 * 1024)]u8 = undefined;
-        const fba = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-        const sections = try rom.buildSectionTable(fba);
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+        const sections = try rom.buildSectionTable(fba.allocator());
 
         const old_slice = Slice.fromSlice(data.items, old);
         const old_start = old_slice.start.value();
@@ -250,7 +250,6 @@ pub const Rom = struct {
             // for it where it is currently stored. This is expensive, but there is really
             // no other option.
             const extra_bytes = new_size - old.len;
-            const old_rom_len = data.items.len;
             const old_sec_end = old_slice.end();
             const old_rom_end = sections[sections.len - 1].toSlice(data.items).end();
 
@@ -381,14 +380,14 @@ pub const Rom = struct {
         }
     };
 
-    fn buildSectionTable(rom: Rom, allocator: *mem.Allocator) ![]Section {
+    fn buildSectionTable(rom: Rom, allocator: mem.Allocator) ![]Section {
         const h = rom.header();
 
         const file_system = rom.fileSystem();
         const fat = file_system.fat;
 
         var sections = std.ArrayList(Section).init(allocator);
-        try sections.ensureCapacity(7 + fat.len);
+        try sections.ensureTotalCapacity(7 + fat.len);
 
         const data = &rom.data;
         sections.appendAssumeCapacity(Section.fromStartLen(
@@ -410,7 +409,7 @@ pub const Rom = struct {
         return sections.toOwnedSlice();
     }
 
-    pub fn fromFile(file: std.fs.File, allocator: *mem.Allocator) !Rom {
+    pub fn fromFile(file: std.fs.File, allocator: mem.Allocator) !Rom {
         const reader = file.reader();
         const size = try file.getEndPos();
         try file.seekTo(0);

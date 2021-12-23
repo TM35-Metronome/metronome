@@ -523,7 +523,7 @@ pub const StringTable = struct {
     buf: []u8 = &[_]u8{},
 
     pub fn create(
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
         file_this_was_extracted_from: u16,
         number_of_strings: u16,
         max_string_len: usize,
@@ -537,7 +537,7 @@ pub const StringTable = struct {
         };
     }
 
-    pub fn destroy(table: StringTable, allocator: *mem.Allocator) void {
+    pub fn destroy(table: StringTable, allocator: mem.Allocator) void {
         allocator.free(table.buf);
     }
 
@@ -566,7 +566,7 @@ pub const StringTable = struct {
 
 pub const Game = struct {
     info: offsets.Info,
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     rom: *nds.Rom,
     owned: Owned,
     ptrs: Pointers,
@@ -579,7 +579,7 @@ pub const Game = struct {
         trainer_parties: [][6]PartyMemberBoth,
         strings: Strings,
 
-        pub fn deinit(owned: Owned, allocator: *mem.Allocator) void {
+        pub fn deinit(owned: Owned, allocator: mem.Allocator) void {
             allocator.free(owned.arm9);
             allocator.free(owned.trainer_parties);
             owned.strings.deinit(allocator);
@@ -598,7 +598,7 @@ pub const Game = struct {
 
         pub const Array = [std.meta.fields(Strings).len]*const StringTable;
 
-        pub fn deinit(strings: Strings, allocator: *mem.Allocator) void {
+        pub fn deinit(strings: Strings, allocator: mem.Allocator) void {
             for (strings.asArray()) |table|
                 table.destroy(allocator);
         }
@@ -641,7 +641,7 @@ pub const Game = struct {
         given_pokemons: []StaticPokemon,
         pokeball_items: []PokeballItem,
 
-        pub fn deinit(ptrs: Pointers, allocator: *mem.Allocator) void {
+        pub fn deinit(ptrs: Pointers, allocator: mem.Allocator) void {
             allocator.free(ptrs.static_pokemons);
             allocator.free(ptrs.given_pokemons);
             allocator.free(ptrs.pokeball_items);
@@ -662,7 +662,7 @@ pub const Game = struct {
         return error.UnknownGame;
     }
 
-    pub fn fromRom(allocator: *mem.Allocator, nds_rom: *nds.Rom) !Game {
+    pub fn fromRom(allocator: mem.Allocator, nds_rom: *nds.Rom) !Game {
         const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
         const arm9 = if (info.arm9_is_encoded)
             try nds.blz.decode(allocator, nds_rom.arm9())
@@ -734,7 +734,7 @@ pub const Game = struct {
     }
 
     pub fn fromRomEx(
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
         nds_rom: *nds.Rom,
         info: offsets.Info,
         owned: Owned,
@@ -1028,6 +1028,7 @@ pub const Game = struct {
             debug.assert(writer.context.pos == bytes.len);
         }
     }
+
     pub fn deinit(game: Game) void {
         game.owned.deinit(game.allocator);
         game.ptrs.deinit(game.allocator);
@@ -1039,7 +1040,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: *mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(version: common.Version, scripts: nds.fs.Fs, allocator: mem.Allocator) !ScriptCommands {
         if (version == .heart_gold or version == .soul_silver) {
             // We don't support decoding scripts for hg/ss yet.
             return ScriptCommands{
@@ -1156,7 +1157,7 @@ pub const Game = struct {
     }
 
     fn decryptStringTable(
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
         max_string_len: usize,
         text: nds.fs.Fs,
         file: u16,

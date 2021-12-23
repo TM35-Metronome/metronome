@@ -98,7 +98,7 @@ pub fn generate(comptime escapes: []const Escape) type {
             try esc.finish();
         }
 
-        pub fn escapeAlloc(allocator: *mem.Allocator, str: []const u8) ![]u8 {
+        pub fn escapeAlloc(allocator: mem.Allocator, str: []const u8) ![]u8 {
             var res = std.ArrayList(u8).init(allocator);
             try escapeWrite(res.writer(), str);
             return res.toOwnedSlice();
@@ -120,7 +120,7 @@ pub fn generate(comptime escapes: []const Escape) type {
             try esc.finish();
         }
 
-        pub fn unescapeAlloc(allocator: *mem.Allocator, str: []const u8) ![]u8 {
+        pub fn unescapeAlloc(allocator: mem.Allocator, str: []const u8) ![]u8 {
             var res = std.ArrayList(u8).init(allocator);
             try unescapeWrite(res.writer(), str);
             return res.toOwnedSlice();
