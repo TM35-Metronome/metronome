@@ -12,9 +12,9 @@ const process = std.process;
 const Executables = @This();
 
 arena: heap.ArenaAllocator,
-load: util.Path = util.Path{},
-apply: util.Path = util.Path{},
-identify: util.Path = util.Path{},
+load: util.Path = util.Path{ .buffer = undefined },
+apply: util.Path = util.Path{ .buffer = undefined },
+identify: util.Path = util.Path{ .buffer = undefined },
 commands: []const Command = &[_]Command{},
 
 const Command = struct {
@@ -110,7 +110,7 @@ pub fn find(allocator: mem.Allocator) !Executables {
 }
 
 fn findCore(tool: []const u8) !util.Path {
-    const self_exe_dir = (try util.dir.selfExeDir()).span();
+    const self_exe_dir = (try util.dir.selfExeDir()).slice();
 
     return joinAccess(&[_][]const u8{ self_exe_dir, "core", tool }) catch
         joinAccess(&[_][]const u8{ self_exe_dir, tool }) catch
@@ -142,7 +142,7 @@ fn findInPath(name: []const u8) !util.Path {
 
 fn joinAccess(paths: []const []const u8) !util.Path {
     const res = util.path.join(paths);
-    try fs.cwd().access(res.span(), .{});
+    try fs.cwd().access(res.constSlice(), .{});
     return res;
 }
 
@@ -158,7 +158,7 @@ fn findCommands(arena: *heap.ArenaAllocator) ![]Command {
             try res.append(command);
         } else {
             const command_path = findCommand(line) catch continue;
-            const command = pathToCommand(arena, command_path.span()) catch continue;
+            const command = pathToCommand(arena, command_path.constSlice()) catch continue;
             try res.append(command);
         }
     }
@@ -172,9 +172,9 @@ const Allocators = struct {
 };
 
 fn findCommand(name: []const u8) !util.Path {
-    const self_exe_dir = (try util.dir.selfExeDir()).span();
-    const config_dir = (try util.dir.folder(.local_configuration)).span();
-    const cwd = (try util.dir.cwd()).span();
+    const self_exe_dir = (try util.dir.selfExeDir()).slice();
+    const config_dir = (try util.dir.folder(.local_configuration)).slice();
+    const cwd = (try util.dir.cwd()).slice();
     return joinAccess(&[_][]const u8{ cwd, name }) catch
         joinAccess(&[_][]const u8{ config_dir, program_name, name }) catch
         joinAccess(&[_][]const u8{ self_exe_dir, "randomizers", name }) catch
@@ -184,12 +184,12 @@ fn findCommand(name: []const u8) !util.Path {
 
 fn openCommandFile() !fs.File {
     const cwd = fs.cwd();
-    const config_dir = (try util.dir.folder(.local_configuration)).span();
+    const config_dir = (try util.dir.folder(.local_configuration)).slice();
     const command_path = util.path.join(&[_][]const u8{
         config_dir,
         program_name,
         command_file_name,
-    }).span();
+    }).slice();
 
     // TODO: When we want to enable plugin support, readd this
     //if (cwd.openFile(command_path, .{})) |file| {

@@ -533,7 +533,25 @@ pub fn drawActions(
         .save_settings => c.NFD_SaveDialog(null, null, &m_out_path),
         .load_settings => c.NFD_OpenDialog(null, null, &m_out_path),
         .load_rom => c.NFD_OpenDialog("gb,gba,nds", null, &m_out_path),
-        .randomize => c.NFD_SaveDialog("gb,gba,nds", null, &m_out_path),
+        .randomize => blk: {
+            const in_rom_path = in_rom.?.path.constSlice();
+            const dirname = path.dirname(in_rom_path) orelse ".";
+            const ext = path.extension(in_rom_path);
+            const in_name = basenameNoExt(in_rom_path);
+
+            var default_path = util.Path{ .buffer = undefined };
+            default_path.appendSlice(dirname) catch {};
+            default_path.appendSlice("/") catch {};
+            default_path.appendSlice(in_name) catch {};
+            default_path.appendSlice("-randomized") catch {};
+            default_path.appendSlice(ext) catch {};
+            default_path.append(0) catch {};
+
+            const default = default_path.slice();
+            // Ensure we are null terminated even if the above fails.
+            default[default.len - 1] = 0;
+            break :blk c.NFD_SaveDialog("gb,gba,nds", default.ptr, &m_out_path);
+        },
     };
 
     const selected_path = switch (dialog_result) {
@@ -553,7 +571,7 @@ pub fn drawActions(
         },
         else => unreachable,
     };
-    const selected_path_slice = selected_path.span();
+    const selected_path_slice = selected_path.constSlice();
 
     switch (file_browser_kind) {
         .load_rom => {
@@ -563,7 +581,7 @@ pub fn drawActions(
             const result = std.ChildProcess.exec(.{
                 .allocator = fba.allocator(),
                 .argv = &[_][]const u8{
-                    exes.identify.span(),
+                    exes.identify.constSlice(),
                     selected_path_slice,
                 },
             }) catch |err| {
@@ -589,8 +607,8 @@ pub fn drawActions(
         .randomize => {
             // in should never be null here as the "Randomize" button is inactive when
             // it is.
-            const in_path = rom.?.path.span();
-            const out_path = selected_path.span();
+            const in_path = rom.?.path.slice();
+            const out_path = selected_path.constSlice();
 
             const stderr = std.io.getStdErr();
             outputScript(stderr.writer(), exes, settings.*, in_path, out_path) catch {};
@@ -605,24 +623,24 @@ pub fn drawActions(
             popups.info("Rom has been randomized!", .{});
         },
         .load_settings => {
-            const file = fs.cwd().openFile(selected_path.span(), .{}) catch |err| {
-                popups.err("Could not open '{s}': {}", .{ selected_path.span(), err });
+            const file = fs.cwd().openFile(selected_path.constSlice(), .{}) catch |err| {
+                popups.err("Could not open '{s}': {}", .{ selected_path.constSlice(), err });
                 return rom;
             };
             defer file.close();
             settings.load(exes, file.reader()) catch |err| {
-                popups.err("Failed to load from '{s}': {}", .{ selected_path.span(), err });
+                popups.err("Failed to load from '{s}': {}", .{ selected_path.constSlice(), err });
                 return rom;
             };
         },
         .save_settings => {
-            const file = fs.cwd().createFile(selected_path.span(), .{}) catch |err| {
-                popups.err("Could not open '{s}': {}", .{ selected_path.span(), err });
+            const file = fs.cwd().createFile(selected_path.constSlice(), .{}) catch |err| {
+                popups.err("Could not open '{s}': {}", .{ selected_path.constSlice(), err });
                 return rom;
             };
             defer file.close();
             settings.save(exes, file.writer()) catch |err| {
-                popups.err("Failed to write to '{s}': {}", .{ selected_path.span(), err });
+                popups.err("Failed to write to '{s}': {}", .{ selected_path.constSlice(), err });
                 return rom;
             };
         },
@@ -633,11 +651,10 @@ pub fn drawActions(
 pub fn drawInfo(ctx: *nk.Context, m_rom: ?Rom) void {
     if (c.nk_group_begin(ctx, "Info", border_title_group) == 0)
         return;
-
     defer c.nk_group_end(ctx);
-    const rom = m_rom orelse return;
 
-    var it = mem.split(u8, rom.info.span(), "\n");
+    const info = if (m_rom) |*rom| rom.info.constSlice() else "No rom has been opened yet.";
+    var it = mem.split(u8, info, "\n");
     while (it.next()) |line_notrim| {
         const line = mem.trimRight(u8, line_notrim, " ");
         if (line.len == 0)
@@ -807,22 +824,22 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
         .windows => blk: {
             const cache_dir = try util.dir.folder(.cache);
             const program_cache_dir = util.path.join(&[_][]const u8{
-                cache_dir.span(),
+                cache_dir.constSlice(),
                 Executables.program_name,
             });
             const script_file_name = util.path.join(&[_][]const u8{
-                program_cache_dir.span(),
+                program_cache_dir.constSlice(),
                 "tmp_scipt.bat",
             });
             {
-                try fs.cwd().makePath(program_cache_dir.span());
-                const file = try fs.cwd().createFile(script_file_name.span(), .{});
+                try fs.cwd().makePath(program_cache_dir.constSlice());
+                const file = try fs.cwd().createFile(script_file_name.constSlice(), .{});
                 defer file.close();
                 try outputScript(file.writer(), exes, settings, in, out);
             }
 
             const cmd = try std.ChildProcess.init(
-                &[_][]const u8{ "cmd", "/c", "call", script_file_name.span() },
+                &[_][]const u8{ "cmd", "/c", "call", script_file_name.constSlice() },
                 fba.allocator(),
             );
             defer cmd.deinit();
@@ -866,7 +883,7 @@ fn outputScript(
 
     const esc = escape.generate(&escapes);
     try writer.writeAll(quotes);
-    try esc.escapeWrite(writer, exes.load.span());
+    try esc.escapeWrite(writer, exes.load.constSlice());
     try writer.writeAll(quotes ++ " " ++ quotes);
     try esc.escapeWrite(writer, in);
     try writer.writeAll(quotes ++ " | ");
@@ -939,7 +956,7 @@ fn outputScript(
     }
 
     try writer.writeAll(quotes);
-    try esc.escapeWrite(writer, exes.apply.span());
+    try esc.escapeWrite(writer, exes.apply.constSlice());
     try writer.writeAll(quotes ++ " --replace --output " ++ quotes);
     try esc.escapeWrite(writer, out);
     try writer.writeAll(quotes ++ " " ++ quotes);
