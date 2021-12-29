@@ -367,16 +367,16 @@ test "tm35-misc" {
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{"--wild-level-scaling=0.5"},
-        \\.wild_pokemons[0].grass.pokemons[0].min_level=10
-        \\.wild_pokemons[0].grass.pokemons[0].max_level=20
-        \\.wild_pokemons[0].fishing.pokemons[0].min_level=20
-        \\.wild_pokemons[0].fishing.pokemons[0].max_level=40
+        \\.wild_pokemons[0].grass_0.pokemons[0].min_level=10
+        \\.wild_pokemons[0].grass_0.pokemons[0].max_level=20
+        \\.wild_pokemons[0].fishing_0.pokemons[0].min_level=20
+        \\.wild_pokemons[0].fishing_0.pokemons[0].max_level=40
         \\
     ,
-        \\.wild_pokemons[0].grass.pokemons[0].min_level=5
-        \\.wild_pokemons[0].grass.pokemons[0].max_level=10
-        \\.wild_pokemons[0].fishing.pokemons[0].min_level=10
-        \\.wild_pokemons[0].fishing.pokemons[0].max_level=20
+        \\.wild_pokemons[0].grass_0.pokemons[0].min_level=5
+        \\.wild_pokemons[0].grass_0.pokemons[0].max_level=10
+        \\.wild_pokemons[0].fishing_0.pokemons[0].min_level=10
+        \\.wild_pokemons[0].fishing_0.pokemons[0].max_level=20
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{"--exp-yield-scaling=0.5"},
