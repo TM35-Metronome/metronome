@@ -19,6 +19,7 @@ const Program = @This();
 
 allocator: mem.Allocator,
 options: struct {
+    easy_hms: bool,
     fast_text: bool,
     biking: Allow,
     running: Allow,
@@ -44,6 +45,7 @@ pub const description =
 pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("    --allow-biking <unchanged|nowhere|everywhere>   Change where biking is allowed (gen3 only) (default: unchanged).") catch unreachable,
     clap.parseParam("    --allow-running <unchanged|nowhere|everywhere>  Change where running is allowed (gen3 only) (default: unchanged).") catch unreachable,
+    clap.parseParam("    --easy-hms                                      Have all Pokémon be able to learn all HMs.") catch unreachable,
     clap.parseParam("    --fast-text                                     Change text speed to fastest possible for the game.") catch unreachable,
     clap.parseParam("    --exp-yield-scaling <FLOAT>                     Scale The amount of exp Pokémons give. (default: 1.0).") catch unreachable,
     clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
@@ -61,6 +63,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const trainer_scale_arg = args.option("--trainer-level-scaling") orelse "1.0";
     const wild_scale_arg = args.option("--wild-level-scaling") orelse "1.0";
 
+    const easy_hms = args.flag("--easy-hms");
     const fast_text = args.flag("--fast-text");
     const biking = std.meta.stringToEnum(Allow, biking_arg);
     const running = std.meta.stringToEnum(Allow, running_arg);
@@ -94,6 +97,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
+            .easy_hms = easy_hms,
             .fast_text = fast_text,
             .biking = biking.?,
             .running = running.?,
@@ -150,6 +154,11 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             } else {
                 return error.ParserFailed;
             },
+            .hms => |hm| return out.print(".pokemons[{}].hms[{}]={}\n", .{
+                pokemons.index,
+                hm.index,
+                hm.value or program.options.easy_hms,
+            }),
             .stats,
             .types,
             .catch_rate,
@@ -165,7 +174,6 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             .evos,
             .moves,
             .tms,
-            .hms,
             .name,
             .pokedex_entry,
             => return error.ParserFailed,
@@ -276,8 +284,14 @@ fn useGame(ctx: anytype, game: format.Game) !void {
     unreachable;
 }
 
+fn testIt(args: []const []const u8, in: []const u8, out: []const u8) !void {
+    // Not providing the args should be a noop
+    try util.testing.testProgram(Program, &[_][]const u8{}, in, in);
+    try util.testing.testProgram(Program, args, in, out);
+}
+
 test "tm35-misc" {
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=everywhere"},
+    try testIt(&[_][]const u8{"--allow-biking=everywhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -286,7 +300,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=nowhere"},
+    try testIt(&[_][]const u8{"--allow-biking=nowhere"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -295,7 +309,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=false
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-biking=unchanged"},
+    try testIt(&[_][]const u8{"--allow-biking=unchanged"},
         \\.maps[0].allow_cycling=false
         \\.maps[0].allow_cycling=true
         \\
@@ -304,7 +318,7 @@ test "tm35-misc" {
         \\.maps[0].allow_cycling=true
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=everywhere"},
+    try testIt(&[_][]const u8{"--allow-running=everywhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -313,7 +327,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=nowhere"},
+    try testIt(&[_][]const u8{"--allow-running=nowhere"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -322,7 +336,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=false
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--allow-running=unchanged"},
+    try testIt(&[_][]const u8{"--allow-running=unchanged"},
         \\.maps[0].allow_running=false
         \\.maps[0].allow_running=true
         \\
@@ -331,7 +345,7 @@ test "tm35-misc" {
         \\.maps[0].allow_running=true
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--fast-text"},
+    try testIt(&[_][]const u8{"--fast-text"},
         \\.instant_text=false
         \\.instant_text=true
         \\.text_delays[0]=10
@@ -348,7 +362,7 @@ test "tm35-misc" {
         \\.text_delays[3]=0
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--static-level-scaling=0.5"},
+    try testIt(&[_][]const u8{"--static-level-scaling=0.5"},
         \\.static_pokemons[0].level=20
         \\.static_pokemons[1].level=30
         \\
@@ -357,7 +371,7 @@ test "tm35-misc" {
         \\.static_pokemons[1].level=15
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--trainer-level-scaling=0.5"},
+    try testIt(&[_][]const u8{"--trainer-level-scaling=0.5"},
         \\.trainers[0].party[0].level=20
         \\.trainers[10].party[10].level=10
         \\
@@ -366,7 +380,7 @@ test "tm35-misc" {
         \\.trainers[10].party[10].level=5
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--wild-level-scaling=0.5"},
+    try testIt(&[_][]const u8{"--wild-level-scaling=0.5"},
         \\.wild_pokemons[0].grass_0.pokemons[0].min_level=10
         \\.wild_pokemons[0].grass_0.pokemons[0].max_level=20
         \\.wild_pokemons[0].fishing_0.pokemons[0].min_level=20
@@ -379,15 +393,26 @@ test "tm35-misc" {
         \\.wild_pokemons[0].fishing_0.pokemons[0].max_level=20
         \\
     );
-    try util.testing.testProgram(Program, &[_][]const u8{"--exp-yield-scaling=0.5"},
-        \\.pokemons[0].pokedex_entry=0
+    try testIt(&[_][]const u8{"--exp-yield-scaling=0.5"},
         \\.pokemons[0].base_exp_yield=20
         \\.pokemons[1].base_exp_yield=40
         \\
     ,
-        \\.pokemons[0].pokedex_entry=0
         \\.pokemons[0].base_exp_yield=10
         \\.pokemons[1].base_exp_yield=20
+        \\
+    );
+    try testIt(&[_][]const u8{"--easy-hms"},
+        \\.pokemons[0].hms[0]=false
+        \\.pokemons[0].hms[1]=true
+        \\.pokemons[0].hms[0]=true
+        \\.pokemons[0].hms[1]=false
+        \\
+    ,
+        \\.pokemons[0].hms[0]=true
+        \\.pokemons[0].hms[1]=true
+        \\.pokemons[0].hms[0]=true
+        \\.pokemons[0].hms[1]=true
         \\
     );
 }

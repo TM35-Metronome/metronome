@@ -812,7 +812,7 @@ pub const Game = struct {
                 table.destroy(allocator);
         }
 
-        pub fn asArray(text: *const Text) Array {
+        pub fn asArray(text: Text) Array {
             var res: Array = undefined;
             inline for (std.meta.fields(Text)) |field, i|
                 res[i] = @field(text, field.name);
@@ -831,7 +831,7 @@ pub const Game = struct {
                 table.destroy(allocator);
         }
 
-        pub fn asArray(story: *const Story) Array {
+        pub fn asArray(story: Story) Array {
             var res: Array = undefined;
             inline for (std.meta.fields(Story)) |field, i|
                 res[i] = @field(story, field.name);
