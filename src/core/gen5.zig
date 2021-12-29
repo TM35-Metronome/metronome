@@ -781,16 +781,18 @@ pub const Game = struct {
         old_arm_len: usize,
         arm9: []u8,
         trainer_parties: [][6]PartyMemberBoth,
-        strings: Strings,
+        text: Text,
+        story: Story,
 
         pub fn deinit(owned: Owned, allocator: mem.Allocator) void {
             allocator.free(owned.arm9);
             allocator.free(owned.trainer_parties);
-            owned.strings.deinit(allocator);
+            owned.text.deinit(allocator);
+            owned.story.deinit(allocator);
         }
     };
 
-    pub const Strings = struct {
+    pub const Text = struct {
         type_names: StringTable,
         pokemon_names: StringTable,
         trainer_names: StringTable,
@@ -803,17 +805,36 @@ pub const Game = struct {
         item_descriptions: StringTable,
         move_descriptions: StringTable,
 
-        pub const Array = [std.meta.fields(Strings).len]*const StringTable;
+        pub const Array = [std.meta.fields(Text).len]StringTable;
 
-        pub fn deinit(strings: Strings, allocator: mem.Allocator) void {
-            for (strings.asArray()) |table|
+        pub fn deinit(text: Text, allocator: mem.Allocator) void {
+            for (text.asArray()) |table|
                 table.destroy(allocator);
         }
 
-        pub fn asArray(strings: *const Strings) Array {
+        pub fn asArray(text: *const Text) Array {
             var res: Array = undefined;
-            inline for (std.meta.fields(Strings)) |field, i|
-                res[i] = &@field(strings, field.name);
+            inline for (std.meta.fields(Text)) |field, i|
+                res[i] = @field(text, field.name);
+
+            return res;
+        }
+    };
+
+    pub const Story = struct {
+        starter_choice: StringTable,
+
+        pub const Array = [std.meta.fields(Story).len]StringTable;
+
+        pub fn deinit(story: Story, allocator: mem.Allocator) void {
+            for (story.asArray()) |table|
+                table.destroy(allocator);
+        }
+
+        pub fn asArray(story: *const Story) Array {
+            var res: Array = undefined;
+            inline for (std.meta.fields(Story)) |field, i|
+                res[i] = @field(story, field.name);
 
             return res;
         }
@@ -872,6 +893,7 @@ pub const Game = struct {
         errdefer allocator.free(arm9);
 
         const text = try file_system.openNarc(nds.fs.root, info.text);
+        const story = try file_system.openNarc(nds.fs.root, info.story);
         const trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(1, Trainer);
         const trainer_parties_narc = try file_system.openNarc(nds.fs.root, info.parties);
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
@@ -932,11 +954,14 @@ pub const Game = struct {
         const move_descriptions = try decryptStringTable(allocator, 256, text, info.move_descriptions);
         errdefer move_descriptions.destroy(allocator);
 
+        const starter_choice = try decryptStringTable(allocator, 256 * 2, story, info.starter_choice);
+        errdefer starter_choice.destroy(allocator);
+
         return fromRomEx(allocator, nds_rom, info, .{
             .old_arm_len = nds_rom.arm9().len,
             .arm9 = arm9,
             .trainer_parties = trainer_parties,
-            .strings = .{
+            .text = .{
                 .map_names = map_names,
                 .type_names = type_names,
                 .item_descriptions = item_descriptions,
@@ -948,6 +973,9 @@ pub const Game = struct {
                 .trainer_names = trainer_names,
                 .pokedex_category_names = pokedex_category_names,
                 .pokemon_names = pokemon_names,
+            },
+            .story = .{
+                .starter_choice = starter_choice,
             },
         });
     }
@@ -1023,6 +1051,34 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
+        game.updateStarterDialog();
+        try game.applyArm9();
+        try game.applyTrainerParties();
+        try game.applyStrings(&game.owned.story.asArray(), game.info.story);
+        try game.applyStrings(&game.owned.text.asArray(), game.info.text);
+
+        game.ptrs.deinit(game.allocator);
+        game.* = try fromRomEx(
+            game.allocator,
+            game.rom,
+            game.info,
+            game.owned,
+        );
+    }
+
+    fn updateStarterDialog(game: Game) void {
+        for (game.ptrs.starters) |starter_ptrs, i| {
+            const starter = starter_ptrs[0].value();
+            const index = game.info.starter_choice_indexs[i];
+            const text = game.owned.story.starter_choice.get(index);
+            mem.set(u8, text, 0);
+
+            const starter_name = game.owned.text.pokemon_names.getSpan(starter);
+            mem.copy(u8, text, starter_name);
+        }
+    }
+
+    fn applyArm9(game: Game) !void {
         const arm9 = try nds.blz.encode(game.allocator, game.owned.arm9, 0x4000);
         defer game.allocator.free(arm9);
 
@@ -1044,17 +1100,6 @@ pub const Game = struct {
             u8,
             try game.rom.resizeSection(game.rom.arm9(), arm9.len),
             arm9,
-        );
-
-        try game.applyTrainerParties();
-        try game.applyStrings();
-        game.ptrs.deinit(game.allocator);
-
-        game.* = try fromRomEx(
-            game.allocator,
-            game.rom,
-            game.info,
-            game.owned,
         );
     }
 
@@ -1122,25 +1167,30 @@ pub const Game = struct {
     }
 
     /// Applies all decrypted strings to the game.
-    fn applyStrings(game: Game) !void {
-        const file_system = game.rom.fileSystem();
-        const old_text_bytes = try file_system.openFileData(nds.fs.root, game.info.text);
-        const old_text = try nds.fs.Fs.fromNarc(old_text_bytes);
+    fn applyStrings(game: Game, strings: []const StringTable, string_file: []const u8) !void {
+        const buf = blk: {
+            const file_system = game.rom.fileSystem();
+            const text_bytes = try file_system.openFileData(nds.fs.root, string_file);
+            const text = try nds.fs.Fs.fromNarc(text_bytes);
 
-        // We then calculate the size of the content for our new narc
-        var extra_bytes: usize = 0;
-        for (game.owned.strings.asArray()) |table| {
-            extra_bytes += math.sub(
-                u32,
-                table.encryptedSize(),
-                old_text.fat[table.file_this_was_extracted_from].len(),
-            ) catch 0;
-        }
+            // We then calculate the size of the content for our new narc
+            var extra_bytes: usize = 0;
+            for (strings) |table| {
+                extra_bytes += math.sub(
+                    u32,
+                    table.encryptedSize(),
+                    text.fat[table.file_this_was_extracted_from].len(),
+                ) catch 0;
+            }
 
-        const buf = try game.rom.resizeSection(old_text_bytes, old_text_bytes.len + extra_bytes);
+            break :blk try game.rom.resizeSection(
+                text_bytes,
+                text_bytes.len + extra_bytes,
+            );
+        };
+
         const text = try nds.fs.Fs.fromNarc(buf);
-
-        for (game.owned.strings.asArray()) |table| {
+        for (strings) |table| {
             const new_file_size = table.encryptedSize();
             const file = &text.fat[table.file_this_was_extracted_from];
 

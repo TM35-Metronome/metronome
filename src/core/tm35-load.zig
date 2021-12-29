@@ -730,13 +730,13 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         else => unreachable,
     }
 
-    try outputGen4StringTable(writer, "pokemons", "name", game.owned.strings.pokemon_names);
-    try outputGen4StringTable(writer, "moves", "name", game.owned.strings.move_names);
-    try outputGen4StringTable(writer, "moves", "description", game.owned.strings.move_descriptions);
-    try outputGen4StringTable(writer, "abilities", "name", game.owned.strings.ability_names);
-    try outputGen4StringTable(writer, "items", "name", game.owned.strings.item_names);
-    try outputGen4StringTable(writer, "items", "description", game.owned.strings.item_descriptions);
-    try outputGen4StringTable(writer, "types", "name", game.owned.strings.type_names);
+    try outputGen4StringTable(writer, "pokemons", "name", game.owned.text.pokemon_names);
+    try outputGen4StringTable(writer, "moves", "name", game.owned.text.move_names);
+    try outputGen4StringTable(writer, "moves", "description", game.owned.text.move_descriptions);
+    try outputGen4StringTable(writer, "abilities", "name", game.owned.text.ability_names);
+    try outputGen4StringTable(writer, "items", "name", game.owned.text.item_names);
+    try outputGen4StringTable(writer, "items", "description", game.owned.text.item_descriptions);
+    try outputGen4StringTable(writer, "types", "name", game.owned.text.type_names);
 }
 
 fn outputGen4StringTable(
@@ -983,15 +983,15 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    try outputGen5StringTable(writer, "pokemons", 0, "name", game.owned.strings.pokemon_names);
-    try outputGen5StringTable(writer, "pokedex", 0, "category", game.owned.strings.pokedex_category_names);
-    try outputGen5StringTable(writer, "moves", 0, "name", game.owned.strings.move_names);
-    try outputGen5StringTable(writer, "moves", 0, "description", game.owned.strings.move_descriptions);
-    try outputGen5StringTable(writer, "abilities", 0, "name", game.owned.strings.ability_names);
-    try outputGen5StringTable(writer, "items", 0, "name", game.owned.strings.item_names);
-    try outputGen5StringTable(writer, "items", 0, "description", game.owned.strings.item_descriptions);
-    try outputGen5StringTable(writer, "types", 0, "name", game.owned.strings.type_names);
-    try outputGen5StringTable(writer, "trainers", 1, "name", game.owned.strings.trainer_names);
+    try outputGen5StringTable(writer, "pokemons", 0, "name", game.owned.text.pokemon_names);
+    try outputGen5StringTable(writer, "pokedex", 0, "category", game.owned.text.pokedex_category_names);
+    try outputGen5StringTable(writer, "moves", 0, "name", game.owned.text.move_names);
+    try outputGen5StringTable(writer, "moves", 0, "description", game.owned.text.move_descriptions);
+    try outputGen5StringTable(writer, "abilities", 0, "name", game.owned.text.ability_names);
+    try outputGen5StringTable(writer, "items", 0, "name", game.owned.text.item_names);
+    try outputGen5StringTable(writer, "items", 0, "description", game.owned.text.item_descriptions);
+    try outputGen5StringTable(writer, "types", 0, "name", game.owned.text.type_names);
+    try outputGen5StringTable(writer, "trainers", 1, "name", game.owned.text.trainer_names);
 }
 
 fn outputGen5StringTable(

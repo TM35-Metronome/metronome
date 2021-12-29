@@ -755,8 +755,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             if (moves.index >= game.ptrs.moves.len)
                 return error.Error;
 
-            const descriptions = game.owned.strings.move_descriptions;
-            const names = game.owned.strings.move_names;
+            const descriptions = game.owned.text.move_descriptions;
+            const names = game.owned.text.move_names;
             const move = &game.ptrs.moves[moves.index];
             switch (moves.value) {
                 .description => |str| try applyGen4String(descriptions, moves.index, str),
@@ -773,8 +773,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             }
         },
         .items => |items| {
-            const descriptions = game.owned.strings.item_descriptions;
-            const names = game.owned.strings.item_names;
+            const descriptions = game.owned.text.item_descriptions;
+            const names = game.owned.text.item_names;
             switch (items.value) {
                 .description => |str| return applyGen4String(descriptions, items.index, str),
                 .name => |str| return applyGen4String(names, items.index, str),
@@ -818,13 +818,13 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             }
         },
         .abilities => |abilities| {
-            const names = game.owned.strings.ability_names;
+            const names = game.owned.text.ability_names;
             switch (abilities.value) {
                 .name => |str| try applyGen4String(names, abilities.index, str),
             }
         },
         .types => |types| {
-            const names = game.owned.strings.type_names;
+            const names = game.owned.text.type_names;
             switch (types.value) {
                 .name => |str| try applyGen4String(names, types.index, str),
             }
@@ -833,7 +833,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             if (pokemons.index >= game.ptrs.pokemons.len)
                 return error.Error;
 
-            const names = game.owned.strings.pokemon_names;
+            const names = game.owned.text.pokemon_names;
             const pokemon = &game.ptrs.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
@@ -1210,7 +1210,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (trainers.index == 0 or trainers.index - 1 >= game.ptrs.trainers.len)
                 return error.Error;
 
-            const names = game.owned.strings.trainer_names;
+            const names = game.owned.text.trainer_names;
             const trainer = &game.ptrs.trainers[trainers.index - 1];
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
@@ -1250,7 +1250,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (pokemons.index >= game.ptrs.pokemons.fat.len)
                 return error.Error;
 
-            const names = game.owned.strings.pokemon_names;
+            const names = game.owned.text.pokemon_names;
             const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
@@ -1378,15 +1378,15 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (items.index >= game.ptrs.items.len)
                 return error.IndexOutOfBound;
 
-            const descriptions = game.owned.strings.item_descriptions;
+            const descriptions = game.owned.text.item_descriptions;
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
                 .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .description => |str| try applyGen5String(descriptions, items.index, str),
                 .name => |str| {
-                    const names_on_ground = game.owned.strings.item_names_on_the_ground;
-                    const item_names = game.owned.strings.item_names;
+                    const names_on_ground = game.owned.text.item_names_on_the_ground;
+                    const item_names = game.owned.text.item_names;
                     if (items.index >= item_names.keys.len)
                         return error.Error;
 
@@ -1410,7 +1410,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             }
         },
         .pokedex => |pokedex| {
-            const names = game.owned.strings.pokedex_category_names;
+            const names = game.owned.text.pokedex_category_names;
             switch (pokedex.value) {
                 .category => |category| try applyGen5String(names, pokedex.index, category),
                 .height,
@@ -1422,8 +1422,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (moves.index >= game.ptrs.moves.len)
                 return error.IndexOutOfBound;
 
-            const names = game.owned.strings.move_names;
-            const descriptions = game.owned.strings.move_descriptions;
+            const names = game.owned.text.move_names;
+            const descriptions = game.owned.text.move_descriptions;
             const move = &game.ptrs.moves[moves.index];
             switch (moves.value) {
                 .description => |str| try applyGen5String(descriptions, moves.index, str),
@@ -1439,13 +1439,13 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             }
         },
         .abilities => |abilities| {
-            const names = game.owned.strings.ability_names;
+            const names = game.owned.text.ability_names;
             switch (abilities.value) {
                 .name => |str| try applyGen5String(names, abilities.index, str),
             }
         },
         .types => |types| {
-            const names = game.owned.strings.type_names;
+            const names = game.owned.text.type_names;
             switch (types.value) {
                 .name => |str| try applyGen5String(names, types.index, str),
             }

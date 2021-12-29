@@ -45,6 +45,10 @@ pub const Info = struct {
     item_descriptions: u16,
     type_names: u16,
     map_names: u16,
+
+    story: []const u8,
+    starter_choice: u16,
+    starter_choice_indexs: [3]usize,
 };
 
 pub const infos = [_]Info{
@@ -108,6 +112,10 @@ const black2_info = Info{
     .item_descriptions = 63,
     .type_names = 489,
     .map_names = 109,
+
+    .story = "/a/0/0/3",
+    .starter_choice = 169,
+    .starter_choice_indexs = .{ 37, 36, 35 },
 };
 
 const white2_info = Info{
@@ -148,6 +156,10 @@ const white2_info = Info{
     .item_descriptions = black2_info.item_descriptions,
     .type_names = black2_info.type_names,
     .map_names = black2_info.map_names,
+
+    .story = black2_info.story,
+    .starter_choice = black2_info.starter_choice,
+    .starter_choice_indexs = black2_info.starter_choice_indexs,
 };
 
 const black_info = Info{
@@ -213,6 +225,10 @@ const black_info = Info{
     .item_descriptions = 53,
     .type_names = 287,
     .map_names = 89,
+
+    .story = black2_info.story,
+    .starter_choice = 430,
+    .starter_choice_indexs = .{ 18, 17, 16 },
 };
 
 const white_info = Info{
@@ -253,6 +269,10 @@ const white_info = Info{
     .item_descriptions = black_info.item_descriptions,
     .type_names = black_info.type_names,
     .map_names = black_info.map_names,
+
+    .story = black_info.story,
+    .starter_choice = black_info.starter_choice,
+    .starter_choice_indexs = black_info.starter_choice_indexs,
 };
 
 pub const hm_count = 6;
