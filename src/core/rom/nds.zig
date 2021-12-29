@@ -108,7 +108,7 @@ pub const Rom = struct {
         h.arm9.offset = lu32.init(@intCast(u32, res.data.len));
         h.arm9.size = lu32.init(opts.arm9_size);
         try writer.writeByteNTimes(0, h.arm9.size.value());
-        try writer.writeByteNTimes(0, math.sub(usize, 0x8000, res.data.len) catch 0);
+        try writer.writeByteNTimes(0, 0x8000 -| res.data.len);
 
         h.arm7.ram_address = lu32.init(0x2000000);
         h.arm7.entry_address = lu32.init(0x2000000);

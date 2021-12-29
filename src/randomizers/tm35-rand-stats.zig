@@ -263,12 +263,12 @@ fn randomUntilSum(
     for (buf) |*item, i| {
         const to_add_f = @intToFloat(f64, missing) * (weights[i] / total_weigth);
         const to_add_max = math.min(to_add_f, math.maxInt(u8));
-        item.* = math.add(T, item.*, @floatToInt(u8, to_add_max)) catch math.maxInt(T);
+        item.* +|= @floatToInt(u8, to_add_max);
     }
 
     while (it.fold(buf, @as(usize, 0), foldu8) < max) {
         const item = util.random.item(random, buf).?;
-        item.* = math.add(T, item.*, 1) catch item.*;
+        item.* +|= 1;
     }
 }
 

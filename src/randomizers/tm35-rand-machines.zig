@@ -155,10 +155,8 @@ fn randomize(program: *Program) !void {
     const allocator = program.allocator;
     const random = rand.DefaultPrng.init(program.options.seed).random();
 
-    for (program.tms.values()) |*tm|
-        tm.* = util.random.item(random, program.moves.keys()).?.*;
-    for (program.hms.values()) |*hm|
-        hm.* = util.random.item(random, program.moves.keys()).?.*;
+    randomizeMachines(program, random, program.tms.values());
+    randomizeMachines(program, random, program.hms.values());
 
     // Find the maximum length of a line. Used to split descriptions into lines.
     var max_line_len: usize = 0;
@@ -176,7 +174,7 @@ fn randomize(program: *Program) !void {
     //       max_line_len to destribute newlines will not actually be totally
     //       correct. The best I can do here is to just reduce the max_line_len
     //       by some amount and hope it is enough for all strings.
-    max_line_len = math.sub(usize, max_line_len, 5) catch 0;
+    max_line_len -|= 5;
 
     for (program.items.values()) |*item| {
         if (item.pocket != .tms_hms)
@@ -197,6 +195,20 @@ fn randomize(program: *Program) !void {
             item.description = new_desc.slice(0, item.description.len);
         }
     }
+}
+
+fn randomizeMachines(program: *Program, random: rand.Random, machines: []u16) void {
+    const pick_from = program.moves.keys();
+    for (machines) |*machine, i| while (true) {
+        machine.* = util.random.item(random, pick_from).?.*;
+
+        // Prevent duplicates if possible. We cannot prevent it if we have less moves to pick
+        // from than there is machines
+        if (pick_from.len < machines.len)
+            break;
+        if (mem.indexOfScalar(u16, machines[0..i], machine.*) == null)
+            break;
+    };
 }
 
 const Items = std.AutoArrayHashMapUnmanaged(u16, Item);
@@ -238,16 +250,16 @@ test "tm35-rand-machines" {
         \\.hms[2]=5
         \\.tms[0]=1
         \\.tms[1]=2
-        \\.tms[2]=2
+        \\.tms[2]=0
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
         \\.tms[0]=1
         \\.tms[1]=2
-        \\.tms[2]=2
-        \\.hms[0]=0
-        \\.hms[1]=2
-        \\.hms[2]=0
+        \\.tms[2]=0
+        \\.hms[0]=2
+        \\.hms[1]=0
+        \\.hms[2]=5
         \\
     );
 }

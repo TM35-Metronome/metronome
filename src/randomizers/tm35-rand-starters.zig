@@ -82,8 +82,18 @@ fn output(program: *Program, writer: anytype) !void {
 fn randomize(program: *Program) !void {
     const random = rand.DefaultPrng.init(program.options.seed).random();
     const pick_from = try program.getStartersToPickFrom();
-    for (program.starters.values()) |*starter|
+
+    const starters = program.starters.values();
+    for (starters) |*starter, i| while (true) {
         starter.* = util.random.item(random, pick_from.keys()).?.*;
+
+        // Prevent duplicates if possible. We cannot prevent it if we have less pokemon to pick
+        // from than there is starters
+        if (pick_from.count() < starters.len)
+            break;
+        if (mem.indexOfScalar(u16, starters[0..i], starter.*) == null)
+            break;
+    };
 }
 
 fn getStartersToPickFrom(program: *Program) !Set {
@@ -255,20 +265,20 @@ test "tm35-rand-starters" {
 
     try util.testing.testProgram(Program, &[_][]const u8{"--seed=1"}, test_string, result_prefix ++
         \\.starters[0]=4
-        \\.starters[1]=4
-        \\.starters[2]=0
+        \\.starters[1]=0
+        \\.starters[2]=1
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--pick-lowest-evolution" }, test_string, result_prefix ++
         \\.starters[0]=5
-        \\.starters[1]=5
-        \\.starters[2]=0
+        \\.starters[1]=0
+        \\.starters[2]=3
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--evolutions=1" }, test_string, result_prefix ++
         \\.starters[0]=3
-        \\.starters[1]=3
-        \\.starters[2]=0
+        \\.starters[1]=0
+        \\.starters[2]=1
         \\
     );
     try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--evolutions=2" }, test_string, result_prefix ++

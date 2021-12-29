@@ -219,12 +219,12 @@ pub fn drawCommands(
         defer nk.nonPaddedGroupEnd(ctx);
         c.nk_layout_row_dynamic(ctx, 0, 1);
         if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
-            const before = math.sub(usize, selected, 1) catch 0;
+            const before = selected -| 1;
             mem.swap(usize, &settings.order[before], &settings.order[selected]);
             selected = before;
         }
         if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
-            const after = math.min(selected + 1, math.sub(usize, settings.order.len, 1) catch 0);
+            const after = math.min(selected + 1, settings.order.len -| 1);
             mem.swap(usize, &settings.order[selected], &settings.order[after]);
             selected = after;
         }
