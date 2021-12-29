@@ -568,12 +568,12 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const header = &game.wild_pokemon_headers[pokemons.index];
             switch (pokemons.value) {
-                .land => |area| {
+                .grass_0 => |area| {
                     const land = try header.land.toPtr(game.data);
                     const wilds = try land.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(area, &land.encounter_rate, wilds);
                 },
-                .surf => |area| {
+                .surf_0 => |area| {
                     const surf = try header.surf.toPtr(game.data);
                     const wilds = try surf.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(area, &surf.encounter_rate, wilds);
@@ -583,29 +583,39 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     const wilds = try rock.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(area, &rock.encounter_rate, wilds);
                 },
-                .fishing => |area| {
+                .fishing_0 => |area| {
                     const fish = try header.fishing.toPtr(game.data);
                     const wilds = try fish.wild_pokemons.toPtr(game.data);
                     try applyGen3Area(area, &fish.encounter_rate, wilds);
                 },
-                .grass,
-                .grass_morning,
-                .grass_day,
-                .grass_night,
-                .dark_grass,
-                .swarm_replace,
-                .day_replace,
-                .night_replace,
-                .radar_replace,
-                .unknown_replace,
-                .gba_replace,
-                .sea_unknown,
-                .old_rod,
-                .good_rod,
-                .super_rod,
-                .rustling_grass,
-                .ripple_surf,
-                .ripple_fishing,
+                .grass_1,
+                .grass_2,
+                .grass_3,
+                .grass_4,
+                .grass_5,
+                .grass_6,
+                .dark_grass_0,
+                .dark_grass_1,
+                .dark_grass_2,
+                .dark_grass_3,
+                .rustling_grass_0,
+                .rustling_grass_1,
+                .rustling_grass_2,
+                .rustling_grass_3,
+                .surf_1,
+                .surf_2,
+                .surf_3,
+                .ripple_surf_0,
+                .ripple_surf_1,
+                .ripple_surf_2,
+                .ripple_surf_3,
+                .fishing_1,
+                .fishing_2,
+                .fishing_3,
+                .ripple_fishing_0,
+                .ripple_fishing_1,
+                .ripple_fishing_2,
+                .ripple_fishing_3,
                 => return error.ParserFailed,
             }
         },
@@ -957,7 +967,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
                     const wilds = &wild_pokemons.dppt[pokemons.index];
                     switch (pokemons.value) {
-                        .grass => |grass| switch (grass) {
+                        .grass_0 => |grass| switch (grass) {
                             .encounter_rate => |encounter_rate| wilds.grass_rate = lu32.init(encounter_rate),
                             .pokemons => |mons| {
                                 if (mons.index >= wilds.grass.len)
@@ -971,27 +981,37 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                                 }
                             },
                         },
-                        .swarm_replace => |area| try applyDpptReplacement(area, &wilds.swarm_replace),
-                        .day_replace => |area| try applyDpptReplacement(area, &wilds.day_replace),
-                        .night_replace => |area| try applyDpptReplacement(area, &wilds.night_replace),
-                        .radar_replace => |area| try applyDpptReplacement(area, &wilds.radar_replace),
-                        .unknown_replace => |area| try applyDpptReplacement(area, &wilds.unknown_replace),
-                        .gba_replace => |area| try applyDpptReplacement(area, &wilds.gba_replace),
-                        .surf => |area| try applyDpptSea(area, &wilds.surf),
-                        .sea_unknown => |area| try applyDpptSea(area, &wilds.sea_unknown),
-                        .old_rod => |area| try applyDpptSea(area, &wilds.old_rod),
-                        .good_rod => |area| try applyDpptSea(area, &wilds.good_rod),
-                        .super_rod => |area| try applyDpptSea(area, &wilds.super_rod),
-                        .grass_morning,
-                        .grass_day,
-                        .grass_night,
-                        .dark_grass,
+                        .grass_1 => |area| try applyDpptReplacement(area, &wilds.swarm_replace),
+                        .grass_2 => |area| try applyDpptReplacement(area, &wilds.day_replace),
+                        .grass_3 => |area| try applyDpptReplacement(area, &wilds.night_replace),
+                        .grass_4 => |area| try applyDpptReplacement(area, &wilds.radar_replace),
+                        .grass_5 => |area| try applyDpptReplacement(area, &wilds.unknown_replace),
+                        .grass_6 => |area| try applyDpptReplacement(area, &wilds.gba_replace),
+                        .surf_0 => |area| try applyDpptSea(area, &wilds.surf),
+                        .surf_1 => |area| try applyDpptSea(area, &wilds.sea_unknown),
+                        .fishing_0 => |area| try applyDpptSea(area, &wilds.old_rod),
+                        .fishing_1 => |area| try applyDpptSea(area, &wilds.good_rod),
+                        .fishing_2 => |area| try applyDpptSea(area, &wilds.super_rod),
+                        .dark_grass_0,
+                        .dark_grass_1,
+                        .dark_grass_2,
+                        .dark_grass_3,
+                        .rustling_grass_0,
+                        .rustling_grass_1,
+                        .rustling_grass_2,
+                        .rustling_grass_3,
+                        .surf_2,
+                        .surf_3,
+                        .ripple_surf_0,
+                        .ripple_surf_1,
+                        .ripple_surf_2,
+                        .ripple_surf_3,
+                        .fishing_3,
+                        .ripple_fishing_0,
+                        .ripple_fishing_1,
+                        .ripple_fishing_2,
+                        .ripple_fishing_3,
                         .rock_smash,
-                        .fishing,
-                        .land,
-                        .rustling_grass,
-                        .ripple_surf,
-                        .ripple_fishing,
                         => return error.ParserFailed,
                     }
                 },
@@ -1004,28 +1024,38 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
                     const wilds = &wild_pokemons.hgss[pokemons.index];
                     switch (pokemons.value) {
-                        .grass_morning => |area| try applyHgssGrass(area, wilds, &wilds.grass_morning),
-                        .grass_day => |area| try applyHgssGrass(area, wilds, &wilds.grass_day),
-                        .grass_night => |area| try applyHgssGrass(area, wilds, &wilds.grass_night),
-                        .surf => |area| try applyHgssSea(area, &wilds.sea_rates[0], &wilds.surf),
-                        .sea_unknown => |area| try applyHgssSea(area, &wilds.sea_rates[1], &wilds.sea_unknown),
-                        .old_rod => |area| try applyHgssSea(area, &wilds.sea_rates[2], &wilds.old_rod),
-                        .good_rod => |area| try applyHgssSea(area, &wilds.sea_rates[3], &wilds.good_rod),
-                        .super_rod => |area| try applyHgssSea(area, &wilds.sea_rates[4], &wilds.super_rod),
-                        .grass,
-                        .dark_grass,
-                        .swarm_replace,
-                        .day_replace,
-                        .night_replace,
-                        .radar_replace,
-                        .unknown_replace,
-                        .gba_replace,
+                        .grass_0 => |area| try applyHgssGrass(area, wilds, &wilds.grass_morning),
+                        .grass_1 => |area| try applyHgssGrass(area, wilds, &wilds.grass_day),
+                        .grass_2 => |area| try applyHgssGrass(area, wilds, &wilds.grass_night),
+                        .surf_0 => |area| try applyHgssSea(area, &wilds.sea_rates[0], &wilds.surf),
+                        .surf_1 => |area| try applyHgssSea(area, &wilds.sea_rates[1], &wilds.sea_unknown),
+                        .fishing_0 => |area| try applyHgssSea(area, &wilds.sea_rates[2], &wilds.old_rod),
+                        .fishing_1 => |area| try applyHgssSea(area, &wilds.sea_rates[3], &wilds.good_rod),
+                        .fishing_2 => |area| try applyHgssSea(area, &wilds.sea_rates[4], &wilds.super_rod),
+                        .grass_3,
+                        .grass_4,
+                        .grass_5,
+                        .grass_6,
+                        .dark_grass_0,
+                        .dark_grass_1,
+                        .dark_grass_2,
+                        .dark_grass_3,
+                        .rustling_grass_0,
+                        .rustling_grass_1,
+                        .rustling_grass_2,
+                        .rustling_grass_3,
+                        .surf_2,
+                        .surf_3,
+                        .ripple_surf_0,
+                        .ripple_surf_1,
+                        .ripple_surf_2,
+                        .ripple_surf_3,
+                        .fishing_3,
+                        .ripple_fishing_0,
+                        .ripple_fishing_1,
+                        .ripple_fishing_2,
+                        .ripple_fishing_3,
                         .rock_smash,
-                        .fishing,
-                        .land,
-                        .rustling_grass,
-                        .ripple_surf,
-                        .ripple_fishing,
                         => return error.ParserFailed,
                     }
                 },
@@ -1443,30 +1473,43 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (pokemons.index >= game.ptrs.wild_pokemons.fat.len)
                 return error.Error;
 
-            const wilds = try game.ptrs.wild_pokemons.fileAs(.{ .i = pokemons.index }, gen5.WildPokemons);
+            const file = nds.fs.File{ .i = pokemons.index };
+            const wilds = game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
+                try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
+
             switch (pokemons.value) {
-                .grass => |area| try applyGen5Area(area, "grass", 0, wilds),
-                .dark_grass => |area| try applyGen5Area(area, "dark_grass", 1, wilds),
-                .rustling_grass => |area| try applyGen5Area(area, "rustling_grass", 2, wilds),
-                .surf => |area| try applyGen5Area(area, "surf", 3, wilds),
-                .ripple_surf => |area| try applyGen5Area(area, "ripple_surf", 4, wilds),
-                .fishing => |area| try applyGen5Area(area, "fishing", 5, wilds),
-                .ripple_fishing => |area| try applyGen5Area(area, "ripple_fishing", 6, wilds),
-                .grass_morning,
-                .grass_day,
-                .grass_night,
-                .land,
+                .grass_0 => |area| try applyGen5Area(area, "grass", 0, 0, wilds),
+                .grass_1 => |area| try applyGen5Area(area, "grass", 1, 0, wilds),
+                .grass_2 => |area| try applyGen5Area(area, "grass", 2, 0, wilds),
+                .grass_3 => |area| try applyGen5Area(area, "grass", 3, 0, wilds),
+                .dark_grass_0 => |area| try applyGen5Area(area, "dark_grass", 0, 1, wilds),
+                .dark_grass_1 => |area| try applyGen5Area(area, "dark_grass", 1, 1, wilds),
+                .dark_grass_2 => |area| try applyGen5Area(area, "dark_grass", 2, 1, wilds),
+                .dark_grass_3 => |area| try applyGen5Area(area, "dark_grass", 3, 1, wilds),
+                .rustling_grass_0 => |area| try applyGen5Area(area, "rustling_grass", 0, 2, wilds),
+                .rustling_grass_1 => |area| try applyGen5Area(area, "rustling_grass", 1, 2, wilds),
+                .rustling_grass_2 => |area| try applyGen5Area(area, "rustling_grass", 2, 2, wilds),
+                .rustling_grass_3 => |area| try applyGen5Area(area, "rustling_grass", 3, 2, wilds),
+                .surf_0 => |area| try applyGen5Area(area, "surf", 0, 3, wilds),
+                .surf_1 => |area| try applyGen5Area(area, "surf", 1, 3, wilds),
+                .surf_2 => |area| try applyGen5Area(area, "surf", 2, 3, wilds),
+                .surf_3 => |area| try applyGen5Area(area, "surf", 3, 3, wilds),
+                .ripple_surf_0 => |area| try applyGen5Area(area, "ripple_surf", 0, 4, wilds),
+                .ripple_surf_1 => |area| try applyGen5Area(area, "ripple_surf", 1, 4, wilds),
+                .ripple_surf_2 => |area| try applyGen5Area(area, "ripple_surf", 2, 4, wilds),
+                .ripple_surf_3 => |area| try applyGen5Area(area, "ripple_surf", 3, 4, wilds),
+                .fishing_0 => |area| try applyGen5Area(area, "fishing", 0, 5, wilds),
+                .fishing_1 => |area| try applyGen5Area(area, "fishing", 1, 5, wilds),
+                .fishing_2 => |area| try applyGen5Area(area, "fishing", 2, 5, wilds),
+                .fishing_3 => |area| try applyGen5Area(area, "fishing", 3, 5, wilds),
+                .ripple_fishing_0 => |area| try applyGen5Area(area, "ripple_fishing", 0, 6, wilds),
+                .ripple_fishing_1 => |area| try applyGen5Area(area, "ripple_fishing", 1, 6, wilds),
+                .ripple_fishing_2 => |area| try applyGen5Area(area, "ripple_fishing", 2, 6, wilds),
+                .ripple_fishing_3 => |area| try applyGen5Area(area, "ripple_fishing", 3, 6, wilds),
+                .grass_4,
+                .grass_5,
+                .grass_6,
                 .rock_smash,
-                .swarm_replace,
-                .day_replace,
-                .night_replace,
-                .radar_replace,
-                .unknown_replace,
-                .gba_replace,
-                .sea_unknown,
-                .old_rod,
-                .good_rod,
-                .super_rod,
                 => return error.ParserFailed,
             }
         },
@@ -1541,13 +1584,19 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 fn applyGen5Area(
     area: format.WildArea,
     comptime field: []const u8,
-    index: usize,
-    wilds: *gen5.WildPokemons,
+    wild_index: usize,
+    rate_index: usize,
+    wilds: []gen5.WildPokemons,
 ) !void {
+    if (wilds.len <= wild_index)
+        return error.ParserFailed;
+
     switch (area) {
-        .encounter_rate => |encounter_rate| wilds.rates[index] = try math.cast(u8, encounter_rate),
+        .encounter_rate => |encounter_rate| {
+            wilds[wild_index].rates[rate_index] = try math.cast(u8, encounter_rate);
+        },
         .pokemons => |pokemons| {
-            const wild_area = &@field(wilds, field);
+            const wild_area = &@field(wilds[wild_index], field);
             if (pokemons.index >= wild_area.len)
                 return error.Error;
 

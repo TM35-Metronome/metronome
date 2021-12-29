@@ -372,7 +372,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
                 .encounter_rate = land.encounter_rate,
                 .pokemons = wilds,
             };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .land = area }) });
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .grass_0 = area }) });
         } else |_| {}
         if (header.surf.toPtr(game.data)) |surf| {
             const wilds = try surf.wild_pokemons.toPtr(game.data);
@@ -380,7 +380,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
                 .encounter_rate = surf.encounter_rate,
                 .pokemons = wilds,
             };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .surf = area }) });
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .surf_0 = area }) });
         } else |_| {}
         if (header.rock_smash.toPtr(game.data)) |rock| {
             const wilds = try rock.wild_pokemons.toPtr(game.data);
@@ -396,7 +396,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
                 .encounter_rate = fish.encounter_rate,
                 .pokemons = wilds,
             };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .fishing = area }) });
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .fishing_0 = area }) });
         } else |_| {}
     }
 
@@ -568,7 +568,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         => for (game.ptrs.wild_pokemons.dppt) |wild_mons, i| {
             const rate = .{ .encounter_rate = wild_mons.grass_rate }; // Result location crash alert
             try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
-                .grass = rate,
+                .grass_0 = rate,
             }) });
             for (wild_mons.grass) |grass, j| {
                 const pokemon = .{ .pokemons = ston.index(j, .{
@@ -577,7 +577,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                     .species = grass.species,
                 }) }; // Result location crash alert
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
-                    .grass = pokemon,
+                    .grass_0 = pokemon,
                 }) });
             }
 
@@ -588,11 +588,12 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                 "radar_replace",
                 "unknown_replace",
                 "gba_replace",
-            }) |area_name| {
+            }) |area_name, area_i| {
                 for (@field(wild_mons, area_name)) |replacement, j| {
+                    const out_name = std.fmt.comptimePrint("grass_{}", .{area_i + 1});
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
-                        ston.field(area_name, .{ .pokemons = ston.index(j, .{
+                        ston.field(out_name, .{ .pokemons = ston.index(j, .{
                             .species = replacement.species,
                         }) }),
                     ) });
@@ -602,20 +603,42 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             inline for ([_][]const u8{
                 "surf",
                 "sea_unknown",
-                "old_rod",
-                "good_rod",
-                "super_rod",
-            }) |area_name| {
+            }) |area_name, area_i| {
+                const out_name = std.fmt.comptimePrint("surf_{}", .{area_i});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
-                    ston.field(area_name, .{
+                    ston.field(out_name, .{
                         .encounter_rate = @field(wild_mons, area_name).rate,
                     }),
                 ) });
                 for (@field(wild_mons, area_name).mons) |mon, j| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
-                        ston.field(area_name, .{ .pokemons = ston.index(j, .{
+                        ston.field(out_name, .{ .pokemons = ston.index(j, .{
+                            .min_level = mon.min_level,
+                            .max_level = mon.max_level,
+                            .species = mon.species,
+                        }) }),
+                    ) });
+                }
+            }
+
+            inline for ([_][]const u8{
+                "old_rod",
+                "good_rod",
+                "super_rod",
+            }) |area_name, area_i| {
+                const out_name = std.fmt.comptimePrint("fishing_{}", .{area_i});
+                try ston.serialize(writer, .{ .wild_pokemons = ston.index(
+                    i,
+                    ston.field(out_name, .{
+                        .encounter_rate = @field(wild_mons, area_name).rate,
+                    }),
+                ) });
+                for (@field(wild_mons, area_name).mons) |mon, j| {
+                    try ston.serialize(writer, .{ .wild_pokemons = ston.index(
+                        i,
+                        ston.field(out_name, .{ .pokemons = ston.index(j, .{
                             .min_level = mon.min_level,
                             .max_level = mon.max_level,
                             .species = mon.species,
@@ -633,17 +656,18 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                 "grass_morning",
                 "grass_day",
                 "grass_night",
-            }) |area_name| {
+            }) |area_name, area_i| {
+                const out_name = std.fmt.comptimePrint("grass_{}", .{area_i});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
-                    ston.field(area_name, .{
+                    ston.field(out_name, .{
                         .encounter_rate = wild_mons.grass_rate,
                     }),
                 ) });
                 for (@field(wild_mons, area_name)) |species, j| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
-                        ston.field(area_name, .{ .pokemons = ston.index(j, .{
+                        ston.field(out_name, .{ .pokemons = ston.index(j, .{
                             .min_level = wild_mons.grass_levels[j],
                             .max_level = wild_mons.grass_levels[j],
                             .species = species,
@@ -656,20 +680,42 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             inline for ([_][]const u8{
                 "surf",
                 "sea_unknown",
-                "old_rod",
-                "good_rod",
-                "super_rod",
             }) |area_name, j| {
+                const out_name = std.fmt.comptimePrint("surf_{}", .{j});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
-                    ston.field(area_name, .{
+                    ston.field(out_name, .{
                         .encounter_rate = wild_mons.sea_rates[j],
                     }),
                 ) });
                 for (@field(wild_mons, area_name)) |sea, k| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
-                        ston.field(area_name, .{ .pokemons = ston.index(k, .{
+                        ston.field(out_name, .{ .pokemons = ston.index(k, .{
+                            .min_level = sea.min_level,
+                            .max_level = sea.max_level,
+                            .species = sea.species,
+                        }) }),
+                    ) });
+                }
+            }
+
+            inline for ([_][]const u8{
+                "old_rod",
+                "good_rod",
+                "super_rod",
+            }) |area_name, j| {
+                const out_name = std.fmt.comptimePrint("fishing_{}", .{j});
+                try ston.serialize(writer, .{ .wild_pokemons = ston.index(
+                    i,
+                    ston.field(out_name, .{
+                        .encounter_rate = wild_mons.sea_rates[j + 2],
+                    }),
+                ) });
+                for (@field(wild_mons, area_name)) |sea, k| {
+                    try ston.serialize(writer, .{ .wild_pokemons = ston.index(
+                        i,
+                        ston.field(out_name, .{ .pokemons = ston.index(k, .{
                             .min_level = sea.min_level,
                             .max_level = sea.max_level,
                             .species = sea.species,
@@ -876,31 +922,39 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.wild_pokemons.fat) |_, i| {
-        const wild_mons = try game.ptrs.wild_pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.WildPokemons);
-        inline for ([_][]const u8{
-            "grass",
-            "dark_grass",
-            "rustling_grass",
-            "surf",
-            "ripple_surf",
-            "fishing",
-            "ripple_fishing",
-        }) |area_name, j| {
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(
-                i,
-                ston.field(area_name, .{
-                    .encounter_rate = wild_mons.rates[j],
-                }),
-            ) });
-            for (@field(wild_mons, area_name)) |mon, k| {
+        const file = nds.fs.File{ .i = @intCast(u32, i) };
+        const wilds = game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
+            try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
+
+        for (wilds) |wild_mons, wild_i| {
+            inline for ([_][]const u8{
+                "grass",
+                "dark_grass",
+                "rustling_grass",
+                "surf",
+                "ripple_surf",
+                "fishing",
+                "ripple_fishing",
+            }) |area_name, j| {
+                var buf: [20]u8 = undefined;
+                const out_name = std.fmt.bufPrint(&buf, "{s}_{}", .{ area_name, wild_i }) catch
+                    unreachable;
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
-                    ston.field(area_name, .{ .pokemons = ston.index(k, .{
-                        .species = mon.species.species(),
-                        .min_level = mon.min_level,
-                        .max_level = mon.max_level,
-                    }) }),
+                    ston.field(out_name, .{
+                        .encounter_rate = wild_mons.rates[j],
+                    }),
                 ) });
+                for (@field(wild_mons, area_name)) |mon, k| {
+                    try ston.serialize(writer, .{ .wild_pokemons = ston.index(
+                        i,
+                        ston.field(out_name, .{ .pokemons = ston.index(k, .{
+                            .species = mon.species.species(),
+                            .min_level = mon.min_level,
+                            .max_level = mon.max_level,
+                        }) }),
+                    ) });
+                }
             }
         }
     }

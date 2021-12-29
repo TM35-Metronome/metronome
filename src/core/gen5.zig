@@ -316,10 +316,10 @@ pub const WildPokemons = extern struct {
 };
 
 pub const Pocket = enum(u4) {
-    items = 0x00,
-    tms_hms = 0x01,
-    key_items = 0x02,
-    poke_balls = 0x08,
+    items = 0,
+    tms_hms = 1,
+    key_items = 2,
+    poke_balls = 8,
     _,
 };
 
