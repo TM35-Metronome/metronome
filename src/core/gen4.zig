@@ -577,16 +577,16 @@ pub const Game = struct {
         old_arm_len: usize,
         arm9: []u8,
         trainer_parties: [][6]PartyMemberBoth,
-        strings: Strings,
+        text: Text,
 
         pub fn deinit(owned: Owned, allocator: mem.Allocator) void {
             allocator.free(owned.arm9);
             allocator.free(owned.trainer_parties);
-            owned.strings.deinit(allocator);
+            owned.text.deinit(allocator);
         }
     };
 
-    pub const Strings = struct {
+    pub const Text = struct {
         type_names: StringTable,
         pokemon_names: StringTable,
         //trainer_names:StringTable,
@@ -596,17 +596,17 @@ pub const Game = struct {
         item_descriptions: StringTable,
         move_descriptions: StringTable,
 
-        pub const Array = [std.meta.fields(Strings).len]*const StringTable;
+        pub const Array = [std.meta.fields(Text).len]StringTable;
 
-        pub fn deinit(strings: Strings, allocator: mem.Allocator) void {
-            for (strings.asArray()) |table|
+        pub fn deinit(text: Text, allocator: mem.Allocator) void {
+            for (text.asArray()) |table|
                 table.destroy(allocator);
         }
 
-        pub fn asArray(strings: *const Strings) Array {
+        pub fn asArray(text: *const Text) Array {
             var res: Array = undefined;
-            inline for (std.meta.fields(Strings)) |field, i|
-                res[i] = &@field(strings, field.name);
+            inline for (std.meta.fields(Text)) |field, i|
+                res[i] = @field(text, field.name);
 
             return res;
         }
@@ -720,7 +720,7 @@ pub const Game = struct {
             .old_arm_len = nds_rom.arm9().len,
             .arm9 = arm9,
             .trainer_parties = trainer_parties,
-            .strings = .{
+            .text = .{
                 .type_names = type_names,
                 .item_descriptions = item_descriptions,
                 .item_names = item_names,
@@ -941,7 +941,7 @@ pub const Game = struct {
 
         // We then calculate the size of the content for our new narc
         var extra_bytes: usize = 0;
-        for (game.owned.strings.asArray()) |table| {
+        for (game.owned.text.asArray()) |table| {
             extra_bytes += math.sub(
                 u32,
                 table.encryptedSize(),
@@ -953,7 +953,7 @@ pub const Game = struct {
         const text = try nds.fs.Fs.fromNarc(buf);
 
         // First, resize all tables that need a resize
-        for (game.owned.strings.asArray()) |table| {
+        for (game.owned.text.asArray()) |table| {
             const new_file_size = table.encryptedSize();
             const file = &text.fat[table.file_this_was_extracted_from];
 
