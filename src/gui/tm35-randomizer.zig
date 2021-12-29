@@ -541,7 +541,7 @@ pub fn drawActions(
 
             var default_path = util.Path{ .buffer = undefined };
             default_path.appendSlice(dirname) catch {};
-            default_path.appendSlice("/") catch {};
+            default_path.appendSlice(path.sep_str) catch {};
             default_path.appendSlice(in_name) catch {};
             default_path.appendSlice("-randomized") catch {};
             default_path.appendSlice(ext) catch {};
