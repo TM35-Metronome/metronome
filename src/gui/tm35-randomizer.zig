@@ -245,7 +245,7 @@ pub fn drawCommands(
             c.nk_layout_row_template_push_dynamic(ctx);
             c.nk_layout_row_template_end(ctx);
 
-            const command_name = path.basename(command.path);
+            const command_name = basenameNoExt(command.path);
             const ui_name = toUserfriendly(&tmp_buf, command_name[0..math.min(command_name.len, tmp_buf.len)]);
             settings.commands[command_i].enabled =
                 c.nk_check_label(ctx, "", @boolToInt(settings.commands[command_i].enabled)) != 0;
@@ -967,7 +967,7 @@ fn outputArgument(
 fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
     debug.assert(programmer_in.len <= human_out.len);
 
-    const suffixes = [_][]const u8{".exe"};
+    const suffixes = [_][]const u8{};
     const prefixes = [_][]const u8{"tm35-"};
 
     var trimmed = programmer_in;
@@ -1117,7 +1117,7 @@ const Settings = struct {
 
             const command = exes.commands[o];
             const setting = settings.commands[o];
-            try csv_escape.escapeWrite(writer, path.basename(command.path));
+            try csv_escape.escapeWrite(writer, basenameNoExt(command.path));
             for (command.flags) |flag, i| {
                 if (!setting.flags[i])
                     continue;
@@ -1166,21 +1166,6 @@ const Settings = struct {
 
             try writer.writeAll("\n");
         }
-    }
-
-    fn saveOne(
-        writer: anytype,
-        param: clap.Param(clap.Help),
-        value: anytype,
-        comptime value_fmt: []const u8,
-    ) !void {
-        const prefix = if (param.names.long) |_| "--" else "-";
-        const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-        try csv_escape.escapePrint(writer, "{s}{s}={" ++ value_fmt ++ "}", .{
-            prefix,
-            name,
-            value,
-        });
     }
 
     fn load(settings: *Settings, exes: Executables, reader: anytype) !void {
@@ -1263,7 +1248,7 @@ const Settings = struct {
 
     fn findCommandIndex(e: Executables, name: []const u8) ?usize {
         for (e.commands) |command, i| {
-            const basename = path.basename(command.path);
+            const basename = basenameNoExt(command.path);
             if (mem.eql(u8, basename, name))
                 return i;
         }
@@ -1279,3 +1264,9 @@ const Settings = struct {
         return null;
     }
 };
+
+fn basenameNoExt(p: []const u8) []const u8 {
+    const basename = path.basename(p);
+    const ext = path.extension(basename);
+    return basename[0 .. basename.len - ext.len];
+}
