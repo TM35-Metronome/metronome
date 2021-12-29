@@ -130,36 +130,7 @@ pub fn TerminatedArray(comptime n: usize, comptime T: type, comptime sentinel: T
     };
 }
 
-pub fn StackArrayList(comptime size: usize, comptime T: type) type {
-    return struct {
-        items: [size]T = undefined,
-        len: usize = 0,
-
-        pub fn fromSlice(items: []const T) !@This() {
-            if (size < items.len)
-                return error.SliceToBig;
-
-            var res: @This() = undefined;
-            mem.copy(T, &res.items, items);
-            res.len = items.len;
-            return res;
-        }
-
-        pub fn span(list: anytype) Span(@TypeOf(list)) {
-            return list.items[0..list.len];
-        }
-
-        fn Span(comptime List: type) type {
-            var info = @typeInfo(List);
-            info.Pointer.size = .Slice;
-            info.Pointer.child = T;
-            info.Pointer.alignment = @alignOf(T);
-            return @Type(info);
-        }
-    };
-}
-
-pub const Path = StackArrayList(fs.MAX_PATH_BYTES, u8);
+pub const Path = std.BoundedArray(u8, fs.MAX_PATH_BYTES);
 
 pub const path = struct {
     pub fn join(paths: []const []const u8) Path {
@@ -168,7 +139,7 @@ pub const path = struct {
         // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
         // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
         // ensures that only a valid path has been allocated into res.
-        var fba = heap.FixedBufferAllocator.init(&res.items);
+        var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
         const res_slice = fs.path.join(failing.allocator(), paths) catch unreachable;
         res.len = res_slice.len;
@@ -182,7 +153,7 @@ pub const path = struct {
         // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
         // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
         // ensures that only a valid path has been allocated into res.
-        var fba = heap.FixedBufferAllocator.init(&res.items);
+        var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = debug.FailingAllocator.init(&fba.allocator, 1);
         const res_slice = fs.path.resolve(&failing.allocator, paths) catch |err| switch (err) {
             error.OutOfMemory => unreachable,
@@ -197,14 +168,14 @@ pub const path = struct {
 pub const dir = struct {
     pub fn selfExeDir() !Path {
         var res: Path = undefined;
-        const res_slice = try fs.selfExeDirPath(&res.items);
+        const res_slice = try fs.selfExeDirPath(&res.buffer);
         res.len = res_slice.len;
         return res;
     }
 
     pub fn cwd() !Path {
         var res: Path = undefined;
-        const res_slice = try os.getcwd(&res.items);
+        const res_slice = try os.getcwd(&res.buffer);
         res.len = res_slice.len;
         return res;
     }
