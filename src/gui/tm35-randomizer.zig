@@ -615,7 +615,8 @@ pub fn drawActions(
             stderr.writeAll("\n") catch {};
 
             randomize(exes, settings.*, in_path, out_path) catch |err| {
-                // TODO: Maybe print the stderr from the command we run in the randomizer function
+                // TODO: Maybe print the stderr from the command we run in the randomizer
+                // function
                 popups.err("Failed to randomize '{s}': {}", .{ in_path, err });
                 return rom;
             };

@@ -166,6 +166,9 @@ fn randomize(program: *Program) void {
         const new_total = if (program.options.same_total_stats) old_total else new_random_total;
 
         var weights: [pokemon.stats.len]f32 = undefined;
+        for (weights) |*w|
+            w.* = random.float(f32);
+
         randomWithinSum(random, u8, &pokemon.stats, &weights, new_total);
     }
 
@@ -218,6 +221,9 @@ fn randomizeFromChildren(
 
     pokemon.stats = average;
     var weights: [pokemon.stats.len]f32 = undefined;
+    for (weights) |*w|
+        w.* = random.float(f32);
+
     randomUntilSum(random, u8, &pokemon.stats, &weights, new_total);
 
     // After this, the Pokémons stats should be equal or above the average
@@ -229,32 +235,24 @@ fn randomWithinSum(
     random: rand.Random,
     comptime T: type,
     buf: []T,
-    weight_buf: []f32,
-    s: u64,
+    weights: []const f32,
+    sum: u64,
 ) void {
     mem.set(T, buf, 0);
-    randomUntilSum(random, T, buf, weight_buf, s);
+    randomUntilSum(random, T, buf, weights, sum);
 }
 
 fn randomUntilSum(
     random: rand.Random,
     comptime T: type,
     buf: []T,
-    weight_buf: []f32,
-    s: u64,
+    weights: []const f32,
+    sum: u64,
 ) void {
-    // TODO: In this program, we will never pass buf.len > 6, so we can
-    //       statically have this buffer. If this function is to be more
-    //       general, we problably have to accept an allpocator.
-    const weights = blk: {
-        for (buf) |_, i|
-            weight_buf[i] = random.float(f32);
-
-        break :blk weight_buf[0..buf.len];
-    };
+    debug.assert(buf.len == weights.len);
 
     const curr = it.fold(buf, @as(usize, 0), foldu8);
-    const max = math.min(s, buf.len * math.maxInt(T));
+    const max = math.min(sum, buf.len * math.maxInt(T));
     if (max < curr)
         return;
 

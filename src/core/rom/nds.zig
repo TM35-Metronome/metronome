@@ -138,8 +138,7 @@ pub const Rom = struct {
     }
 
     /// Returns the arm9 section of the rom. Note here that this section could
-    /// be encoded and therefor not very useful. Call decodeArm9 before this
-    /// if you need the section to be decoded.
+    /// be encoded and therefor not very useful.
     pub fn arm9(rom: Rom) []u8 {
         const h = rom.header();
         const offset = h.arm9.offset.value();

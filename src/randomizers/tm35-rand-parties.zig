@@ -661,14 +661,7 @@ fn randomizePartyMember(
         // the set we will pick from.
         var intersection = program.intersection.promote(allocator);
         intersection.clearRetainingCapacity();
-        try util.set.intersectInline(
-            &intersection,
-            // HACK: `ArrayHashMapUnmanaged` does not have the `iterator` function,
-            //       but `ArrayHashMap` does. We just promote them to get access to
-            //       this function
-            ability_set.promote(allocator),
-            type_set.promote(allocator),
-        );
+        try util.set.intersectInline(&intersection, ability_set, type_set);
         program.intersection = intersection.unmanaged;
     }
 
