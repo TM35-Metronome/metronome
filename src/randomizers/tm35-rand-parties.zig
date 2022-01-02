@@ -1768,11 +1768,11 @@ test "tm35-rand-parties" {
     while (seed < 100) : (seed += 1) {
         var buf: [100]u8 = undefined;
         const seed_arg = try fmt.bufPrint(&buf, "--seed={}", .{seed});
-        const out = try util.testing.runProgram(Program, &[_][]const u8{
+        const out = try util.testing.runProgram(Program, .{ .args = &[_][]const u8{
             "--exclude=pokemon 2",
             "--exclude=pokemon 4",
             seed_arg,
-        }, test_string);
+        }, .in = test_string });
         defer testing.allocator.free(out);
 
         try testing.expect(mem.indexOf(u8, out, ".species=2") == null);

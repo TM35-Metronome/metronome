@@ -284,135 +284,140 @@ fn useGame(ctx: anytype, game: format.Game) !void {
     unreachable;
 }
 
-fn testIt(args: []const []const u8, in: []const u8, out: []const u8) !void {
-    // Not providing the args should be a noop
-    try util.testing.testProgram(Program, &[_][]const u8{}, in, in);
-    try util.testing.testProgram(Program, args, in, out);
-}
+test {
+    const Pattern = util.testing.Pattern;
+    const test_input = try util.testing.filter(util.testing.test_case, &.{
+        ".maps[*].allow_*=*",
+        ".instant_text=*",
+        ".text_delays[*]=*",
+        ".static_pokemons[*].level=*",
+        ".trainers[*].party[*].level=*",
+        ".wild_pokemons[*].*.pokemons[*].*_level=*",
+        ".pokemons[*].base_exp_yield=*",
+        ".pokemons[*].hms[*]=*",
+    });
+    defer testing.allocator.free(test_input);
 
-test "tm35-misc" {
-    try testIt(&[_][]const u8{"--allow-biking=everywhere"},
-        \\.maps[0].allow_cycling=false
-        \\.maps[0].allow_cycling=true
-        \\
-    ,
-        \\.maps[0].allow_cycling=true
-        \\.maps[0].allow_cycling=true
-        \\
-    );
-    try testIt(&[_][]const u8{"--allow-biking=nowhere"},
-        \\.maps[0].allow_cycling=false
-        \\.maps[0].allow_cycling=true
-        \\
-    ,
-        \\.maps[0].allow_cycling=false
-        \\.maps[0].allow_cycling=false
-        \\
-    );
-    try testIt(&[_][]const u8{"--allow-biking=unchanged"},
-        \\.maps[0].allow_cycling=false
-        \\.maps[0].allow_cycling=true
-        \\
-    ,
-        \\.maps[0].allow_cycling=false
-        \\.maps[0].allow_cycling=true
-        \\
-    );
-    try testIt(&[_][]const u8{"--allow-running=everywhere"},
-        \\.maps[0].allow_running=false
-        \\.maps[0].allow_running=true
-        \\
-    ,
-        \\.maps[0].allow_running=true
-        \\.maps[0].allow_running=true
-        \\
-    );
-    try testIt(&[_][]const u8{"--allow-running=nowhere"},
-        \\.maps[0].allow_running=false
-        \\.maps[0].allow_running=true
-        \\
-    ,
-        \\.maps[0].allow_running=false
-        \\.maps[0].allow_running=false
-        \\
-    );
-    try testIt(&[_][]const u8{"--allow-running=unchanged"},
-        \\.maps[0].allow_running=false
-        \\.maps[0].allow_running=true
-        \\
-    ,
-        \\.maps[0].allow_running=false
-        \\.maps[0].allow_running=true
-        \\
-    );
-    try testIt(&[_][]const u8{"--fast-text"},
-        \\.instant_text=false
-        \\.instant_text=true
-        \\.text_delays[0]=10
-        \\.text_delays[1]=10
-        \\.text_delays[2]=10
-        \\.text_delays[3]=10
-        \\
-    ,
-        \\.instant_text=true
-        \\.instant_text=true
-        \\.text_delays[0]=2
-        \\.text_delays[1]=1
-        \\.text_delays[2]=0
-        \\.text_delays[3]=0
-        \\
-    );
-    try testIt(&[_][]const u8{"--static-level-scaling=0.5"},
-        \\.static_pokemons[0].level=20
-        \\.static_pokemons[1].level=30
-        \\
-    ,
-        \\.static_pokemons[0].level=10
-        \\.static_pokemons[1].level=15
-        \\
-    );
-    try testIt(&[_][]const u8{"--trainer-level-scaling=0.5"},
-        \\.trainers[0].party[0].level=20
-        \\.trainers[10].party[10].level=10
-        \\
-    ,
-        \\.trainers[0].party[0].level=10
-        \\.trainers[10].party[10].level=5
-        \\
-    );
-    try testIt(&[_][]const u8{"--wild-level-scaling=0.5"},
-        \\.wild_pokemons[0].grass_0.pokemons[0].min_level=10
-        \\.wild_pokemons[0].grass_0.pokemons[0].max_level=20
-        \\.wild_pokemons[0].fishing_0.pokemons[0].min_level=20
-        \\.wild_pokemons[0].fishing_0.pokemons[0].max_level=40
-        \\
-    ,
-        \\.wild_pokemons[0].grass_0.pokemons[0].min_level=5
-        \\.wild_pokemons[0].grass_0.pokemons[0].max_level=10
-        \\.wild_pokemons[0].fishing_0.pokemons[0].min_level=10
-        \\.wild_pokemons[0].fishing_0.pokemons[0].max_level=20
-        \\
-    );
-    try testIt(&[_][]const u8{"--exp-yield-scaling=0.5"},
-        \\.pokemons[0].base_exp_yield=20
-        \\.pokemons[1].base_exp_yield=40
-        \\
-    ,
-        \\.pokemons[0].base_exp_yield=10
-        \\.pokemons[1].base_exp_yield=20
-        \\
-    );
-    try testIt(&[_][]const u8{"--easy-hms"},
-        \\.pokemons[0].hms[0]=false
-        \\.pokemons[0].hms[1]=true
-        \\.pokemons[0].hms[0]=true
-        \\.pokemons[0].hms[1]=false
-        \\
-    ,
-        \\.pokemons[0].hms[0]=true
-        \\.pokemons[0].hms[1]=true
-        \\.pokemons[0].hms[0]=true
-        \\.pokemons[0].hms[1]=true
-        \\
-    );
+    try util.testing.testProgram(Program, &[_][]const u8{}, test_input, test_input);
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--allow-biking=unchanged",
+    }, test_input, test_input);
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-biking=everywhere"},
+        .patterns = &[_]Pattern{
+            Pattern.string(518, 518, "].allow_cycling=true\n"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-biking=nowhere"},
+        .patterns = &[_]Pattern{
+            Pattern.string(518, 518, "].allow_cycling=false\n"),
+        },
+    });
+    try util.testing.testProgram(Program, &[_][]const u8{
+        "--allow-running=unchanged",
+    }, test_input, test_input);
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-running=everywhere"},
+        .patterns = &[_]Pattern{
+            Pattern.string(518, 518, "].allow_running=true\n"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-running=nowhere"},
+        .patterns = &[_]Pattern{
+            Pattern.string(518, 518, "].allow_running=false\n"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--fast-text"},
+        .patterns = &[_]Pattern{
+            Pattern.string(1, 1, ".instant_text=true\n"),
+            Pattern.string(1, 1, ".text_delays[0]=2\n"),
+            Pattern.string(1, 1, ".text_delays[1]=1\n"),
+            Pattern.string(1, 1, ".text_delays[2]=0\n"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--static-level-scaling=1.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(1, 1, ".static_pokemons[*].level=70"),
+            Pattern.glob(3, 3, ".static_pokemons[*].level=68"),
+            Pattern.glob(7, 7, ".static_pokemons[*].level=65"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--static-level-scaling=0.5"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(1, 1, ".static_pokemons[*].level=35"),
+            Pattern.glob(3, 3, ".static_pokemons[*].level=34"),
+            Pattern.glob(7, 7, ".static_pokemons[*].level=32"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--trainer-level-scaling=1.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(11, 11, ".trainers[*].party[*].level=20"),
+            Pattern.glob(16, 16, ".trainers[*].party[*].level=40"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--trainer-level-scaling=2.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(11, 11, ".trainers[*].party[*].level=40"),
+            Pattern.glob(16, 16, ".trainers[*].party[*].level=80"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--wild-level-scaling=1.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(97, 97, ".wild_pokemons[*].*.pokemons[*].min_level=10"),
+            Pattern.glob(37, 37, ".wild_pokemons[*].*.pokemons[*].max_level=10"),
+            Pattern.glob(09, 09, ".wild_pokemons[*].*.pokemons[*].min_level=20"),
+            Pattern.glob(44, 44, ".wild_pokemons[*].*.pokemons[*].max_level=20"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--wild-level-scaling=2.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(97, 97, ".wild_pokemons[*].*.pokemons[*].min_level=20"),
+            Pattern.glob(37, 37, ".wild_pokemons[*].*.pokemons[*].max_level=20"),
+            Pattern.glob(09, 09, ".wild_pokemons[*].*.pokemons[*].min_level=40"),
+            Pattern.glob(44, 44, ".wild_pokemons[*].*.pokemons[*].max_level=40"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--exp-yield-scaling=1.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(06, 06, ".pokemons[*].base_exp_yield=50"),
+            Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=60"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--exp-yield-scaling=2.0"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(06, 06, ".pokemons[*].base_exp_yield=100"),
+            Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=120"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--easy-hms"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(0, 0, ".pokemons[*].hms[*]=false"),
+        },
+    });
 }

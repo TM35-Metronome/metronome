@@ -33,11 +33,6 @@ moves: Moves = Moves{},
 tms: Machines = Machines{},
 hms: Machines = Machines{},
 
-const Preference = enum {
-    random,
-    stab,
-};
-
 pub const main = util.generateMain(Program);
 pub const version = "0.0.0";
 pub const description =
@@ -225,41 +220,93 @@ const Move = struct {
     description: Utf8 = Utf8.init("") catch unreachable,
 };
 
-test "tm35-rand-machines" {
-    const result_prefix =
-        \\.moves[0].power=10
-        \\.moves[1].power=30
-        \\.moves[2].power=30
-        \\.moves[3].power=30
-        \\.moves[4].power=50
-        \\.moves[5].power=70
-        \\
-    ;
-    const test_string = result_prefix ++
-        \\.tms[0]=0
-        \\.tms[1]=2
-        \\.tms[2]=4
-        \\.hms[0]=1
-        \\.hms[1]=3
-        \\.hms[2]=5
-        \\
-    ;
-    try util.testing.testProgram(Program, &[_][]const u8{"--seed=0"}, test_string, result_prefix ++
-        \\.hms[0]=1
-        \\.hms[1]=3
-        \\.hms[2]=5
-        \\.tms[0]=1
-        \\.tms[1]=2
-        \\.tms[2]=0
-        \\
-    );
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=0", "--hms" }, test_string, result_prefix ++
-        \\.tms[0]=1
-        \\.tms[1]=2
-        \\.tms[2]=0
-        \\.hms[0]=2
-        \\.hms[1]=0
-        \\.hms[2]=5
-        \\
-    );
+//
+// Testing
+//
+
+fn expectSameMachines(a: CollectedMachinesSet, b: CollectedMachinesSet) !void {
+    try util.set.expectEqual(a, b);
+}
+
+fn expectDifferentMachines(a: CollectedMachinesSet, b: CollectedMachinesSet) !void {
+    try testing.expect(!util.set.eql(a, b));
+}
+
+const CollectedMachinesSet = std.AutoHashMap(ston.Index(u8, u16), void);
+
+const CollectedMachines = struct {
+    hms: CollectedMachinesSet,
+    tms: CollectedMachinesSet,
+
+    fn deinit(machines: *CollectedMachines) void {
+        machines.hms.deinit();
+        machines.tms.deinit();
+    }
+};
+
+fn collectMachines(in: []const u8) !CollectedMachines {
+    var res = CollectedMachines{
+        .hms = std.AutoHashMap(ston.Index(u8, u16), void).init(testing.allocator),
+        .tms = std.AutoHashMap(ston.Index(u8, u16), void).init(testing.allocator),
+    };
+    errdefer res.deinit();
+
+    var tok = ston.tokenize(in);
+    var des = ston.Deserializer(format.Game){ .tok = &tok };
+    while (des.next()) |line| switch (line) {
+        .hms => |v| try testing.expect((try res.hms.fetchPut(v, {})) == null),
+        .tms => |v| try testing.expect((try res.tms.fetchPut(v, {})) == null),
+        else => {},
+    } else |_| {
+        try testing.expect(tok.next().tag == .end);
+    }
+
+    return res;
+}
+
+test {
+    const number_of_seeds = 20;
+    const test_case = try util.testing.filter(util.testing.test_case, &.{
+        ".hms[*]=*",
+        ".tms[*]=*",
+        ".moves[*].pp=*",
+    });
+    defer testing.allocator.free(test_case);
+
+    var original_machines = try collectMachines(test_case);
+    defer original_machines.deinit();
+
+    var seed: usize = 0;
+    while (seed < number_of_seeds) : (seed += 1) {
+        var buf: [20]u8 = undefined;
+        const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
+        const res = try util.testing.runProgram(Program, .{
+            .in = test_case,
+            .args = &[_][]const u8{seed_arg},
+        });
+        defer testing.allocator.free(res);
+
+        var res_machines = try collectMachines(res);
+        defer res_machines.deinit();
+
+        try expectSameMachines(original_machines.hms, res_machines.hms);
+        try expectDifferentMachines(original_machines.tms, res_machines.tms);
+    }
+
+    seed = 0;
+    while (seed < number_of_seeds) : (seed += 1) {
+        var buf: [20]u8 = undefined;
+        const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
+        const res = try util.testing.runProgram(Program, .{
+            .in = test_case,
+            .args = &[_][]const u8{ seed_arg, "--hms" },
+        });
+        defer testing.allocator.free(res);
+
+        var res_machines = try collectMachines(res);
+        defer res_machines.deinit();
+
+        try expectDifferentMachines(original_machines.hms, res_machines.hms);
+        try expectDifferentMachines(original_machines.tms, res_machines.tms);
+    }
 }

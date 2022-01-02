@@ -34,6 +34,7 @@ const randomizer_exes = [_][]const u8{
 const other_exes = [_][]const u8{
     "tm35-generate-site",
     "tm35-misc",
+    "tm35-noop",
     "tm35-no-trade-evolutions",
 };
 
