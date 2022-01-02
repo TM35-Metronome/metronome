@@ -10,7 +10,7 @@ const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
 
-pub const test_case = @embedFile("test_file.tm");
+pub const test_case = @embedFile("test_file.tm35");
 
 pub const TestProgramOptions = struct {
     args: []const []const u8 = &[_][]const u8{},
