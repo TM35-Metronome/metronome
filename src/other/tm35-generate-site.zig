@@ -275,6 +275,23 @@ fn generate(writer: anytype, game: Game) !void {
 
     try writer.print(
         \\</table>
+        \\<h1>Machines</h1>
+        \\<table>
+        \\
+    , .{});
+    for (game.tms.keys()) |tm_id, i| {
+        const tm_move = game.tms.values()[i];
+        const move_name = humanize(if (game.moves.get(tm_move)) |m| m.name else unknown);
+        try writer.print("<tr><td>TM{} - <a href=\"#move_{}\">{s}</a></td></tr>\n", .{ tm_id + 1, tm_move, move_name });
+    }
+    for (game.hms.keys()) |hm_id, i| {
+        const hm_move = game.hms.values()[i];
+        const move_name = humanize(if (game.moves.get(hm_move)) |m| m.name else unknown);
+        try writer.print("<tr><td>HM{} - <a href=\"#move_{}\">{s}</a></td></tr>\n", .{ hm_id + 1, hm_move, move_name });
+    }
+
+    try writer.print(
+        \\</table>
         \\<h1>Pokedex</h1>
         \\<table>
         \\
@@ -456,19 +473,23 @@ fn generate(writer: anytype, game: Game) !void {
             \\<table>
             \\
         , .{});
-        for ([_]Map(u8, void){ pokemon.hms, pokemon.tms }) |machines, j| {
-            const prefix = if (j == 0) "TM" else "HM";
-            const moves = if (j == 0) game.tms else game.hms;
-
-            for (machines.keys()) |machine| {
-                const move_id = moves.get(machine) orelse continue;
-                const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
-                try writer.print(
-                    "<tr><td>{s}{}</td><td><a href=\"#move_{}\">{s}</a></td></tr>\n",
-                    .{ prefix, machine + 1, move_id, move_name },
-                );
-            }
+        for (pokemon.tms.keys()) |tm_id| {
+            const move_id = game.tms.get(tm_id) orelse continue;
+            const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
+            try writer.print(
+                "<tr><td>TM{}</td><td><a href=\"#move_{}\">{s}</a></td></tr>\n",
+                .{ tm_id + 1, move_id, move_name },
+            );
         }
+        for (pokemon.hms.keys()) |hm_id| {
+            const move_id = game.hms.get(hm_id) orelse continue;
+            const move_name = humanize(if (game.moves.get(move_id)) |m| m.name else unknown);
+            try writer.print(
+                "<tr><td>TM{}</td><td><a href=\"#move_{}\">{s}</a></td></tr>\n",
+                .{ hm_id + 1, move_id, move_name },
+            );
+        }
+
         try writer.print(
             \\</table>
             \\</details>

@@ -1200,8 +1200,10 @@ const Settings = struct {
             }
         };
 
+        var fifo = util.io.Fifo(.Dynamic).init(settings.arena.child_allocator);
+        defer fifo.deinit();
+
         var order_i: usize = 0;
-        var fifo = util.io.Fifo(.{ .Static = 1024 * 2 }).init();
         while (try util.io.readLine(reader, &fifo)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
