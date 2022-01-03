@@ -36,14 +36,14 @@ pub fn io(
     ctx: anytype,
     parse: anytype,
 ) !void {
-    var tok: ston.Tokenizer = undefined;
-    var des = ston.Deserializer(Game){ .tok = &tok };
+    var parser: ston.Parser = undefined;
+    var des = ston.Deserializer(Game){ .parser = &parser };
     var fifo = util.io.Fifo(.Dynamic).init(allocator);
     defer fifo.deinit();
 
     while (true) {
         const buf = fifo.readableSlice(0);
-        tok = ston.tokenize(buf);
+        parser = ston.Parser{ .str = buf };
 
         var start: usize = 0;
         while (true) {
@@ -52,20 +52,21 @@ pub fn io(
                     // When `parse` returns `ParserFailed` it communicates to us that they
                     // could not handle the result in any meaningful way, so we are responsible
                     // for writing the parsed string back out.
-                    error.ParserFailed => try writer.writeAll(buf[start..tok.i]),
+                    error.ParserFailed => try writer.writeAll(buf[start..parser.i]),
                     else => return err,
                 };
 
-                start = tok.i;
+                start = parser.i;
             } else |err| err;
 
             // If we couldn't parse a portion of the buffer, then we skip to the next line
             // and try again. The current line will just be written out again.
-            if (mem.indexOfScalarPos(u8, buf, start, '\n')) |index| {
+            if (mem.indexOfScalarPos(u8, parser.str, parser.i, '\n')) |index| {
                 const line = buf[start .. index + 1];
                 try writer.writeAll(line);
 
                 start = index + 1;
+                parser.i = start;
                 std.log.warn("{s}: {s}", .{ @errorName(err), line[0 .. line.len - 1] });
                 continue;
             }

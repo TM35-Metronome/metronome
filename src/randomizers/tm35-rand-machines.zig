@@ -251,14 +251,14 @@ fn collectMachines(in: []const u8) !CollectedMachines {
     };
     errdefer res.deinit();
 
-    var tok = ston.tokenize(in);
-    var des = ston.Deserializer(format.Game){ .tok = &tok };
+    var parser = ston.Parser{ .str = in };
+    var des = ston.Deserializer(format.Game){ .parser = &parser };
     while (des.next()) |line| switch (line) {
         .hms => |v| try testing.expect((try res.hms.fetchPut(v, {})) == null),
         .tms => |v| try testing.expect((try res.tms.fetchPut(v, {})) == null),
         else => {},
     } else |_| {
-        try testing.expect(tok.next().tag == .end);
+        try testing.expectEqual(parser.str.len, parser.i);
     }
 
     return res;
