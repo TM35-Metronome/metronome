@@ -189,9 +189,9 @@ fn useGame(game: *Game, parsed: format.Game) !void {
         .game_title,
         .gamecode,
         .instant_text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
-    return error.ParserFailed;
+    return error.DidNotConsumeData;
 }
 
 fn generate(writer: anytype, game: Game) !void {

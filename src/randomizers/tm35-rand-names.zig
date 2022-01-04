@@ -100,7 +100,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .tms,
             .hms,
             .pokedex_entry,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .trainers => |trainers| switch (trainers.value) {
             .name => |str| {
@@ -116,7 +116,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .party_type,
             .party_size,
             .party,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .moves => |moves| switch (moves.value) {
             .name => |str| {
@@ -134,7 +134,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .target,
             .priority,
             .category,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .abilities => |abilities| switch (abilities.value) {
             .name => |str| {
@@ -155,7 +155,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .description,
             .price,
             .pocket,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .version,
         .game_title,
@@ -174,7 +174,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

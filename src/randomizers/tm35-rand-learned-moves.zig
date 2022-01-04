@@ -39,7 +39,7 @@ pub const description =
 
 pub const params = &[_]clap.Param(clap.Help){
     clap.parseParam("-h, --help                      Display this help text and exit.                                                                ") catch unreachable,
-    clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (90% preference, 10% random). (default: random)") catch unreachable,
+    clap.parseParam("-p, --preference <random|stab>  Which moves the randomizer should prefer picking (preference is 90% for stab and 10% otherwise). (default: random)") catch unreachable,
     clap.parseParam("-s, --seed <INT>                The seed to use for random numbers. A random seed will be picked if this is not specified.      ") catch unreachable,
     clap.parseParam("-v, --version                   Output version information and exit.                                                            ") catch unreachable,
 };
@@ -98,7 +98,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .hms => |hms| _ = try pokemon.hms.put(allocator, hms.index, hms.value),
                 .types => |types| {
                     _ = try pokemon.types.put(allocator, types.value, {});
-                    return error.ParserFailed;
+                    return error.DidNotConsumeData;
                 },
                 .stats,
                 .catch_rate,
@@ -116,7 +116,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .moves,
                 .name,
                 .pokedex_entry,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
             return;
         },
@@ -135,17 +135,17 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .category,
                 => {},
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .tms => |tms| {
             _ = try program.tms.put(allocator, tms.index, tms.value);
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .hms => |hms| {
             _ = try program.hms.put(allocator, hms.index, hms.value);
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
-        else => return error.ParserFailed,
+        else => return error.DidNotConsumeData,
     }
     unreachable;
 }

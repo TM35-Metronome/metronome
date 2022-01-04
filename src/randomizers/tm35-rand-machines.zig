@@ -120,7 +120,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             _ = try program.hms.put(allocator, ms.index, ms.value);
             return;
         } else {
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .moves => |moves| {
             const move = (try program.moves.getOrPutValue(allocator, moves.index, .{})).value_ptr;
@@ -137,7 +137,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 },
                 else => {},
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .items => |items| {
             const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
@@ -150,7 +150,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 },
                 else => {},
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .version,
         .game_title,
@@ -170,7 +170,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

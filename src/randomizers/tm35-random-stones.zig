@@ -105,7 +105,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try program.pokedex.put(allocator, pokedex.index, {});
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokemons => |pokemons| {
             const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{})).value_ptr;
@@ -134,9 +134,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .tms,
                 .hms,
                 .name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .items => |items| {
             const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
@@ -152,16 +152,16 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .price => |price| item.price = price,
                 .battle_effect,
                 .pocket,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokeball_items => |items| switch (items.value) {
             .item => |item| if (program.options.replace_cheap) {
                 _ = try program.pokeball_items.put(allocator, items.index, .{ .item = item });
                 return;
-            } else return error.ParserFailed,
-            .amount => return error.ParserFailed,
+            } else return error.DidNotConsumeData,
+            .amount => return error.DidNotConsumeData,
         },
         .version,
         .game_title,
@@ -181,7 +181,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .given_pokemons,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

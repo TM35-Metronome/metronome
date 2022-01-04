@@ -128,7 +128,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try program.pokedex.put(allocator, pokedex.index, {});
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokemons => |pokemons| {
             const pokemon_kv = try program.pokemons.getOrPutValue(allocator, pokemons.index, .{});
@@ -149,7 +149,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     .target => |target| _ = try pokemon.evos.put(allocator, target, {}),
                     .method,
                     .param,
-                    => return error.ParserFailed,
+                    => return error.DidNotConsumeData,
                 },
                 .base_exp_yield,
                 .ev_yield,
@@ -162,23 +162,23 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .tms,
                 .hms,
                 .name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .static_pokemons => |pokemons| switch (pokemons.value) {
             .species => |species| {
                 _ = try program.static_mons.put(allocator, pokemons.index, .{ .species = species });
                 return;
             },
-            .level => return error.ParserFailed,
+            .level => return error.DidNotConsumeData,
         },
         .given_pokemons => |pokemons| switch (pokemons.value) {
             .species => |species| {
                 _ = try program.given_mons.put(allocator, pokemons.index, .{ .species = species });
                 return;
             },
-            .level => return error.ParserFailed,
+            .level => return error.DidNotConsumeData,
         },
         .hidden_hollows => |hollows| {
             const groups = (try program.hidden_hollows.getOrPutValue(
@@ -212,7 +212,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                         },
                     }
                 },
-                .items => return error.ParserFailed,
+                .items => return error.DidNotConsumeData,
             }
         },
         .version,
@@ -232,7 +232,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .wild_pokemons,
         .pokeball_items,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

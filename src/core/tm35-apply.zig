@@ -302,7 +302,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                                 return error.IndexOutOfBound;
                             member.moves[moves.index] = lu16.init(moves.value);
                         },
-                        .ability => return error.ParserFailed,
+                        .ability => return error.DidNotConsumeData,
                     }
                 },
             }
@@ -410,7 +410,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                             .unknown_0x02,
                             .unknown_0x03,
                             .trade_with_pokemon,
-                            => return error.ParserFailed,
+                            => return error.DidNotConsumeData,
                         },
                         .param => |param| evolution.param = lu16.init(param),
                         .target => |target| evolution.target = lu16.init(target),
@@ -523,7 +523,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     switch (pokedex.value) {
                         .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
                         .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
-                        .category => return error.ParserFailed,
+                        .category => return error.DidNotConsumeData,
                     }
                 },
                 .ruby,
@@ -538,7 +538,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     switch (pokedex.value) {
                         .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
                         .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
-                        .category => return error.ParserFailed,
+                        .category => return error.DidNotConsumeData,
                     }
                 },
                 else => unreachable,
@@ -616,7 +616,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .ripple_fishing_1,
                 .ripple_fishing_2,
                 .ripple_fishing_3,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .static_pokemons => |pokemons| {
@@ -661,7 +661,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
         },
         .hidden_hollows,
         .instant_text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
 }
 
@@ -748,7 +748,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .encounter_music,
                 .trainer_picture,
                 .name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .moves => |moves| {
@@ -769,7 +769,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .effect,
                 .priority,
                 .target,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .items => |items| {
@@ -798,7 +798,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     .tms_hms => .tms_hms,
                     .berries => .berries,
                     .poke_balls => .poke_balls,
-                    .none => return error.ParserFailed,
+                    .none => return error.DidNotConsumeData,
                 },
             }
         },
@@ -814,7 +814,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         return error.Error;
                     game.ptrs.pokedex_weights[pokedex.index] = lu32.init(weight);
                 },
-                .category => return error.ParserFailed,
+                .category => return error.DidNotConsumeData,
             }
         },
         .abilities => |abilities| {
@@ -931,7 +931,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                             .unknown_0x02,
                             .unknown_0x03,
                             .trade_with_pokemon,
-                            => return error.ParserFailed,
+                            => return error.DidNotConsumeData,
                         },
                         .param => |param| evolution.param = lu16.init(param),
                         .target => |target| evolution.target = lu16.init(target),
@@ -1012,7 +1012,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         .ripple_fishing_2,
                         .ripple_fishing_3,
                         .rock_smash,
-                        => return error.ParserFailed,
+                        => return error.DidNotConsumeData,
                     }
                 },
 
@@ -1056,7 +1056,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         .ripple_fishing_2,
                         .ripple_fishing_3,
                         .rock_smash,
-                        => return error.ParserFailed,
+                        => return error.DidNotConsumeData,
                     }
                 },
                 else => unreachable,
@@ -1096,7 +1096,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
         .text,
         .maps,
         .text_delays,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
 }
 
@@ -1144,10 +1144,10 @@ fn applyDpptReplacement(area: format.WildArea, replacements: []gen4.DpptWildPoke
                 .species => |species| replacement.species = lu16.init(species),
                 .min_level,
                 .max_level,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
-        .encounter_rate => return error.ParserFailed,
+        .encounter_rate => return error.DidNotConsumeData,
     }
 }
 
@@ -1243,7 +1243,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 },
                 .encounter_music,
                 .trainer_picture,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .pokemons => |pokemons| {
@@ -1348,7 +1348,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                             .trade_with_pokemon => .trade_with_pokemon,
                             .friend_ship_during_day,
                             .friend_ship_during_night,
-                            => return error.ParserFailed,
+                            => return error.DidNotConsumeData,
                         },
                         .param => |param| evolution.param = lu16.init(param),
                         .target => |target| evolution.target = lu16.init(target),
@@ -1405,7 +1405,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     .tms_hms => .tms_hms,
                     .berries,
                     .none,
-                    => return error.ParserFailed,
+                    => return error.DidNotConsumeData,
                 },
             }
         },
@@ -1415,7 +1415,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .category => |category| try applyGen5String(names, pokedex.index, category),
                 .height,
                 .weight,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .moves => |moves| {
@@ -1466,7 +1466,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .cave,
                 .type,
                 .escape_rope,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .wild_pokemons => |pokemons| {
@@ -1510,7 +1510,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .grass_5,
                 .grass_6,
                 .rock_smash,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .static_pokemons => |pokemons| {
@@ -1567,17 +1567,17 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 },
                 .items => |items| {
                     if (items.index >= hollow.items.len)
-                        return error.ParserFailed;
+                        return error.DidNotConsumeData;
 
                     hollow.items[items.index] = lu16.init(items.value);
                 },
             }
         } else {
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .text_delays,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
 }
 
@@ -1589,7 +1589,7 @@ fn applyGen5Area(
     wilds: []gen5.WildPokemons,
 ) !void {
     if (wilds.len <= wild_index)
-        return error.ParserFailed;
+        return error.DidNotConsumeData;
 
     switch (area) {
         .encounter_rate => |encounter_rate| {

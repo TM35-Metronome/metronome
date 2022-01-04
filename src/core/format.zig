@@ -24,77 +24,113 @@ const escape = util.escape;
 //
 
 /// A function for efficiently reading the tm35 format from `reader` and write unwanted lines
-/// back into `writer`. `parse` will be called once a line has been parsed successfully, which
-/// allows the caller to handle the parsed result however they like. If `parse` returns
-/// `error.ParserFailed`, then that will indicate to `io`, that the callback could not handle
-/// the result and that `io` should handle it instead. Any other error from `parse` will
+/// back into `writer`. `consume` will be called once a line has been parsed successfully, which
+/// allows the caller to handle the parsed result however they like. If `consume` returns
+/// `error.DidNotConsumeData`, then that will indicate to `io`, that the callback could not handle
+/// the result and that `io` should handle it instead. Any other error from `consume` will
 /// be returned from `io` as well.
 pub fn io(
     allocator: mem.Allocator,
     reader: anytype,
     writer: anytype,
     ctx: anytype,
-    parse: anytype,
+    consume: anytype,
 ) !void {
-    var parser: ston.Parser = undefined;
+    // WARNING: All the optimizations below have been done with the aid of profilers. Do not
+    // simplify the code unless you have checked that the simplified code is just as fast.
+    // Here is a simple oneliner you can use on linux to check:
+    // ```
+    // zig build build-tm35-noop -Drelease && \\
+    //   perf stat -r 250 dash -c 'zig-out/bin/tm35-noop < src/common/test_file.tm35 > /dev/null'
+    // ```
+
+    // Two arraylists used for buffering input and output. These are used over buffered streams
+    // for two reasons:
+    // * For input, this allows us to ensure that there is always at least one entire line in the
+    //   input. This allows ston.Deserializer to work straight on the input data without having
+    //   to read the lines into a buffer first.
+    // * For output, this allows us to collect all non consumed lines into one buffer and output
+    //   it at the same time we are reading more into into `in`. Because we know that non cosumed
+    //   lines is always a subset of the input we can ensure that `out` has the same capacity as
+    //   `in` and call `appendSliceAssumeCapacity` to avoid allocating in the hot loop.
+    var in = std.ArrayList(u8).init(allocator);
+    defer in.deinit();
+    var out = std.ArrayList(u8).init(allocator);
+    defer out.deinit();
+
+    try in.ensureUnusedCapacity(util.io.bufsize);
+    try out.ensureUnusedCapacity(util.io.bufsize);
+    in.items.len = try reader.read(in.unusedCapacitySlice());
+
+    var first_none_consumed_line: ?usize = null;
+    var start_of_line: usize = 0;
+    var parser = ston.Parser{ .str = in.items };
     var des = ston.Deserializer(Game){ .parser = &parser };
-    var fifo = util.io.Fifo(.Dynamic).init(allocator);
-    defer fifo.deinit();
-
-    while (true) {
-        const buf = fifo.readableSlice(0);
-        parser = ston.Parser{ .str = buf };
-
-        var start: usize = 0;
-        while (true) {
-            const err = while (des.next()) |res| {
-                parse(ctx, res) catch |err| switch (err) {
-                    // When `parse` returns `ParserFailed` it communicates to us that they
-                    // could not handle the result in any meaningful way, so we are responsible
-                    // for writing the parsed string back out.
-                    error.ParserFailed => try writer.writeAll(buf[start..parser.i]),
-                    else => return err,
-                };
-
-                start = parser.i;
-            } else |err| err;
-
-            // If we couldn't parse a portion of the buffer, then we skip to the next line
-            // and try again. The current line will just be written out again.
-            if (mem.indexOfScalarPos(u8, parser.str, parser.i, '\n')) |index| {
-                const line = buf[start .. index + 1];
-                try writer.writeAll(line);
-
-                start = index + 1;
-                parser.i = start;
-                std.log.warn("{s}: {s}", .{ @errorName(err), line[0 .. line.len - 1] });
-                continue;
+    while (parser.str.len != 0) : (start_of_line = parser.i) {
+        while (des.next()) |res| : (start_of_line = parser.i) {
+            if (consume(ctx, res)) |_| {
+                if (first_none_consumed_line) |start| {
+                    // Ok, `consume` just consumed a line after we have had at least one line
+                    // that was not consumed. we can now slice from
+                    // `first_none_consumed_line..start_of_line` to get all the lines we need to
+                    // handle and append them all in one go to `out`. This is faster than
+                    // appending none consumed lines one at the time because this feeds more data
+                    // to mem.copy which then causes us to hit a codepath that is really fast
+                    // on a lot of data.
+                    const lines = parser.str[start..start_of_line];
+                    out.appendSliceAssumeCapacity(lines);
+                    first_none_consumed_line = null;
+                }
+            } else |err| switch (err) {
+                // When `consume` returns `DidNotConsumeData` it communicates to us that they
+                // could not handle the result in any meaningful way, so we are responsible
+                // for writing the parsed string back out.
+                error.DidNotConsumeData => if (first_none_consumed_line == null) {
+                    first_none_consumed_line = start_of_line;
+                },
+                else => return err,
             }
+        } else |err|
+        // If we couldn't parse a portion of the buffer, then we skip to the next line
+        // and try again. The current line will just be written out again.
+        if (mem.indexOfScalarPos(u8, parser.str, parser.i, '\n')) |index| {
+            if (first_none_consumed_line == null)
+                first_none_consumed_line = start_of_line;
 
-            break;
+            const line = parser.str[start_of_line .. index + 1];
+            parser.i = index + 1;
+            std.log.debug("{s}: '{s}'", .{ @errorName(err), line[0 .. line.len - 1] });
+            continue;
         }
 
-        const new_buf = blk: {
-            fifo.discard(start);
-            fifo.realign();
-            const slice = fifo.writableSlice(0);
-            if (slice.len != 0)
-                break :blk slice;
-            break :blk try fifo.writableWithSize(math.max(util.io.bufsize, fifo.buf.len));
-        };
-
-        const num = try reader.read(new_buf);
-        fifo.update(num);
-
-        if (num == 0) {
-            if (fifo.count == 0)
-                return;
-
-            // If get here, then both parsing and the "index of newline" branches above
-            // failed. Let's terminate the buffer, so that at least the "index of newline"
-            // branch will succeed. Once that succeed, this branch will never be hit again.
-            try fifo.writeItem('\n');
+        // Ok, we are done deserializing this batch of input. We need to output all the
+        // lines that wasn't consumed and write the this to the writer.
+        if (first_none_consumed_line) |start| {
+            const lines = parser.str[start..start_of_line];
+            out.appendSliceAssumeCapacity(lines);
+            first_none_consumed_line = null;
         }
+        try writer.writeAll(out.items);
+        out.shrinkRetainingCapacity(0);
+
+        // There is probably some leftover which wasn't part of a full line. Copy that to the
+        // start and make room for more data. Here we need to ensure that `out` at least as much
+        // capacity as `in`.
+        mem.copy(u8, in.items, in.items[start_of_line..]);
+        in.shrinkRetainingCapacity(in.items.len - start_of_line);
+        try in.ensureUnusedCapacity(util.io.bufsize);
+        try out.ensureTotalCapacity(in.capacity);
+
+        const num = try reader.read(in.unusedCapacitySlice());
+        in.items.len += num;
+        if (num == 0 and in.items.len != 0) {
+            // If get here, then the input did not have a terminating newline. In that case
+            // the above parsing logic will never succeed. Let's append a newline here so that
+            // we can handle that egde case.
+            in.appendAssumeCapacity('\n');
+        }
+
+        parser = ston.Parser{ .str = in.items };
     }
 }
 

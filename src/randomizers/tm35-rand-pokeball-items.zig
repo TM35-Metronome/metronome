@@ -110,7 +110,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 _ = try program.pokeballs.put(allocator, items.index, .{ .item = item });
                 return;
             },
-            .amount => return error.ParserFailed,
+            .amount => return error.DidNotConsumeData,
         },
         .items => |items| {
             const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
@@ -124,9 +124,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 },
                 .description,
                 .battle_effect,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .version,
         .game_title,
@@ -148,7 +148,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .given_pokemons,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

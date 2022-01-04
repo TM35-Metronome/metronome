@@ -131,7 +131,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         .instant_text => |_| if (program.options.fast_text) {
             return out.print(".instant_text=true\n", .{});
         } else {
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .text_delays => |delay| if (program.options.fast_text) {
             const new_delay = switch (delay.index) {
@@ -141,7 +141,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             };
             return out.print(".text_delays[{}]={}\n", .{ delay.index, new_delay });
         } else {
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokemons => |pokemons| switch (pokemons.value) {
             .base_exp_yield => |yield| if (program.options.exp_scale != 1.0) {
@@ -152,7 +152,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                     new_yield,
                 });
             } else {
-                return error.ParserFailed;
+                return error.DidNotConsumeData;
             },
             .hms => |hm| return out.print(".pokemons[{}].hms[{}]={}\n", .{
                 pokemons.index,
@@ -176,14 +176,14 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             .tms,
             .name,
             .pokedex_entry,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .maps => |maps| {
             switch (maps.value) {
                 .allow_cycling, .allow_running => {
                     const allow = if (maps.value == .allow_running) program.options.running else program.options.biking;
                     if (allow == .unchanged)
-                        return error.ParserFailed;
+                        return error.DidNotConsumeData;
 
                     return out.print(".maps[{}].{s}={}\n", .{
                         maps.index,
@@ -199,7 +199,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                 .battle_scene,
                 .allow_escaping,
                 .show_map_name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .trainers => |trainers| switch (trainers.value) {
@@ -213,13 +213,13 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                         new_level,
                     });
                 } else {
-                    return error.ParserFailed;
+                    return error.DidNotConsumeData;
                 },
                 .ability,
                 .species,
                 .item,
                 .moves,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             },
             .class,
             .encounter_music,
@@ -228,7 +228,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             .items,
             .party_type,
             .party_size,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .wild_pokemons => |wild_areas| {
             const wild_area = wild_areas.value.value();
@@ -245,11 +245,11 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                             new_level,
                         });
                     } else {
-                        return error.ParserFailed;
+                        return error.DidNotConsumeData;
                     },
-                    .species => return error.ParserFailed,
+                    .species => return error.DidNotConsumeData,
                 },
-                .encounter_rate => return error.ParserFailed,
+                .encounter_rate => return error.DidNotConsumeData,
             }
         },
         .static_pokemons => |pokemons| switch (pokemons.value) {
@@ -260,9 +260,9 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                 const new_level = @floatToInt(u8, math.min(new_level_float, 100));
                 return out.print(".static_pokemons[{}].level={}\n", .{ pokemons.index, new_level });
             } else {
-                return error.ParserFailed;
+                return error.DidNotConsumeData;
             },
-            .species => return error.ParserFailed,
+            .species => return error.DidNotConsumeData,
         },
         .version,
         .game_title,
@@ -279,7 +279,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }
@@ -298,38 +298,51 @@ test {
     });
     defer testing.allocator.free(test_input);
 
-    try util.testing.testProgram(Program, &[_][]const u8{}, test_input, test_input);
-    try util.testing.testProgram(Program, &[_][]const u8{
-        "--allow-biking=unchanged",
-    }, test_input, test_input);
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-biking=unchanged"},
+        .patterns = &[_]Pattern{
+            Pattern.string(165, 165, "].allow_cycling=true\n"),
+            Pattern.string(353, 353, "].allow_cycling=false\n"),
+        },
+    });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=everywhere"},
         .patterns = &[_]Pattern{
             Pattern.string(518, 518, "].allow_cycling=true\n"),
+            Pattern.string(000, 000, "].allow_cycling=false\n"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=nowhere"},
         .patterns = &[_]Pattern{
+            Pattern.string(000, 000, "].allow_cycling=true\n"),
             Pattern.string(518, 518, "].allow_cycling=false\n"),
         },
     });
-    try util.testing.testProgram(Program, &[_][]const u8{
-        "--allow-running=unchanged",
-    }, test_input, test_input);
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--allow-running=unchanged"},
+        .patterns = &[_]Pattern{
+            Pattern.string(228, 228, "].allow_running=true\n"),
+            Pattern.string(290, 290, "].allow_running=false\n"),
+        },
+    });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=everywhere"},
         .patterns = &[_]Pattern{
             Pattern.string(518, 518, "].allow_running=true\n"),
+            Pattern.string(000, 000, "].allow_running=false\n"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=nowhere"},
         .patterns = &[_]Pattern{
+            Pattern.string(000, 000, "].allow_running=true\n"),
             Pattern.string(518, 518, "].allow_running=false\n"),
         },
     });

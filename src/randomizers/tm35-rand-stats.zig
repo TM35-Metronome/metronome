@@ -104,11 +104,11 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                             .{},
                         )).value_ptr;
                         _ = try evo_from.evolves_from.put(allocator, mons.index, {});
-                        return error.ParserFailed;
+                        return error.DidNotConsumeData;
                     },
                     .method,
                     .param,
-                    => return error.ParserFailed,
+                    => return error.DidNotConsumeData,
                 },
                 .types,
                 .catch_rate,
@@ -127,7 +127,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .hms,
                 .name,
                 .pokedex_entry,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .version,
@@ -151,7 +151,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
 
     unreachable;

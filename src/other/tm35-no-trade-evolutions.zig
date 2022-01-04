@@ -74,7 +74,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     switch (evos.value) {
                         .param => |param| evo.param = param,
                         .method => |method| evo.method = method,
-                        .target => return error.ParserFailed,
+                        .target => return error.DidNotConsumeData,
                     }
                 },
                 .stats,
@@ -95,7 +95,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .hms,
                 .name,
                 .pokedex_entry,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
         },
         .version,
@@ -119,7 +119,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
 }
 

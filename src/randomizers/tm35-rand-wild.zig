@@ -82,7 +82,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try program.pokedex.put(allocator, pokedex.index, {});
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokemons => |pokemons| {
             const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
@@ -107,9 +107,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .tms,
                 .hms,
                 .name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .wild_pokemons => |wild_areas| {
             const zone = (try program.wild_pokemons.getOrPutValue(
@@ -136,7 +136,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     }
                     return;
                 },
-                .encounter_rate => return error.ParserFailed,
+                .encounter_rate => return error.DidNotConsumeData,
             }
         },
         .version,
@@ -158,7 +158,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

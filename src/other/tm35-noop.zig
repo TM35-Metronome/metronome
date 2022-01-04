@@ -48,5 +48,5 @@ pub fn run(
 fn useGame(ctx: anytype, game: format.Game) !void {
     _ = ctx;
     _ = game;
-    return error.ParserFailed;
+    return error.DidNotConsumeData;
 }

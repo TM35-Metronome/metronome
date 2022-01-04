@@ -120,7 +120,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try program.pokedex.put(allocator, pokedex.index, {});
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .starters => |starters| {
             _ = try program.starters.put(allocator, starters.index, starters.value);
@@ -151,7 +151,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     },
                     .param,
                     .method,
-                    => return error.ParserFailed,
+                    => return error.DidNotConsumeData,
                 },
                 .stats,
                 .types,
@@ -169,9 +169,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .tms,
                 .hms,
                 .name,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .version,
         .game_title,
@@ -192,7 +192,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }

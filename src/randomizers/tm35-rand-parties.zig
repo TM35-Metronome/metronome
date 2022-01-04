@@ -256,7 +256,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokedex => |pokedex| {
             _ = try program.pokedex.put(allocator, pokedex.index, {});
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .pokemons => |pokemons| {
             const pokemon = (try program.pokemons.getOrPutValue(allocator, pokemons.index, .{}))
@@ -304,9 +304,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .evos,
                 .tms,
                 .hms,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .trainers => |trainers| {
             const trainer = (try program.trainers.getOrPutValue(allocator, trainers.index, .{}))
@@ -335,7 +335,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .trainer_picture,
                 .name,
                 .items,
-                => return error.ParserFailed,
+                => return error.DidNotConsumeData,
             }
             return;
         },
@@ -343,13 +343,13 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .battle_effect => |effect| {
                 if (effect != 0)
                     _ = try program.held_items.put(allocator, items.index, {});
-                return error.ParserFailed;
+                return error.DidNotConsumeData;
             },
             .name,
             .description,
             .price,
             .pocket,
-            => return error.ParserFailed,
+            => return error.DidNotConsumeData,
         },
         .moves => |moves| {
             const move = (try program.moves.getOrPutValue(allocator, moves.index, .{}))
@@ -367,7 +367,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .category,
                 => {},
             }
-            return error.ParserFailed;
+            return error.DidNotConsumeData;
         },
         .version,
         .game_title,
@@ -386,7 +386,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         .pokeball_items,
         .hidden_hollows,
         .text,
-        => return error.ParserFailed,
+        => return error.DidNotConsumeData,
     }
     unreachable;
 }
