@@ -1006,6 +1006,7 @@ pub const Command = packed struct {
     };
     pub const CheckItemBagNumber = packed struct {
         item: lu16,
+        quantity: lu16,
         result: lu16,
     };
     pub const StoreItemCount = packed struct {
