@@ -198,14 +198,13 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
     for (game.ptrs.scripts.fat) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
-        var offsets = std.ArrayList(isize).init(allocator);
+        var offsets = std.ArrayList(usize).init(allocator);
         defer offsets.deinit();
 
-        for (gen5.script.getScriptOffsets(script_data)) |relative_offset, i| {
-            const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
-            if (@intCast(isize, script_data.len) < offset)
-                continue;
-            if (offset < 0)
+        for (gen5.script.getScriptOffsets(script_data)) |relative, i| {
+            const position = @intCast(isize, i + 1) * @sizeOf(lu32);
+            const offset = math.cast(usize, relative.value() + position) catch continue;
+            if (script_data.len < offset)
                 continue;
             try offsets.append(offset);
         }
@@ -214,14 +213,10 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
         while (offset_i < offsets.items.len) : (offset_i += 1) {
             const offset = offsets.items[offset_i];
             try writer.print("script[{}]@0x{x}:\n", .{ script_i, offset });
-            if (@intCast(isize, script_data.len) < offset)
-                continue;
-            if (offset < 0)
-                continue;
 
             var decoder = gen5.script.CommandDecoder{
                 .bytes = script_data,
-                .i = @intCast(usize, offset),
+                .i = offset,
             };
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
@@ -241,11 +236,11 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                             .call_routine => command.data().call_routine.offset.value(),
                             else => unreachable,
                         };
-
-                        const location = off + @intCast(isize, decoder.i);
-                        if (mem.indexOfScalar(isize, offsets.items, location) == null) {
-                            try offsets.append(location);
-                        }
+                        if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
+                            if (loc < script_data.len and
+                                mem.indexOfScalar(usize, offsets.items, loc) == null)
+                                try offsets.append(loc);
+                        } else |_| {}
                     },
                     else => {},
                 }

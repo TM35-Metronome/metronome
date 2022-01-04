@@ -1294,97 +1294,148 @@ pub const Game = struct {
         var pokeball_items = std.ArrayList(PokeballItem).init(allocator);
         errdefer pokeball_items.deinit();
 
-        var script_offsets = std.ArrayList(isize).init(allocator);
+        var script_offsets = std.ArrayList(usize).init(allocator);
         defer script_offsets.deinit();
+
+        var set_var_offsets = std.ArrayList(usize).init(allocator);
+        defer set_var_offsets.deinit();
+
+        var given_pokemons_to_resolve = std.AutoArrayHashMap(usize, *lu16).init(allocator);
+        defer given_pokemons_to_resolve.deinit();
 
         for (scripts.fat) |fat| {
             const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.shrinkRetainingCapacity(0);
+            defer set_var_offsets.shrinkRetainingCapacity(0);
+            defer given_pokemons_to_resolve.shrinkRetainingCapacity(0);
 
-            for (script.getScriptOffsets(script_data)) |relative_offset, i| {
-                const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
-                if (@intCast(isize, script_data.len) < offset)
-                    continue;
-                if (offset < 0)
+            for (script.getScriptOffsets(script_data)) |relative, i| {
+                const position = @intCast(isize, i + 1) * @sizeOf(lu32);
+                const offset = math.cast(usize, relative.value() + position) catch continue;
+                if (script_data.len < offset)
                     continue;
                 try script_offsets.append(offset);
             }
 
-            // The variable 0x8008 is the variables that stores items given
-            // from Pokéballs.
-            var var_800C: ?*lu16 = null;
-
             var offset_i: usize = 0;
             while (offset_i < script_offsets.items.len) : (offset_i += 1) {
                 const offset = script_offsets.items[offset_i];
-                if (@intCast(isize, script_data.len) < offset)
-                    continue;
-                if (offset < 0)
-                    continue;
+                var command_offset = offset;
+                var decoder = script.CommandDecoder{
+                    .bytes = script_data,
+                    .i = offset,
+                };
+                while (decoder.next() catch continue) |command| : (command_offset = decoder.i) {
+                    switch (command.toZigUnion()) {
+                        .wild_battle => |battle| try static_pokemons.append(.{
+                            .species = &battle.species,
+                            .level = &battle.level,
+                        }),
+                        .wild_battle_store_result => |battle| try static_pokemons.append(.{
+                            .species = &battle.species,
+                            .level = &battle.level,
+                        }),
+                        .give_pokemon_1 => |given| if (given.species.value() & 0x8000 == 0) {
+                            try given_pokemons.append(.{
+                                .species = &given.species,
+                                .level = &given.level,
+                            });
+                        } else {
+                            try given_pokemons_to_resolve.put(
+                                given.species.value(),
+                                &given.level,
+                            );
+                        },
+                        .give_pokemon_2 => |given| if (given.species.value() & 0x8000 == 0) {
+                            try given_pokemons.append(.{
+                                .species = &given.species,
+                                .level = &given.level,
+                            });
+                        } else {
+                            try given_pokemons_to_resolve.put(
+                                given.species.value(),
+                                &given.level,
+                            );
+                        },
+                        .give_pokemon_4 => |given| if (given.species.value() & 0x8000 == 0) {
+                            try given_pokemons.append(.{
+                                .species = &given.species,
+                                .level = &given.level,
+                            });
+                        } else {
+                            try given_pokemons_to_resolve.put(
+                                given.species.value(),
+                                &given.level,
+                            );
+                        },
+                        .set_var_eq_val,
+                        .set_var_2a,
+                        => try set_var_offsets.append(command_offset),
+                        .jump, .@"if", .call_routine => {
+                            const off = switch (command.toZigUnion()) {
+                                .jump => |jump| jump.offset.value(),
+                                .@"if" => |if_| if_.offset.value(),
+                                .call_routine => |call| call.offset.value(),
+                                else => unreachable,
+                            };
+                            if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
+                                if (loc < script_data.len and
+                                    mem.indexOfScalar(usize, script_offsets.items, loc) == null)
+                                    try script_offsets.append(loc);
+                            } else |_| {}
+                        },
+                        else => {},
+                    }
+                }
+            }
 
+            for (set_var_offsets.items) |offset| {
                 var decoder = script.CommandDecoder{
                     .bytes = script_data,
                     .i = @intCast(usize, offset),
                 };
-                while (decoder.next() catch continue) |command| {
-                    // If we hit var 0x800C, the var_800C_tmp will be set and
-                    // var_800C will become var_800C_tmp. Then the next iteration
-                    // of this loop will set var_8008 to null again. This allows us
-                    // to store this state for only the next iteration of the loop.
-                    var var_800C_tmp: ?*lu16 = null;
-                    defer var_800C = var_800C_tmp;
 
-                    switch (command.tag) {
-                        .wild_battle => try static_pokemons.append(.{
-                            .species = &command.data().wild_battle.species,
-                            .level = &command.data().wild_battle.level,
-                        }),
-                        .wild_battle_store_result => try static_pokemons.append(.{
-                            .species = &command.data().wild_battle_store_result.species,
-                            .level = &command.data().wild_battle_store_result.level,
-                        }),
-                        .give_pokemon_1 => try given_pokemons.append(.{
-                            .species = &command.data().give_pokemon_1.species,
-                            .level = &command.data().give_pokemon_1.level,
-                        }),
-                        .give_pokemon_2 => try given_pokemons.append(.{
-                            .species = &command.data().give_pokemon_2.species,
-                            .level = &command.data().give_pokemon_2.level,
-                        }),
-                        .give_pokemon_4 => try given_pokemons.append(.{
-                            .species = &command.data().give_pokemon_4.species,
-                            .level = &command.data().give_pokemon_4.level,
-                        }),
+                const first = (decoder.next() catch unreachable).?;
+                switch (first.toZigUnion()) {
+                    .set_var_eq_val => |set| if (given_pokemons_to_resolve.get(set.container.value())) |level| {
+                        try given_pokemons.append(.{
+                            .species = &set.value,
+                            .level = level,
+                        });
+                    } else {
+                        const item = set;
+                        const amount = script.expectNext(&decoder, .set_var_eq_val) orelse continue;
+                        _ = script.expectNext(&decoder, .call_routine) orelse continue;
+                        _ = script.expectNext(&decoder, .wait_moment) orelse continue;
+                        _ = script.expectNext(&decoder, .unlock_all) orelse continue;
+                        _ = script.expectNext(&decoder, .end) orelse continue;
+                        if (item.container.value() != 32780 or
+                            amount.data().set_var_eq_val.container.value() != 32781)
+                            continue;
 
-                        // In scripts, field items are two set_var_eq_val commands
-                        // followed by a jump to the code that gives this item:
-                        //   set_var_eq_val 0x800C // Item given
-                        //   set_var_eq_val 0x800D // Amount of items
-                        //   jump ???
-                        .set_var_eq_val => switch (command.data().set_var_eq_val.container.value()) {
-                            0x800C => var_800C_tmp = &command.data().set_var_eq_val.value,
-                            0x800D => if (var_800C) |item| {
-                                const amount = &command.data().set_var_eq_val.value;
-                                try pokeball_items.append(.{
-                                    .item = item,
-                                    .amount = amount,
-                                });
-                            },
-                            else => {},
-                        },
-                        .jump, .@"if", .call_routine => {
-                            const off = switch (command.tag) {
-                                .jump => command.data().jump.offset.value(),
-                                .@"if" => command.data().@"if".offset.value(),
-                                .call_routine => command.data().call_routine.offset.value(),
-                                else => unreachable,
-                            };
-                            const location = off + @intCast(isize, decoder.i);
-                            if (mem.indexOfScalar(isize, script_offsets.items, location) == null)
-                                try script_offsets.append(location);
-                        },
-                        else => {},
-                    }
+                        try pokeball_items.append(.{
+                            .item = &item.value,
+                            .amount = &amount.data().set_var_eq_val.value,
+                        });
+                    },
+                    .set_var_2a => |item| {
+                        const amount = script.expectNext(&decoder, .set_var_2a) orelse continue;
+                        const unknown = script.expectNext(&decoder, .set_var_2a) orelse continue;
+                        _ = script.expectNext(&decoder, .call_std) orelse continue;
+                        _ = script.expectNext(&decoder, .wait_moment) orelse continue;
+                        _ = script.expectNext(&decoder, .unlock_all) orelse continue;
+                        _ = script.expectNext(&decoder, .end) orelse continue;
+                        if (item.container.value() != 32768 or
+                            amount.data().set_var_2a.container.value() != 32769 or
+                            unknown.data().set_var_2a.container.value() != 32770)
+                            continue;
+
+                        try pokeball_items.append(.{
+                            .item = &item.value,
+                            .amount = &amount.data().set_var_2a.value,
+                        });
+                    },
+                    else => {},
                 }
             }
         }
