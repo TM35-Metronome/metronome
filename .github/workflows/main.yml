@@ -1,6 +1,8 @@
 name: CI
 on:
   push:
+    branches:
+      - master
   pull_request:
   schedule:
     - cron: '0 0 * * *'
@@ -10,6 +12,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+        release: [true, false]
+        step: [install, test]
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v2.4.0
@@ -18,9 +22,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1.3.0
         with:
           version: master
-      - run: zig build test
-      - run: zig build test -Drelease
-      - run: zig build
+      - run: zig build ${{matrix.step}} -Drelease=${{matrix.release}}
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -28,4 +30,4 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1.3.0
         with:
           version: master
-      - run: zig fmt --check .
+      - run: zig fmt --check src build.zig
