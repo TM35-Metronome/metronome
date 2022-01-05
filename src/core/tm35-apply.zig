@@ -1174,7 +1174,7 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try writer.print("{s}", .{util.escape.default.unescapeFmt(value)});
+    try util.escape.default.unescapeWrite(writer, value);
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)
@@ -1627,7 +1627,7 @@ fn applyGen5StringReplace(
     var buf: [1024]u8 = undefined;
     const writer = io.fixedBufferStream(&buf).writer();
     try writer.writeAll(before);
-    try writer.print("{s}", .{util.escape.default.unescapeFmt(replace_with)});
+    try util.escape.default.unescapeWrite(writer, replace_with);
     try writer.writeAll(after);
     _ = writer.write("\x00") catch undefined;
 
@@ -1649,7 +1649,7 @@ fn applyGen5String(strs: gen5.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try writer.print("{s}", .{util.escape.default.unescapeFmt(value)});
+    try util.escape.default.unescapeWrite(writer, value);
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)

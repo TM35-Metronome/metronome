@@ -60,7 +60,8 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
 
             if (args.flag("--version")) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-                try stdout.writer().print("{s}\n", .{Program.version});
+                try stdout.writer().writeAll(Program.version);
+                try stdout.writer().writeAll("\n");
                 try stdout.flush();
                 return;
             }
@@ -76,14 +77,13 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
         }
 
         fn usage(writer: anytype) !void {
-            try writer.print("Usage: {s} ", .{@typeName(Program)});
+            try writer.writeAll("Usage: ");
+            try writer.writeAll(@typeName(Program));
+            try writer.writeAll(" ");
             try clap.usage(writer, Program.params);
-            try writer.print(
-                \\
-                \\{s}
-                \\Options:
-                \\
-            , .{Program.description});
+            try writer.writeAll("\n");
+            try writer.writeAll(Program.description);
+            try writer.writeAll("\nOptions:\n");
             try clap.help(writer, Program.params);
         }
     }.main;
