@@ -83,12 +83,7 @@ const pkgs = [_]Pkg{
 pub fn build(b: *Builder) void {
     b.setPreferredReleaseMode(.ReleaseFast);
     const mode = b.standardReleaseOptions();
-    const target = b.standardTargetOptions(.{
-        .whitelist = &[_]Target{
-            Target.parse(.{ .arch_os_abi = "x86_64-linux-gnu" }) catch unreachable,
-            Target.parse(.{ .arch_os_abi = "x86_64-windows-gnu" }) catch unreachable,
-        },
-    });
+    const target = b.standardTargetOptions(.{});
 
     const strip = b.option(bool, "strip", "") orelse false;
 
@@ -123,12 +118,16 @@ pub fn build(b: *Builder) void {
             },
             .linux => {
                 exe.addIncludeDir("lib/nuklear/demo/x11_xft");
-                exe.addIncludeDir("/usr/include/freetype2");
-                exe.addIncludeDir("/usr/include/");
-                exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
+                exe.addSystemIncludeDir("/usr/include/freetype2");
+                exe.addSystemIncludeDir("/usr/include/");
+
+                exe.addLibPath("/usr/lib/");
+                exe.addLibPath("/usr/lib/x86_64-linux-gnu");
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("Xft");
+
+                exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
             },
             else => unreachable, // TODO: More os support
         }
@@ -138,7 +137,7 @@ pub fn build(b: *Builder) void {
         exe.addIncludeDir("src/gui/nuklear");
         exe.addCSourceFile("src/gui/nuklear/impl.c", lib_cflags);
         exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
-        exe.linkSystemLibrary("c");
+        exe.linkLibC();
         exe.linkSystemLibrary("m");
     }
 }
@@ -156,7 +155,7 @@ fn buildProgram(
     src: []const u8,
     opt: BuildProgramOptions,
 ) *LibExeObjStep {
-    const step = b.step(b.fmt("build-{s}", .{name}), "");
+    const step = b.step(name, "");
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
         exe.addPackage(pkg);
