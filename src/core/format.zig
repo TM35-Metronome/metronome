@@ -104,7 +104,7 @@ pub fn io(
         }
 
         // Ok, we are done deserializing this batch of input. We need to output all the
-        // lines that wasn't consumed and write the this to the writer.
+        // lines that wasn't consumed and write them to `writer`.
         if (first_none_consumed_line) |start| {
             const lines = parser.str[start..start_of_line];
             out.appendSliceAssumeCapacity(lines);
@@ -114,8 +114,8 @@ pub fn io(
         out.shrinkRetainingCapacity(0);
 
         // There is probably some leftover which wasn't part of a full line. Copy that to the
-        // start and make room for more data. Here we need to ensure that `out` at least as much
-        // capacity as `in`.
+        // start and make room for more data. Here we need to ensure that `out` has at least as
+        // much capacity as `in`.
         mem.copy(u8, in.items, in.items[start_of_line..]);
         in.shrinkRetainingCapacity(in.items.len - start_of_line);
         try in.ensureUnusedCapacity(util.io.bufsize);
