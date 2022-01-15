@@ -146,17 +146,9 @@ fn removeTradeEvolutions(program: *Program) void {
         .level_up_holding_item_during_daytime
     else
         trade_method_replace;
-    const trade_method_pokemon_replace: ?M = if (has_level_up_party)
-        .level_up_with_other_pokemon_in_party
-    else
-        trade_method_replace;
 
     const trade_param_replace: ?u16 = if (has_level_up) @as(usize, 36) else null;
     const trade_param_holding_replace: ?u16 = if (has_level_up_holding)
-        null
-    else
-        trade_param_replace;
-    const trade_param_pokemon_replace: ?u16 = if (has_level_up_party)
         null
     else
         trade_param_replace;
@@ -168,17 +160,13 @@ fn removeTradeEvolutions(program: *Program) void {
             const method = evo.method;
             const param = evo.param;
             switch (evo.method) {
-                .trade => {
+                .trade, .trade_with_pokemon => {
                     evo.method = trade_method_replace orelse method;
                     evo.param = trade_param_replace orelse param;
                 },
                 .trade_holding_item => {
                     evo.method = trade_method_holding_replace orelse method;
                     evo.param = trade_param_holding_replace orelse param;
-                },
-                .trade_with_pokemon => {
-                    evo.method = trade_method_pokemon_replace orelse method;
-                    evo.param = trade_param_pokemon_replace orelse param;
                 },
                 .attack_eql_defense,
                 .attack_gth_defense,
