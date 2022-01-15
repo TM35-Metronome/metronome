@@ -74,8 +74,7 @@ const extension = switch (builtin.target.os.tag) {
 const command_file_name = "commands";
 const default_commands =
     "tm35-rand-machines" ++ extension ++ "\n" ++
-    "tm35-rand-learned-moves" ++ extension ++ "\n" ++
-    "tm35-rand-stats" ++ extension ++ "\n" ++
+    "tm35-rand-pokemons" ++ extension ++ "\n" ++
     "tm35-rand-pokeball-items" ++ extension ++ "\n" ++
     "tm35-rand-parties" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++

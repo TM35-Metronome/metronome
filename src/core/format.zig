@@ -55,16 +55,20 @@ pub fn io(
     //   `in` and call `appendSliceAssumeCapacity` to avoid allocating in the hot loop.
     var in = std.ArrayList(u8).init(allocator);
     defer in.deinit();
-    var out = std.ArrayList(u8).init(allocator);
+    var out = std.ArrayList([]const u8).init(allocator);
     defer out.deinit();
 
     try in.ensureUnusedCapacity(util.io.bufsize);
-    try out.ensureUnusedCapacity(util.io.bufsize);
-    in.items.len = try reader.read(in.unusedCapacitySlice());
+
+    {
+        const in_slice = in.unusedCapacitySlice();
+        in.items.len = try reader.read(in_slice[0 .. in_slice.len - 1]);
+        in_slice[in.items.len] = 0;
+    }
 
     var first_none_consumed_line: ?usize = null;
     var start_of_line: usize = 0;
-    var parser = ston.Parser{ .str = in.items };
+    var parser = ston.Parser{ .str = in.items.ptr[0..in.items.len :0] };
     var des = ston.Deserializer(Game){ .parser = &parser };
     while (parser.str.len != 0) : (start_of_line = parser.i) {
         while (des.next()) |res| : (start_of_line = parser.i) {
@@ -78,7 +82,7 @@ pub fn io(
                     // to mem.copy which then causes us to hit a codepath that is really fast
                     // on a lot of data.
                     const lines = parser.str[start..start_of_line];
-                    out.appendSliceAssumeCapacity(lines);
+                    try out.append(lines);
                     first_none_consumed_line = null;
                 }
             } else |err| switch (err) {
@@ -107,10 +111,12 @@ pub fn io(
         // lines that wasn't consumed and write them to `writer`.
         if (first_none_consumed_line) |start| {
             const lines = parser.str[start..start_of_line];
-            out.appendSliceAssumeCapacity(lines);
+            try out.append(lines);
             first_none_consumed_line = null;
         }
-        try writer.writeAll(out.items);
+
+        for (out.items) |lines|
+            try writer.writeAll(lines);
         out.shrinkRetainingCapacity(0);
 
         // There is probably some leftover which wasn't part of a full line. Copy that to the
@@ -121,8 +127,10 @@ pub fn io(
         try in.ensureUnusedCapacity(util.io.bufsize);
         try out.ensureTotalCapacity(in.capacity);
 
-        const num = try reader.read(in.unusedCapacitySlice());
+        const in_slice = in.unusedCapacitySlice();
+        const num = try reader.read(in_slice[0 .. in_slice.len - 1]);
         in.items.len += num;
+
         if (num == 0 and in.items.len != 0) {
             // If get here, then the input did not have a terminating newline. In that case
             // the above parsing logic will never succeed. Let's append a newline here so that
@@ -130,7 +138,8 @@ pub fn io(
             in.appendAssumeCapacity('\n');
         }
 
-        parser = ston.Parser{ .str = in.items };
+        in.allocatedSlice()[in.items.len] = 0;
+        parser = ston.Parser{ .str = in.items.ptr[0..in.items.len :0] };
     }
 }
 

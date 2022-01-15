@@ -205,7 +205,7 @@ pub const Trainer = extern struct {
 pub const Move = extern struct {
     u8_0: u8,
     u8_1: u8,
-    category: common.MoveCategory,
+    category: Category,
     power: u8,
     type: u8,
     accuracy: u8,
@@ -219,6 +219,12 @@ pub const Move = extern struct {
     u8_13: u8,
     u8_14: u8,
     u8_15: u8,
+
+    pub const Category = enum(u8) {
+        physical = 0x00,
+        special = 0x01,
+        status = 0x02,
+    };
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);

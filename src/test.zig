@@ -10,7 +10,7 @@ test {
     _ = @import("other/tm35-generate-site.zig");
     _ = @import("other/tm35-misc.zig");
     _ = @import("other/tm35-no-trade-evolutions.zig");
-    _ = @import("randomizers/tm35-rand-learned-moves.zig");
+    _ = @import("randomizers/tm35-rand-pokemons.zig");
     _ = @import("randomizers/tm35-rand-machines.zig");
     _ = @import("randomizers/tm35-rand-names.zig");
     _ = @import("randomizers/tm35-rand-parties.zig");

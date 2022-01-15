@@ -67,7 +67,7 @@ pub const params = &[_]clap.Param(clap.Help){
 };
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const seed = try util.getSeed(args);
+    const seed = try util.args.seed(args);
     const excluded_moves_arg = args.options("--exclude");
     var excluded_moves = try std.ArrayList([]const u8).initCapacity(
         allocator,
@@ -309,7 +309,14 @@ const CollectedMachines = struct {
     }
 };
 
-fn collectMachines(in: []const u8) !CollectedMachines {
+fn runProgram(opt: util.testing.RunProgramOptions) !CollectedMachines {
+    const res = try util.testing.runProgram(Program, opt);
+    defer testing.allocator.free(res);
+
+    return try collectMachines(res);
+}
+
+fn collectMachines(in: [:0]const u8) !CollectedMachines {
     var res = CollectedMachines{
         .hms = CollectedMachinesSet.init(testing.allocator),
         .tms = CollectedMachinesSet.init(testing.allocator),
@@ -339,28 +346,25 @@ test {
     });
     defer testing.allocator.free(test_case);
 
-    var original_machines = try collectMachines(test_case);
-    defer original_machines.deinit();
+    var original = try collectMachines(test_case);
+    defer original.deinit();
 
     var seed: usize = 0;
     while (seed < number_of_seeds) : (seed += 1) {
         var buf: [20]u8 = undefined;
         const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
-        const res = try util.testing.runProgram(Program, .{
+        var res = try runProgram(.{
             .in = test_case,
             .args = &[_][]const u8{
                 "--exclude=struggle", "--exclude=surf", "--exclude=stomp",
                 seed_arg,
             },
         });
-        defer testing.allocator.free(res);
+        defer res.deinit();
 
-        var res_machines = try collectMachines(res);
-        defer res_machines.deinit();
-
-        try expectSameMachines(original_machines.hms, res_machines.hms);
-        try expectDifferentMachines(original_machines.tms, res_machines.tms);
-        try expectNoMachineBeing(res_machines.tms, &.{
+        try expectSameMachines(original.hms, res.hms);
+        try expectDifferentMachines(original.tms, res.tms);
+        try expectNoMachineBeing(res.tms, &.{
             23, // Stomp
             57, // Surf
             165, // Struggle
@@ -371,26 +375,23 @@ test {
     while (seed < number_of_seeds) : (seed += 1) {
         var buf: [20]u8 = undefined;
         const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
-        const res = try util.testing.runProgram(Program, .{
+        var res = try runProgram(.{
             .in = test_case,
             .args = &[_][]const u8{
                 "--exclude=struggle", "--exclude=surf", "--exclude=stomp",
                 seed_arg,             "--hms",
             },
         });
-        defer testing.allocator.free(res);
+        defer res.deinit();
 
-        var res_machines = try collectMachines(res);
-        defer res_machines.deinit();
-
-        try expectDifferentMachines(original_machines.hms, res_machines.hms);
-        try expectDifferentMachines(original_machines.tms, res_machines.tms);
-        try expectNoMachineBeing(res_machines.tms, &.{
+        try expectDifferentMachines(original.hms, res.hms);
+        try expectDifferentMachines(original.tms, res.tms);
+        try expectNoMachineBeing(res.tms, &.{
             23, // Stomp
             57, // Surf
             165, // Struggle
         });
-        try expectNoMachineBeing(res_machines.hms, &.{
+        try expectNoMachineBeing(res.hms, &.{
             23, // Stomp
             57, // Surf
             165, // Struggle

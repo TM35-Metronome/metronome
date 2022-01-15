@@ -35,7 +35,7 @@ pub const RunProgramOptions = struct {
     in: []const u8 = test_case,
 };
 
-pub fn runProgram(comptime Program: type, opt: RunProgramOptions) ![]const u8 {
+pub fn runProgram(comptime Program: type, opt: RunProgramOptions) ![:0]const u8 {
     var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena_state.deinit();
 
@@ -56,7 +56,7 @@ pub fn runProgram(comptime Program: type, opt: RunProgramOptions) ![]const u8 {
         StdIo.Writer,
         .{ .in = stdin.reader(), .out = stdout.writer() },
     );
-    return stdout.toOwnedSlice();
+    return stdout.toOwnedSliceSentinel(0);
 }
 
 pub const Context = struct {
@@ -92,7 +92,9 @@ pub const Pattern = struct {
     }
 
     fn findString(ctx: Context, haystack: []const u8, pos: usize) ?usize {
-        return mem.indexOfPos(u8, haystack, pos, ctx.toSlice(u8));
+        const slice = ctx.toSlice(u8);
+        const index = mem.indexOfPos(u8, haystack, pos, slice) orelse return null;
+        return index + slice.len;
     }
 
     pub fn glob(min: usize, max: usize, str: []const u8) Pattern {
@@ -109,19 +111,13 @@ pub const Pattern = struct {
         var it = mem.split(u8, haystack, "\n");
         it.index = pos;
 
-        var curr = it.index;
-        while (it.next()) |line| : (curr = it.index) {
+        while (it.next()) |line| {
             if (util.glob.match(glob_str, line))
-                return curr;
+                return it.index;
         }
 
         return null;
     }
-};
-
-pub const SeedRange = struct {
-    min: usize,
-    max: usize,
 };
 
 pub const FindMatchesOptions = struct {
@@ -137,10 +133,11 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
     const res = try runProgram(Program, .{ .args = opt.args, .in = opt.in });
     defer testing.allocator.free(res);
 
+    var fail: bool = false;
     for (opt.patterns) |pattern| {
         var i: usize = 0;
         var matches: usize = 0;
-        while (pattern.find(pattern.ctx, res, i)) |new_i| : (i = new_i + 1)
+        while (pattern.find(pattern.ctx, res, i)) |end| : (i = end)
             matches += 1;
 
         if (matches < pattern.min or pattern.max < matches) {
@@ -149,12 +146,15 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
                 pattern.max,
                 matches,
             });
-            return error.TestExpectedEqual;
+            fail = true;
         }
     }
+
+    if (fail)
+        return error.TestExpectedEqual;
 }
 
-pub fn filter(in: []const u8, globs: []const []const u8) ![]u8 {
+pub fn filter(in: []const u8, globs: []const []const u8) ![:0]u8 {
     var res = std.ArrayList(u8).init(testing.allocator);
     errdefer res.deinit();
 
@@ -169,5 +169,5 @@ pub fn filter(in: []const u8, globs: []const []const u8) ![]u8 {
         try res.append('\n');
     }
 
-    return res.toOwnedSlice();
+    return res.toOwnedSliceSentinel(0);
 }

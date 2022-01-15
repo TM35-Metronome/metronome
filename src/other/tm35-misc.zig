@@ -362,7 +362,7 @@ test {
         .patterns = &[_]Pattern{
             Pattern.glob(1, 1, ".static_pokemons[*].level=70"),
             Pattern.glob(3, 3, ".static_pokemons[*].level=68"),
-            Pattern.glob(7, 7, ".static_pokemons[*].level=65"),
+            Pattern.glob(10, 10, ".static_pokemons[*].level=65"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -371,7 +371,7 @@ test {
         .patterns = &[_]Pattern{
             Pattern.glob(1, 1, ".static_pokemons[*].level=35"),
             Pattern.glob(3, 3, ".static_pokemons[*].level=34"),
-            Pattern.glob(7, 7, ".static_pokemons[*].level=32"),
+            Pattern.glob(10, 10, ".static_pokemons[*].level=32"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{

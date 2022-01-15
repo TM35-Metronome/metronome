@@ -79,7 +79,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.getSeed(args),
+            .seed = try util.args.seed(args),
             .include_tms_hms = args.flag("--include-tms-hms"),
             .include_key_items = args.flag("--include-key-items"),
             .excluded_items = excluded_items.toOwnedSlice(),

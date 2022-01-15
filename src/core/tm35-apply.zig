@@ -765,7 +765,11 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .type => |_type| move.type = _type,
                 .accuracy => |accuracy| move.accuracy = accuracy,
                 .pp => |pp| move.pp = pp,
-                .category => |category| move.category = category,
+                .category => |category| move.category = switch (category) {
+                    .physical => .physical,
+                    .special => .special,
+                    .status => .status,
+                },
                 .effect,
                 .priority,
                 .target,
@@ -1435,7 +1439,11 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .pp => |pp| move.pp = pp,
                 .target => |target| move.target = target,
                 .priority => |priority| move.priority = priority,
-                .category => |category| move.category = category,
+                .category => |category| move.category = switch (category) {
+                    .physical => .physical,
+                    .special => .special,
+                    .status => .status,
+                },
             }
         },
         .abilities => |abilities| {

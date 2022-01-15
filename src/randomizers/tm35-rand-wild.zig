@@ -46,7 +46,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.getSeed(args),
+            .seed = try util.args.seed(args),
             .simular_total_stats = args.flag("--simular-total-stats"),
         },
     };

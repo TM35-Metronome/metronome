@@ -44,7 +44,7 @@ pub const params = &[_]clap.Param(clap.Help){
 };
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const seed = try util.getSeed(args);
+    const seed = try util.args.seed(args);
     return Program{
         .allocator = allocator,
         .seed = seed,

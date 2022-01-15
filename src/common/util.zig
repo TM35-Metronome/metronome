@@ -12,6 +12,7 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
+pub const args = @import("args.zig");
 pub const bit = @import("bit.zig");
 pub const escape = @import("escape.zig");
 pub const glob = @import("glob.zig");
@@ -26,14 +27,6 @@ test {
     std.testing.refAllDecls(@This());
 }
 
-pub fn getSeed(args: anytype) !u64 {
-    const seed = args.option("--seed") orelse return std.crypto.random.int(u64);
-    return fmt.parseUnsigned(u64, seed, 10) catch |err| {
-        log.err("'{s}' could not be parsed as a number to --seed: {}", .{ seed, err });
-        return error.InvalidSeed;
-    };
-}
-
 pub fn generateMain(comptime Program: type) fn () anyerror!void {
     return struct {
         fn main() anyerror!void {
@@ -43,7 +36,9 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
-            var args = clap.parse(clap.Help, Program.params, .{ .diagnostic = &diag }) catch |err| {
+            var arguments = clap.parse(clap.Help, Program.params, .{
+                .diagnostic = &diag,
+            }) catch |err| {
                 var stderr = std.io.bufferedWriter(std.io.getStdErr().writer());
                 diag.report(stderr.writer(), err) catch {};
                 usage(stderr.writer()) catch {};
@@ -51,14 +46,14 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
                 return error.InvalidArgument;
             };
 
-            if (args.flag("--help")) {
+            if (arguments.flag("--help")) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try usage(stdout.writer());
                 try stdout.flush();
                 return;
             }
 
-            if (args.flag("--version")) {
+            if (arguments.flag("--version")) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try stdout.writer().writeAll(Program.version);
                 try stdout.writer().writeAll("\n");
@@ -67,7 +62,7 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             }
 
             var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-            var program = try Program.init(arena.allocator(), args);
+            var program = try Program.init(arena.allocator(), arguments);
             try program.run(std.fs.File.Reader, @TypeOf(stdout.writer()), .{
                 .in = std.io.getStdIn().reader(),
                 .out = stdout.writer(),

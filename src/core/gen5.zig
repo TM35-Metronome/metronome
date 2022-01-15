@@ -158,7 +158,7 @@ pub const Trainer = extern struct {
 pub const Move = packed struct {
     type: u8,
     effect_category: u8,
-    category: common.MoveCategory,
+    category: Category,
     power: u8,
     accuracy: u8,
     pp: u8,
@@ -192,6 +192,12 @@ pub const Move = packed struct {
     padding1: [2]u8,
     flags: lu16,
     padding2: [2]u8,
+
+    pub const Category = enum(u8) {
+        status = 0x00,
+        physical = 0x01,
+        special = 0x02,
+    };
 
     comptime {
         debug.assert(@sizeOf(@This()) == 36);

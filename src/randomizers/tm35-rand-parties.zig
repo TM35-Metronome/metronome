@@ -148,7 +148,7 @@ pub const params = &[_]clap.Param(clap.Help){
 };
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const seed = try util.getSeed(args);
+    const seed = try util.args.seed(args);
     const abilities_arg = args.option("--abilities") orelse "random";
     const items_arg = args.option("--items") orelse "none";
     const moves_arg = args.option("--moves") orelse "none";
