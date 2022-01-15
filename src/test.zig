@@ -17,7 +17,6 @@ test {
     _ = @import("randomizers/tm35-rand-pokeball-items.zig");
     _ = @import("randomizers/tm35-rand-starters.zig");
     _ = @import("randomizers/tm35-rand-static.zig");
-    _ = @import("randomizers/tm35-rand-stats.zig");
     _ = @import("randomizers/tm35-rand-wild.zig");
     _ = @import("randomizers/tm35-random-stones.zig");
 }
