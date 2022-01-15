@@ -16,3 +16,8 @@ pub fn ItemResult(comptime Span: type) type {
     info.Pointer.size = .One;
     return @Type(info);
 }
+
+pub fn items(random: rand.Random, to_randomize: anytype, pick_from: anytype) void {
+    for (to_randomize) |*v|
+        v.* = item(random, pick_from).?.*;
+}

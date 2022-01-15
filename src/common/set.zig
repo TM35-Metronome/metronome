@@ -66,7 +66,9 @@ pub fn eql(a: anytype, b: anytype) bool {
 
     var it = a.iterator();
     while (it.next()) |entry| {
-        if (b.get(entry.key_ptr.*) == null)
+        const va = a.get(entry.key_ptr.*).?;
+        const vb = b.get(entry.key_ptr.*) orelse return false;
+        if (va != vb)
             return false;
     }
 

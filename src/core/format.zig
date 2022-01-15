@@ -263,14 +263,14 @@ pub const Pokemon = union(enum) {
     pokedex_entry: u16,
     growth_rate: GrowthRate,
     color: Color,
-    abilities: ston.Index(u8, u8),
-    egg_groups: ston.Index(u8, EggGroup),
-    evos: ston.Index(u8, Evolution),
-    hms: ston.Index(u8, bool),
+    egg_groups: ston.Index(u1, EggGroup),
+    types: ston.Index(u1, u8),
+    abilities: ston.Index(u2, u8),
+    hms: ston.Index(u7, bool),
+    tms: ston.Index(u7, bool),
     items: ston.Index(u8, u16),
+    evos: ston.Index(u8, Evolution),
     moves: ston.Index(u8, LevelUpMove),
-    tms: ston.Index(u8, bool),
-    types: ston.Index(u8, u8),
 };
 
 pub const Evolution = union(enum) {

@@ -23,13 +23,20 @@ const Program = @This();
 allocator: mem.Allocator,
 options: Options,
 first_evos: Set = Set{},
-pokemons: Pokemons = Pokemons{},
+types: Set = Set{},
+abilities: Set = Set{},
+items: Set = Set{},
 moves: Moves = Moves{},
+pokemons: Pokemons = Pokemons{},
 tms: Machines = Machines{},
 hms: Machines = Machines{},
 
 const Options = struct {
     seed: u64,
+
+    abilities: Method,
+    types: Method,
+    items: Method,
 
     stats: Method,
     same_total_stats: bool,
@@ -69,8 +76,20 @@ pub const params = &[_]clap.Param(clap.Help){
             "Output version information and exit.",
     ) catch unreachable,
     clap.parseParam(
+        "-a, --abilities <unchanged|random|random_follow_evos> " ++
+            "The method for which pokemon abilities will be randomized. (default: unchanged)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-i, --items <unchanged|random|random_follow_evos> " ++
+            "The method for which pokemon items will be randomized. (default: unchanged)",
+    ) catch unreachable,
+    clap.parseParam(
+        "-t, --types <unchanged|random|random_follow_evos> " ++
+            "The method for which pokemon types will be randomized. (default: unchanged)",
+    ) catch unreachable,
+    clap.parseParam(
         "-S, --stats <unchanged|random|random_follow_evos> " ++
-            "Output version information and exit. (default: unchanged)",
+            "The method for which pokemon stats will be randomized. (default: unchanged)",
     ) catch unreachable,
     clap.parseParam(
         "    --same-total-stats " ++
@@ -78,7 +97,8 @@ pub const params = &[_]clap.Param(clap.Help){
     ) catch unreachable,
     clap.parseParam(
         "-m, --machines <unchanged|random|random_follow_evos> " ++
-            "Output version information and exit. (default: unchanged)",
+            "The method for which pokemon machines learned (tms,hms) will be randomized. " ++
+            "(default: unchanged)",
     ) catch unreachable,
     clap.parseParam(
         "    --non-stab-machine-chance <FLOAT> " ++
@@ -101,6 +121,22 @@ pub const params = &[_]clap.Param(clap.Help){
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const options = Options{
         .seed = try util.args.seed(args),
+        .abilities = (try util.args.enumeration(
+            args,
+            "--abilities",
+            Method,
+        )) orelse Method.unchanged,
+        .types = (try util.args.enumeration(
+            args,
+            "--types",
+            Method,
+        )) orelse Method.unchanged,
+        .items = (try util.args.enumeration(
+            args,
+            "--items",
+            Method,
+        )) orelse Method.unchanged,
+
         .stats = (try util.args.enumeration(
             args,
             "--stats",
@@ -157,6 +193,8 @@ fn output(program: *Program, writer: anytype) !void {
         const species = program.pokemons.keys()[i];
         try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
             .types = pokemon.types,
+            .abilities = pokemon.abilities,
+            .items = pokemon.items,
         }) });
 
         var stat_it = pokemon.stats.iterator();
@@ -223,7 +261,13 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     pokemon.hms_learned.set(hms.index, hms.value);
                 },
                 .stats => |stats| pokemon.stats.put(stats, stats.value()),
-                .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
+                .types => |types| _ = try pokemon.types.put(allocator, types.index, types.value),
+                .items => |items| _ = try pokemon.items.put(allocator, items.index, items.value),
+                .abilities => |abilities| _ = try pokemon.abilities.put(
+                    allocator,
+                    abilities.index,
+                    abilities.value,
+                ),
                 .evos => |evos| switch (evos.value) {
                     .target => |target| _ = try pokemon.evos.put(allocator, evos.index, target),
                     .param => |param| _ = try pokemon.evo_params.put(
@@ -240,13 +284,11 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .catch_rate,
                 .base_exp_yield,
                 .ev_yield,
-                .items,
                 .gender_ratio,
                 .egg_cycles,
                 .base_friendship,
                 .growth_rate,
                 .egg_groups,
-                .abilities,
                 .color,
                 .moves,
                 .name,
@@ -280,6 +322,26 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             _ = try program.hms.put(allocator, hms.index, hms.value);
             return error.DidNotConsumeData;
         },
+        .types => |types| {
+            _ = try program.types.put(allocator, types.index, {});
+            return error.DidNotConsumeData;
+        },
+        .abilities => |abilities| {
+            // TODO: Ability 0 is invalid in games. Figure out a generic way of figuring this
+            //       out.
+            if (abilities.index != 0)
+                _ = try program.abilities.put(allocator, abilities.index, {});
+
+            return error.DidNotConsumeData;
+        },
+        .items => |items| {
+            // TODO: Item 0 is invalid in games. Figure out a generic way of figuring this
+            //       out.
+            if (items.index != 0)
+                _ = try program.items.put(allocator, items.index, {});
+
+            return error.DidNotConsumeData;
+        },
         else => return error.DidNotConsumeData,
     }
     unreachable;
@@ -287,6 +349,42 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const random = rand.DefaultPrng.init(program.options.seed).random();
+
+    switch (program.options.types) {
+        .unchanged => {},
+        .random => for (program.pokemons.values()) |*pokemon| {
+            util.random.items(random, pokemon.types.values(), program.types.keys());
+        },
+        .random_follow_evos => for (program.first_evos.keys()) |species| {
+            const pokemon = program.pokemons.getPtr(species).?;
+            util.random.items(random, pokemon.types.values(), program.types.keys());
+            program.copyFieldsToEvolutions(pokemon.*, &.{"types"});
+        },
+    }
+
+    switch (program.options.abilities) {
+        .unchanged => {},
+        .random => for (program.pokemons.values()) |*pokemon| {
+            util.random.items(random, pokemon.abilities.values(), program.abilities.keys());
+        },
+        .random_follow_evos => for (program.first_evos.keys()) |species| {
+            const pokemon = program.pokemons.getPtr(species).?;
+            util.random.items(random, pokemon.abilities.values(), program.abilities.keys());
+            program.copyFieldsToEvolutions(pokemon.*, &.{"abilities"});
+        },
+    }
+
+    switch (program.options.items) {
+        .unchanged => {},
+        .random => for (program.pokemons.values()) |*pokemon| {
+            util.random.items(random, pokemon.items.values(), program.items.keys());
+        },
+        .random_follow_evos => for (program.first_evos.keys()) |species| {
+            const pokemon = program.pokemons.getPtr(species).?;
+            util.random.items(random, pokemon.items.values(), program.items.keys());
+            program.copyFieldsToEvolutions(pokemon.*, &.{"items"});
+        },
+    }
 
     switch (program.options.stats) {
         .unchanged => {},
@@ -305,13 +403,13 @@ fn randomize(program: *Program) !void {
             program.randomizeMachinesLearned(
                 random,
                 &pokemon.tms_learned,
-                pokemon.types,
+                pokemon.types.values(),
                 program.tms,
             );
             program.randomizeMachinesLearned(
                 random,
                 &pokemon.hms_learned,
-                pokemon.types,
+                pokemon.types.values(),
                 program.hms,
             );
         },
@@ -320,16 +418,16 @@ fn randomize(program: *Program) !void {
             program.randomizeMachinesLearned(
                 random,
                 &pokemon.tms_learned,
-                pokemon.types,
+                pokemon.types.values(),
                 program.tms,
             );
             program.randomizeMachinesLearned(
                 random,
                 &pokemon.hms_learned,
-                pokemon.types,
+                pokemon.types.values(),
                 program.hms,
             );
-            program.copyMachinesToEvolutions(pokemon.*);
+            program.copyFieldsToEvolutions(pokemon.*, &.{ "hms_learned", "tms_learned" });
         },
     }
 }
@@ -338,7 +436,7 @@ fn randomizeMachinesLearned(
     program: *Program,
     random: rand.Random,
     learned: *MachinesLearned,
-    pokemon_types: Set,
+    pokemon_types: []const u16,
     machines: Machines,
 ) void {
     var i: usize = 0;
@@ -349,7 +447,7 @@ fn randomizeMachinesLearned(
             const move = program.moves.get(move_id) orelse break :blk no_stab_chance;
             if (move.category == .status and !program.options.status_moves_are_stab)
                 break :blk no_stab_chance;
-            if (pokemon_types.get(move.type) == null)
+            if (mem.indexOfScalar(u16, pokemon_types, move.type) == null)
                 break :blk no_stab_chance;
 
             break :blk program.options.chance_to_learn_stab_machine;
@@ -359,12 +457,16 @@ fn randomizeMachinesLearned(
     }
 }
 
-fn copyMachinesToEvolutions(program: *Program, pokemon: Pokemon) void {
+fn copyFieldsToEvolutions(
+    program: *Program,
+    pokemon: Pokemon,
+    comptime fields: []const []const u8,
+) void {
     for (pokemon.evos.values()) |evo_species| {
         const evo = program.pokemons.getPtr(evo_species).?;
-        evo.tms_learned = pokemon.tms_learned;
-        evo.hms_learned = pokemon.hms_learned;
-        program.copyMachinesToEvolutions(evo.*);
+        inline for (fields) |field|
+            @field(evo, field) = @field(pokemon, field);
+        program.copyFieldsToEvolutions(evo.*, fields);
     }
 }
 
@@ -435,16 +537,19 @@ const EvoMethods = std.AutoArrayHashMapUnmanaged(u8, format.Evolution.Method);
 const EvoParams = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Evos = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
+const Map = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
-const MachinesLearned = std.PackedIntArray(bool, math.maxInt(u8) + 1);
+const MachinesLearned = std.PackedIntArray(bool, math.maxInt(u7) + 1);
 const Stats = std.EnumMap(meta.Tag(format.Stats(u8)), u8);
 
 const Pokemon = struct {
     stats: Stats = Stats{},
-    types: Set = Set{},
+    types: Map = Map{},
+    abilities: Map = Map{},
+    items: Map = Map{},
     tms_learned: MachinesLearned = mem.zeroes(MachinesLearned),
     tms_occupied: MachinesLearned = mem.zeroes(MachinesLearned),
     hms_learned: MachinesLearned = mem.zeroes(MachinesLearned),
@@ -529,6 +634,16 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
     }
 }
 
+fn expectPokemonMapFieldFollowEvo(program: Program, comptime field: []const u8) !void {
+    const pokemons = program.pokemons.values();
+    for (pokemons) |*pokemon| {
+        for (pokemon.evos.values()) |species| {
+            const evo = program.pokemons.getPtr(species).?;
+            try util.set.expectEqual(@field(pokemon, field), @field(evo, field));
+        }
+    }
+}
+
 fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
     const old_keys = old_prog.pokemons.keys();
     const new_keys = new_prog.pokemons.keys();
@@ -568,7 +683,6 @@ test "stats" {
         .in = test_case,
         .args = &[_][]const u8{"--stats=random"},
         .patterns = &[_]Pattern{
-            Pattern.glob(963, 963, ".pokemons[*].evos[*].*"),
             Pattern.glob(710, 710, ".pokemons[*].stats.hp=*"),
             Pattern.glob(710, 710, ".pokemons[*].stats.attack=*"),
             Pattern.glob(710, 710, ".pokemons[*].stats.defense=*"),
@@ -630,7 +744,6 @@ test "machines" {
         .in = test_case,
         .args = &[_][]const u8{},
         .patterns = &[_]Pattern{
-            Pattern.glob(963, 963, ".pokemons[*].evos[*].*"),
             Pattern.glob(67450, 67450, ".pokemons[*].tms[*]=*"),
             Pattern.glob(4260, 4260, ".pokemons[*].hms[*]=*"),
         },
@@ -844,4 +957,100 @@ test "machines" {
             Pattern.glob(4260, 4260, ".pokemons[*].hms[*]=false"),
         },
     });
+}
+
+test "types" {
+    const test_case = try util.testing.filter(util.testing.test_case, &.{
+        ".pokemons[*].types[*]=*",
+        ".pokemons[*].evos[*].*",
+        ".types[*].name=*",
+    });
+    defer testing.allocator.free(test_case);
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
+        .args = &[_][]const u8{"--types=random"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(1420, 1420, ".pokemons[*].types[*]=*"),
+        },
+    });
+
+    var seed: usize = 0;
+    while (seed < number_of_seeds) : (seed += 1) {
+        var buf: [20]u8 = undefined;
+        const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
+
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const data = try runProgram(arena.allocator(), .{
+            .in = test_case,
+            .args = &[_][]const u8{ "--types=random_follow_evos", seed_arg },
+        });
+        try expectPokemonMapFieldFollowEvo(data, "types");
+    }
+}
+
+test "abilities" {
+    const test_case = try util.testing.filter(util.testing.test_case, &.{
+        ".pokemons[*].abilities[*]=*",
+        ".pokemons[*].evos[*].*",
+        ".abilities[*].name=*",
+    });
+    defer testing.allocator.free(test_case);
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
+        .args = &[_][]const u8{"--abilities=random"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(2130, 2130, ".pokemons[*].abilities[*]=*"),
+        },
+    });
+
+    var seed: usize = 0;
+    while (seed < number_of_seeds) : (seed += 1) {
+        var buf: [20]u8 = undefined;
+        const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
+
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const data = try runProgram(arena.allocator(), .{
+            .in = test_case,
+            .args = &[_][]const u8{ "--abilities=random_follow_evos", seed_arg },
+        });
+        try expectPokemonMapFieldFollowEvo(data, "abilities");
+    }
+}
+
+test "items" {
+    const test_case = try util.testing.filter(util.testing.test_case, &.{
+        ".pokemons[*].items[*]=*",
+        ".pokemons[*].evos[*].*",
+        ".items[*].name=*",
+    });
+    defer testing.allocator.free(test_case);
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
+        .args = &[_][]const u8{"--items=random"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(2130, 2130, ".pokemons[*].items[*]=*"),
+        },
+    });
+
+    var seed: usize = 0;
+    while (seed < number_of_seeds) : (seed += 1) {
+        var buf: [20]u8 = undefined;
+        const seed_arg = std.fmt.bufPrint(&buf, "--seed={}", .{seed}) catch unreachable;
+
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const data = try runProgram(arena.allocator(), .{
+            .in = test_case,
+            .args = &[_][]const u8{ "--items=random_follow_evos", seed_arg },
+        });
+        try expectPokemonMapFieldFollowEvo(data, "items");
+    }
 }
