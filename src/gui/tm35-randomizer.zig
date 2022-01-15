@@ -463,7 +463,7 @@ pub fn drawOptions(
 }
 
 pub fn drawOptionsLayout(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
-    const width = 145;
+    const width = 185;
     c.nk_layout_row_template_begin(ctx, 0);
     c.nk_layout_row_template_push_static(ctx, width);
     c.nk_layout_row_template_push_dynamic(ctx);

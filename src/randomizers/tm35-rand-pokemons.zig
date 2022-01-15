@@ -69,7 +69,7 @@ pub const params = &[_]clap.Param(clap.Help){
             "Output version information and exit.",
     ) catch unreachable,
     clap.parseParam(
-        "-S, --stats <unchanged,random,random_follow_evos> " ++
+        "-S, --stats <unchanged|random|random_follow_evos> " ++
             "Output version information and exit. (default: unchanged)",
     ) catch unreachable,
     clap.parseParam(
@@ -77,16 +77,16 @@ pub const params = &[_]clap.Param(clap.Help){
             "Pokémons will have the same total stats after randomization.",
     ) catch unreachable,
     clap.parseParam(
-        "-m, --machines <unchanged,random,random_follow_evos> " ++
+        "-m, --machines <unchanged|random|random_follow_evos> " ++
             "Output version information and exit. (default: unchanged)",
     ) catch unreachable,
     clap.parseParam(
-        "    --chance-to-learn-non-stab-machine <FLOAT> " ++
+        "    --non-stab-machine-chance <FLOAT> " ++
             "The chance a pokemon can learn a machine providing a non stab move when " ++
             "randomizing machines. (default: 0.5)",
     ) catch unreachable,
     clap.parseParam(
-        "    --chance-to-learn-stab-machine <FLOAT> " ++
+        "    --stab-machine-chance <FLOAT> " ++
             "The chance a pokemon can learn a machine providing a stab move when randomizing " ++
             "machines. (default: 0.5)",
     ) catch unreachable,
@@ -115,12 +115,12 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         )) orelse Method.unchanged,
         .chance_to_learn_non_stab_machine = (try util.args.float(
             args,
-            "--chance-to-learn-non-stab-machine",
+            "--non-stab-machine-chance",
             f64,
         )) orelse 0.5,
         .chance_to_learn_stab_machine = (try util.args.float(
             args,
-            "--chance-to-learn-stab-machine",
+            "--stab-machine-chance",
             f64,
         )) orelse 0.5,
 
@@ -638,8 +638,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random",                      "--chance-to-learn-stab-machine=1.0",
-            "--chance-to-learn-non-stab-machine=1.0",
+            "--machines=random",             "--stab-machine-chance=1.0",
+            "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(67450, 67450, ".pokemons[*].tms[*]=true"),
@@ -651,8 +651,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random",
-            "--chance-to-learn-stab-machine=1.0", "--chance-to-learn-non-stab-machine=1.0",
+            "--status-moves-are-stab",   "--machines=random",
+            "--stab-machine-chance=1.0", "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(67450, 67450, ".pokemons[*].tms[*]=true"),
@@ -664,8 +664,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random",                      "--chance-to-learn-stab-machine=1.0",
-            "--chance-to-learn-non-stab-machine=0.0",
+            "--machines=random",             "--stab-machine-chance=1.0",
+            "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(4146, 4146, ".pokemons[*].tms[*]=true"),
@@ -677,8 +677,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random",
-            "--chance-to-learn-stab-machine=1.0", "--chance-to-learn-non-stab-machine=0.0",
+            "--status-moves-are-stab",   "--machines=random",
+            "--stab-machine-chance=1.0", "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(6612, 6612, ".pokemons[*].tms[*]=true"),
@@ -690,8 +690,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random",                      "--chance-to-learn-stab-machine=0.0",
-            "--chance-to-learn-non-stab-machine=1.0",
+            "--machines=random",             "--stab-machine-chance=0.0",
+            "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(63304, 63304, ".pokemons[*].tms[*]=true"),
@@ -703,8 +703,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random",
-            "--chance-to-learn-stab-machine=0.0", "--chance-to-learn-non-stab-machine=1.0",
+            "--status-moves-are-stab",   "--machines=random",
+            "--stab-machine-chance=0.0", "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(60838, 60838, ".pokemons[*].tms[*]=true"),
@@ -716,8 +716,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random",                      "--chance-to-learn-stab-machine=0.0",
-            "--chance-to-learn-non-stab-machine=0.0",
+            "--machines=random",             "--stab-machine-chance=0.0",
+            "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(0, 0, ".pokemons[*].tms[*]=true"),
@@ -729,8 +729,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random",
-            "--chance-to-learn-stab-machine=0.0", "--chance-to-learn-non-stab-machine=0.0",
+            "--status-moves-are-stab",   "--machines=random",
+            "--stab-machine-chance=0.0", "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(0, 0, ".pokemons[*].tms[*]=true"),
@@ -743,8 +743,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random_follow_evos",          "--chance-to-learn-stab-machine=1.0",
-            "--chance-to-learn-non-stab-machine=1.0",
+            "--machines=random_follow_evos", "--stab-machine-chance=1.0",
+            "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(67450, 67450, ".pokemons[*].tms[*]=true"),
@@ -756,8 +756,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random_follow_evos",
-            "--chance-to-learn-stab-machine=1.0", "--chance-to-learn-non-stab-machine=1.0",
+            "--status-moves-are-stab",   "--machines=random_follow_evos",
+            "--stab-machine-chance=1.0", "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(67450, 67450, ".pokemons[*].tms[*]=true"),
@@ -769,8 +769,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random_follow_evos",          "--chance-to-learn-stab-machine=1.0",
-            "--chance-to-learn-non-stab-machine=0.0",
+            "--machines=random_follow_evos", "--stab-machine-chance=1.0",
+            "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(4078, 4078, ".pokemons[*].tms[*]=true"),
@@ -782,8 +782,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random_follow_evos",
-            "--chance-to-learn-stab-machine=1.0", "--chance-to-learn-non-stab-machine=0.0",
+            "--status-moves-are-stab",   "--machines=random_follow_evos",
+            "--stab-machine-chance=1.0", "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(6587, 6587, ".pokemons[*].tms[*]=true"),
@@ -795,8 +795,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random_follow_evos",          "--chance-to-learn-stab-machine=0.0",
-            "--chance-to-learn-non-stab-machine=1.0",
+            "--machines=random_follow_evos", "--stab-machine-chance=0.0",
+            "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(63372, 63372, ".pokemons[*].tms[*]=true"),
@@ -808,8 +808,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random_follow_evos",
-            "--chance-to-learn-stab-machine=0.0", "--chance-to-learn-non-stab-machine=1.0",
+            "--status-moves-are-stab",   "--machines=random_follow_evos",
+            "--stab-machine-chance=0.0", "--non-stab-machine-chance=1.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(60863, 60863, ".pokemons[*].tms[*]=true"),
@@ -821,8 +821,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--machines=random_follow_evos",          "--chance-to-learn-stab-machine=0.0",
-            "--chance-to-learn-non-stab-machine=0.0",
+            "--machines=random_follow_evos", "--stab-machine-chance=0.0",
+            "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(0, 0, ".pokemons[*].tms[*]=true"),
@@ -834,8 +834,8 @@ test "machines" {
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{
-            "--status-moves-are-stab",            "--machines=random_follow_evos",
-            "--chance-to-learn-stab-machine=0.0", "--chance-to-learn-non-stab-machine=0.0",
+            "--status-moves-are-stab",   "--machines=random_follow_evos",
+            "--stab-machine-chance=0.0", "--non-stab-machine-chance=0.0",
         },
         .patterns = &[_]Pattern{
             Pattern.glob(0, 0, ".pokemons[*].tms[*]=true"),
