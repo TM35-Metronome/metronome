@@ -258,7 +258,7 @@ test "tm35-no-trade-evolutions" {
         H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up", "36") ++
-            H.evo("3", "level_up_with_other_pokemon_in_party", "1") ++
+            H.evo("3", "level_up", "36") ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),
     );
 }

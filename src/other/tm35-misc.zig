@@ -360,7 +360,7 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--static-level-scaling=1.0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(1, 1, ".static_pokemons[*].level=70"),
+            Pattern.glob(4, 4, ".static_pokemons[*].level=70"),
             Pattern.glob(3, 3, ".static_pokemons[*].level=68"),
             Pattern.glob(10, 10, ".static_pokemons[*].level=65"),
         },
@@ -369,7 +369,7 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--static-level-scaling=0.5"},
         .patterns = &[_]Pattern{
-            Pattern.glob(1, 1, ".static_pokemons[*].level=35"),
+            Pattern.glob(4, 4, ".static_pokemons[*].level=35"),
             Pattern.glob(3, 3, ".static_pokemons[*].level=34"),
             Pattern.glob(10, 10, ".static_pokemons[*].level=32"),
         },
