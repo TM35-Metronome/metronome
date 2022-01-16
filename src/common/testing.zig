@@ -141,7 +141,7 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
             matches += 1;
 
         if (matches < pattern.min or pattern.max < matches) {
-            std.debug.print("expected between {} and {} matches, found {}\n", .{
+            std.debug.print("\nexpected between {} and {} matches, found {}", .{
                 pattern.min,
                 pattern.max,
                 matches,
@@ -150,8 +150,10 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
         }
     }
 
-    if (fail)
+    if (fail) {
+        std.debug.print("\n", .{});
         return error.TestExpectedEqual;
+    }
 }
 
 pub fn filter(in: []const u8, globs: []const []const u8) ![:0]u8 {
@@ -170,4 +172,14 @@ pub fn filter(in: []const u8, globs: []const []const u8) ![:0]u8 {
     }
 
     return res.toOwnedSliceSentinel(0);
+}
+
+pub fn boundPrint(
+    comptime bound: usize,
+    comptime format: []const u8,
+    args: anytype,
+) !std.BoundedArray(u8, bound) {
+    var res: std.BoundedArray(u8, bound) = undefined;
+    res.len = (try fmt.bufPrint(&res.buffer, format, args)).len;
+    return res;
 }

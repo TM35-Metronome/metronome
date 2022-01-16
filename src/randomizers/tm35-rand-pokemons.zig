@@ -121,46 +121,15 @@ pub const params = &[_]clap.Param(clap.Help){
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const options = Options{
         .seed = try util.args.seed(args),
-        .abilities = (try util.args.enumeration(
-            args,
-            "--abilities",
-            Method,
-        )) orelse Method.unchanged,
-        .types = (try util.args.enumeration(
-            args,
-            "--types",
-            Method,
-        )) orelse Method.unchanged,
-        .items = (try util.args.enumeration(
-            args,
-            "--items",
-            Method,
-        )) orelse Method.unchanged,
-
-        .stats = (try util.args.enumeration(
-            args,
-            "--stats",
-            Method,
-        )) orelse Method.unchanged,
         .same_total_stats = args.flag("--same-total-stats"),
-
-        .machines = (try util.args.enumeration(
-            args,
-            "--machines",
-            Method,
-        )) orelse Method.unchanged,
-        .chance_to_learn_non_stab_machine = (try util.args.float(
-            args,
-            "--non-stab-machine-chance",
-            f64,
-        )) orelse 0.5,
-        .chance_to_learn_stab_machine = (try util.args.float(
-            args,
-            "--stab-machine-chance",
-            f64,
-        )) orelse 0.5,
-
         .status_moves_are_stab = args.flag("--status-moves-are-stab"),
+        .abilities = (try util.args.enumeration(args, "--abilities", Method)) orelse .unchanged,
+        .types = (try util.args.enumeration(args, "--types", Method)) orelse .unchanged,
+        .items = (try util.args.enumeration(args, "--items", Method)) orelse .unchanged,
+        .stats = (try util.args.enumeration(args, "--stats", Method)) orelse .unchanged,
+        .machines = (try util.args.enumeration(args, "--machines", Method)) orelse .unchanged,
+        .chance_to_learn_non_stab_machine = (try util.args.float(args, "--non-stab-machine-chance", f64)) orelse 0.5,
+        .chance_to_learn_stab_machine = (try util.args.float(args, "--stab-machine-chance", f64)) orelse 0.5,
     };
     return Program{
         .allocator = allocator,

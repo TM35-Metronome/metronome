@@ -17,7 +17,7 @@ pub fn Fifo(comptime buffer_type: std.fifo.LinearFifoBufferType) type {
 /// Reads lines from `reader` using a `Fifo` for buffering.
 ///
 /// NOTE: using `readUntilDelimitorArrayList` over this function results in
-///       tm35-rand-parties to be around 2x slower. This function is therefor
+///       tm35-rand-trainers to be around 2x slower. This function is therefor
 ///       still better to use until zigs std gets a better `readUntilDelimitor`
 ///       implementation. Replacement code bellow:
 ///```

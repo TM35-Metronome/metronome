@@ -13,7 +13,7 @@ test {
     _ = @import("randomizers/tm35-rand-pokemons.zig");
     _ = @import("randomizers/tm35-rand-machines.zig");
     _ = @import("randomizers/tm35-rand-names.zig");
-    _ = @import("randomizers/tm35-rand-parties.zig");
+    _ = @import("randomizers/tm35-rand-trainers.zig");
     _ = @import("randomizers/tm35-rand-pokeball-items.zig");
     _ = @import("randomizers/tm35-rand-starters.zig");
     _ = @import("randomizers/tm35-rand-static.zig");

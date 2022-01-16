@@ -76,7 +76,7 @@ const default_commands =
     "tm35-rand-machines" ++ extension ++ "\n" ++
     "tm35-rand-pokemons" ++ extension ++ "\n" ++
     "tm35-rand-pokeball-items" ++ extension ++ "\n" ++
-    "tm35-rand-parties" ++ extension ++ "\n" ++
+    "tm35-rand-trainers" ++ extension ++ "\n" ++
     "tm35-rand-starters" ++ extension ++ "\n" ++
     "tm35-rand-static" ++ extension ++ "\n" ++
     "tm35-rand-wild" ++ extension ++ "\n" ++

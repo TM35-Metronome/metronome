@@ -22,7 +22,7 @@ const randomizer_exes = [_][]const u8{
     "tm35-rand-pokemons",
     "tm35-rand-machines",
     "tm35-rand-names",
-    "tm35-rand-parties",
+    "tm35-rand-trainers",
     "tm35-rand-pokeball-items",
     "tm35-rand-starters",
     "tm35-rand-static",

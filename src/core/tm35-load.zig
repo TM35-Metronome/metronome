@@ -445,10 +445,22 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                     .ability = member.base.gender_ability.ability,
                     .level = member.base.level,
                     .species = member.base.species,
-                    .item = member.item,
-                    .moves = member.moves,
                 }),
             }) });
+
+            if (trainer.party_type == .item or trainer.party_type == .both) {
+                try ston.serialize(writer, .{ .trainers = ston.index(i, .{
+                    .party = ston.index(j, .{ .item = member.item }),
+                }) });
+            }
+
+            if (trainer.party_type == .moves or trainer.party_type == .both) {
+                for (member.moves) |move, k| {
+                    try ston.serialize(writer, .{ .trainers = ston.index(i, .{ .party = ston.index(j, .{
+                        .moves = ston.index(k, move),
+                    }) }) });
+                }
+            }
         }
     }
 
@@ -797,10 +809,22 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
                     .ability = member.base.gender_ability.ability,
                     .level = member.base.level,
                     .species = member.base.species,
-                    .item = member.item,
-                    .moves = member.moves,
                 }),
             }) });
+
+            if (trainer.party_type == .item or trainer.party_type == .both) {
+                try ston.serialize(writer, .{ .trainers = ston.index(i, .{
+                    .party = ston.index(j, .{ .item = member.item }),
+                }) });
+            }
+
+            if (trainer.party_type == .moves or trainer.party_type == .both) {
+                for (member.moves) |move, k| {
+                    try ston.serialize(writer, .{ .trainers = ston.index(i, .{ .party = ston.index(j, .{
+                        .moves = ston.index(k, move),
+                    }) }) });
+                }
+            }
         }
     }
 
