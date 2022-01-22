@@ -11,6 +11,7 @@ const fmt = std.fmt;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
+const testing = std.testing;
 const unicode = std.unicode;
 
 const nds = rom.nds;
@@ -642,7 +643,8 @@ fn decrypt(data: []const lu16, out: anytype) !u16 {
     };
 
     const key = getKey(data);
-    const res = keyForI(key, data.len, 0);
+    const table = KeyTable.init(key);
+    const res = table.get(data.len, 0);
     const first = data[0].value() ^ res;
     const compressed = first == 0xF100;
     const start = @boolToInt(compressed);
@@ -650,7 +652,7 @@ fn decrypt(data: []const lu16, out: anytype) !u16 {
     var bits: u5 = 0;
     var container: u32 = 0;
     for (data[start..]) |c, i| {
-        const decoded = c.value() ^ keyForI(key, data.len, i + start);
+        const decoded = c.value() ^ table.get(data.len, i + start);
         if (compressed) {
             container |= @as(u32, decoded) << bits;
             bits += 16;
@@ -709,18 +711,59 @@ fn encrypt(data: []lu16, _key: u16) void {
     var key = _key;
     for (data) |*c| {
         c.* = lu16.init(c.value() ^ key);
-        key = ((key << 3) | (key >> 13)) & 0xffff;
+        key = (key << 3) | (key >> 13);
     }
 }
 
+const KeyTable = struct {
+    const table_size = 16;
+
+    table: [table_size]u16,
+    len: usize,
+
+    pub fn init(_key: u16) KeyTable {
+        var table: [table_size]u16 = undefined;
+        var key = _key;
+        for (table) |*entry, i| {
+            entry.* = key;
+            key = (key >> 3) | (key << 13);
+            if (key == _key)
+                return .{ .table = table, .len = i + 1 };
+        }
+
+        unreachable;
+    }
+
+    fn get(table: KeyTable, len: usize, i: usize) u16 {
+        return table.table[(len - (i + 1)) % table.len];
+    }
+};
+
+// This is the old correct version. We use this for testing the KeyTable
 fn keyForI(key: u16, len: usize, i: usize) u16 {
     const it = len - (i + 1);
-    var res: u32 = key;
+    var res: u16 = key;
 
     for (@as([*]void, undefined)[0..it]) |_|
-        res = (res >> 3) | (res << 13) & 0xffff;
+        res = (res >> 3) | (res << 13);
 
-    return @intCast(u16, res);
+    return res;
+}
+
+test "KeyTable" {
+    var j: usize = 0;
+    while (j <= math.maxInt(u16)) : (j += 1)
+        _ = KeyTable.init(@intCast(u16, j));
+
+    for ([_]u16{ 0xf0f0, 0x0f0f, 0xdead, 0xbeef }) |key| {
+        const table = KeyTable.init(key);
+        var len: usize = 0;
+        while (len < 40) : (len += 1) {
+            var i: usize = 0;
+            while (i < len) : (i += 1)
+                try testing.expectEqual(keyForI(key, len, i), table.get(len, i));
+        }
+    }
 }
 
 pub const StringTable = struct {
