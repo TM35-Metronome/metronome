@@ -162,10 +162,8 @@ pub fn filter(in: []const u8, globs: []const []const u8) ![:0]u8 {
 
     var it = mem.split(u8, in, "\n");
     while (it.next()) |line| {
-        for (globs) |glob| {
-            if (util.glob.match(glob, line))
-                break;
-        } else continue;
+        if (util.glob.matchesOneOf(line, globs) == null)
+            continue;
 
         try res.appendSlice(line);
         try res.append('\n');

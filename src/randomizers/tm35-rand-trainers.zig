@@ -30,6 +30,7 @@ options: Options,
 pokedex: Set = Set{},
 pokemons: Pokemons = Pokemons{},
 trainers: Trainers = Trainers{},
+trainer_names: TrainerNames = TrainerNames{},
 moves: Moves = Moves{},
 held_items: Set = Set{},
 
@@ -55,6 +56,8 @@ const Options = struct {
     party_pokemons: PartyPokemonsOption,
     stats: StatsOption,
     types: ThemeOption,
+    included_trainers: []const []const u8,
+    excluded_trainers: []const []const u8,
     excluded_pokemons: []const []const u8,
 };
 
@@ -152,7 +155,16 @@ pub const params = &[_]clap.Param(clap.Help){
             "Which ability each party member should have. (default: random)",
     ) catch unreachable,
     clap.parseParam(
-        "-e, --exclude <STRING>... " ++
+        "    --exclude-trainer <STRING>... " ++
+            "List of trainers to not change. Case insensitive. Supports wildcards like 'grunt*'.",
+    ) catch unreachable,
+    clap.parseParam(
+        "    --include-trainer <STRING>... " ++
+            "List of trainers to change, ignoring --exlude-trainer. Case insensitive. " ++
+            "Supports wildcards like 'grunt*'.",
+    ) catch unreachable,
+    clap.parseParam(
+        "    --exclude-pokemon <STRING>... " ++
             "List of pokemons to never pick. Case insensitive. Supports wildcards like 'nido*'.",
     ) catch unreachable,
     clap.parseParam(
@@ -162,11 +174,20 @@ pub const params = &[_]clap.Param(clap.Help){
 };
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const excluded_pokemons_arg = args.options("--exclude");
-    var excluded_pokemons = try std.ArrayList([]const u8)
-        .initCapacity(allocator, excluded_pokemons_arg.len);
-    for (excluded_pokemons_arg) |exclude|
-        excluded_pokemons.appendAssumeCapacity(try ascii.allocLowerString(allocator, exclude));
+    const excluded_pokemons_arg = args.options("--exclude-pokemon");
+    var excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
+    for (excluded_pokemons) |_, i|
+        excluded_pokemons[i] = try ascii.allocLowerString(allocator, excluded_pokemons_arg[i]);
+
+    const excluded_trainers_arg = args.options("--exclude-trainer");
+    var excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
+    for (excluded_trainers) |_, i|
+        excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
+
+    const included_trainers_arg = args.options("--include-trainer");
+    var included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
+    for (included_trainers) |_, i|
+        included_trainers[i] = try ascii.allocLowerString(allocator, included_trainers_arg[i]);
 
     const options = Options{
         .seed = try util.args.seed(args),
@@ -179,7 +200,9 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .held_items = (try util.args.enumeration(args, "--held-items", HeldItemOption)) orelse .unchanged,
         .stats = (try util.args.enumeration(args, "--stats", StatsOption)) orelse .random,
         .types = (try util.args.enumeration(args, "--types", ThemeOption)) orelse .random,
-        .excluded_pokemons = excluded_pokemons.toOwnedSlice(),
+        .excluded_pokemons = excluded_pokemons,
+        .included_trainers = included_trainers,
+        .excluded_trainers = excluded_trainers,
     };
 
     return Program{
@@ -295,12 +318,18 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                             moves.value,
                         ),
                     }
-                    return;
+                },
+                .name => |_name| {
+                    const name = try escape.default.unescapeAlloc(allocator, _name);
+                    for (name) |*c|
+                        c.* = ascii.toLower(c.*);
+
+                    _ = try program.trainer_names.getOrPutValue(allocator, trainers.index, name);
+                    return error.DidNotConsumeData;
                 },
                 .class,
                 .encounter_music,
                 .trainer_picture,
-                .name,
                 .items,
                 => return error.DidNotConsumeData,
             }
@@ -364,11 +393,19 @@ fn randomize(program: *Program) !void {
         return;
     }
 
-    for (program.trainers.values()) |*trainer| {
+    for (program.trainers.values()) |*trainer, i| {
         // Trainers with 0 party members are considered "invalid" trainers
         // and will not be randomized.
         if (trainer.party_size == 0)
             continue;
+
+        const key = program.trainers.keys()[i];
+        if (program.trainer_names.get(key)) |name| {
+            if (util.glob.matchesOneOf(name, program.options.included_trainers) == null and
+                util.glob.matchesOneOf(name, program.options.excluded_trainers) != null)
+                continue;
+        }
+
         try program.randomizeTrainer(trainer);
     }
 }
@@ -761,6 +798,7 @@ const Party = std.AutoArrayHashMapUnmanaged(u8, PartyMember);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const SpeciesBy = std.AutoArrayHashMapUnmanaged(u16, Set);
+const TrainerNames = std.AutoArrayHashMapUnmanaged(u16, []const u8);
 const Trainers = std.AutoArrayHashMapUnmanaged(u16, Trainer);
 
 fn pokedexPokemons(
@@ -772,17 +810,14 @@ fn pokedexPokemons(
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    outer: for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values()) |pokemon, i| {
         const species = pokemons.keys()[i];
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)
             continue;
-
-        for (excluded_pokemons) |glob| {
-            if (util.glob.match(glob, pokemon.name))
-                continue :outer;
-        }
+        if (util.glob.matchesOneOf(pokemon.name, excluded_pokemons)) |_|
+            continue;
 
         _ = try res.put(allocator, species, {});
     }
@@ -1091,8 +1126,8 @@ test {
         try util.testing.runProgramFindPatterns(Program, .{
             .in = test_case,
             .args = &[_][]const u8{
-                "--exclude=Gible",
-                "--exclude=Weedle",
+                "--exclude-pokemon=Gible",
+                "--exclude-pokemon=Weedle",
                 "--party-pokemons=randomize",
                 (try util.testing.boundPrint(16, "--seed={}", .{seed})).slice(),
             },

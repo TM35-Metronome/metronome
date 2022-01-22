@@ -319,7 +319,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 fn randomize(program: *Program) !void {
     const random = rand.DefaultPrng.init(program.options.seed).random();
 
-    switch (program.options.types) {
+    if (program.types.keys().len != 0) switch (program.options.types) {
         .unchanged => {},
         .random => for (program.pokemons.values()) |*pokemon| {
             util.random.items(random, pokemon.types.values(), program.types.keys());
@@ -329,9 +329,9 @@ fn randomize(program: *Program) !void {
             util.random.items(random, pokemon.types.values(), program.types.keys());
             program.copyFieldsToEvolutions(pokemon.*, &.{"types"});
         },
-    }
+    };
 
-    switch (program.options.abilities) {
+    if (program.abilities.keys().len != 0) switch (program.options.abilities) {
         .unchanged => {},
         .random => for (program.pokemons.values()) |*pokemon| {
             util.random.items(random, pokemon.abilities.values(), program.abilities.keys());
@@ -341,9 +341,9 @@ fn randomize(program: *Program) !void {
             util.random.items(random, pokemon.abilities.values(), program.abilities.keys());
             program.copyFieldsToEvolutions(pokemon.*, &.{"abilities"});
         },
-    }
+    };
 
-    switch (program.options.items) {
+    if (program.items.keys().len != 0) switch (program.options.items) {
         .unchanged => {},
         .random => for (program.pokemons.values()) |*pokemon| {
             util.random.items(random, pokemon.items.values(), program.items.keys());
@@ -353,7 +353,7 @@ fn randomize(program: *Program) !void {
             util.random.items(random, pokemon.items.values(), program.items.keys());
             program.copyFieldsToEvolutions(pokemon.*, &.{"items"});
         },
-    }
+    };
 
     switch (program.options.stats) {
         .unchanged => {},
@@ -938,10 +938,13 @@ test "types" {
 
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
+        .args = &[_][]const u8{"--types=unchanged"},
+        .patterns = &[_]Pattern{Pattern.glob(1420, 1420, ".pokemons[*].types[*]=*")},
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
         .args = &[_][]const u8{"--types=random"},
-        .patterns = &[_]Pattern{
-            Pattern.glob(1420, 1420, ".pokemons[*].types[*]=*"),
-        },
+        .patterns = &[_]Pattern{Pattern.glob(1420, 1420, ".pokemons[*].types[*]=*")},
     });
 
     var seed: usize = 0;
@@ -970,10 +973,13 @@ test "abilities" {
 
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
+        .args = &[_][]const u8{"--abilities=unchanged"},
+        .patterns = &[_]Pattern{Pattern.glob(2130, 2130, ".pokemons[*].abilities[*]=*")},
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
         .args = &[_][]const u8{"--abilities=random"},
-        .patterns = &[_]Pattern{
-            Pattern.glob(2130, 2130, ".pokemons[*].abilities[*]=*"),
-        },
+        .patterns = &[_]Pattern{Pattern.glob(2130, 2130, ".pokemons[*].abilities[*]=*")},
     });
 
     var seed: usize = 0;
@@ -1002,10 +1008,13 @@ test "items" {
 
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
+        .args = &[_][]const u8{"--items=unchanged"},
+        .patterns = &[_]Pattern{Pattern.glob(2130, 2130, ".pokemons[*].items[*]=*")},
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
         .args = &[_][]const u8{"--items=random"},
-        .patterns = &[_]Pattern{
-            Pattern.glob(2130, 2130, ".pokemons[*].items[*]=*"),
-        },
+        .patterns = &[_]Pattern{Pattern.glob(2130, 2130, ".pokemons[*].items[*]=*")},
     });
 
     var seed: usize = 0;

@@ -38,3 +38,12 @@ pub fn match(glob: []const u8, str: []const u8) bool {
 
     return mem.endsWith(u8, str[pos..], curr);
 }
+
+pub fn matchesOneOf(str: []const u8, globs: []const []const u8) ?usize {
+    for (globs) |glob, i| {
+        if (match(glob, str))
+            return i;
+    }
+
+    return null;
+}

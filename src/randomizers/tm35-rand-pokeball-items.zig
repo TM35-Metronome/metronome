@@ -210,11 +210,8 @@ fn getItems(
             if (item.pocket == pocket)
                 continue :outer;
         }
-
-        for (excluded_items) |glob| {
-            if (util.glob.match(glob, item.name))
-                continue :outer;
-        }
+        if (util.glob.matchesOneOf(item.name, excluded_items)) |_|
+            continue;
 
         _ = try res.put(allocator, item_key, {});
     }

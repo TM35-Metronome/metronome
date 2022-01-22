@@ -241,15 +241,12 @@ fn randomizeMachines(
 
 fn getMoves(program: Program) !Set {
     var res = Set{};
-    outer: for (program.moves.keys()) |move_id, i| {
+    for (program.moves.keys()) |move_id, i| {
         const move = program.moves.values()[i];
         if (move.pp == 0)
             continue;
-
-        for (program.options.excluded_moves) |glob| {
-            if (util.glob.match(glob, move.name))
-                continue :outer;
-        }
+        if (util.glob.matchesOneOf(move.name, program.options.excluded_moves)) |_|
+            continue;
 
         try res.putNoClobber(program.allocator, move_id, {});
     }

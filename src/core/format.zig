@@ -125,7 +125,6 @@ pub fn io(
         mem.copy(u8, in.items, in.items[start_of_line..]);
         in.shrinkRetainingCapacity(in.items.len - start_of_line);
         try in.ensureUnusedCapacity(util.io.bufsize);
-        try out.ensureTotalCapacity(in.capacity);
 
         const in_slice = in.unusedCapacitySlice();
         const num = try reader.read(in_slice[0 .. in_slice.len - 1]);
