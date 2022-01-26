@@ -122,10 +122,7 @@ pub fn main() anyerror!void {
     };
     defer exes.deinit();
 
-    var settings = Settings.init(allocator, exes) catch |err| blk: {
-        popups.err("Failed to create settings: {}", .{err});
-        break :blk Settings{ .arena = heap.ArenaAllocator.init(allocator) };
-    };
+    var settings = Settings{ .arena = heap.ArenaAllocator.init(allocator) };
     defer settings.deinit();
 
     var rom: ?Rom = null;
@@ -143,7 +140,7 @@ pub fn main() anyerror!void {
             c.nk_layout_row_template_push_static(ctx, 300);
             c.nk_layout_row_template_push_dynamic(ctx);
             c.nk_layout_row_template_end(ctx);
-            selected = drawCommands(ctx, exes, settings, selected);
+            selected = drawCommands(ctx, exes, &settings, selected);
             if (nk.nonPaddedGroupBegin(ctx, "opt_and_actions", c.NK_WINDOW_NO_SCROLLBAR)) {
                 defer nk.nonPaddedGroupEnd(ctx);
                 const action_group_height =
@@ -197,7 +194,7 @@ pub fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {
 pub fn drawCommands(
     ctx: *nk.Context,
     exes: Executables,
-    settings: Settings,
+    settings: *Settings,
     in_selected: usize,
 ) usize {
     var tmp_buf: [128]u8 = undefined;
@@ -218,40 +215,69 @@ pub fn drawCommands(
     if (nk.nonPaddedGroupBegin(ctx, "command-buttons", c.NK_WINDOW_NO_SCROLLBAR)) {
         defer nk.nonPaddedGroupEnd(ctx);
         c.nk_layout_row_dynamic(ctx, 0, 1);
-        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0) {
+        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_UP) != 0 and
+            settings.commands.items.len != 0)
+        {
             const before = selected -| 1;
-            mem.swap(usize, &settings.order[before], &settings.order[selected]);
+            mem.swap(
+                Settings.Command,
+                &settings.commands.items[before],
+                &settings.commands.items[selected],
+            );
             selected = before;
         }
-        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0) {
-            const after = math.min(selected + 1, settings.order.len -| 1);
-            mem.swap(usize, &settings.order[selected], &settings.order[after]);
+        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_TRIANGLE_DOWN) != 0 and
+            settings.commands.items.len != 0)
+        {
+            const after = math.min(selected + 1, settings.commands.items.len - 1);
+            mem.swap(
+                Settings.Command,
+                &settings.commands.items[selected],
+                &settings.commands.items[after],
+            );
             selected = after;
+        }
+        if (c.nk_button_symbol(ctx, c.NK_SYMBOL_MINUS) != 0 and
+            settings.commands.items.len != 0)
+        {
+            _ = settings.commands.orderedRemove(selected);
+            selected = math.min(selected, settings.commands.items.len -| 1);
         }
     }
 
     var list_view: c.nk_list_view = undefined;
-    if (c.nk_list_view_begin(ctx, &list_view, "command-list", c.NK_WINDOW_BORDER, 0, @intCast(c_int, exes.commands.len)) != 0) {
+    if (c.nk_list_view_begin(ctx, &list_view, "command-list", c.NK_WINDOW_BORDER, 0, @intCast(c_int, exes.commands.len + 1)) != 0) {
         defer c.nk_list_view_end(&list_view);
-        for (settings.order) |command_i, i| {
-            const command = exes.commands[command_i];
+        for (settings.commands.items) |setting, i| {
+            const command = exes.commands[setting.executable];
             if (i < @intCast(usize, list_view.begin))
                 continue;
             if (@intCast(usize, list_view.end) <= i)
                 break;
 
-            c.nk_layout_row_template_begin(ctx, 0);
-            c.nk_layout_row_template_push_static(ctx, ctx.style.font.*.height);
-            c.nk_layout_row_template_push_dynamic(ctx);
-            c.nk_layout_row_template_end(ctx);
-
-            const command_name = basenameNoExt(command.path);
-            const ui_name = toUserfriendly(&tmp_buf, command_name[0..math.min(command_name.len, tmp_buf.len)]);
-            settings.commands[command_i].enabled =
-                c.nk_check_label(ctx, "", @boolToInt(settings.commands[command_i].enabled)) != 0;
-
+            c.nk_layout_row_dynamic(ctx, 0, 1);
+            const ui_name = toUserfriendly(&tmp_buf, command.name());
             if (c.nk_select_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT, @boolToInt(i == selected)) != 0)
                 selected = i;
+        }
+
+        c.nk_layout_row_dynamic(ctx, 0, 1);
+        var bounds: c.struct_nk_rect = undefined;
+        c.nkWidgetBounds(ctx, &bounds);
+
+        if (c.nkComboBeginText(ctx, "Add Command", @intCast(c_int, "Add Command".len), &nk.vec2(bounds.w, 500)) != 0) {
+            c.nk_layout_row_dynamic(ctx, 0, 1);
+
+            for (exes.commands) |command, i| {
+                const command_name = toUserfriendly(&tmp_buf, command.name());
+                if (c.nk_combo_item_text(ctx, command_name.ptr, @intCast(c_int, command_name.len), c.NK_TEXT_LEFT) != 0) {
+                    // TODO: Handle memory error.
+                    const setting = settings.commands.addOne(settings.arena.allocator()) catch unreachable;
+                    setting.* = Settings.Command.init(settings.arena.allocator(), i, command) catch unreachable;
+                }
+            }
+
+            c.nk_combo_end(ctx);
         }
     }
     return selected;
@@ -282,9 +308,11 @@ pub fn drawOptions(
     defer c.nk_group_end(ctx);
     if (exes.commands.len == 0)
         return;
+    if (settings.commands.items.len == 0)
+        return;
 
-    const command = exes.commands[settings.order[selected]];
-    const setting = settings.commands[settings.order[selected]];
+    const setting = settings.commands.items[selected];
+    const command = exes.commands[setting.executable];
 
     var it = mem.split(u8, command.help, "\n");
     while (it.next()) |line_notrim| {
@@ -537,7 +565,7 @@ pub fn drawActions(
             const in_rom_path = in_rom.?.path.constSlice();
             const dirname = path.dirname(in_rom_path) orelse ".";
             const ext = path.extension(in_rom_path);
-            const in_name = basenameNoExt(in_rom_path);
+            const in_name = util.path.basenameNoExt(in_rom_path);
 
             var default_path = util.Path{ .buffer = undefined };
             default_path.appendSlice(dirname) catch {};
@@ -629,10 +657,14 @@ pub fn drawActions(
                 return rom;
             };
             defer file.close();
-            settings.load(exes, file.reader()) catch |err| {
+
+            const allocator = settings.arena.child_allocator;
+            const new_settings = Settings.load(allocator, exes, file.reader()) catch |err| {
                 popups.err("Failed to load from '{s}': {}", .{ selected_path.constSlice(), err });
                 return rom;
             };
+            settings.deinit();
+            settings.* = new_settings;
         },
         .save_settings => {
             const file = fs.cwd().createFile(selected_path.constSlice(), .{}) catch |err| {
@@ -889,11 +921,8 @@ fn outputScript(
     try esc.escapeWrite(writer, in);
     try writer.writeAll(quotes ++ " | ");
 
-    for (settings.order) |order| {
-        const command = exes.commands[order];
-        const setting = settings.commands[order];
-        if (!setting.enabled)
-            continue;
+    for (settings.commands.items) |setting| {
+        const command = exes.commands[setting.executable];
 
         try writer.writeAll(quotes);
         try esc.escapeWrite(writer, command.path);
@@ -1019,16 +1048,12 @@ fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
 const Settings = struct {
     arena: heap.ArenaAllocator,
 
-    // The order in which we call the commands. This is an array of indexes into
-    // exes.commands
-    order: []usize = &[_]usize{},
-
     /// The options for all commands in `exes.commands`.
-    commands: []Command = &[_]Command{},
+    commands: std.ArrayListUnmanaged(Command) = std.ArrayListUnmanaged(Command){},
 
     const Command = struct {
-        /// Is the command enabled, meaning should it run when we randomize?
-        enabled: bool,
+        /// Which executable does these settings belong to
+        executable: usize,
 
         /// For boolean options like `--enable` and `--enabled=true`
         flags: []bool,
@@ -1051,75 +1076,44 @@ const Settings = struct {
 
         /// For multi string options like `--exclude=a --exclude=b`. Stored as lines in a string
         multi_strings: []String,
+
+        fn init(allocator: mem.Allocator, exe_i: usize, exe: Executables.Command) !Command {
+            var setting = Command{
+                .executable = exe_i,
+                .flags = try allocator.alloc(bool, exe.flags.len),
+                .ints = try allocator.alloc(usize, exe.ints.len),
+                .floats = try allocator.alloc(f64, exe.floats.len),
+                .enums = try allocator.alloc(usize, exe.enums.len),
+                .strings = try allocator.alloc(String, exe.strings.len),
+                .files = try allocator.alloc(String, exe.files.len),
+                .multi_strings = try allocator.alloc(String, exe.multi_strings.len),
+            };
+            mem.set(bool, setting.flags, false);
+            mem.set(String, setting.multi_strings, .{});
+
+            for (setting.ints) |*int, j|
+                int.* = exe.ints[j].default;
+            for (setting.floats) |*float, j|
+                float.* = exe.floats[j].default;
+            for (setting.enums) |*enumeration, j|
+                enumeration.* = exe.enums[j].default;
+            for (setting.strings) |*string, j| {
+                string.* = .{};
+                try string.appendSlice(allocator, exe.strings[j].default);
+            }
+            for (setting.files) |*string, j| {
+                string.* = .{};
+                try string.appendSlice(allocator, exe.files[j].default);
+            }
+
+            return setting;
+        }
     };
 
     const String = std.ArrayListUnmanaged(u8);
 
-    fn init(allocator: mem.Allocator, exes: Executables) !Settings {
-        var res = Settings{ .arena = heap.ArenaAllocator.init(allocator) };
-        errdefer res.deinit();
-
-        const arena = res.arena.allocator();
-        res.order = try arena.alloc(usize, exes.commands.len);
-        res.commands = try arena.alloc(Command, exes.commands.len);
-
-        for (res.commands) |*command, i| {
-            const exe_command = exes.commands[i];
-            command.* = .{
-                .enabled = false,
-                .flags = try arena.alloc(bool, exe_command.flags.len),
-                .ints = try arena.alloc(usize, exe_command.ints.len),
-                .floats = try arena.alloc(f64, exe_command.floats.len),
-                .enums = try arena.alloc(usize, exe_command.enums.len),
-                .strings = try arena.alloc(String, exe_command.strings.len),
-                .files = try arena.alloc(String, exe_command.files.len),
-                .multi_strings = try arena.alloc(String, exe_command.multi_strings.len),
-            };
-
-            mem.set(String, command.strings, .{});
-            mem.set(String, command.files, .{});
-            mem.set(String, command.multi_strings, .{});
-        }
-
-        try res.reset(exes);
-        return res;
-    }
-
     fn deinit(settings: Settings) void {
         settings.arena.deinit();
-    }
-
-    fn reset(settings: *Settings, exes: Executables) !void {
-        for (settings.order) |*o, i|
-            o.* = i;
-
-        for (settings.commands) |*command, i| {
-            const exe_command = exes.commands[i];
-            mem.set(bool, command.flags, false);
-
-            for (command.ints) |*int, j|
-                int.* = exe_command.ints[j].default;
-            for (command.floats) |*float, j|
-                float.* = exe_command.floats[j].default;
-            for (command.enums) |*enumeration, j|
-                enumeration.* = exe_command.enums[j].default;
-            for (command.strings) |*string, j| {
-                string.shrinkRetainingCapacity(0);
-                try string.appendSlice(
-                    settings.arena.allocator(),
-                    exe_command.strings[j].default,
-                );
-            }
-            for (command.files) |*string, j| {
-                string.shrinkRetainingCapacity(0);
-                try string.appendSlice(
-                    settings.arena.allocator(),
-                    exe_command.files[j].default,
-                );
-            }
-            for (command.multi_strings) |*strings|
-                strings.shrinkRetainingCapacity(0);
-        }
     }
 
     const csv_escapes = escape.default_escapes ++ [_]escape.Escape{
@@ -1129,13 +1123,9 @@ const Settings = struct {
     const csv_escape = escape.generate(csv_escapes);
 
     fn save(settings: Settings, exes: Executables, writer: anytype) !void {
-        for (settings.order) |o| {
-            if (!settings.commands[o].enabled)
-                continue;
-
-            const command = exes.commands[o];
-            const setting = settings.commands[o];
-            try csv_escape.escapeWrite(writer, basenameNoExt(command.path));
+        for (settings.commands.items) |setting| {
+            const command = exes.commands[setting.executable];
+            try csv_escape.escapeWrite(writer, util.path.basenameNoExt(command.path));
             for (command.flags) |flag, i| {
                 if (!setting.flags[i])
                     continue;
@@ -1186,8 +1176,12 @@ const Settings = struct {
         }
     }
 
-    fn load(settings: *Settings, exes: Executables, reader: anytype) !void {
-        try settings.reset(exes);
+    fn load(allocator: mem.Allocator, exes: Executables, reader: anytype) !Settings {
+        var arena_state = heap.ArenaAllocator.init(allocator);
+        const arena = arena_state.allocator();
+        errdefer arena_state.deinit();
+
+        var settings = std.ArrayList(Command).init(arena);
 
         const EscapedSplitterArgIterator = struct {
             separator: escape.EscapedSplitter,
@@ -1200,23 +1194,17 @@ const Settings = struct {
             }
         };
 
-        var fifo = util.io.Fifo(.Dynamic).init(settings.arena.child_allocator);
+        var fifo = util.io.Fifo(.Dynamic).init(allocator);
         defer fifo.deinit();
 
-        var order_i: usize = 0;
         while (try util.io.readLine(reader, &fifo)) |line| {
             var separator = escape.splitEscaped(line, "\\", ",");
             const name = separator.next() orelse continue;
             const i = findCommandIndex(exes, name) orelse continue;
 
-            if (mem.indexOfScalar(usize, settings.order[0..order_i], i)) |_|
-                return error.DuplicateEntry;
-
             const command = exes.commands[i];
-            const setting = &settings.commands[i];
-            settings.order[order_i] = i;
-            setting.enabled = true;
-            order_i += 1;
+            const setting = try settings.addOne();
+            setting.* = try Command.init(arena, i, command);
 
             var args = EscapedSplitterArgIterator{ .separator = separator };
             var streaming_clap = clap.StreamingClap(clap.Help, EscapedSplitterArgIterator){
@@ -1244,32 +1232,28 @@ const Settings = struct {
                 } else if (findParam(command.strings, param_i)) |j| {
                     const entry = &setting.strings[j];
                     entry.shrinkRetainingCapacity(0);
-                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
+                    try entry.appendSlice(arena, arg.value.?);
                 } else if (findParam(command.files, param_i)) |j| {
                     const entry = &setting.files[j];
                     entry.shrinkRetainingCapacity(0);
-                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
+                    try entry.appendSlice(arena, arg.value.?);
                 } else if (findParam(command.multi_strings, param_i)) |j| {
                     const entry = &setting.multi_strings[j];
-                    try entry.appendSlice(settings.arena.allocator(), arg.value.?);
-                    try entry.append(settings.arena.allocator(), '\n');
+                    try entry.appendSlice(arena, arg.value.?);
+                    try entry.append(arena, '\n');
                 }
             }
         }
 
-        for (exes.commands) |_, i| {
-            if (mem.indexOfScalar(usize, settings.order[0..order_i], i)) |_|
-                continue;
-
-            settings.order[order_i] = i;
-            order_i += 1;
-        }
+        return Settings{
+            .arena = arena_state,
+            .commands = settings.moveToUnmanaged(),
+        };
     }
 
     fn findCommandIndex(e: Executables, name: []const u8) ?usize {
         for (e.commands) |command, i| {
-            const basename = basenameNoExt(command.path);
-            if (mem.eql(u8, basename, name))
+            if (mem.eql(u8, command.name(), name))
                 return i;
         }
 
@@ -1284,9 +1268,3 @@ const Settings = struct {
         return null;
     }
 };
-
-fn basenameNoExt(p: []const u8) []const u8 {
-    const basename = path.basename(p);
-    const ext = path.extension(basename);
-    return basename[0 .. basename.len - ext.len];
-}

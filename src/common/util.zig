@@ -158,6 +158,12 @@ pub const path = struct {
 
         return res;
     }
+
+    pub fn basenameNoExt(p: []const u8) []const u8 {
+        const basename = fs.path.basename(p);
+        const ext = fs.path.extension(basename);
+        return basename[0 .. basename.len - ext.len];
+    }
 };
 
 pub const dir = struct {

@@ -17,7 +17,7 @@ apply: util.Path = util.Path{ .buffer = undefined },
 identify: util.Path = util.Path{ .buffer = undefined },
 commands: []const Command = &[_]Command{},
 
-const Command = struct {
+pub const Command = struct {
     path: []const u8,
     help: []const u8,
 
@@ -63,6 +63,10 @@ const Command = struct {
     const MultiString = struct {
         i: usize,
     };
+
+    pub fn name(command: Command) []const u8 {
+        return util.path.basenameNoExt(command.path);
+    }
 };
 
 pub const program_name = "tm35-randomizer";
