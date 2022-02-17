@@ -1187,10 +1187,10 @@ const Settings = struct {
             separator: escape.EscapedSplitter,
             buf: [mem.page_size]u8 = undefined,
 
-            pub fn next(iter: *@This()) mem.Allocator.Error!?[]const u8 {
+            pub fn next(iter: *@This()) ?[]const u8 {
                 const n = iter.separator.next() orelse return null;
                 var fba = std.heap.FixedBufferAllocator.init(&iter.buf);
-                return try csv_escape.unescapeAlloc(fba.allocator(), n);
+                return csv_escape.unescapeAlloc(fba.allocator(), n) catch null;
             }
         };
 

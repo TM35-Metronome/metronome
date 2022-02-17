@@ -44,7 +44,6 @@ const gui_exes = [_][]const u8{
 const clap_pkg = Pkg{ .name = "clap", .path = .{ .path = "lib/zig-clap/clap.zig" } };
 const crc_pkg = Pkg{ .name = "crc", .path = .{ .path = "lib/zig-crc/crc.zig" } };
 const folders_pkg = Pkg{ .name = "folders", .path = .{ .path = "lib/known-folders/known-folders.zig" } };
-const mecha_pkg = Pkg{ .name = "mecha", .path = .{ .path = "lib/mecha/mecha.zig" } };
 const ston_pkg = Pkg{ .name = "ston", .path = .{ .path = "lib/ston/ston.zig" } };
 const ziter_pkg = Pkg{ .name = "ziter", .path = .{ .path = "lib/ziter/ziter.zig" } };
 
@@ -54,7 +53,6 @@ const util_pkg = Pkg{
     .dependencies = &[_]Pkg{
         clap_pkg,
         folders_pkg,
-        mecha_pkg,
     },
 };
 
@@ -62,7 +60,6 @@ const format_pkg = Pkg{
     .name = "format",
     .path = .{ .path = "src/core/format.zig" },
     .dependencies = &[_]Pkg{
-        mecha_pkg,
         ston_pkg,
         util_pkg,
     },
@@ -73,7 +70,6 @@ const pkgs = [_]Pkg{
     crc_pkg,
     folders_pkg,
     format_pkg,
-    mecha_pkg,
     ston_pkg,
     util_pkg,
     ziter_pkg,

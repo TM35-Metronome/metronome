@@ -1,9 +1,6 @@
 [submodule "lib/zig-crc"]
 	path = lib/zig-crc
 	url = ../../Hejsil/zig-crc.git
-[submodule "lib/zig-bench"]
-	path = lib/zig-bench
-	url = ../../Hejsil/zig-bench.git
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
 	url = ../../Hejsil/zig-clap.git
@@ -13,9 +10,6 @@
 [submodule "lib/nativefiledialog"]
 	path = lib/nativefiledialog
 	url = ../../mlabbe/nativefiledialog.git
-[submodule "lib/mecha"]
-	path = lib/mecha
-	url = ../../Hejsil/mecha.git
 [submodule "lib/known-folders"]
 	path = lib/known-folders
 	url = ../../ziglibs/known-folders.git
