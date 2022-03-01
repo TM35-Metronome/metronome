@@ -118,8 +118,12 @@ pub fn build(b: *Builder) void {
 
                 exe.addLibPath("/usr/lib/");
                 exe.addLibPath("/usr/lib/x86_64-linux-gnu");
+                exe.linkSystemLibrary("fontconfig");
+                exe.linkSystemLibrary("freetype");
                 exe.linkSystemLibrary("X11");
+                exe.linkSystemLibrary("xcb");
                 exe.linkSystemLibrary("Xft");
+                exe.linkSystemLibrary("xrender");
 
                 exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
                 exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
