@@ -35,7 +35,6 @@ jobs:
         include:
             - target: native
               name: linux
-        include:
             - target: x86_64-windows-gnu
               name: windows
     runs-on: ubuntu-latest
