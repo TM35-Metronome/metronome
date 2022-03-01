@@ -32,7 +32,12 @@ jobs:
   build:
     strategy:
       matrix:
-        target: [x86_64-linux, x86_64-windows]
+        include:
+            - target: native
+              name: linux
+        include:
+            - target: x86_64-windows-gnu
+              name: windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -43,11 +48,11 @@ jobs:
           version: master
       - run: |
           zig build -Dstrip -Drelease -Dtarget=${{ matrix.target }}
-          ./make-zip.sh metronome-${{ matrix.target }}
+          ./make-zip.sh metronome-${{ matrix.name }}
       - uses: actions/upload-artifact@v2
         with:
-          name: metronome-${{ matrix.target }}
-          path: metronome-${{ matrix.target }}.zip
+          name: metronome-${{ matrix.name }}
+          path: metronome-${{ matrix.name }}.zip
           retention-days: 1
 
   create-release:
