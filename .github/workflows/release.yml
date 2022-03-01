@@ -32,7 +32,7 @@ jobs:
   build:
     strategy:
       matrix:
-        target: [x86_64-linux-gnu.2.19..., x86_64-windows-gnu]
+        target: [native, x86_64-windows-gnu]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
