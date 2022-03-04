@@ -33,10 +33,22 @@ jobs:
     strategy:
       matrix:
         include:
-            - target: native
-              name: linux
-            - target: x86_64-windows-gnu
-              name: windows
+            - name: linux
+              target: native
+              strip: true
+              release: true
+            - name: windows
+              target: x86_64-windows-gnu
+              strip: true
+              release: true
+            - name: linux-debug
+              target: native
+              strip: false
+              release: false
+            - name: windows-debug
+              target: x86_64-windows-gnu
+              strip: false
+              release: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -46,7 +58,7 @@ jobs:
         with:
           version: master
       - run: |
-          zig build -Dstrip -Drelease -Dtarget=${{ matrix.target }}
+          zig build -Dstrip=${{ matrix.strip }} -Drelease=${{ matrix.release }} -Dtarget=${{ matrix.target }}
           ./make-zip.sh metronome-${{ matrix.name }}
       - uses: actions/upload-artifact@v2
         with:
