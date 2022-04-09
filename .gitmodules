@@ -19,3 +19,6 @@
 [submodule "lib/ston"]
 	path = lib/ston
 	url = ../../Hejsil/ston.git
+[submodule "lib/webview"]
+	path = lib/webview
+	url = https://github.com/webview/webview.git

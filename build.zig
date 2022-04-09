@@ -93,56 +93,33 @@ pub fn build(b: *Builder) void {
     for (other_exes) |name|
         _ = buildProgram(b, name, b.fmt("src/other/{s}.zig", .{name}), options);
 
-    const lib_cflags = &[_][]const u8{
-        "-D_POSIX_C_SOURCE=200809L",
-        "-fno-sanitize=undefined", // Nuklear trips the undefined sanitizer https://github.com/Immediate-Mode-UI/Nuklear/issues/94
-    };
     for (gui_exes) |tool| {
         const source = b.fmt("src/gui/{s}.zig", .{tool});
-        const exe = buildProgram(b, tool, source, options);
+        const exe = buildProgram(b, tool, source, .{
+            .strip = strip,
+            .target = target,
+            .mode = mode,
+            .single_threaded = false,
+        });
 
         switch (target.getOsTag()) {
             .windows => {
-                exe.addIncludeDir("lib/nuklear/demo/gdi");
-                exe.addCSourceFile("src/gui/nuklear/gdi.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", lib_cflags);
-                exe.linkSystemLibrary("user32");
-                exe.linkSystemLibrary("gdi32");
-                exe.linkSystemLibrary("uuid");
-                exe.linkSystemLibrary("msimg32");
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", &.{});
             },
             .linux => {
-                exe.addIncludeDir("lib/nuklear/demo/x11_xft");
-                exe.addSystemIncludeDir("/usr/include/freetype2");
-                exe.addSystemIncludeDir("/usr/include/");
-
-                exe.addLibPath("/usr/lib/");
-                exe.addLibPath("/usr/lib/x86_64-linux-gnu");
-                exe.linkSystemLibrary("expat");
-                exe.linkSystemLibrary("fontconfig");
-                exe.linkSystemLibrary("freetype");
-                exe.linkSystemLibrary("libpng");
-                exe.linkSystemLibrary("uuid");
-                exe.linkSystemLibrary("x11");
-                exe.linkSystemLibrary("xau");
-                exe.linkSystemLibrary("xcb");
-                exe.linkSystemLibrary("xdmcp");
-                exe.linkSystemLibrary("xft");
-                exe.linkSystemLibrary("xrender");
-                exe.linkSystemLibrary("z");
-
-                exe.addCSourceFile("src/gui/nuklear/x11.c", lib_cflags);
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", lib_cflags);
+                exe.linkSystemLibrary("webkit2gtk-4.0");
+                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", &.{});
             },
             else => unreachable, // TODO: More os support
         }
 
-        exe.addIncludeDir("lib/nativefiledialog/src/include");
-        exe.addIncludeDir("lib/nuklear");
-        exe.addIncludeDir("src/gui/nuklear");
-        exe.addCSourceFile("src/gui/nuklear/impl.c", lib_cflags);
-        exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", lib_cflags);
+        exe.addIncludePath("lib/nativefiledialog/src/include");
+        exe.addIncludePath("lib/webview/");
+        exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", &.{});
+        exe.addCSourceFile("lib/webview/webview.cc", &.{});
+
         exe.linkLibC();
+        exe.linkSystemLibrary("stdc++");
         exe.linkSystemLibrary("m");
     }
 }
@@ -150,6 +127,7 @@ pub fn build(b: *Builder) void {
 const BuildProgramOptions = struct {
     install: bool = true,
     strip: bool = false,
+    single_threaded: bool = true,
     mode: std.builtin.Mode = .Debug,
     target: Target,
 };
@@ -170,7 +148,7 @@ fn buildProgram(
 
     exe.setTarget(opt.target);
     exe.setBuildMode(opt.mode);
-    exe.single_threaded = true;
+    exe.single_threaded = opt.single_threaded;
     exe.use_stage1 = true;
     exe.strip = opt.strip;
     step.dependOn(&exe.step);
