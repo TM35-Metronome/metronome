@@ -1360,7 +1360,7 @@ pub const Game = struct {
 
             for (script.getScriptOffsets(script_data)) |relative, i| {
                 const position = @intCast(isize, i + 1) * @sizeOf(lu32);
-                const offset = math.cast(usize, relative.value() + position) catch continue;
+                const offset = math.cast(usize, relative.value() + position) orelse continue;
                 if (script_data.len < offset)
                     continue;
                 try script_offsets.append(offset);
@@ -1431,7 +1431,7 @@ pub const Game = struct {
                                 if (loc < script_data.len and
                                     mem.indexOfScalar(usize, script_offsets.items, loc) == null)
                                     try script_offsets.append(loc);
-                            } else |_| {}
+                            }
                         },
                         else => {},
                     }

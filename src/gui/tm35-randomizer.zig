@@ -840,9 +840,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
 
     const term = switch (builtin.target.os.tag) {
         .linux => blk: {
-            const sh = try std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, fba.allocator());
-            defer sh.deinit();
-
+            var sh = std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, fba.allocator());
             sh.stdin_behavior = .Pipe;
             try sh.spawn();
 
@@ -871,12 +869,10 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
                 try outputScript(file.writer(), exes, settings, in, out);
             }
 
-            const cmd = try std.ChildProcess.init(
+            const cmd = std.ChildProcess.init(
                 &[_][]const u8{ "cmd", "/c", "call", script_file_name.constSlice() },
                 fba.allocator(),
             );
-            defer cmd.deinit();
-
             break :blk try cmd.spawnAndWait();
         },
         else => @compileError("Unsupported os"),

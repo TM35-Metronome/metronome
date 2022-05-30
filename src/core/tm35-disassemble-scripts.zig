@@ -203,7 +203,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
 
         for (gen5.script.getScriptOffsets(script_data)) |relative, i| {
             const position = @intCast(isize, i + 1) * @sizeOf(lu32);
-            const offset = math.cast(usize, relative.value() + position) catch continue;
+            const offset = math.cast(usize, relative.value() + position) orelse continue;
             if (script_data.len < offset)
                 continue;
             try offsets.append(offset);
@@ -240,7 +240,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                             if (loc < script_data.len and
                                 mem.indexOfScalar(usize, offsets.items, loc) == null)
                                 try offsets.append(loc);
-                        } else |_| {}
+                        }
                     },
                     else => {},
                 }

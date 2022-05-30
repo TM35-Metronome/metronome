@@ -277,7 +277,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
-                .encounter_music => |encounter_music| trainer.encounter_music.music = try math.cast(u7, encounter_music),
+                .encounter_music => |encounter_music| trainer.encounter_music.music = math.cast(u7, encounter_music) orelse
+                    return error.Error,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
@@ -365,8 +366,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const lvl_up_move = &lvl_up_moves[moves.index];
                     switch (moves.value) {
-                        .id => |id| lvl_up_move.id = try math.cast(u9, id),
-                        .level => |level| lvl_up_move.level = try math.cast(u7, level),
+                        .id => |id| lvl_up_move.id = math.cast(u9, id) orelse return error.Error,
+                        .level => |level| lvl_up_move.level = math.cast(u7, level) orelse return error.Error,
                     }
                 },
                 .evos => |evos| {
@@ -418,7 +419,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 },
                 .color => |color| pokemon.color.color = color,
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
-                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = try math.cast(u8, base_exp_yield),
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = math.cast(u8, base_exp_yield) orelse
+                    return error.Error,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
@@ -480,7 +482,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const item = &game.items[items.index];
             switch (items.value) {
-                .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .price => |price| item.price = lu16.init(math.cast(u16, price) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .name => |str| try applyGen3String(&item.name, str),
                 .description => |str| {
@@ -521,8 +523,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const entry = &game.pokedex.emerald[pokedex.index];
                     switch (pokedex.value) {
-                        .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
-                        .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
+                        .height => |height| entry.height = lu16.init(math.cast(u16, height) orelse return error.Error),
+                        .weight => |weight| entry.weight = lu16.init(math.cast(u16, weight) orelse return error.Error),
                         .category => return error.DidNotConsumeData,
                     }
                 },
@@ -536,8 +538,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const entry = &game.pokedex.rsfrlg[pokedex.index];
                     switch (pokedex.value) {
-                        .height => |height| entry.height = lu16.init(try math.cast(u16, height)),
-                        .weight => |weight| entry.weight = lu16.init(try math.cast(u16, weight)),
+                        .height => |height| entry.height = lu16.init(math.cast(u16, height) orelse return error.Error),
+                        .weight => |weight| entry.weight = lu16.init(math.cast(u16, weight) orelse return error.Error),
                         .category => return error.DidNotConsumeData,
                     }
                 },
@@ -626,7 +628,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             const static_mon = game.static_pokemons[pokemons.index];
             switch (pokemons.value) {
                 .species => |species| static_mon.species.* = lu16.init(species),
-                .level => |level| static_mon.level.* = try math.cast(u8, level),
+                .level => |level| static_mon.level.* = math.cast(u8, level) orelse return error.Error,
             }
         },
         .given_pokemons => |pokemons| {
@@ -636,7 +638,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             const given_mon = game.given_pokemons[pokemons.index];
             switch (pokemons.value) {
                 .species => |species| given_mon.species.* = lu16.init(species),
-                .level => |level| given_mon.level.* = try math.cast(u8, level),
+                .level => |level| given_mon.level.* = math.cast(u8, level) orelse return error.Error,
             }
         },
         .pokeball_items => |items| {
@@ -667,7 +669,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
 fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !void {
     switch (area) {
-        .encounter_rate => |encounter_rate| rate.* = try math.cast(u8, encounter_rate),
+        .encounter_rate => |encounter_rate| rate.* = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
             if (pokemons.index >= wilds.len)
                 return error.IndexOutOfBound;
@@ -794,7 +796,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
                 .description, .name => unreachable,
-                .price => |price| item.price = lu16.init(try math.cast(u16, price)),
+                .price => |price| item.price = lu16.init(math.cast(u16, price) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .pocket => |pocket| item.pocket.pocket = switch (pocket) {
                     .items => .items,
@@ -863,7 +865,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     pokemon.abilities[abilities.index] = abilities.value;
                 },
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
-                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = try math.cast(u8, base_exp_yield),
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = math.cast(u8, base_exp_yield) orelse return error.Error,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
@@ -890,8 +892,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
                     const lvl_up_move = &lvl_up_moves[moves.index];
                     switch (moves.value) {
-                        .id => |id| lvl_up_move.id = try math.cast(u9, id),
-                        .level => |level| lvl_up_move.level = try math.cast(u7, level),
+                        .id => |id| lvl_up_move.id = math.cast(u9, id) orelse return error.Error,
+                        .level => |level| lvl_up_move.level = math.cast(u7, level) orelse return error.Error,
                     }
                 },
                 .evos => |evos| {
@@ -1106,7 +1108,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
 fn applyHgssGrass(area: format.WildArea, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
     switch (area) {
-        .encounter_rate => |encounter_rate| wilds.grass_rate = try math.cast(u8, encounter_rate),
+        .encounter_rate => |encounter_rate| wilds.grass_rate = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
             if (pokemons.index >= grass.len)
                 return error.Error;
@@ -1122,7 +1124,7 @@ fn applyHgssGrass(area: format.WildArea, wilds: *gen4.HgssWildPokemons, grass: *
 
 fn applyHgssSea(area: format.WildArea, rate: *u8, sea: []gen4.HgssWildPokemons.Sea) !void {
     switch (area) {
-        .encounter_rate => |encounter_rate| rate.* = try math.cast(u8, encounter_rate),
+        .encounter_rate => |encounter_rate| rate.* = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
             if (pokemons.index >= sea.len)
                 return error.IndexOutOfBound;
@@ -1385,7 +1387,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             const descriptions = game.owned.text.item_descriptions;
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
-                .price => |price| item.price = lu16.init(try math.cast(u16, price / 10)),
+                .price => |price| item.price = lu16.init(math.cast(u16, price / 10) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .description => |str| try applyGen5String(descriptions, items.index, str),
                 .name => |str| {
@@ -1601,7 +1603,7 @@ fn applyGen5Area(
 
     switch (area) {
         .encounter_rate => |encounter_rate| {
-            wilds[wild_index].rates[rate_index] = try math.cast(u8, encounter_rate);
+            wilds[wild_index].rates[rate_index] = math.cast(u8, encounter_rate) orelse return error.Error;
         },
         .pokemons => |pokemons| {
             const wild_area = &@field(wilds[wild_index], field);
@@ -1612,7 +1614,7 @@ fn applyGen5Area(
             switch (pokemons.value) {
                 .min_level => |min_level| wild.min_level = min_level,
                 .max_level => |max_level| wild.max_level = max_level,
-                .species => |species| wild.species.setSpecies(try math.cast(u10, species)),
+                .species => |species| wild.species.setSpecies(math.cast(u10, species) orelse return error.Error),
             }
         },
     }

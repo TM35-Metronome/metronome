@@ -41,15 +41,15 @@ const gui_exes = [_][]const u8{
     "tm35-randomizer",
 };
 
-const clap_pkg = Pkg{ .name = "clap", .path = .{ .path = "lib/zig-clap/clap.zig" } };
-const crc_pkg = Pkg{ .name = "crc", .path = .{ .path = "lib/zig-crc/crc.zig" } };
-const folders_pkg = Pkg{ .name = "folders", .path = .{ .path = "lib/known-folders/known-folders.zig" } };
-const ston_pkg = Pkg{ .name = "ston", .path = .{ .path = "lib/ston/ston.zig" } };
-const ziter_pkg = Pkg{ .name = "ziter", .path = .{ .path = "lib/ziter/ziter.zig" } };
+const clap_pkg = Pkg{ .name = "clap", .source = .{ .path = "lib/zig-clap/clap.zig" } };
+const crc_pkg = Pkg{ .name = "crc", .source = .{ .path = "lib/zig-crc/crc.zig" } };
+const folders_pkg = Pkg{ .name = "folders", .source = .{ .path = "lib/known-folders/known-folders.zig" } };
+const ston_pkg = Pkg{ .name = "ston", .source = .{ .path = "lib/ston/ston.zig" } };
+const ziter_pkg = Pkg{ .name = "ziter", .source = .{ .path = "lib/ziter/ziter.zig" } };
 
 const util_pkg = Pkg{
     .name = "util",
-    .path = .{ .path = "src/common/util.zig" },
+    .source = .{ .path = "src/common/util.zig" },
     .dependencies = &[_]Pkg{
         clap_pkg,
         folders_pkg,
@@ -58,7 +58,7 @@ const util_pkg = Pkg{
 
 const format_pkg = Pkg{
     .name = "format",
-    .path = .{ .path = "src/core/format.zig" },
+    .source = .{ .path = "src/core/format.zig" },
     .dependencies = &[_]Pkg{
         ston_pkg,
         util_pkg,
