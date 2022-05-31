@@ -869,7 +869,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
                 try outputScript(file.writer(), exes, settings, in, out);
             }
 
-            const cmd = std.ChildProcess.init(
+            var cmd = std.ChildProcess.init(
                 &[_][]const u8{ "cmd", "/c", "call", script_file_name.constSlice() },
                 fba.allocator(),
             );
