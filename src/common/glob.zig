@@ -3,7 +3,7 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 
-test "" {
+test {
     try testing.expect(match("test case", "test case"));
     try testing.expect(!match("case", "test case"));
     try testing.expect(!match("test", "test case"));

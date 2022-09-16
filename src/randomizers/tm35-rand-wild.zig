@@ -35,19 +35,32 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
-    clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-    clap.parseParam("-t, --simular-total-stats  Replaced wild Pokémons should have simular total stats.                                   ") catch unreachable,
-    clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
 };
+
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-t, --simular-total-stats
+    \\        Replaced wild Pokémons should have simular total stats.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.args.seed(args),
-            .simular_total_stats = args.flag("--simular-total-stats"),
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .simular_total_stats = args.args.@"simular-total-stats",
         },
     };
 }

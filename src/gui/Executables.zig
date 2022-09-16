@@ -217,9 +217,17 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
     var multi_strings = std.ArrayList(Command.MultiString).init(arena.allocator());
     var params = std.ArrayList(clap.Param(clap.Help)).init(arena.allocator());
 
-    var it = mem.split(u8, help, "\n");
-    while (it.next()) |line| {
-        const param = clap.parseParam(line) catch continue;
+    const options_start_str = "Options:\n";
+    var help_index = if (mem.indexOf(u8, help, options_start_str)) |i|
+        i + options_start_str.len
+    else
+        0;
+
+    while (help_index != help.len) {
+        var end_of_this: usize = undefined;
+        defer help_index += end_of_this;
+        const param = clap.parseParamEx(help[help_index..], &end_of_this) catch continue;
+
         if (param.names.long == null and param.names.short == null)
             continue;
         if (mem.eql(u8, param.names.long orelse "", "help"))
@@ -233,29 +241,29 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
         try params.append(param);
         switch (param.takes_value) {
             .none => try flags.append(.{ .i = i }),
-            .one => if (mem.eql(u8, param.id.value, "BOOL")) {
+            .one => if (mem.eql(u8, param.id.value(), "BOOL")) {
                 try flags.append(.{ .i = i });
-            } else if (mem.eql(u8, param.id.value, "INT")) {
-                const default = if (findDefaultValue(param.id.msg)) |v|
+            } else if (mem.eql(u8, param.id.value(), "INT")) {
+                const default = if (findDefaultValue(param.id.description())) |v|
                     fmt.parseInt(usize, v, 10) catch 0
                 else
                     0;
 
                 try ints.append(.{ .i = i, .default = default });
-            } else if (mem.eql(u8, param.id.value, "FLOAT")) {
-                const default = if (findDefaultValue(param.id.msg)) |v|
+            } else if (mem.eql(u8, param.id.value(), "FLOAT")) {
+                const default = if (findDefaultValue(param.id.description())) |v|
                     fmt.parseFloat(f64, v) catch 0
                 else
                     0;
 
                 try floats.append(.{ .i = i, .default = default });
-            } else if (mem.indexOfScalar(u8, param.id.value, '|') != null) {
+            } else if (mem.indexOfScalar(u8, param.id.value(), '|') != null) {
                 var options = std.ArrayList([]const u8).init(arena.allocator());
-                var options_it = mem.split(u8, param.id.value, "|");
+                var options_it = mem.split(u8, param.id.value(), "|");
                 while (options_it.next()) |option|
                     try options.append(option);
 
-                const default = if (findDefaultValue(param.id.msg)) |v| blk: {
+                const default = if (findDefaultValue(param.id.description())) |v| blk: {
                     for (options.items) |option, option_i| {
                         if (mem.eql(u8, option, v))
                             break :blk option_i;
@@ -268,11 +276,11 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
                     .options = options.toOwnedSlice(),
                     .default = default,
                 });
-            } else if (mem.eql(u8, param.id.value, "FILE")) {
-                const default = findDefaultValue(param.id.msg) orelse "";
+            } else if (mem.eql(u8, param.id.value(), "FILE")) {
+                const default = findDefaultValue(param.id.description()) orelse "";
                 try files.append(.{ .i = i, .default = default });
             } else {
-                const default = findDefaultValue(param.id.msg) orelse "";
+                const default = findDefaultValue(param.id.description()) orelse "";
                 try strings.append(.{ .i = i, .default = default });
             },
             .many => {

@@ -37,38 +37,37 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam(
-        "-h, --help " ++
-            "Display this help text and exit.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-t, --include-tms-hms " ++
-            "Allow for tms/hms to be randomized (This might make the game impossible to " ++
-            "complete).",
-    ) catch unreachable,
-    clap.parseParam(
-        "-k, --include-key-items " ++
-            "Allow for key items to be randomized (This might make the game impossible to " ++
-            "complete).",
-    ) catch unreachable,
-    clap.parseParam(
-        "-s, --seed <INT> " ++
-            "The seed to use for random numbers. A random seed will be picked if this is not " ++
-            "specified.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-e, --exclude <STRING>... " ++
-            "List of items to never pick. Case insensitive. Supports wildcards like '*mail'.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-v, --version " ++
-            "Output version information and exit.",
-    ) catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
+    .STRING = clap.parsers.string,
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-t, --include-tms-hms
+    \\        Allow for tms/hms to be randomized (This might make the game impossible to
+    \\        complete).
+    \\
+    \\-k, --include-key-items
+    \\        Allow for key items to be randomized (This might make the game impossible to
+    \\        complete).
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-e, --exclude <STRING>...
+    \\        List of items to never pick. Case insensitive. Supports wildcards like '*mail'.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const excluded_items_arg = args.options("--exclude");
+    const excluded_items_arg = args.args.exclude;
     var excluded_items = try std.ArrayList([]const u8).initCapacity(
         allocator,
         excluded_items_arg.len,
@@ -79,9 +78,9 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.args.seed(args),
-            .include_tms_hms = args.flag("--include-tms-hms"),
-            .include_key_items = args.flag("--include-key-items"),
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .include_tms_hms = args.args.@"include-tms-hms",
+            .include_key_items = args.args.@"include-key-items",
             .excluded_items = excluded_items.toOwnedSlice(),
         },
     };

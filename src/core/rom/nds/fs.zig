@@ -384,15 +384,15 @@ pub const Builder = struct {
         const handle = @intCast(u16, b.fnt_main.items.len);
 
         var buf: [1024]u8 = undefined;
-        const fbs = io.fixedBufferStream(&buf).writer();
+        var fbs = io.fixedBufferStream(&buf);
         const len = @intCast(u7, dir_name.len);
         const kind = @as(u8, @boolToInt(true)) << 7;
         const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
-        try fbs.writeByte(kind | len);
-        try fbs.writeAll(dir_name);
-        try fbs.writeIntLittle(u16, id);
+        try fbs.writer().writeByte(kind | len);
+        try fbs.writer().writeAll(dir_name);
+        try fbs.writer().writeIntLittle(u16, id);
 
-        const written = fbs.context.getWritten();
+        const written = fbs.getWritten();
         try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len + 1);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
@@ -433,13 +433,13 @@ pub const Builder = struct {
         const handle = parent_entry.first_file_handle.value();
 
         var buf: [1024]u8 = undefined;
-        const fbs = io.fixedBufferStream(&buf).writer();
+        var fbs = io.fixedBufferStream(&buf);
         const len = @intCast(u7, file_name.len);
         const kind = @as(u8, @boolToInt(false)) << 7;
-        try fbs.writeByte(kind | len);
-        try fbs.writeAll(file_name);
+        try fbs.writer().writeByte(kind | len);
+        try fbs.writer().writeAll(file_name);
 
-        const written = fbs.context.getWritten();
+        const written = fbs.getWritten();
         try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 

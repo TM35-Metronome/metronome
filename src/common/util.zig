@@ -12,7 +12,6 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
-pub const args = @import("args.zig");
 pub const bit = @import("bit.zig");
 pub const escape = @import("escape.zig");
 pub const glob = @import("glob.zig");
@@ -36,7 +35,7 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             // of shutdown time.
             var arena = heap.ArenaAllocator.init(heap.page_allocator);
             var diag = clap.Diagnostic{};
-            var arguments = clap.parse(clap.Help, Program.params, .{
+            var arguments = clap.parse(clap.Help, &Program.params, Program.parsers, .{
                 .diagnostic = &diag,
             }) catch |err| {
                 var stderr = std.io.bufferedWriter(std.io.getStdErr().writer());
@@ -46,14 +45,14 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
                 return error.InvalidArgument;
             };
 
-            if (arguments.flag("--help")) {
+            if (arguments.args.help) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try usage(stdout.writer());
                 try stdout.flush();
                 return;
             }
 
-            if (arguments.flag("--version")) {
+            if (arguments.args.version) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try stdout.writer().writeAll(Program.version);
                 try stdout.writer().writeAll("\n");
@@ -75,11 +74,11 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
             try writer.writeAll("Usage: ");
             try writer.writeAll(@typeName(Program));
             try writer.writeAll(" ");
-            try clap.usage(writer, Program.params);
+            try clap.usage(writer, clap.Help, &Program.params);
             try writer.writeAll("\n");
             try writer.writeAll(Program.description);
             try writer.writeAll("\nOptions:\n");
-            try clap.help(writer, Program.params);
+            try clap.help(writer, clap.Help, &Program.params, .{});
         }
     }.main;
 }

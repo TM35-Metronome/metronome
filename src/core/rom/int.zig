@@ -53,7 +53,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
         }
 
         fn swap(v: Inner) Inner {
-            return if (_endian != native_endian) @byteSwap(Inner, v) else v;
+            return if (_endian != native_endian) @byteSwap(v) else v;
         }
     };
 }

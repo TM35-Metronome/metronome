@@ -42,33 +42,32 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam(
-        "-h, --help " ++
-            "Display this help text and exit.",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --hms " ++
-            "Also randomize hms (this may break your game).",
-    ) catch unreachable,
-    clap.parseParam(
-        "-s, --seed <INT> " ++
-            "The seed to use for random numbers. A random seed will be picked if this is " ++
-            "not specified.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-e, --exclude <STRING>... " ++
-            "List of moves to never pick. Case insensitive. Supports wildcards like '*chop'.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-v, --version " ++
-            "Output version information and exit.",
-    ) catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
+    .STRING = clap.parsers.string,
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\    --hms
+    \\        Also randomize hms (this may break your game).
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this not
+    \\        specified.
+    \\
+    \\-e, --exclude <STRING>...
+    \\        List of moves to never pick. Case insensitive. Supports wildcards like '*chop'.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const seed = try util.args.seed(args);
-    const excluded_moves_arg = args.options("--exclude");
+    const excluded_moves_arg = args.args.exclude;
     var excluded_moves = try std.ArrayList([]const u8).initCapacity(
         allocator,
         excluded_moves_arg.len,
@@ -79,8 +78,8 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = seed,
-            .hms = args.flag("--hms"),
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .hms = args.args.hms,
             .excluded_moves = excluded_moves.toOwnedSlice(),
         },
     };

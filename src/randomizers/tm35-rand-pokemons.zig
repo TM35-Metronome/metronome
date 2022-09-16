@@ -61,75 +61,68 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam(
-        "-h, --help " ++
-            "Display this help text and exit.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-s, --seed <INT> " ++
-            "The seed to use for random numbers. A random seed will be picked if this is not " ++
-            "specified.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-v, --version " ++
-            "Output version information and exit.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-a, --abilities <unchanged|random|random_follow_evos> " ++
-            "The method for which pokemon abilities will be randomized. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-i, --items <unchanged|random|random_follow_evos> " ++
-            "The method for which pokemon items will be randomized. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-t, --types <unchanged|random|random_follow_evos> " ++
-            "The method for which pokemon types will be randomized. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-S, --stats <unchanged|random|random_follow_evos> " ++
-            "The method for which pokemon stats will be randomized. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --same-total-stats " ++
-            "Pokémons will have the same total stats after randomization.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-m, --machines <unchanged|random|random_follow_evos> " ++
-            "The method for which pokemon machines learned (tms,hms) will be randomized. " ++
-            "(default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --non-stab-machine-chance <FLOAT> " ++
-            "The chance a pokemon can learn a machine providing a non stab move when " ++
-            "randomizing machines. (default: 0.5)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --stab-machine-chance <FLOAT> " ++
-            "The chance a pokemon can learn a machine providing a stab move when randomizing " ++
-            "machines. (default: 0.5)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --status-moves-are-stab " ++
-            "Whether status moves, which are the same typing as the pokemon, should be " ++
-            "considered as stab moves when determining the chance that the move should be " ++
-            "learnable.",
-    ) catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
+    .FLOAT = clap.parsers.float(f64),
+    .@"unchanged|random|random_follow_evos" = clap.parsers.enumeration(Method),
 };
+
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+    \\-a, --abilities <unchanged|random|random_follow_evos>
+    \\        The method for which pokemon abilities will be randomized. (default: unchanged)
+    \\
+    \\-i, --items <unchanged|random|random_follow_evos>
+    \\        The method for which pokemon items will be randomized. (default: unchanged)
+    \\
+    \\-t, --types <unchanged|random|random_follow_evos>
+    \\        The method for which pokemon types will be randomized. (default: unchanged)
+    \\
+    \\-S, --stats <unchanged|random|random_follow_evos>
+    \\        The method for which pokemon stats will be randomized. (default: unchanged)
+    \\
+    \\    --same-total-stats
+    \\        Pokémons will have the same total stats after randomization.
+    \\
+    \\-m, --machines <unchanged|random|random_follow_evos>
+    \\        The method for which pokemon machines learned (tms,hms) will be randomized.
+    \\        (default: unchanged)
+    \\
+    \\    --non-stab-machine-chance <FLOAT>
+    \\        The chance a pokemon can learn a machine providing a non stab move when
+    \\        randomizing machines. (default: 0.5)
+    \\
+    \\    --stab-machine-chance <FLOAT>
+    \\        The chance a pokemon can learn a machine providing a stab move when randomizing
+    \\        machines. (default: 0.5)
+    \\
+    \\    --status-moves-are-stab
+    \\        Whether status moves, which are the same typing as the pokemon, should be
+    \\        considered as stab moves when determining the chance that the move should be
+    \\        learnable.
+);
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const options = Options{
-        .seed = try util.args.seed(args),
-        .same_total_stats = args.flag("--same-total-stats"),
-        .status_moves_are_stab = args.flag("--status-moves-are-stab"),
-        .abilities = (try util.args.enumeration(args, "--abilities", Method)) orelse .unchanged,
-        .types = (try util.args.enumeration(args, "--types", Method)) orelse .unchanged,
-        .items = (try util.args.enumeration(args, "--items", Method)) orelse .unchanged,
-        .stats = (try util.args.enumeration(args, "--stats", Method)) orelse .unchanged,
-        .machines = (try util.args.enumeration(args, "--machines", Method)) orelse .unchanged,
-        .chance_to_learn_non_stab_machine = (try util.args.float(args, "--non-stab-machine-chance", f64)) orelse 0.5,
-        .chance_to_learn_stab_machine = (try util.args.float(args, "--stab-machine-chance", f64)) orelse 0.5,
+        .seed = args.args.seed orelse std.crypto.random.int(u64),
+        .same_total_stats = args.args.@"same-total-stats",
+        .status_moves_are_stab = args.args.@"status-moves-are-stab",
+        .abilities = args.args.abilities orelse .unchanged,
+        .types = args.args.types orelse .unchanged,
+        .items = args.args.items orelse .unchanged,
+        .stats = args.args.stats orelse .unchanged,
+        .machines = args.args.machines orelse .unchanged,
+        .chance_to_learn_non_stab_machine = args.args.@"non-stab-machine-chance" orelse 0.5,
+        .chance_to_learn_stab_machine = args.args.@"stab-machine-chance" orelse 0.5,
     };
     return Program{
         .allocator = allocator,

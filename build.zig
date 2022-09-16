@@ -171,6 +171,7 @@ fn buildProgram(
     exe.setTarget(opt.target);
     exe.setBuildMode(opt.mode);
     exe.single_threaded = true;
+    exe.use_stage1 = true;
     exe.strip = opt.strip;
     step.dependOn(&exe.step);
     b.default_step.dependOn(step);
@@ -185,5 +186,6 @@ fn testIt(b: *Builder, parent_step: *Step, mode: std.builtin.Mode, src: []const 
 
     exe_test.setBuildMode(mode);
     exe_test.single_threaded = true;
+    exe_test.use_stage1 = true;
     parent_step.dependOn(&exe_test.step);
 }

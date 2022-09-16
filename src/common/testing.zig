@@ -42,7 +42,7 @@ pub fn runProgram(comptime Program: type, opt: RunProgramOptions) ![:0]const u8 
     var stdout = std.ArrayList(u8).init(testing.allocator);
     var stdin = io.fixedBufferStream(opt.in);
     var arg_iter = clap.args.SliceIterator{ .args = opt.args };
-    const clap_args = try clap.parseEx(clap.Help, Program.params, &arg_iter, .{});
+    var clap_args = try clap.parseEx(clap.Help, Program.params, Program.parsers, &arg_iter, .{});
     defer clap_args.deinit();
 
     const StdIo = util.CustomStdIoStreams(

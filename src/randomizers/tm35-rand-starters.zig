@@ -37,29 +37,36 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-e, --evolutions <INT>       Only pick starters with NUM or more evolutions. (default: 0)                              ") catch unreachable,
-    clap.parseParam("-h, --help                   Display this help text and exit.                                                          ") catch unreachable,
-    clap.parseParam("-l, --pick-lowest-evolution  Always pick the lowest evolution of a starter.                                            ") catch unreachable,
-    clap.parseParam("-s, --seed <INT>             The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-    clap.parseParam("-v, --version                Output version information and exit.                                                      ") catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
 };
 
-pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const evolutions = if (args.option("--evolutions")) |evos|
-        fmt.parseUnsigned(usize, evos, 10) catch |err| {
-            log.err("'{s}' could not be parsed as a number to --evolutions: {}", .{ evos, err });
-            return error.InvalidArgument;
-        }
-    else
-        0;
+pub const params = clap.parseParamsComptime(
+    \\-e, --evolutions <INT>
+    \\        Only pick starters with NUM or more evolutions. (default: 0)
+    \\
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-l, --pick-lowest-evolution
+    \\        Always pick the lowest evolution of a starter.
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
 
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.args.seed(args),
-            .pick_lowest = args.flag("--pick-lowest-evolution"),
-            .evolutions = evolutions,
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .pick_lowest = args.args.@"pick-lowest-evolution",
+            .evolutions = math.cast(usize, args.args.evolutions orelse 0) orelse return error.ArgumentToBig,
         },
     };
 }

@@ -51,33 +51,38 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help                                                               Display this help text and exit.                                                          ") catch unreachable,
-    clap.parseParam("-s, --seed <INT>                                                         The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-    clap.parseParam("-m, --method <random|same-stats|simular-stats|legendary-with-legendary>  The method used to pick the new static Pokémon. (default: random)                         ") catch unreachable,
-    clap.parseParam("-t, --types <random|same>                                                Which type each static pokemon should be. (default: random)                               ") catch unreachable,
-    clap.parseParam("-v, --version                                                            Output version information and exit.                                                      ") catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
+    .@"random|same-stats|simular-stats|legendary-with-legendary" = clap.parsers.enumeration(Method),
+    .@"random|same" = clap.parsers.enumeration(Type),
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-m, --method <random|same-stats|simular-stats|legendary-with-legendary>
+    \\        The method used to pick the new static Pokémon. (default: random)
+    \\
+    \\-t, --types <random|same>
+    \\        Which type each static pokemon should be. (default: random)
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const type_arg = args.option("--types") orelse "random";
-    const types = std.meta.stringToEnum(Type, type_arg) orelse {
-        log.err("--types does not support '{s}'", .{type_arg});
-        return error.InvalidArgument;
-    };
-
-    const method_arg = args.option("--method") orelse "random";
-    const method = std.meta.stringToEnum(Method, method_arg) orelse {
-        log.err("--method does not support '{s}'", .{method_arg});
-        return error.InvalidArgument;
-    };
-
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.args.seed(args),
-            .type = types,
-            .method = method,
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .type = args.args.types orelse .random,
+            .method = args.args.method orelse .random,
         },
     };
 }

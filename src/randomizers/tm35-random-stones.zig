@@ -54,19 +54,32 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help                 Display this help text and exit.                                                          ") catch unreachable,
-    clap.parseParam("-r, --replace-cheap-items  Replaces cheap items in pokeballs with stones.") catch unreachable,
-    clap.parseParam("-s, --seed <INT>           The seed to use for random numbers. A random seed will be picked if this is not specified.") catch unreachable,
-    clap.parseParam("-v, --version              Output version information and exit.                                                      ") catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
 };
+
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-r, --replace-cheap-items
+    \\        Replaces cheap items in pokeballs with stones.
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .seed = try util.args.seed(args),
-            .replace_cheap = args.flag("--replace-cheap-items"),
+            .seed = args.args.seed orelse std.crypto.random.int(u64),
+            .replace_cheap = args.args.@"replace-cheap-items",
         },
     };
 }

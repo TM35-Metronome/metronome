@@ -29,18 +29,30 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help           Display this help text and exit.    ") catch unreachable,
-    clap.parseParam("-o, --output <FILE>  Override destination path.          ") catch unreachable,
-    clap.parseParam("-v, --version        Output version information and exit.") catch unreachable,
-    clap.parseParam("<ROM>") catch unreachable,
+pub const parsers = .{
+    .ROM = clap.parsers.string,
+    .FILE = clap.parsers.string,
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-o, --output <FILE>
+    \\        Override destination path.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+    \\<ROM>
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals();
+    const pos = args.positionals;
     const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
-    const out = args.option("--output") orelse
+    const out = args.args.output orelse
         try fmt.allocPrint(allocator, "{s}.output", .{path.basename(file_name)});
 
     return Program{

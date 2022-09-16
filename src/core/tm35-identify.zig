@@ -31,20 +31,26 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
-    clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    clap.parseParam("<ROM>          The rom to identify.                ") catch unreachable,
+pub const parsers = .{
+    .ROM = clap.parsers.string,
 };
 
-pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+    \\<ROM>
+    \\        The rom to identify.
+    \\
+);
 
-    return Program{
-        .allocator = allocator,
-        .file = file_name,
-    };
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
+    const pos = args.positionals;
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+    return Program{ .allocator = allocator, .file = file_name };
 }
 
 pub fn run(

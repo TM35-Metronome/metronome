@@ -54,26 +54,44 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-a, --abort-on-first-warning  Abort execution on the first warning emitted.                                                         ") catch unreachable,
-    clap.parseParam("-h, --help                    Display this help text and exit.                                                                      ") catch unreachable,
-    clap.parseParam("-n, --no-output               Don't output the file.                                                                                ") catch unreachable,
-    clap.parseParam("-o, --output <FILE>           Override destination path.                                                                            ") catch unreachable,
-    clap.parseParam("-p, --patch <none|live|full>  Output patch data to stdout when not 'none'. 'live' = patch after each line. 'full' = patch when done.") catch unreachable,
-    clap.parseParam("-r, --replace                 Replace output file if it already exists.                                                             ") catch unreachable,
-    clap.parseParam("-v, --version                 Output version information and exit.                                                                  ") catch unreachable,
-    clap.parseParam("<ROM>                         The rom to apply the changes to.                                                                  ") catch unreachable,
+pub const parsers = .{
+    .FILE = clap.parsers.string,
+    .ROM = clap.parsers.string,
+    .@"none|live|full" = clap.parsers.enumeration(PatchOption),
 };
 
-pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals();
-    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+pub const params = clap.parseParamsComptime(
+    \\-a, --abort-on-first-warning
+    \\        Abort execution on the first warning emitted.
+    \\
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-n, --no-output
+    \\        Don't output the file.
+    \\
+    \\-o, --output <FILE>
+    \\        Override destination path.
+    \\
+    \\-p, --patch <none|live|full>
+    \\        Output patch data to stdout when not 'none'.
+    \\        'live' = patch after each line.
+    \\        'full' = patch when done.
+    \\
+    \\-r, --replace
+    \\        Replace output file if it already exists.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+    \\<ROM>
+    \\        The rom to apply the changes to.
+    \\
+);
 
-    const patch_arg = args.option("--patch") orelse "none";
-    const patch = std.meta.stringToEnum(PatchOption, patch_arg) orelse {
-        log.err("--patch does not support '{s}'", .{patch_arg});
-        return error.InvalidArgument;
-    };
+pub fn init(allocator: mem.Allocator, args: anytype) !Program {
+    const pos = args.positionals;
+    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
 
     var game = blk: {
         const file = try fs.cwd().openFile(file_name, .{});
@@ -110,6 +128,8 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     };
     errdefer game.deinit();
 
+    const patch = args.args.patch orelse .none;
+
     // When --patch is passed, we store a copy of the games old state, so that we
     // can generate binary patches between old and new versions.
     var old_bytes = std.ArrayListUnmanaged(u8){};
@@ -119,10 +139,10 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
 
     return Program{
         .allocator = allocator,
-        .no_output = args.flag("--no-output"),
-        .replace = args.flag("--replace"),
-        .abort_on_first_warning = args.flag("--abort-on-first-warning"),
-        .out = args.option("--output") orelse
+        .no_output = args.args.@"no-output",
+        .replace = args.args.replace,
+        .abort_on_first_warning = args.args.@"abort-on-first-warning",
+        .out = args.args.output orelse
             try fmt.allocPrint(allocator, "{s}.modified", .{path.basename(file_name)}),
         .patch = patch,
         .game = game,

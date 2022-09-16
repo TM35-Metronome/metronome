@@ -106,100 +106,95 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam(
-        "-h, --help " ++
-            "Display this help text and exit.",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --held-items <none|unchanged|random> " ++
-            "The method used to picking held items. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --moves <none|unchanged|best|best_for_level|random_learnable|random> " ++
-            "  The method used to picking moves. (default: none)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-p, --party-pokemons <unchanged|randomize> " ++
-            "Wether the trainers pokemons should be randomized. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-m, --party-size-min <INT> " ++
-            "The minimum size each trainers party is allowed to be. (default: 1)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-M, --party-size-max <INT> " ++
-            "The maximum size each trainers party is allowed to be. (default: 6)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --party-size <unchanged|minimum|random> " ++
-            "The method used to pick the trainer party size. (default: unchanged)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-s, --seed <INT> " ++
-            "The seed to use for random numbers. A random seed will be picked if this is not " ++
-            "specified.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-S, --stats <random|simular|follow_level> " ++
-            "The total stats the picked pokemon should have if pokemons are randomized. " ++
-            "(default: random)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-t, --types <random|same|themed> " ++
-            "Which types each trainer should use if pokemons are randomized. " ++
-            "(default: random)",
-    ) catch unreachable,
-    clap.parseParam(
-        "-a, --abilities <random|same|themed> " ++
-            "Which ability each party member should have. (default: random)",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --exclude-trainer <STRING>... " ++
-            "List of trainers to not change. Case insensitive. Supports wildcards like 'grunt*'.",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --include-trainer <STRING>... " ++
-            "List of trainers to change, ignoring --exlude-trainer. Case insensitive. " ++
-            "Supports wildcards like 'grunt*'.",
-    ) catch unreachable,
-    clap.parseParam(
-        "    --exclude-pokemon <STRING>... " ++
-            "List of pokemons to never pick. Case insensitive. Supports wildcards like 'nido*'.",
-    ) catch unreachable,
-    clap.parseParam(
-        "-v, --version " ++
-            "Output version information and exit.",
-    ) catch unreachable,
+pub const parsers = .{
+    .INT = clap.parsers.int(u64, 0),
+    .STRING = clap.parsers.string,
+    .@"none|unchanged|best|best_for_level|random_learnable|random" = clap.parsers.enumeration(MoveOption),
+    .@"none|unchanged|random" = clap.parsers.enumeration(HeldItemOption),
+    .@"unchanged|randomize" = clap.parsers.enumeration(PartyPokemonsOption),
+    .@"unchanged|minimum|random" = clap.parsers.enumeration(PartySizeOption),
+    .@"random|simular|follow_level" = clap.parsers.enumeration(StatsOption),
+    .@"random|same|themed" = clap.parsers.enumeration(ThemeOption),
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\--held-items <none|unchanged|random>
+    \\        The method used to picking held items. (default: unchanged)
+    \\
+    \\--moves <none|unchanged|best|best_for_level|random_learnable|random>
+    \\        The method used to picking moves. (default: none)
+    \\
+    \\-p, --party-pokemons <unchanged|randomize>
+    \\        Wether the trainers pokemons should be randomized. (default: unchanged)
+    \\
+    \\-m, --party-size-min <INT>
+    \\        The minimum size each trainers party is allowed to be. (default: 1)
+    \\
+    \\-M, --party-size-max <INT>
+    \\        The maximum size each trainers party is allowed to be. (default: 6)
+    \\
+    \\--party-size <unchanged|minimum|random>
+    \\        The method used to pick the trainer party size. (default: unchanged)
+    \\
+    \\-s, --seed <INT>
+    \\        The seed to use for random numbers. A random seed will be picked if this is not
+    \\        specified.
+    \\
+    \\-S, --stats <random|simular|follow_level>
+    \\        The total stats the picked pokemon should have if pokemons are randomized.
+    \\        (default: random)
+    \\
+    \\-t, --types <random|same|themed>
+    \\        Which types each trainer should use if pokemons are randomized. (default: random)
+    \\
+    \\-a, --abilities <random|same|themed>
+    \\        Which ability each party member should have. (default: random)
+    \\
+    \\--exclude-trainer <STRING>...
+    \\        List of trainers to not change. Case insensitive. Supports wildcards like 'grunt*'.
+    \\
+    \\--include-trainer <STRING>...
+    \\        List of trainers to change, ignoring --exlude-trainer. Case insensitive. Supports
+    \\        wildcards like 'grunt*'.
+    \\
+    \\--exclude-pokemon <STRING>...
+    \\        List of pokemons to never pick. Case insensitive. Supports wildcards like 'nido*'.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const excluded_pokemons_arg = args.options("--exclude-pokemon");
+    const excluded_pokemons_arg = args.args.@"exclude-pokemon";
     var excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
     for (excluded_pokemons) |_, i|
         excluded_pokemons[i] = try ascii.allocLowerString(allocator, excluded_pokemons_arg[i]);
 
-    const excluded_trainers_arg = args.options("--exclude-trainer");
+    const excluded_trainers_arg = args.args.@"exclude-trainer";
     var excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
     for (excluded_trainers) |_, i|
         excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
 
-    const included_trainers_arg = args.options("--include-trainer");
+    const included_trainers_arg = args.args.@"include-trainer";
     var included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
     for (included_trainers) |_, i|
         included_trainers[i] = try ascii.allocLowerString(allocator, included_trainers_arg[i]);
 
     const options = Options{
-        .seed = try util.args.seed(args),
-        .party_size_min = (try util.args.int(args, "--party-size-min", u8)) orelse 1,
-        .party_size_max = (try util.args.int(args, "--party-size-max", u8)) orelse 6,
-        .party_size = (try util.args.enumeration(args, "--party-size", PartySizeOption)) orelse .unchanged,
-        .party_pokemons = (try util.args.enumeration(args, "--party-pokemons", PartyPokemonsOption)) orelse .unchanged,
-        .abilities = (try util.args.enumeration(args, "--abilities", ThemeOption)) orelse .random,
-        .moves = (try util.args.enumeration(args, "--moves", MoveOption)) orelse .unchanged,
-        .held_items = (try util.args.enumeration(args, "--held-items", HeldItemOption)) orelse .unchanged,
-        .stats = (try util.args.enumeration(args, "--stats", StatsOption)) orelse .random,
-        .types = (try util.args.enumeration(args, "--types", ThemeOption)) orelse .random,
+        .seed = args.args.seed orelse std.crypto.random.int(u64),
+        .party_size_min = math.cast(u8, args.args.@"party-size-min" orelse 1) orelse return error.ArgumentToBig,
+        .party_size_max = math.cast(u8, args.args.@"party-size-max" orelse 6) orelse return error.ArgumentToBig,
+        .party_size = args.args.@"party-size" orelse .unchanged,
+        .party_pokemons = args.args.@"party-pokemons" orelse .unchanged,
+        .abilities = args.args.abilities orelse .random,
+        .moves = args.args.moves orelse .unchanged,
+        .held_items = args.args.@"held-items" orelse .unchanged,
+        .stats = args.args.stats orelse .random,
+        .types = args.args.types orelse .random,
         .excluded_pokemons = excluded_pokemons,
         .included_trainers = included_trainers,
         .excluded_trainers = excluded_trainers,

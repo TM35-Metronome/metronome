@@ -42,69 +42,56 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("    --allow-biking <unchanged|nowhere|everywhere>   Change where biking is allowed (gen3 only) (default: unchanged).") catch unreachable,
-    clap.parseParam("    --allow-running <unchanged|nowhere|everywhere>  Change where running is allowed (gen3 only) (default: unchanged).") catch unreachable,
-    clap.parseParam("    --easy-hms                                      Have all Pokémon be able to learn all HMs.") catch unreachable,
-    clap.parseParam("    --fast-text                                     Change text speed to fastest possible for the game.") catch unreachable,
-    clap.parseParam("    --exp-yield-scaling <FLOAT>                     Scale The amount of exp Pokémons give. (default: 1.0).") catch unreachable,
-    clap.parseParam("    --static-level-scaling <FLOAT>                  Scale static Pokémon levels by this number. (default: 1.0).") catch unreachable,
-    clap.parseParam("    --trainer-level-scaling <FLOAT>                 Scale trainer Pokémon levels by this number. (default: 1.0).") catch unreachable,
-    clap.parseParam("    --wild-level-scaling <FLOAT>                    Scale wild Pokémon levels by this number. (default: 1.0).") catch unreachable,
-    clap.parseParam("-h, --help                                          Display this help text and exit.") catch unreachable,
-    clap.parseParam("-v, --version                                       Output version information and exit.") catch unreachable,
+pub const parsers = .{
+    .FLOAT = clap.parsers.float(f64),
+    .@"unchanged|nowhere|everywhere" = clap.parsers.enumeration(Allow),
 };
 
+pub const params = clap.parseParamsComptime(
+    \\    --allow-biking <unchanged|nowhere|everywhere>
+    \\        Change where biking is allowed (gen3 only) (default: unchanged).
+    \\
+    \\    --allow-running <unchanged|nowhere|everywhere>
+    \\        Change where running is allowed (gen3 only) (default: unchanged).
+    \\
+    \\    --easy-hms
+    \\        Have all Pokémon be able to learn all HMs.
+    \\
+    \\    --fast-text
+    \\        Change text speed to fastest possible for the game.
+    \\
+    \\    --exp-yield-scaling <FLOAT>
+    \\        Scale The amount of exp Pokémons give. (default: 1.0).
+    \\
+    \\    --static-level-scaling <FLOAT>
+    \\        Scale static Pokémon levels by this number. (default: 1.0).
+    \\
+    \\    --trainer-level-scaling <FLOAT>
+    \\        Scale trainer Pokémon levels by this number. (default: 1.0).
+    \\
+    \\    --wild-level-scaling <FLOAT>
+    \\        Scale wild Pokémon levels by this number. (default: 1.0).
+    \\
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const biking_arg = args.option("--allow-biking") orelse "unchanged";
-    const running_arg = args.option("--allow-running") orelse "unchanged";
-    const exp_scale_arg = args.option("--exp-yield-scaling") orelse "1.0";
-    const static_scale_arg = args.option("--static-level-scaling") orelse "1.0";
-    const trainer_scale_arg = args.option("--trainer-level-scaling") orelse "1.0";
-    const wild_scale_arg = args.option("--wild-level-scaling") orelse "1.0";
-
-    const easy_hms = args.flag("--easy-hms");
-    const fast_text = args.flag("--fast-text");
-    const biking = std.meta.stringToEnum(Allow, biking_arg);
-    const running = std.meta.stringToEnum(Allow, running_arg);
-    const trainer_scale = fmt.parseFloat(f64, trainer_scale_arg);
-    const wild_scale = fmt.parseFloat(f64, wild_scale_arg);
-    const static_scale = fmt.parseFloat(f64, static_scale_arg);
-    const exp_scale = fmt.parseFloat(f64, exp_scale_arg);
-
-    for ([_]struct { arg: []const u8, value: []const u8, check: ?Allow }{
-        .{ .arg = "--allow-biking", .value = biking_arg, .check = biking },
-        .{ .arg = "--allow-running", .value = running_arg, .check = running },
-    }) |arg| {
-        if (arg.check == null) {
-            log.err("Invalid value for {s}: {s}", .{ arg.arg, arg.value });
-            return error.InvalidArgument;
-        }
-    }
-
-    for ([_]struct { arg: []const u8, value: []const u8, check: anyerror!f64 }{
-        .{ .arg = "--exp-yield-scaling", .value = exp_scale_arg, .check = exp_scale },
-        .{ .arg = "--static-level-scaling", .value = static_scale_arg, .check = static_scale },
-        .{ .arg = "--trainer-level-scaling", .value = trainer_scale_arg, .check = trainer_scale },
-        .{ .arg = "--wild-level-scaling", .value = wild_scale_arg, .check = wild_scale },
-    }) |arg| {
-        if (arg.check) |_| {} else |_| {
-            log.err("Invalid value for {s}: {s}", .{ arg.arg, arg.value });
-            return error.InvalidArgument;
-        }
-    }
-
     return Program{
         .allocator = allocator,
         .options = .{
-            .easy_hms = easy_hms,
-            .fast_text = fast_text,
-            .biking = biking.?,
-            .running = running.?,
-            .exp_scale = exp_scale catch unreachable,
-            .static_scale = static_scale catch unreachable,
-            .trainer_scale = trainer_scale catch unreachable,
-            .wild_scale = wild_scale catch unreachable,
+            .easy_hms = args.args.@"easy-hms",
+            .fast_text = args.args.@"fast-text",
+            .biking = args.args.@"allow-biking" orelse .unchanged,
+            .running = args.args.@"allow-running" orelse .unchanged,
+            .exp_scale = args.args.@"exp-yield-scaling" orelse 1.0,
+            .static_scale = args.args.@"static-level-scaling" orelse 1.0,
+            .trainer_scale = args.args.@"trainer-level-scaling" orelse 1.0,
+            .wild_scale = args.args.@"wild-level-scaling" orelse 1.0,
         },
     };
 }
@@ -311,14 +298,14 @@ test {
         .args = &[_][]const u8{"--allow-biking=everywhere"},
         .patterns = &[_]Pattern{
             Pattern.string(518, 518, "].allow_cycling=true\n"),
-            Pattern.string(000, 000, "].allow_cycling=false\n"),
+            Pattern.string(0, 0, "].allow_cycling=false\n"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=nowhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(000, 000, "].allow_cycling=true\n"),
+            Pattern.string(0, 0, "].allow_cycling=true\n"),
             Pattern.string(518, 518, "].allow_cycling=false\n"),
         },
     });
@@ -335,14 +322,14 @@ test {
         .args = &[_][]const u8{"--allow-running=everywhere"},
         .patterns = &[_]Pattern{
             Pattern.string(518, 518, "].allow_running=true\n"),
-            Pattern.string(000, 000, "].allow_running=false\n"),
+            Pattern.string(0, 0, "].allow_running=false\n"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=nowhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(000, 000, "].allow_running=true\n"),
+            Pattern.string(0, 0, "].allow_running=true\n"),
             Pattern.string(518, 518, "].allow_running=false\n"),
         },
     });
@@ -396,7 +383,7 @@ test {
         .patterns = &[_]Pattern{
             Pattern.glob(97, 97, ".wild_pokemons[*].*.pokemons[*].min_level=10"),
             Pattern.glob(37, 37, ".wild_pokemons[*].*.pokemons[*].max_level=10"),
-            Pattern.glob(09, 09, ".wild_pokemons[*].*.pokemons[*].min_level=20"),
+            Pattern.glob(9, 9, ".wild_pokemons[*].*.pokemons[*].min_level=20"),
             Pattern.glob(44, 44, ".wild_pokemons[*].*.pokemons[*].max_level=20"),
         },
     });
@@ -406,7 +393,7 @@ test {
         .patterns = &[_]Pattern{
             Pattern.glob(97, 97, ".wild_pokemons[*].*.pokemons[*].min_level=20"),
             Pattern.glob(37, 37, ".wild_pokemons[*].*.pokemons[*].max_level=20"),
-            Pattern.glob(09, 09, ".wild_pokemons[*].*.pokemons[*].min_level=40"),
+            Pattern.glob(9, 9, ".wild_pokemons[*].*.pokemons[*].min_level=40"),
             Pattern.glob(44, 44, ".wild_pokemons[*].*.pokemons[*].max_level=40"),
         },
     });
@@ -414,7 +401,7 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--exp-yield-scaling=1.0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(06, 06, ".pokemons[*].base_exp_yield=50"),
+            Pattern.glob(6, 6, ".pokemons[*].base_exp_yield=50"),
             Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=60"),
         },
     });
@@ -422,7 +409,7 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--exp-yield-scaling=2.0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(06, 06, ".pokemons[*].base_exp_yield=100"),
+            Pattern.glob(6, 6, ".pokemons[*].base_exp_yield=100"),
             Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=120"),
         },
     });

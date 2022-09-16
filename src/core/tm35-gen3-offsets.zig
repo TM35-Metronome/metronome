@@ -35,14 +35,23 @@ pub const description =
     \\
 ;
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help     Display this help text and exit.    ") catch unreachable,
-    clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    clap.parseParam("<ROM>") catch unreachable,
+pub const parsers = .{
+    .ROM = clap.parsers.string,
 };
 
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+    \\<ROM>
+    \\
+);
+
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    return Program{ .allocator = allocator, .files = args.positionals() };
+    return Program{ .allocator = allocator, .files = args.positionals };
 }
 
 pub fn run(

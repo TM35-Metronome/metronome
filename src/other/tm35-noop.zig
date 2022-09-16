@@ -26,10 +26,16 @@ pub const description =
 
 allocator: mem.Allocator,
 
-pub const params = &[_]clap.Param(clap.Help){
-    clap.parseParam("-h, --help     Display this help text and exit.") catch unreachable,
-    clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-};
+pub const parsers = .{};
+
+pub const params = clap.parseParamsComptime(
+    \\-h, --help
+    \\        Display this help text and exit.
+    \\
+    \\-v, --version
+    \\        Output version information and exit.
+    \\
+);
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     _ = args;

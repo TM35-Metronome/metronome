@@ -34,7 +34,7 @@ const frame_time = time.ns_per_s / fps;
 
 const platform = switch (builtin.target.os.tag) {
     .windows => struct {
-        pub extern "kernel32" fn GetConsoleWindow() callconv(std.os.windows.WINAPI) std.os.windows.HWND;
+        extern "kernel32" fn GetConsoleWindow() callconv(std.os.windows.WINAPI) std.os.windows.HWND;
     },
     else => struct {},
 };
@@ -174,7 +174,7 @@ pub fn main() anyerror!void {
     }
 }
 
-pub fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {
+fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {
     if (c.nk_group_begin(ctx, name, border_title_group) != 0) {
         defer c.nk_group_end(ctx);
     }
@@ -191,7 +191,7 @@ pub fn noopGroup(ctx: *nk.Context, name: [*:0]const u8) void {
 // | +-+ |                   | |
 // |     +-------------------+ |
 // +---------------------------+
-pub fn drawCommands(
+fn drawCommands(
     ctx: *nk.Context,
     exes: Executables,
     settings: *Settings,
@@ -294,7 +294,7 @@ pub fn drawCommands(
 // | field-b   |             | |
 // |                           |
 // +--------------------------+
-pub fn drawOptions(
+fn drawOptions(
     ctx: *nk.Context,
     popups: *Popups,
     exes: Executables,
@@ -334,12 +334,11 @@ pub fn drawOptions(
 
     for (command.flags) |flag, i| {
         const param = command.params[flag.i];
-        const help = param.id.msg;
 
         var bounds: c.struct_nk_rect = undefined;
         c.nkWidgetBounds(ctx, &bounds);
         if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-            c.nk_tooltip_text(ctx, help.ptr, @intCast(c_int, help.len));
+            paramTooltip(ctx, param);
 
         const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
         const ui_name = toUserfriendly(&tmp_buf, name);
@@ -467,10 +466,11 @@ pub fn drawOptions(
         var bounds: c.struct_nk_rect = undefined;
         c.nkWidgetBounds(ctx, &bounds);
         if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-            c.nk_tooltip_text(ctx, param.id.msg.ptr, @intCast(c_int, param.id.msg.len));
+            paramTooltip(ctx, param);
 
         const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
         const ui_name = toUserfriendly(&tmp_buf, name);
+        c.nk_layout_row_dynamic(ctx, 0, 1);
         c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
 
         c.nk_layout_row_dynamic(ctx, 120, 1);
@@ -490,7 +490,7 @@ pub fn drawOptions(
     }
 }
 
-pub fn drawOptionsLayout(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
+fn drawOptionsLayout(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
     const width = 185;
     c.nk_layout_row_template_begin(ctx, 0);
     c.nk_layout_row_template_push_static(ctx, width);
@@ -500,7 +500,7 @@ pub fn drawOptionsLayout(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
     var bounds: c.struct_nk_rect = undefined;
     c.nkWidgetBounds(ctx, &bounds);
     if (c.nkInputIsMouseHoveringRect(&ctx.input, &bounds) != 0)
-        c.nk_tooltip_text(ctx, param.id.msg.ptr, @intCast(c_int, param.id.msg.len));
+        paramTooltip(ctx, param);
 
     const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
 
@@ -509,7 +509,45 @@ pub fn drawOptionsLayout(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
     c.nk_text(ctx, ui_name.ptr, @intCast(c_int, ui_name.len), c.NK_TEXT_LEFT);
 }
 
-pub const Rom = struct {
+fn paramTooltip(ctx: *nk.Context, param: clap.Param(clap.Help)) void {
+    var buf: [1024 * 4]u8 = undefined;
+    var fbs = io.fixedBufferStream(&buf);
+    clap.help(fbs.writer(), clap.Help, &.{param}, .{
+        .description_indent = 0,
+        .indent = 0,
+        .max_width = 80,
+    }) catch unreachable;
+
+    const text = mem.trimRight(u8, fbs.getWritten(), " \n");
+    var it = mem.split(u8, text, "\n");
+    _ = it.next();
+
+    var width: f32 = 0;
+    while (it.next()) |line| {
+        const line_width = ctx.style.font.*.width.?(
+            ctx.style.font.*.userdata,
+            ctx.style.font.*.height,
+            line.ptr,
+            @intCast(c_int, line.len),
+        );
+        width = math.max(width, line_width);
+    }
+
+    width += ctx.style.window.padding.x * 4;
+    const height = ctx.style.font.*.height + 2 * ctx.style.window.padding.y;
+
+    it = mem.split(u8, text, "\n");
+    _ = it.next();
+
+    if (c.nk_tooltip_begin(ctx, width) != 0) {
+        c.nk_layout_row_dynamic(ctx, height, 1);
+        while (it.next()) |line|
+            c.nk_text(ctx, line.ptr, @intCast(c_int, line.len), c.NK_TEXT_LEFT);
+        c.nk_tooltip_end(ctx);
+    }
+}
+
+const Rom = struct {
     path: util.Path,
     info: util.Path,
 };
@@ -524,7 +562,7 @@ pub const Rom = struct {
 // | | Load Settings | | Save Settings | |
 // | +---------------+ +---------------+ |
 // +-------------------------------------+
-pub fn drawActions(
+fn drawActions(
     ctx: *nk.Context,
     popups: *Popups,
     in_rom: ?Rom,
@@ -681,7 +719,7 @@ pub fn drawActions(
     return rom;
 }
 
-pub fn drawInfo(ctx: *nk.Context, m_rom: ?Rom) void {
+fn drawInfo(ctx: *nk.Context, m_rom: ?Rom) void {
     if (c.nk_group_begin(ctx, "Info", border_title_group) == 0)
         return;
     defer c.nk_group_end(ctx);
@@ -706,7 +744,7 @@ pub fn drawInfo(ctx: *nk.Context, m_rom: ?Rom) void {
 // |          |  Ok  | |
 // |          +------+ |
 // +-------------------+
-pub fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
+fn drawPopups(ctx: *nk.Context, popups: *Popups) !void {
     const layout = ctx.current.*.layout;
     const min_height = layout.*.row.min_height;
     const w: f32 = 350;
@@ -1203,7 +1241,7 @@ const Settings = struct {
             setting.* = try Command.init(arena, i, command);
 
             var args = EscapedSplitterArgIterator{ .separator = separator };
-            var streaming_clap = clap.StreamingClap(clap.Help, EscapedSplitterArgIterator){
+            var streaming_clap = clap.streaming.Clap(clap.Help, EscapedSplitterArgIterator){
                 .iter = &args,
                 .params = command.params,
             };
