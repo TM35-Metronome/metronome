@@ -43,6 +43,10 @@ pub const Command = packed struct {
     tag: Kind,
     _data: Data,
 
+    comptime {
+        std.debug.assert(@sizeOf(Command) == 24);
+    }
+
     /// HACK: Zig crashes when trying to access `_data` during code generation. This
     ///       seem to happen because &cmd.data gives a bit aligned pointer, which then
     ///       does not get properly handled in codegen. This function works around this
