@@ -7,102 +7,6 @@ const meta = std.meta;
 const testing = std.testing;
 const trait = meta.trait;
 
-/// Find the field name which is most likly to be the tag of 'union_field'.
-/// This function looks at all fields declared before 'union_field'. If one
-/// of these field is an enum which has the same fields as the 'union_field's
-/// type, then that is assume to be the tag of 'union_field'.
-pub fn findTagFieldName(comptime Container: type, comptime union_field: []const u8) ?[]const u8 {
-    const info = @typeInfo(Container);
-    if (info != .Struct)
-        @compileError(@typeName(Container) ++ " is not a struct.");
-
-    const container_fields = info.Struct.fields;
-    const u_index = for (container_fields) |f, i| {
-        if (mem.eql(u8, f.name, union_field))
-            break i;
-    } else {
-        @compileError("No field called " ++ union_field ++ " in " ++ @typeName(Container));
-    };
-
-    const union_info = @typeInfo(container_fields[u_index].field_type);
-    if (union_info != .Union)
-        @compileError(union_field ++ " is not a union.");
-
-    // Check all fields before 'union_field'.
-    outer: for (container_fields) |field, i| {
-        if (u_index <= i)
-            break;
-        const Enum = field.field_type;
-        const enum_info = @typeInfo(Enum);
-        if (enum_info != .Enum)
-            continue;
-
-        // Check if 'Enum' and 'Union' have the same names
-        // of their fields.
-        const u_fields = union_info.Union.fields;
-        const e_fields = enum_info.Enum.fields;
-        if (u_fields.len != e_fields.len)
-            continue;
-
-        // The 'Enum' and 'Union' have to have the same fields
-        for (u_fields) |u_field| {
-            if (!@hasField(Enum, u_field.name))
-                continue :outer;
-        }
-
-        return field.name;
-    }
-
-    return null;
-}
-
-fn testFindTagFieldName(comptime Container: type, comptime union_field: []const u8, expect: ?[]const u8) !void {
-    if (comptime findTagFieldName(Container, union_field)) |actual| {
-        try testing.expectEqualStrings(expect.?, actual);
-    } else {
-        try testing.expectEqual(expect, null);
-    }
-}
-
-test "findTagFieldName" {
-    const Union = union {
-        a: void,
-        b: u8,
-        c: u16,
-    };
-
-    const Tag = enum {
-        a,
-        b,
-        c,
-    };
-    try testFindTagFieldName(struct {
-        tag: Tag,
-        un: Union,
-    }, "un", "tag");
-    try testFindTagFieldName(struct {
-        tag: Tag,
-        not_tag: u8,
-        un: Union,
-        not_tag2: struct {},
-        not_tag3: enum {
-            a,
-            b,
-            q,
-        },
-    }, "un", "tag");
-    try testFindTagFieldName(struct {
-        not_tag: u8,
-        un: Union,
-        not_tag2: struct {},
-        not_tag3: enum {
-            a,
-            b,
-            q,
-        },
-    }, "un", null);
-}
-
 /// Calculates the packed size of 'value'. The packed size is the size 'value'
 /// would have if unions did not have to have the size of their biggest field.
 pub fn packedLength(value: anytype) error{InvalidTag}!usize {
@@ -180,20 +84,23 @@ test "packedLength" {
     };
 
     const U = packed union {
-        a: void,
-        b: u8,
-        c: u16,
-    };
-
-    const S = packed struct {
         tag: E,
-        pad: u8,
-        data: U,
+        a: packed struct {
+            tag: E,
+        },
+        b: packed struct {
+            tag: E,
+            a: u8,
+        },
+        c: packed struct {
+            tag: E,
+            a: u16,
+        },
     };
 
-    try testPackedLength(S{ .tag = E.a, .pad = 0, .data = U{ .a = {} } }, 2);
-    try testPackedLength(S{ .tag = E.b, .pad = 0, .data = U{ .b = 0 } }, 3);
-    try testPackedLength(S{ .tag = E.c, .pad = 0, .data = U{ .c = 0 } }, 4);
+    try testPackedLength(U{ .a = .{ .tag = E.a } }, 1);
+    try testPackedLength(U{ .b = .{ .tag = E.b, .a = 0 } }, 2);
+    try testPackedLength(U{ .c = .{ .tag = E.c, .a = 0 } }, 3);
 }
 
 pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool) type {
