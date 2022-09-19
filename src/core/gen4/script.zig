@@ -20,7 +20,7 @@ pub fn getScriptOffsets(data: []const u8) []const li32 {
 
 pub const CommandDecoder = script.CommandDecoder(Command, struct {
     fn isEnd(cmd: Command) bool {
-        switch (cmd.tag) {
+        switch (cmd.kind) {
             .end,
             .@"return",
             .return2,
@@ -32,784 +32,772 @@ pub const CommandDecoder = script.CommandDecoder(Command, struct {
 }.isEnd);
 
 // These commands are only valid in dia/pearl/plat
-pub const Command = packed struct {
-    tag: Kind,
-    _data: Data,
+pub const Command = extern union {
+    kind: Kind,
+    nop0: Arg0,
+    nop1: Arg0,
+    end: Arg0,
+    return2: Return2,
+    cmd_a: Cmd_a,
+    @"if": If,
+    if2: If2,
+    call_standard: CallStandard,
+    exit_standard: Arg0,
+    jump: Jump,
+    call: Call,
+    @"return": Arg0,
+    compare_last_result_jump: CompareLastResultJump,
+    compare_last_result_call: CompareLastResultCall,
+    set_flag: SetFlag,
+    clear_flag: ClearFlag,
+    check_flag: CheckFlag,
+    cmd_21: Cmd_21,
+    cmd_22: Cmd_22,
+    set_trainer_id: SetTrainerId,
+    cmd_24: Cmd_24,
+    clear_trainer_id: ClearTrainerId,
+    script_cmd__add_value: ScriptCmd_AddValue,
+    script_cmd__sub_value: ScriptCmd_SubValue,
+    set_var: SetVar,
+    copy_var: CopyVar,
+    message2: Message2,
+    message: Message,
+    message3: Message3,
+    message4: Message4,
+    message5: Message5,
+    cmd_30: Arg0,
+    wait_button: Arg0,
+    cmd_32: Arg0,
+    cmd_33: Arg0,
+    close_msg_on_key_press: Arg0,
+    freeze_message_box: Arg0,
+    call_message_box: CallMessageBox,
+    color_msg_box: ColorMsgBox,
+    type_message_box: TypeMessageBox,
+    no_map_message_box: Arg0,
+    call_text_msg_box: Arg0,
+    store_menu_status: StoreMenuStatus,
+    show_menu: Arg0,
+    yes_no_box: YesNoBox,
+    multi: Multi,
+    multi2: Multi2,
+    cmd_42: Cmd_42,
+    close_multi: Arg0,
+    multi3: Multi3,
+    multi4: Multi4,
+    txt_msg_scrp_multi: TxtMsgScrpMulti,
+    close_multi4: Arg0,
+    play_fanfare: PlayFanfare,
+    multi_row: MultiRow,
+    play_fanfare2: PlayFanfare2,
+    wait_fanfare: WaitFanfare,
+    play_cry: PlayCry,
+    wait_cry: Arg0,
+    soundfr: Soundfr,
+    cmd_4f: Arg0,
+    play_sound: PlaySound,
+    stop: Stop,
+    restart: Arg0,
+    cmd_53: Cmd_53,
+    switch_music: SwitchMusic,
+    store_saying_learned: StoreSayingLearned,
+    play_sound2: PlaySound2,
+    cmd_58: Cmd_58,
+    check_saying_learned: CheckSayingLearned,
+    swith_music2: SwithMusic2,
+    act_microphone: Arg0,
+    deact_microphone: Arg0,
+    cmd_5d: Arg0,
+    apply_movement: ApplyMovement,
+    wait_movement: Arg0,
+    lock_all: Arg0,
+    release_all: Arg0,
+    lock: Lock,
+    release: Release,
+    add_people: AddPeople,
+    remove_people: RemovePeople,
+    lock_cam: LockCam,
+    zoom_cam: Arg0,
+    face_player: Arg0,
+    check_sprite_position: CheckSpritePosition,
+    check_person_position: CheckPersonPosition,
+    continue_follow: ContinueFollow,
+    follow_hero: FollowHero,
+    take_money: TakeMoney,
+    check_money: CheckMoney,
+    show_money: ShowMoney,
+    hide_money: Arg0,
+    update_money: Arg0,
+    show_coins: ShowCoins,
+    hide_coins: Arg0,
+    update_coins: Arg0,
+    check_coins: CheckCoins,
+    give_coins: GiveCoins,
+    take_coins: TakeCoins,
+    take_item: TakeItem,
+    give_item: GiveItem,
+    check_store_item: CheckStoreItem,
+    check_item: CheckItem,
+    store_item_taken: StoreItemTaken,
+    store_item_type: StoreItemType,
+    send_item_type1: SendItemType1,
+    cmd_84: Cmd_84,
+    check_underground_pc_status: CheckUndergroundPcStatus,
+    cmd_86: Cmd_86,
+    send_item_type2: SendItemType2,
+    cmd_88: Cmd_88,
+    cmd_89: Cmd_89,
+    cmd_8a: Cmd_8a,
+    cmd_8b: Cmd_8b,
+    cmd_8c: Cmd_8c,
+    cmd_8d: Cmd_8d,
+    cmd_8e: Cmd_8e,
+    send_item_type3: SendItemType3,
+    check_pokemon_party: CheckPokemonParty,
+    store_pokemon_party: StorePokemonParty,
+    set_pokemon_party_stored: SetPokemonPartyStored,
+    give_pokemon: GivePokemon,
+    give_egg: GiveEgg,
+    check_move: CheckMove,
+    check_place_stored: CheckPlaceStored,
+    cmd_9b: Cmd_9b,
+    cmd_9c: Arg0,
+    cmd_9d: Arg0,
+    cmd_9e: Arg0,
+    cmd_9f: Arg0,
+    cmd_a0: Arg0,
+    call_end: Arg0,
+    cmd__a2: Arg0,
+    wfc_: Arg0,
+    cmd_a4: Cmd_a4,
+    interview: Arg0,
+    dress_pokemon: DressPokemon,
+    display_dressed_pokemon: DisplayDressedPokemon,
+    display_contest_pokemon: DisplayContestPokemon,
+    open_ball_capsule: Arg0,
+    open_sinnoh_maps: Arg0,
+    open_pc_function: OpenPcFunction,
+    draw_union: Arg0,
+    trainer_case_union: Arg0,
+    trade_union: Arg0,
+    record_mixing_union: Arg0,
+    end_game: Arg0,
+    hall_fame_anm: Arg0,
+    store_wfc_status: StoreWfcStatus,
+    start_wfc: StartWfc,
+    choose_starter: Arg0,
+    battle_starter: Arg0,
+    battle_id: BattleId,
+    set_var_battle: SetVarBattle,
+    check_battle_type: CheckBattleType,
+    set_var_battle2: SetVarBattle2,
+    choose_poke_nick: ChoosePokeNick,
+    fade_screen: FadeScreen,
+    reset_screen: Arg0,
+    warp: Warp,
+    rock_climb_animation: RockClimbAnimation,
+    surf_animation: Arg0,
+    waterfall_animation: WaterfallAnimation,
+    flash_animation: Arg0,
+    defog_animation: Arg0,
+    prep_hm_effect: PrepHmEffect,
+    tuxedo: Arg0,
+    check_bike: CheckBike,
+    ride_bike: RideBike,
+    ride_bike2: RideBike2,
+    give_poke_hiro_anm: GivePokeHiroAnm,
+    stop_give_poke_hiro_anm: Arg0,
+    set_var_hero: SetVarHero,
+    set_variable_rival: SetVariableRival,
+    set_var_alter: SetVarAlter,
+    set_var_poke: SetVarPoke,
+    set_var_item: SetVarItem,
+    set_var_item_num: SetVarItemNum,
+    set_var_atk_item: SetVarAtkItem,
+    set_var_atk: SetVarAtk,
+    set_variable_number: SetVariableNumber,
+    set_var_poke_nick: SetVarPokeNick,
+    set_var_obj: SetVarObj,
+    set_var_trainer: SetVarTrainer,
+    set_var_wi_fi_sprite: SetVarWiFiSprite,
+    set_var_poke_stored: SetVarPokeStored,
+    set_var_str_hero: SetVarStrHero,
+    set_var_str_rival: SetVarStrRival,
+    store_starter: StoreStarter,
+    cmd_df: Cmd_df,
+    set_var_item_stored: SetVarItemStored,
+    set_var_item_stored2: SetVarItemStored2,
+    set_var_swarm_poke: SetVarSwarmPoke,
+    check_swarm_poke: CheckSwarmPoke,
+    start_battle_analysis: StartBattleAnalysis,
+    trainer_battle: TrainerBattle,
+    endtrainer_battle: EndtrainerBattle,
+    trainer_battle_stored: TrainerBattleStored,
+    trainer_battle_stored2: TrainerBattleStored2,
+    check_trainer_status: CheckTrainerStatus,
+    store_league_trainer: StoreLeagueTrainer,
+    lost_go_pc: Arg0,
+    check_trainer_lost: CheckTrainerLost,
+    check_trainer_status2: CheckTrainerStatus2,
+    store_poke_party_defeated: StorePokePartyDefeated,
+    chs_friend: ChsFriend,
+    wire_battle_wait: WireBattleWait,
+    cmd_f6: Arg0,
+    pokecontest: Arg0,
+    start_ovation: StartOvation,
+    stop_ovation: StopOvation,
+    cmd_fa: Cmd_fa,
+    cmd_fb: Cmd_fb,
+    cmd_fc: Cmd_fc,
+    setvar_other_entry: SetvarOtherEntry,
+    cmd_fe: Cmd_fe,
+    setvat_hiro_entry: SetvatHiroEntry,
+    cmd_100: Arg0,
+    black_flash_effect: Arg0,
+    setvar_type_contest: SetvarTypeContest,
+    setvar_rank_contest: SetvarRankContest,
+    cmd_104: Cmd_104,
+    cmd_105: Cmd_105,
+    cmd_106: Cmd_106,
+    cmd_107: Cmd_107,
+    store_people_id_contest: StorePeopleIdContest,
+    cmd_109: Cmd_109,
+    setvat_hiro_entry2: SetvatHiroEntry2,
+    act_people_contest: ActPeopleContest,
+    cmd_10c: Cmd_10c,
+    cmd_10d: Cmd_10d,
+    cmd_10e: Cmd_10e,
+    cmd_10f: Cmd_10f,
+    cmd_110: Cmd_110,
+    flash_contest: FlashContest,
+    end_flash: Arg0,
+    carpet_anm: Arg0,
+    cmd_114: Arg0,
+    cmd_115: Cmd_115,
+    show_lnk_cnt_record: Arg0,
+    cmd_117: Arg0,
+    cmd_118: Arg0,
+    store_pokerus: StorePokerus,
+    warp_map_elevator: WarpMapElevator,
+    check_floor: CheckFloor,
+    start_lift: StartLift,
+    store_sin_pokemon_seen: StoreSinPokemonSeen,
+    cmd_11f: Cmd_11f,
+    store_tot_pokemon_seen: StoreTotPokemonSeen,
+    store_nat_pokemon_seen: StoreNatPokemonSeen,
+    set_var_text_pokedex: SetVarTextPokedex,
+    wild_battle: WildBattle,
+    starter_battle: StarterBattle,
+    explanation_battle: Arg0,
+    honey_tree_battle: Arg0,
+    check_if_honey_slathered: CheckIfHoneySlathered,
+    random_battle: Arg0,
+    stop_random_battle: Arg0,
+    write_autograph: Arg0,
+    store_save_data: StoreSaveData,
+    check_save_data: CheckSaveData,
+    check_dress: CheckDress,
+    check_contest_win: CheckContestWin,
+    store_photo_name: StorePhotoName,
+    give_poketch: Arg0,
+    check_ptch_appl: CheckPtchAppl,
+    act_pktch_appl: ActPktchAppl,
+    store_poketch_app: StorePoketchApp,
+    friend_b_t: FriendBT,
+    friend_b_t2: Arg0,
+    cmd_138: Cmd_138,
+    open_union_function2: OpenUnionFunction2,
+    start_union: Arg0,
+    link_closed: Arg0,
+    set_union_function_id: SetUnionFunctionId,
+    close_union_function: Arg0,
+    close_union_function2: Arg0,
+    set_var_union_message: SetVarUnionMessage,
+    store_your_decision_union: StoreYourDecisionUnion,
+    store_other_decision_union: StoreOtherDecisionUnion,
+    cmd_142: Arg0,
+    check_other_decision_union: CheckOtherDecisionUnion,
+    store_your_decision_union2: StoreYourDecisionUnion2,
+    store_other_decision_union2: StoreOtherDecisionUnion2,
+    check_other_decision_union2: CheckOtherDecisionUnion2,
+    pokemart: Pokemart,
+    pokemart1: Pokemart1,
+    pokemart2: Pokemart2,
+    pokemart3: Pokemart3,
+    defeat_go_pokecenter: Arg0,
+    act_bike: ActBike,
+    check_gender: CheckGender,
+    heal_pokemon: Arg0,
+    deact_wireless: Arg0,
+    delete_entry: Arg0,
+    cmd_151: Arg0,
+    underground_id: UndergroundId,
+    union_room: Arg0,
+    open_wi_fi_sprite: Arg0,
+    store_wi_fi_sprite: StoreWiFiSprite,
+    act_wi_fi_sprite: ActWiFiSprite,
+    cmd_157: Cmd_157,
+    activate_pokedex: Arg0,
+    give_running_shoes: Arg0,
+    check_badge: CheckBadge,
+    enable_badge: EnableBadge,
+    disable_badge: DisableBadge,
+    check_follow: CheckFollow,
+    start_follow: Arg0,
+    stop_follow: Arg0,
+    cmd_164: Arg0,
+    cmd_166: Cmd_166,
+    prepare_door_animation: PrepareDoorAnimation,
+    wait_action: WaitAction,
+    wait_close: WaitClose,
+    open_door: OpenDoor,
+    close_door: CloseDoor,
+    act_dcare_function: Arg0,
+    store_p_d_care_num: StorePDCareNum,
+    pastoria_city_function: Arg0,
+    pastoria_city_function2: Arg0,
+    hearthrome_gym_function: Arg0,
+    hearthrome_gym_function2: Arg0,
+    canalave_gym_function: Arg0,
+    veilstone_gym_function: Arg0,
+    sunishore_gym_function: SunishoreGymFunction,
+    sunishore_gym_function2: SunishoreGymFunction2,
+    check_party_number: CheckPartyNumber,
+    open_berry_pouch: OpenBerryPouch,
+    cmd_179: Cmd_179,
+    cmd_17a: Cmd_17a,
+    cmd_17b: Cmd_17b,
+    set_nature_pokemon: SetNaturePokemon,
+    cmd_17d: Cmd_17d,
+    cmd_17e: Cmd_17e,
+    cmd_17f: Cmd_17f,
+    cmd_180: Cmd_180,
+    cmd_181: Cmd_181,
+    check_deoxis: CheckDeoxis,
+    cmd_183: Cmd_183,
+    cmd_184: Cmd_184,
+    cmd_185: Arg0,
+    change_ow_position: ChangeOwPosition,
+    set_ow_position: SetOwPosition,
+    change_ow_movement: ChangeOwMovement,
+    release_ow: ReleaseOw,
+    set_tile_passable: SetTilePassable,
+    set_tile_locked: SetTileLocked,
+    set_ows_follow: SetOwsFollow,
+    show_clock_save: Arg0,
+    hide_clock_save: Arg0,
+    cmd_18f: Cmd_18f,
+    set_save_data: SetSaveData,
+    chs_pokemenu: Arg0,
+    chs_pokemenu2: Arg0,
+    store_poke_menu2: StorePokeMenu2,
+    chs_poke_contest: ChsPokeContest,
+    store_poke_contest: StorePokeContest,
+    show_poke_info: ShowPokeInfo,
+    store_poke_move: StorePokeMove,
+    check_poke_egg: CheckPokeEgg,
+    compare_poke_nick: ComparePokeNick,
+    check_party_number_union: CheckPartyNumberUnion,
+    check_poke_party_health: CheckPokePartyHealth,
+    check_poke_party_num_d_care: CheckPokePartyNumDCare,
+    check_egg_union: CheckEggUnion,
+    underground_function: UndergroundFunction,
+    underground_function2: UndergroundFunction2,
+    underground_start: Arg0,
+    take_money_d_care: TakeMoneyDCare,
+    take_pokemon_d_care: TakePokemonDCare,
+    act_egg_day_c_man: Arg0,
+    deact_egg_day_c_man: Arg0,
+    set_var_poke_and_money_d_care: SetVarPokeAndMoneyDCare,
+    check_money_d_care: CheckMoneyDCare,
+    egg_animation: Arg0,
+    set_var_poke_and_level_d_care: SetVarPokeAndLevelDCare,
+    set_var_poke_chosen_d_care: SetVarPokeChosenDCare,
+    give_poke_d_care: GivePokeDCare,
+    add_people2: AddPeople2,
+    remove_people2: RemovePeople2,
+    mail_box: Arg0,
+    check_mail: CheckMail,
+    show_record_list: ShowRecordList,
+    check_time: CheckTime,
+    check_id_player: CheckIdPlayer,
+    random_text_stored: RandomTextStored,
+    store_happy_poke: StoreHappyPoke,
+    store_happy_status: StoreHappyStatus,
+    set_var_data_day_care: SetVarDataDayCare,
+    check_face_position: CheckFacePosition,
+    store_poke_d_care_love: StorePokeDCareLove,
+    check_status_solaceon_event: CheckStatusSolaceonEvent,
+    check_poke_party: CheckPokeParty,
+    copy_pokemon_height: CopyPokemonHeight,
+    set_variable_pokemon_height: SetVariablePokemonHeight,
+    compare_pokemon_height: ComparePokemonHeight,
+    check_pokemon_height: CheckPokemonHeight,
+    show_move_info: Arg0,
+    store_poke_delete: StorePokeDelete,
+    store_move_delete: StoreMoveDelete,
+    check_move_num_delete: CheckMoveNumDelete,
+    store_delete_move: StoreDeleteMove,
+    check_delete_move: CheckDeleteMove,
+    setvar_move_delete: SetvarMoveDelete,
+    cmd_1cc: Arg0,
+    de_activate_leader: DeActivateLeader,
+    hm_functions: HmFunctions,
+    flash_duration: FlashDuration,
+    defog_duration: DefogDuration,
+    give_accessories: GiveAccessories,
+    check_accessories: CheckAccessories,
+    cmd_1d4: Cmd_1d4,
+    give_accessories2: GiveAccessories2,
+    check_accessories2: CheckAccessories2,
+    berry_poffin: BerryPoffin,
+    set_var_b_tower_chs: SetVarBTowerChs,
+    battle_room_result: BattleRoomResult,
+    activate_b_tower: Arg0,
+    store_b_tower_data: StoreBTowerData,
+    close_b_tower: Arg0,
+    call_b_tower_functions: CallBTowerFunctions,
+    random_team_b_tower: RandomTeamBTower,
+    store_prize_num_b_tower: StorePrizeNumBTower,
+    store_people_id_b_tower: StorePeopleIdBTower,
+    call_b_tower_wire_function: CallBTowerWireFunction,
+    store_p_chosen_wire_b_tower: StorePChosenWireBTower,
+    store_rank_data_wire_b_tower: StoreRankDataWireBTower,
+    cmd_1e4: Cmd_1e4,
+    random_event: RandomEvent,
+    check_sinnoh_pokedex: CheckSinnohPokedex,
+    check_national_pokedex: CheckNationalPokedex,
+    show_sinnoh_sheet: Arg0,
+    show_national_sheet: Arg0,
+    cmd_1ec: Arg0,
+    store_trophy_pokemon: StoreTrophyPokemon,
+    cmd_1ef: Cmd_1ef,
+    cmd_1f0: Cmd_1f0,
+    check_act_fossil: CheckActFossil,
+    cmd_1f2: Arg0,
+    cmd_1f3: Arg0,
+    check_item_chosen: CheckItemChosen,
+    compare_item_poke_fossil: CompareItemPokeFossil,
+    check_pokemon_level: CheckPokemonLevel,
+    check_is_pokemon_poisoned: CheckIsPokemonPoisoned,
+    pre_wfc: Arg0,
+    store_furniture: StoreFurniture,
+    copy_furniture: CopyFurniture,
+    set_b_castle_function_id: SetBCastleFunctionId,
+    b_castle_funct_return: BCastleFunctReturn,
+    cmd_200: Cmd_200,
+    check_effect_hm: CheckEffectHm,
+    great_marsh_function: GreatMarshFunction,
+    battle_poke_colosseum: BattlePokeColosseum,
+    warp_last_elevator: Arg0,
+    open_geo_net: Arg0,
+    great_marsh_bynocule: Arg0,
+    store_poke_colosseum_lost: StorePokeColosseumLost,
+    pokemon_picture: PokemonPicture,
+    hide_picture: Arg0,
+    cmd_20a: Cmd_20a,
+    cmd_20b: Arg0,
+    cmd_20c: Arg0,
+    setvar_mt_coronet: SetvarMtCoronet,
+    cmd_20e: Arg0,
+    check_quic_trine_coordinates: CheckQuicTrineCoordinates,
+    setvar_quick_train_coordinates: SetvarQuickTrainCoordinates,
+    move_train_anm: MoveTrainAnm,
+    store_poke_nature: StorePokeNature,
+    check_poke_nature: CheckPokeNature,
+    random_hallowes: RandomHallowes,
+    start_amity: Arg0,
+    cmd_216: Cmd_216,
+    cmd_217: Cmd_217,
+    chs_r_s_poke: ChsRSPoke,
+    set_s_poke: SetSPoke,
+    check_s_poke: CheckSPoke,
+    cmd_21b: Arg0,
+    act_swarm_poke: ActSwarmPoke,
+    cmd_21d: Cmd_21d,
+    cmd_21e: Arg0,
+    check_move_remember: CheckMoveRemember,
+    cmd_220: Arg0,
+    store_poke_remember: StorePokeRemember,
+    cmd_222: Arg0,
+    store_remember_move: Arg0,
+    teach_move: TeachMove,
+    check_teach_move: CheckTeachMove,
+    set_trade_id: SetTradeId,
+    check_pokemon_trade: CheckPokemonTrade,
+    trade_chosen_pokemon: TradeChosenPokemon,
+    stop_trade: Arg0,
+    cmd_22b: Arg0,
+    close_oak_assistant_event: Arg0,
+    check_nat_pokedex_status: CheckNatPokedexStatus,
+    check_ribbon_number: CheckRibbonNumber,
+    check_ribbon: CheckRibbon,
+    give_ribbon: GiveRibbon,
+    setvar_ribbon: SetvarRibbon,
+    check_happy_ribbon: CheckHappyRibbon,
+    check_pokemart: CheckPokemart,
+    check_furniture: CheckFurniture,
+    cmd_236: Cmd_236,
+    check_phrase_box_input: CheckPhraseBoxInput,
+    check_status_phrase_box: CheckStatusPhraseBox,
+    decide_rules: DecideRules,
+    check_foot_step: CheckFootStep,
+    heal_pokemon_animation: HealPokemonAnimation,
+    store_elevator_direction: StoreElevatorDirection,
+    ship_animation: ShipAnimation,
+    cmd_23e: Cmd_23e,
+    store_phrase_box1_w: StorePhraseBox1W,
+    store_phrase_box2_w: StorePhraseBox2W,
+    setvar_phrase_box1_w: SetvarPhraseBox1W,
+    store_mt_coronet: StoreMtCoronet,
+    check_first_poke_party: CheckFirstPokeParty,
+    check_poke_type: CheckPokeType,
+    check_phrase_box_input2: CheckPhraseBoxInput2,
+    store_und_time: StoreUndTime,
+    prepare_pc_animation: PreparePcAnimation,
+    open_pc_animation: OpenPcAnimation,
+    close_pc_animation: ClosePcAnimation,
+    check_lotto_number: CheckLottoNumber,
+    compare_lotto_number: CompareLottoNumber,
+    setvar_id_poke_boxes: SetvarIdPokeBoxes,
+    cmd_250: Arg0,
+    check_boxes_number: CheckBoxesNumber,
+    stop_great_marsh: StopGreatMarsh,
+    check_poke_catching_show: CheckPokeCatchingShow,
+    close_catching_show: Arg0,
+    check_catching_show_records: CheckCatchingShowRecords,
+    sprt_save: Arg0,
+    ret_sprt_save: Arg0,
+    elev_lg_animation: Arg0,
+    check_elev_lg_anm: CheckElevLgAnm,
+    elev_ir_anm: Arg0,
+    stop_elev_anm: Arg0,
+    check_elev_position: CheckElevPosition,
+    galact_anm: Arg0,
+    galact_anm2: Arg0,
+    main_event: MainEvent,
+    check_accessories3: CheckAccessories3,
+    act_deoxis_form_change: ActDeoxisFormChange,
+    change_form_deoxis: ChangeFormDeoxis,
+    check_coombe_event: CheckCoombeEvent,
+    act_contest_map: Arg0,
+    cmd_266: Arg0,
+    pokecasino: Pokecasino,
+    check_time2: CheckTime2,
+    regigigas_anm: RegigigasAnm,
+    cresselia_anm: CresseliaAnm,
+    check_regi: CheckRegi,
+    check_massage: CheckMassage,
+    unown_message_box: UnownMessageBox,
+    check_p_catching_show: CheckPCatchingShow,
+    cmd_26f: Arg0,
+    shaymin_anm: ShayminAnm,
+    thank_name_insert: ThankNameInsert,
+    setvar_shaymin: SetvarShaymin,
+    setvar_accessories2: SetvarAccessories2,
+    cmd_274: Cmd_274,
+    check_record_casino: CheckRecordCasino,
+    check_coins_casino: CheckCoinsCasino,
+    srt_random_num: SrtRandomNum,
+    check_poke_level2: CheckPokeLevel2,
+    cmd_279: Cmd_279,
+    league_castle_view: Arg0,
+    cmd_27b: Arg0,
+    setvar_amity_pokemon: SetvarAmityPokemon,
+    cmd_27d: Cmd_27d,
+    check_first_time_v_shop: CheckFirstTimeVShop,
+    cmd_27f: Cmd_27f,
+    setvar_id_number: SetvarIdNumber,
+    cmd_281: Cmd_281,
+    setvar_unk: SetvarUnk,
+    cmd_283: Cmd_283,
+    check_ruin_maniac: CheckRuinManiac,
+    check_turn_back: CheckTurnBack,
+    check_ug_people_num: CheckUgPeopleNum,
+    check_ug_fossil_num: CheckUgFossilNum,
+    check_ug_traps_num: CheckUgTrapsNum,
+    check_poffin_item: CheckPoffinItem,
+    check_poffin_case_status: CheckPoffinCaseStatus,
+    unk_funct2: UnkFunct2,
+    pokemon_party_picture: PokemonPartyPicture,
+    act_learning: Arg0,
+    set_sound_learning: SetSoundLearning,
+    check_first_time_champion: CheckFirstTimeChampion,
+    choose_poke_d_care: ChoosePokeDCare,
+    store_poke_d_care: StorePokeDCare,
+    cmd_292: Cmd_292,
+    check_master_rank: CheckMasterRank,
+    show_battle_points_box: ShowBattlePointsBox,
+    hide_battle_points_box: Arg0,
+    update_battle_points_box: Arg0,
+    take_b_points: TakeBPoints,
+    check_b_points: CheckBPoints,
+    cmd_29c: Cmd_29c,
+    choice_multi: ChoiceMulti,
+    h_m_effect: HMEffect,
+    camera_bump_effect: CameraBumpEffect,
+    double_battle: DoubleBattle,
+    apply_movement2: ApplyMovement2,
+    cmd_2a2: Cmd_2a2,
+    store_act_hero_friend_code: StoreActHeroFriendCode,
+    store_act_other_friend_code: StoreActOtherFriendCode,
+    choose_trade_pokemon: Arg0,
+    chs_prize_casino: ChsPrizeCasino,
+    check_plate: CheckPlate,
+    take_coins_casino: TakeCoinsCasino,
+    check_coins_casino2: CheckCoinsCasino2,
+    compare_phrase_box_input: ComparePhraseBoxInput,
+    store_seal_num: StoreSealNum,
+    activate_mystery_gift: Arg0,
+    check_follow_battle: CheckFollowBattle,
+    cmd_2af: Cmd_2af,
+    cmd_2b0: Arg0,
+    cmd_2b1: Arg0,
+    cmd_2b2: Arg0,
+    setvar_seal_random: SetvarSealRandom,
+    darkrai_function: DarkraiFunction,
+    cmd_2b6: Cmd_2b6,
+    store_poke_num_party: StorePokeNumParty,
+    store_poke_nickname: StorePokeNickname,
+    close_multi_union: Arg0,
+    check_battle_union: CheckBattleUnion,
+    cmd_2_b_b: Arg0,
+    check_wild_battle2: CheckWildBattle2,
+    wild_battle2: WildBattle,
+    store_trainer_card_star: StoreTrainerCardStar,
+    bike_ride: Arg0,
+    cmd_2c0: Cmd_2c0,
+    show_save_box: Arg0,
+    hide_save_box: Arg0,
+    cmd_2c3: Cmd_2c3,
+    show_b_tower_some: ShowBTowerSome,
+    delete_saves_b_factory: DeleteSavesBFactory,
+    spin_trade_union: Arg0,
+    check_version_game: CheckVersionGame,
+    show_b_arcade_recors: ShowBArcadeRecors,
+    eterna_gym_anm: Arg0,
+    floral_clock_animation: Arg0,
+    check_poke_party2: CheckPokeParty2,
+    check_poke_castle: CheckPokeCastle,
+    act_team_galactic_events: ActTeamGalacticEvents,
+    choose_wire_poke_b_castle: ChooseWirePokeBCastle,
+    cmd_2d0: Cmd_2d0,
+    cmd_2d1: Cmd_2d1,
+    cmd_2d2: Cmd_2d2,
+    cmd_2d3: Cmd_2d3,
+    cmd_2d4: Cmd_2d4,
+    cmd_2d5: Cmd_2d5,
+    cmd_2d6: Arg0,
+    cmd_2d7: Cmd_2d7,
+    cmd_2d8: Cmd_2d8,
+    cmd_2d9: Cmd_2d9,
+    cmd_2da: Cmd_2da,
+    cmd_2db: Cmd_2db,
+    cmd_2dc: Cmd_2dc,
+    cmd_2dd: Cmd_2dd,
+    cmd_2de: Cmd_2de,
+    cmd_2df: Cmd_2df,
+    cmd_2e0: Cmd_2e0,
+    cmd_2e1: Cmd_2e1,
+    cmd_2e2: Arg0,
+    cmd_2e3: Arg0,
+    cmd_2e4: Cmd_2e4,
+    cmd_2e5: Cmd_2e5,
+    cmd_2e6: Cmd_2e6,
+    cmd_2e7: Cmd_2e7,
+    cmd_2e8: Cmd_2e8,
+    cmd_2e9: Cmd_2e9,
+    cmd_2ea: Cmd_2ea,
+    cmd_2eb: Cmd_2eb,
+    cmd_2ec: Cmd_2ec,
+    cmd_2ed: Arg0,
+    cmd_2ee: Cmd_2ee,
+    cmd_2f0: Arg0,
+    cmd_2f2: Arg0,
+    cmd_2f3: Cmd_2f3,
+    cmd_2f4: Cmd_2f4,
+    cmd_2f5: Cmd_2f5,
+    cmd_2f6: Cmd_2f6,
+    cmd_2f7: Cmd_2f7,
+    cmd_2f8: Arg0,
+    cmd_2f9: Cmd_2f9,
+    cmd_2fa: Cmd_2fa,
+    cmd_2fb: Arg0,
+    cmd_2fc: Cmd_2fc,
+    cmd_2fd: Cmd_2fd,
+    cmd_2fe: Cmd_2fe,
+    cmd_2ff: Cmd_2ff,
+    cmd_300: Arg0,
+    cmd_302: Cmd_302,
+    cmd_303: Cmd_303,
+    cmd_304: Cmd_304,
+    cmd_305: Cmd_305,
+    cmd_306: Cmd_306,
+    cmd_307: Cmd_307,
+    cmd_308: Cmd_308,
+    cmd_309: Arg0,
+    cmd_30a: Cmd_30a,
+    cmd_30b: Arg0,
+    cmd_30c: Arg0,
+    cmd_30d: Cmd_30d,
+    cmd_30e: Cmd_30e,
+    cmd_30f: Cmd_30f,
+    cmd_310: Arg0,
+    cmd_311: Cmd_311,
+    cmd_312: Cmd_312,
+    cmd_313: Cmd_313,
+    cmd_314: Cmd_314,
+    cmd_315: Cmd_315,
+    cmd_316: Arg0,
+    cmd_317: Cmd_317,
+    wild_battle3: WildBattle,
+    cmd_319: Cmd_319,
+    cmd_31a: Cmd_31a,
+    cmd_31b: Cmd_31b,
+    cmd_31c: Cmd_31c,
+    cmd_31d: Cmd_31d,
+    cmd_31e: Cmd_31e,
+    cmd_31f: Arg0,
+    cmd_320: Arg0,
+    cmd_321: Cmd_321,
+    cmd_322: Arg0,
+    cmd_323: Cmd_323,
+    cmd_324: Cmd_324,
+    cmd_325: Cmd_325,
+    cmd_326: Cmd_326,
+    cmd_327: Cmd_327,
+    portal_effect: PortalEffect,
+    cmd_329: Cmd_329,
+    cmd_32a: Cmd_32a,
+    cmd_32b: Cmd_32b,
+    cmd_32c: Cmd_32c,
+    cmd_32d: Arg0,
+    cmd_32e: Arg0,
+    cmd_32f: Cmd_32f,
+    cmd_330: Arg0,
+    cmd_331: Arg0,
+    cmd_332: Arg0,
+    cmd_333: Cmd_333,
+    cmd_334: Cmd_334,
+    cmd_335: Cmd_335,
+    cmd_336: Cmd_336,
+    cmd_337: Cmd_337,
+    cmd_338: Arg0,
+    cmd_339: Arg0,
+    cmd_33a: Cmd_33a,
+    cmd_33c: Cmd_33c,
+    cmd_33d: Cmd_33d,
+    cmd_33e: Cmd_33e,
+    cmd_33f: Cmd_33f,
+    cmd_340: Cmd_340,
+    cmd_341: Cmd_341,
+    cmd_342: Cmd_342,
+    cmd_343: Cmd_343,
+    cmd_344: Cmd_344,
+    cmd_345: Cmd_345,
+    cmd_346: Cmd_346,
+    display_floor: DisplayFloor,
 
-    /// HACK: Zig crashes when trying to access `_data` during code generation. This
-    ///       seem to happen because &cmd.data gives a bit aligned pointer, which then
-    ///       does not get properly handled in codegen. This function works around this
-    ///       by manually skipping the tag field to get the data field.
-    pub fn data(cmd: *Command) *Data {
-        const bytes = mem.asBytes(cmd);
-        return mem.bytesAsValue(Data, bytes[@sizeOf(Kind)..][0..@sizeOf(Data)]);
-    }
-
-    const Data = packed union {
-        nop0: void,
-        nop1: void,
-        end: void,
-        return2: Return2,
-        cmd_a: Cmd_a,
-        @"if": If,
-        if2: If2,
-        call_standard: CallStandard,
-        exit_standard: void,
-        jump: Jump,
-        call: Call,
-        @"return": void,
-        compare_last_result_jump: CompareLastResultJump,
-        compare_last_result_call: CompareLastResultCall,
-        set_flag: SetFlag,
-        clear_flag: ClearFlag,
-        check_flag: CheckFlag,
-        cmd_21: Cmd_21,
-        cmd_22: Cmd_22,
-        set_trainer_id: SetTrainerId,
-        cmd_24: Cmd_24,
-        clear_trainer_id: ClearTrainerId,
-        script_cmd__add_value: ScriptCmd_AddValue,
-        script_cmd__sub_value: ScriptCmd_SubValue,
-        set_var: SetVar,
-        copy_var: CopyVar,
-        message2: Message2,
-        message: Message,
-        message3: Message3,
-        message4: Message4,
-        message5: Message5,
-        cmd_30: void,
-        wait_button: void,
-        cmd_32: void,
-        cmd_33: void,
-        close_msg_on_key_press: void,
-        freeze_message_box: void,
-        call_message_box: CallMessageBox,
-        color_msg_box: ColorMsgBox,
-        type_message_box: TypeMessageBox,
-        no_map_message_box: void,
-        call_text_msg_box: void,
-        store_menu_status: StoreMenuStatus,
-        show_menu: void,
-        yes_no_box: YesNoBox,
-        multi: Multi,
-        multi2: Multi2,
-        cmd_42: Cmd_42,
-        close_multi: void,
-        multi3: Multi3,
-        multi4: Multi4,
-        txt_msg_scrp_multi: TxtMsgScrpMulti,
-        close_multi4: void,
-        play_fanfare: PlayFanfare,
-        multi_row: MultiRow,
-        play_fanfare2: PlayFanfare2,
-        wait_fanfare: WaitFanfare,
-        play_cry: PlayCry,
-        wait_cry: void,
-        soundfr: Soundfr,
-        cmd_4f: void,
-        play_sound: PlaySound,
-        stop: Stop,
-        restart: void,
-        cmd_53: Cmd_53,
-        switch_music: SwitchMusic,
-        store_saying_learned: StoreSayingLearned,
-        play_sound2: PlaySound2,
-        cmd_58: Cmd_58,
-        check_saying_learned: CheckSayingLearned,
-        swith_music2: SwithMusic2,
-        act_microphone: void,
-        deact_microphone: void,
-        cmd_5d: void,
-        apply_movement: ApplyMovement,
-        wait_movement: void,
-        lock_all: void,
-        release_all: void,
-        lock: Lock,
-        release: Release,
-        add_people: AddPeople,
-        remove_people: RemovePeople,
-        lock_cam: LockCam,
-        zoom_cam: void,
-        face_player: void,
-        check_sprite_position: CheckSpritePosition,
-        check_person_position: CheckPersonPosition,
-        continue_follow: ContinueFollow,
-        follow_hero: FollowHero,
-        take_money: TakeMoney,
-        check_money: CheckMoney,
-        show_money: ShowMoney,
-        hide_money: void,
-        update_money: void,
-        show_coins: ShowCoins,
-        hide_coins: void,
-        update_coins: void,
-        check_coins: CheckCoins,
-        give_coins: GiveCoins,
-        take_coins: TakeCoins,
-        take_item: TakeItem,
-        give_item: GiveItem,
-        check_store_item: CheckStoreItem,
-        check_item: CheckItem,
-        store_item_taken: StoreItemTaken,
-        store_item_type: StoreItemType,
-        send_item_type1: SendItemType1,
-        cmd_84: Cmd_84,
-        check_underground_pc_status: CheckUndergroundPcStatus,
-        cmd_86: Cmd_86,
-        send_item_type2: SendItemType2,
-        cmd_88: Cmd_88,
-        cmd_89: Cmd_89,
-        cmd_8a: Cmd_8a,
-        cmd_8b: Cmd_8b,
-        cmd_8c: Cmd_8c,
-        cmd_8d: Cmd_8d,
-        cmd_8e: Cmd_8e,
-        send_item_type3: SendItemType3,
-        check_pokemon_party: CheckPokemonParty,
-        store_pokemon_party: StorePokemonParty,
-        set_pokemon_party_stored: SetPokemonPartyStored,
-        give_pokemon: GivePokemon,
-        give_egg: GiveEgg,
-        check_move: CheckMove,
-        check_place_stored: CheckPlaceStored,
-        cmd_9b: Cmd_9b,
-        cmd_9c: void,
-        cmd_9d: void,
-        cmd_9e: void,
-        cmd_9f: void,
-        cmd_a0: void,
-        call_end: void,
-        cmd__a2: void,
-        wfc_: void,
-        cmd_a4: Cmd_a4,
-        interview: void,
-        dress_pokemon: DressPokemon,
-        display_dressed_pokemon: DisplayDressedPokemon,
-        display_contest_pokemon: DisplayContestPokemon,
-        open_ball_capsule: void,
-        open_sinnoh_maps: void,
-        open_pc_function: OpenPcFunction,
-        draw_union: void,
-        trainer_case_union: void,
-        trade_union: void,
-        record_mixing_union: void,
-        end_game: void,
-        hall_fame_anm: void,
-        store_wfc_status: StoreWfcStatus,
-        start_wfc: StartWfc,
-        choose_starter: void,
-        battle_starter: void,
-        battle_id: BattleId,
-        set_var_battle: SetVarBattle,
-        check_battle_type: CheckBattleType,
-        set_var_battle2: SetVarBattle2,
-        choose_poke_nick: ChoosePokeNick,
-        fade_screen: FadeScreen,
-        reset_screen: void,
-        warp: Warp,
-        rock_climb_animation: RockClimbAnimation,
-        surf_animation: void,
-        waterfall_animation: WaterfallAnimation,
-        flash_animation: void,
-        defog_animation: void,
-        prep_hm_effect: PrepHmEffect,
-        tuxedo: void,
-        check_bike: CheckBike,
-        ride_bike: RideBike,
-        ride_bike2: RideBike2,
-        give_poke_hiro_anm: GivePokeHiroAnm,
-        stop_give_poke_hiro_anm: void,
-        set_var_hero: SetVarHero,
-        set_variable_rival: SetVariableRival,
-        set_var_alter: SetVarAlter,
-        set_var_poke: SetVarPoke,
-        set_var_item: SetVarItem,
-        set_var_item_num: SetVarItemNum,
-        set_var_atk_item: SetVarAtkItem,
-        set_var_atk: SetVarAtk,
-        set_variable_number: SetVariableNumber,
-        set_var_poke_nick: SetVarPokeNick,
-        set_var_obj: SetVarObj,
-        set_var_trainer: SetVarTrainer,
-        set_var_wi_fi_sprite: SetVarWiFiSprite,
-        set_var_poke_stored: SetVarPokeStored,
-        set_var_str_hero: SetVarStrHero,
-        set_var_str_rival: SetVarStrRival,
-        store_starter: StoreStarter,
-        cmd_df: Cmd_df,
-        set_var_item_stored: SetVarItemStored,
-        set_var_item_stored2: SetVarItemStored2,
-        set_var_swarm_poke: SetVarSwarmPoke,
-        check_swarm_poke: CheckSwarmPoke,
-        start_battle_analysis: StartBattleAnalysis,
-        trainer_battle: TrainerBattle,
-        endtrainer_battle: EndtrainerBattle,
-        trainer_battle_stored: TrainerBattleStored,
-        trainer_battle_stored2: TrainerBattleStored2,
-        check_trainer_status: CheckTrainerStatus,
-        store_league_trainer: StoreLeagueTrainer,
-        lost_go_pc: void,
-        check_trainer_lost: CheckTrainerLost,
-        check_trainer_status2: CheckTrainerStatus2,
-        store_poke_party_defeated: StorePokePartyDefeated,
-        chs_friend: ChsFriend,
-        wire_battle_wait: WireBattleWait,
-        cmd_f6: void,
-        pokecontest: void,
-        start_ovation: StartOvation,
-        stop_ovation: StopOvation,
-        cmd_fa: Cmd_fa,
-        cmd_fb: Cmd_fb,
-        cmd_fc: Cmd_fc,
-        setvar_other_entry: SetvarOtherEntry,
-        cmd_fe: Cmd_fe,
-        setvat_hiro_entry: SetvatHiroEntry,
-        cmd_100: void,
-        black_flash_effect: void,
-        setvar_type_contest: SetvarTypeContest,
-        setvar_rank_contest: SetvarRankContest,
-        cmd_104: Cmd_104,
-        cmd_105: Cmd_105,
-        cmd_106: Cmd_106,
-        cmd_107: Cmd_107,
-        store_people_id_contest: StorePeopleIdContest,
-        cmd_109: Cmd_109,
-        setvat_hiro_entry2: SetvatHiroEntry2,
-        act_people_contest: ActPeopleContest,
-        cmd_10c: Cmd_10c,
-        cmd_10d: Cmd_10d,
-        cmd_10e: Cmd_10e,
-        cmd_10f: Cmd_10f,
-        cmd_110: Cmd_110,
-        flash_contest: FlashContest,
-        end_flash: void,
-        carpet_anm: void,
-        cmd_114: void,
-        cmd_115: Cmd_115,
-        show_lnk_cnt_record: void,
-        cmd_117: void,
-        cmd_118: void,
-        store_pokerus: StorePokerus,
-        warp_map_elevator: WarpMapElevator,
-        check_floor: CheckFloor,
-        start_lift: StartLift,
-        store_sin_pokemon_seen: StoreSinPokemonSeen,
-        cmd_11f: Cmd_11f,
-        store_tot_pokemon_seen: StoreTotPokemonSeen,
-        store_nat_pokemon_seen: StoreNatPokemonSeen,
-        set_var_text_pokedex: SetVarTextPokedex,
-        wild_battle: WildBattle,
-        starter_battle: StarterBattle,
-        explanation_battle: void,
-        honey_tree_battle: void,
-        check_if_honey_slathered: CheckIfHoneySlathered,
-        random_battle: void,
-        stop_random_battle: void,
-        write_autograph: void,
-        store_save_data: StoreSaveData,
-        check_save_data: CheckSaveData,
-        check_dress: CheckDress,
-        check_contest_win: CheckContestWin,
-        store_photo_name: StorePhotoName,
-        give_poketch: void,
-        check_ptch_appl: CheckPtchAppl,
-        act_pktch_appl: ActPktchAppl,
-        store_poketch_app: StorePoketchApp,
-        friend_b_t: FriendBT,
-        friend_b_t2: void,
-        cmd_138: Cmd_138,
-        open_union_function2: OpenUnionFunction2,
-        start_union: void,
-        link_closed: void,
-        set_union_function_id: SetUnionFunctionId,
-        close_union_function: void,
-        close_union_function2: void,
-        set_var_union_message: SetVarUnionMessage,
-        store_your_decision_union: StoreYourDecisionUnion,
-        store_other_decision_union: StoreOtherDecisionUnion,
-        cmd_142: void,
-        check_other_decision_union: CheckOtherDecisionUnion,
-        store_your_decision_union2: StoreYourDecisionUnion2,
-        store_other_decision_union2: StoreOtherDecisionUnion2,
-        check_other_decision_union2: CheckOtherDecisionUnion2,
-        pokemart: Pokemart,
-        pokemart1: Pokemart1,
-        pokemart2: Pokemart2,
-        pokemart3: Pokemart3,
-        defeat_go_pokecenter: void,
-        act_bike: ActBike,
-        check_gender: CheckGender,
-        heal_pokemon: void,
-        deact_wireless: void,
-        delete_entry: void,
-        cmd_151: void,
-        underground_id: UndergroundId,
-        union_room: void,
-        open_wi_fi_sprite: void,
-        store_wi_fi_sprite: StoreWiFiSprite,
-        act_wi_fi_sprite: ActWiFiSprite,
-        cmd_157: Cmd_157,
-        activate_pokedex: void,
-        give_running_shoes: void,
-        check_badge: CheckBadge,
-        enable_badge: EnableBadge,
-        disable_badge: DisableBadge,
-        check_follow: CheckFollow,
-        start_follow: void,
-        stop_follow: void,
-        cmd_164: void,
-        cmd_166: Cmd_166,
-        prepare_door_animation: PrepareDoorAnimation,
-        wait_action: WaitAction,
-        wait_close: WaitClose,
-        open_door: OpenDoor,
-        close_door: CloseDoor,
-        act_dcare_function: void,
-        store_p_d_care_num: StorePDCareNum,
-        pastoria_city_function: void,
-        pastoria_city_function2: void,
-        hearthrome_gym_function: void,
-        hearthrome_gym_function2: void,
-        canalave_gym_function: void,
-        veilstone_gym_function: void,
-        sunishore_gym_function: SunishoreGymFunction,
-        sunishore_gym_function2: SunishoreGymFunction2,
-        check_party_number: CheckPartyNumber,
-        open_berry_pouch: OpenBerryPouch,
-        cmd_179: Cmd_179,
-        cmd_17a: Cmd_17a,
-        cmd_17b: Cmd_17b,
-        set_nature_pokemon: SetNaturePokemon,
-        cmd_17d: Cmd_17d,
-        cmd_17e: Cmd_17e,
-        cmd_17f: Cmd_17f,
-        cmd_180: Cmd_180,
-        cmd_181: Cmd_181,
-        check_deoxis: CheckDeoxis,
-        cmd_183: Cmd_183,
-        cmd_184: Cmd_184,
-        cmd_185: void,
-        change_ow_position: ChangeOwPosition,
-        set_ow_position: SetOwPosition,
-        change_ow_movement: ChangeOwMovement,
-        release_ow: ReleaseOw,
-        set_tile_passable: SetTilePassable,
-        set_tile_locked: SetTileLocked,
-        set_ows_follow: SetOwsFollow,
-        show_clock_save: void,
-        hide_clock_save: void,
-        cmd_18f: Cmd_18f,
-        set_save_data: SetSaveData,
-        chs_pokemenu: void,
-        chs_pokemenu2: void,
-        store_poke_menu2: StorePokeMenu2,
-        chs_poke_contest: ChsPokeContest,
-        store_poke_contest: StorePokeContest,
-        show_poke_info: ShowPokeInfo,
-        store_poke_move: StorePokeMove,
-        check_poke_egg: CheckPokeEgg,
-        compare_poke_nick: ComparePokeNick,
-        check_party_number_union: CheckPartyNumberUnion,
-        check_poke_party_health: CheckPokePartyHealth,
-        check_poke_party_num_d_care: CheckPokePartyNumDCare,
-        check_egg_union: CheckEggUnion,
-        underground_function: UndergroundFunction,
-        underground_function2: UndergroundFunction2,
-        underground_start: void,
-        take_money_d_care: TakeMoneyDCare,
-        take_pokemon_d_care: TakePokemonDCare,
-        act_egg_day_c_man: void,
-        deact_egg_day_c_man: void,
-        set_var_poke_and_money_d_care: SetVarPokeAndMoneyDCare,
-        check_money_d_care: CheckMoneyDCare,
-        egg_animation: void,
-        set_var_poke_and_level_d_care: SetVarPokeAndLevelDCare,
-        set_var_poke_chosen_d_care: SetVarPokeChosenDCare,
-        give_poke_d_care: GivePokeDCare,
-        add_people2: AddPeople2,
-        remove_people2: RemovePeople2,
-        mail_box: void,
-        check_mail: CheckMail,
-        show_record_list: ShowRecordList,
-        check_time: CheckTime,
-        check_id_player: CheckIdPlayer,
-        random_text_stored: RandomTextStored,
-        store_happy_poke: StoreHappyPoke,
-        store_happy_status: StoreHappyStatus,
-        set_var_data_day_care: SetVarDataDayCare,
-        check_face_position: CheckFacePosition,
-        store_poke_d_care_love: StorePokeDCareLove,
-        check_status_solaceon_event: CheckStatusSolaceonEvent,
-        check_poke_party: CheckPokeParty,
-        copy_pokemon_height: CopyPokemonHeight,
-        set_variable_pokemon_height: SetVariablePokemonHeight,
-        compare_pokemon_height: ComparePokemonHeight,
-        check_pokemon_height: CheckPokemonHeight,
-        show_move_info: void,
-        store_poke_delete: StorePokeDelete,
-        store_move_delete: StoreMoveDelete,
-        check_move_num_delete: CheckMoveNumDelete,
-        store_delete_move: StoreDeleteMove,
-        check_delete_move: CheckDeleteMove,
-        setvar_move_delete: SetvarMoveDelete,
-        cmd_1cc: void,
-        de_activate_leader: DeActivateLeader,
-        hm_functions: HmFunctions,
-        flash_duration: FlashDuration,
-        defog_duration: DefogDuration,
-        give_accessories: GiveAccessories,
-        check_accessories: CheckAccessories,
-        cmd_1d4: Cmd_1d4,
-        give_accessories2: GiveAccessories2,
-        check_accessories2: CheckAccessories2,
-        berry_poffin: BerryPoffin,
-        set_var_b_tower_chs: SetVarBTowerChs,
-        battle_room_result: BattleRoomResult,
-        activate_b_tower: void,
-        store_b_tower_data: StoreBTowerData,
-        close_b_tower: void,
-        call_b_tower_functions: CallBTowerFunctions,
-        random_team_b_tower: RandomTeamBTower,
-        store_prize_num_b_tower: StorePrizeNumBTower,
-        store_people_id_b_tower: StorePeopleIdBTower,
-        call_b_tower_wire_function: CallBTowerWireFunction,
-        store_p_chosen_wire_b_tower: StorePChosenWireBTower,
-        store_rank_data_wire_b_tower: StoreRankDataWireBTower,
-        cmd_1e4: Cmd_1e4,
-        random_event: RandomEvent,
-        check_sinnoh_pokedex: CheckSinnohPokedex,
-        check_national_pokedex: CheckNationalPokedex,
-        show_sinnoh_sheet: void,
-        show_national_sheet: void,
-        cmd_1ec: void,
-        store_trophy_pokemon: StoreTrophyPokemon,
-        cmd_1ef: Cmd_1ef,
-        cmd_1f0: Cmd_1f0,
-        check_act_fossil: CheckActFossil,
-        cmd_1f2: void,
-        cmd_1f3: void,
-        check_item_chosen: CheckItemChosen,
-        compare_item_poke_fossil: CompareItemPokeFossil,
-        check_pokemon_level: CheckPokemonLevel,
-        check_is_pokemon_poisoned: CheckIsPokemonPoisoned,
-        pre_wfc: void,
-        store_furniture: StoreFurniture,
-        copy_furniture: CopyFurniture,
-        set_b_castle_function_id: SetBCastleFunctionId,
-        b_castle_funct_return: BCastleFunctReturn,
-        cmd_200: Cmd_200,
-        check_effect_hm: CheckEffectHm,
-        great_marsh_function: GreatMarshFunction,
-        battle_poke_colosseum: BattlePokeColosseum,
-        warp_last_elevator: void,
-        open_geo_net: void,
-        great_marsh_bynocule: void,
-        store_poke_colosseum_lost: StorePokeColosseumLost,
-        pokemon_picture: PokemonPicture,
-        hide_picture: void,
-        cmd_20a: Cmd_20a,
-        cmd_20b: void,
-        cmd_20c: void,
-        setvar_mt_coronet: SetvarMtCoronet,
-        cmd_20e: void,
-        check_quic_trine_coordinates: CheckQuicTrineCoordinates,
-        setvar_quick_train_coordinates: SetvarQuickTrainCoordinates,
-        move_train_anm: MoveTrainAnm,
-        store_poke_nature: StorePokeNature,
-        check_poke_nature: CheckPokeNature,
-        random_hallowes: RandomHallowes,
-        start_amity: void,
-        cmd_216: Cmd_216,
-        cmd_217: Cmd_217,
-        chs_r_s_poke: ChsRSPoke,
-        set_s_poke: SetSPoke,
-        check_s_poke: CheckSPoke,
-        cmd_21b: void,
-        act_swarm_poke: ActSwarmPoke,
-        cmd_21d: Cmd_21d,
-        cmd_21e: void,
-        check_move_remember: CheckMoveRemember,
-        cmd_220: void,
-        store_poke_remember: StorePokeRemember,
-        cmd_222: void,
-        store_remember_move: void,
-        teach_move: TeachMove,
-        check_teach_move: CheckTeachMove,
-        set_trade_id: SetTradeId,
-        check_pokemon_trade: CheckPokemonTrade,
-        trade_chosen_pokemon: TradeChosenPokemon,
-        stop_trade: void,
-        cmd_22b: void,
-        close_oak_assistant_event: void,
-        check_nat_pokedex_status: CheckNatPokedexStatus,
-        check_ribbon_number: CheckRibbonNumber,
-        check_ribbon: CheckRibbon,
-        give_ribbon: GiveRibbon,
-        setvar_ribbon: SetvarRibbon,
-        check_happy_ribbon: CheckHappyRibbon,
-        check_pokemart: CheckPokemart,
-        check_furniture: CheckFurniture,
-        cmd_236: Cmd_236,
-        check_phrase_box_input: CheckPhraseBoxInput,
-        check_status_phrase_box: CheckStatusPhraseBox,
-        decide_rules: DecideRules,
-        check_foot_step: CheckFootStep,
-        heal_pokemon_animation: HealPokemonAnimation,
-        store_elevator_direction: StoreElevatorDirection,
-        ship_animation: ShipAnimation,
-        cmd_23e: Cmd_23e,
-        store_phrase_box1_w: StorePhraseBox1W,
-        store_phrase_box2_w: StorePhraseBox2W,
-        setvar_phrase_box1_w: SetvarPhraseBox1W,
-        store_mt_coronet: StoreMtCoronet,
-        check_first_poke_party: CheckFirstPokeParty,
-        check_poke_type: CheckPokeType,
-        check_phrase_box_input2: CheckPhraseBoxInput2,
-        store_und_time: StoreUndTime,
-        prepare_pc_animation: PreparePcAnimation,
-        open_pc_animation: OpenPcAnimation,
-        close_pc_animation: ClosePcAnimation,
-        check_lotto_number: CheckLottoNumber,
-        compare_lotto_number: CompareLottoNumber,
-        setvar_id_poke_boxes: SetvarIdPokeBoxes,
-        cmd_250: void,
-        check_boxes_number: CheckBoxesNumber,
-        stop_great_marsh: StopGreatMarsh,
-        check_poke_catching_show: CheckPokeCatchingShow,
-        close_catching_show: void,
-        check_catching_show_records: CheckCatchingShowRecords,
-        sprt_save: void,
-        ret_sprt_save: void,
-        elev_lg_animation: void,
-        check_elev_lg_anm: CheckElevLgAnm,
-        elev_ir_anm: void,
-        stop_elev_anm: void,
-        check_elev_position: CheckElevPosition,
-        galact_anm: void,
-        galact_anm2: void,
-        main_event: MainEvent,
-        check_accessories3: CheckAccessories3,
-        act_deoxis_form_change: ActDeoxisFormChange,
-        change_form_deoxis: ChangeFormDeoxis,
-        check_coombe_event: CheckCoombeEvent,
-        act_contest_map: void,
-        cmd_266: void,
-        pokecasino: Pokecasino,
-        check_time2: CheckTime2,
-        regigigas_anm: RegigigasAnm,
-        cresselia_anm: CresseliaAnm,
-        check_regi: CheckRegi,
-        check_massage: CheckMassage,
-        unown_message_box: UnownMessageBox,
-        check_p_catching_show: CheckPCatchingShow,
-        cmd_26f: void,
-        shaymin_anm: ShayminAnm,
-        thank_name_insert: ThankNameInsert,
-        setvar_shaymin: SetvarShaymin,
-        setvar_accessories2: SetvarAccessories2,
-        cmd_274: Cmd_274,
-        check_record_casino: CheckRecordCasino,
-        check_coins_casino: CheckCoinsCasino,
-        srt_random_num: SrtRandomNum,
-        check_poke_level2: CheckPokeLevel2,
-        cmd_279: Cmd_279,
-        league_castle_view: void,
-        cmd_27b: void,
-        setvar_amity_pokemon: SetvarAmityPokemon,
-        cmd_27d: Cmd_27d,
-        check_first_time_v_shop: CheckFirstTimeVShop,
-        cmd_27f: Cmd_27f,
-        setvar_id_number: SetvarIdNumber,
-        cmd_281: Cmd_281,
-        setvar_unk: SetvarUnk,
-        cmd_283: Cmd_283,
-        check_ruin_maniac: CheckRuinManiac,
-        check_turn_back: CheckTurnBack,
-        check_ug_people_num: CheckUgPeopleNum,
-        check_ug_fossil_num: CheckUgFossilNum,
-        check_ug_traps_num: CheckUgTrapsNum,
-        check_poffin_item: CheckPoffinItem,
-        check_poffin_case_status: CheckPoffinCaseStatus,
-        unk_funct2: UnkFunct2,
-        pokemon_party_picture: PokemonPartyPicture,
-        act_learning: void,
-        set_sound_learning: SetSoundLearning,
-        check_first_time_champion: CheckFirstTimeChampion,
-        choose_poke_d_care: ChoosePokeDCare,
-        store_poke_d_care: StorePokeDCare,
-        cmd_292: Cmd_292,
-        check_master_rank: CheckMasterRank,
-        show_battle_points_box: ShowBattlePointsBox,
-        hide_battle_points_box: void,
-        update_battle_points_box: void,
-        take_b_points: TakeBPoints,
-        check_b_points: CheckBPoints,
-        cmd_29c: Cmd_29c,
-        choice_multi: ChoiceMulti,
-        h_m_effect: HMEffect,
-        camera_bump_effect: CameraBumpEffect,
-        double_battle: DoubleBattle,
-        apply_movement2: ApplyMovement2,
-        cmd_2a2: Cmd_2a2,
-        store_act_hero_friend_code: StoreActHeroFriendCode,
-        store_act_other_friend_code: StoreActOtherFriendCode,
-        choose_trade_pokemon: void,
-        chs_prize_casino: ChsPrizeCasino,
-        check_plate: CheckPlate,
-        take_coins_casino: TakeCoinsCasino,
-        check_coins_casino2: CheckCoinsCasino2,
-        compare_phrase_box_input: ComparePhraseBoxInput,
-        store_seal_num: StoreSealNum,
-        activate_mystery_gift: void,
-        check_follow_battle: CheckFollowBattle,
-        cmd_2af: Cmd_2af,
-        cmd_2b0: void,
-        cmd_2b1: void,
-        cmd_2b2: void,
-        setvar_seal_random: SetvarSealRandom,
-        darkrai_function: DarkraiFunction,
-        cmd_2b6: Cmd_2b6,
-        store_poke_num_party: StorePokeNumParty,
-        store_poke_nickname: StorePokeNickname,
-        close_multi_union: void,
-        check_battle_union: CheckBattleUnion,
-        cmd_2_b_b: void,
-        check_wild_battle2: CheckWildBattle2,
-        wild_battle2: WildBattle,
-        store_trainer_card_star: StoreTrainerCardStar,
-        bike_ride: void,
-        cmd_2c0: Cmd_2c0,
-        show_save_box: void,
-        hide_save_box: void,
-        cmd_2c3: Cmd_2c3,
-        show_b_tower_some: ShowBTowerSome,
-        delete_saves_b_factory: DeleteSavesBFactory,
-        spin_trade_union: void,
-        check_version_game: CheckVersionGame,
-        show_b_arcade_recors: ShowBArcadeRecors,
-        eterna_gym_anm: void,
-        floral_clock_animation: void,
-        check_poke_party2: CheckPokeParty2,
-        check_poke_castle: CheckPokeCastle,
-        act_team_galactic_events: ActTeamGalacticEvents,
-        choose_wire_poke_b_castle: ChooseWirePokeBCastle,
-        cmd_2d0: Cmd_2d0,
-        cmd_2d1: Cmd_2d1,
-        cmd_2d2: Cmd_2d2,
-        cmd_2d3: Cmd_2d3,
-        cmd_2d4: Cmd_2d4,
-        cmd_2d5: Cmd_2d5,
-        cmd_2d6: void,
-        cmd_2d7: Cmd_2d7,
-        cmd_2d8: Cmd_2d8,
-        cmd_2d9: Cmd_2d9,
-        cmd_2da: Cmd_2da,
-        cmd_2db: Cmd_2db,
-        cmd_2dc: Cmd_2dc,
-        cmd_2dd: Cmd_2dd,
-        cmd_2de: Cmd_2de,
-        cmd_2df: Cmd_2df,
-        cmd_2e0: Cmd_2e0,
-        cmd_2e1: Cmd_2e1,
-        cmd_2e2: void,
-        cmd_2e3: void,
-        cmd_2e4: Cmd_2e4,
-        cmd_2e5: Cmd_2e5,
-        cmd_2e6: Cmd_2e6,
-        cmd_2e7: Cmd_2e7,
-        cmd_2e8: Cmd_2e8,
-        cmd_2e9: Cmd_2e9,
-        cmd_2ea: Cmd_2ea,
-        cmd_2eb: Cmd_2eb,
-        cmd_2ec: Cmd_2ec,
-        cmd_2ed: void,
-        cmd_2ee: Cmd_2ee,
-        cmd_2f0: void,
-        cmd_2f2: void,
-        cmd_2f3: Cmd_2f3,
-        cmd_2f4: Cmd_2f4,
-        cmd_2f5: Cmd_2f5,
-        cmd_2f6: Cmd_2f6,
-        cmd_2f7: Cmd_2f7,
-        cmd_2f8: void,
-        cmd_2f9: Cmd_2f9,
-        cmd_2fa: Cmd_2fa,
-        cmd_2fb: void,
-        cmd_2fc: Cmd_2fc,
-        cmd_2fd: Cmd_2fd,
-        cmd_2fe: Cmd_2fe,
-        cmd_2ff: Cmd_2ff,
-        cmd_300: void,
-        cmd_302: Cmd_302,
-        cmd_303: Cmd_303,
-        cmd_304: Cmd_304,
-        cmd_305: Cmd_305,
-        cmd_306: Cmd_306,
-        cmd_307: Cmd_307,
-        cmd_308: Cmd_308,
-        cmd_309: void,
-        cmd_30a: Cmd_30a,
-        cmd_30b: void,
-        cmd_30c: void,
-        cmd_30d: Cmd_30d,
-        cmd_30e: Cmd_30e,
-        cmd_30f: Cmd_30f,
-        cmd_310: void,
-        cmd_311: Cmd_311,
-        cmd_312: Cmd_312,
-        cmd_313: Cmd_313,
-        cmd_314: Cmd_314,
-        cmd_315: Cmd_315,
-        cmd_316: void,
-        cmd_317: Cmd_317,
-        wild_battle3: WildBattle,
-        cmd_319: Cmd_319,
-        cmd_31a: Cmd_31a,
-        cmd_31b: Cmd_31b,
-        cmd_31c: Cmd_31c,
-        cmd_31d: Cmd_31d,
-        cmd_31e: Cmd_31e,
-        cmd_31f: void,
-        cmd_320: void,
-        cmd_321: Cmd_321,
-        cmd_322: void,
-        cmd_323: Cmd_323,
-        cmd_324: Cmd_324,
-        cmd_325: Cmd_325,
-        cmd_326: Cmd_326,
-        cmd_327: Cmd_327,
-        portal_effect: PortalEffect,
-        cmd_329: Cmd_329,
-        cmd_32a: Cmd_32a,
-        cmd_32b: Cmd_32b,
-        cmd_32c: Cmd_32c,
-        cmd_32d: void,
-        cmd_32e: void,
-        cmd_32f: Cmd_32f,
-        cmd_330: void,
-        cmd_331: void,
-        cmd_332: void,
-        cmd_333: Cmd_333,
-        cmd_334: Cmd_334,
-        cmd_335: Cmd_335,
-        cmd_336: Cmd_336,
-        cmd_337: Cmd_337,
-        cmd_338: void,
-        cmd_339: void,
-        cmd_33a: Cmd_33a,
-        cmd_33c: Cmd_33c,
-        cmd_33d: Cmd_33d,
-        cmd_33e: Cmd_33e,
-        cmd_33f: Cmd_33f,
-        cmd_340: Cmd_340,
-        cmd_341: Cmd_341,
-        cmd_342: Cmd_342,
-        cmd_343: Cmd_343,
-        cmd_344: Cmd_344,
-        cmd_345: Cmd_345,
-        cmd_346: Cmd_346,
-        display_floor: DisplayFloor,
-    };
     pub const Kind = enum(u16) {
         nop0 = lu16.init(0x0).inner,
         nop1 = lu16.init(0x1).inner,
@@ -1575,119 +1563,155 @@ pub const Command = packed struct {
         cmd_346 = lu16.init(0x346).inner,
         display_floor = lu16.init(0x347).inner,
     };
+    pub const Arg0 = packed struct {
+        kind: Kind,
+    };
     pub const Return2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_a = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
     };
     pub const If = packed struct {
+        kind: Kind,
         @"var": lu16,
         nr: lu16,
     };
     pub const If2 = packed struct {
+        kind: Kind,
         @"var": lu16,
         nr: lu16,
     };
     pub const CallStandard = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Jump = packed struct {
+        kind: Kind,
         adr: li32,
     };
     pub const Call = packed struct {
+        kind: Kind,
         adr: li32,
     };
     pub const CompareLastResultJump = packed struct {
+        kind: Kind,
         cond: u8,
         adr: li32,
     };
     pub const CompareLastResultCall = packed struct {
+        kind: Kind,
         cond: u8,
         adr: li32,
     };
     pub const SetFlag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ClearFlag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFlag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_21 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_22 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetTrainerId = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_24 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ClearTrainerId = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ScriptCmd_AddValue = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ScriptCmd_SubValue = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVar = packed struct {
+        kind: Kind,
         destination: lu16,
         value: lu16,
     };
     pub const CopyVar = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Message2 = packed struct {
+        kind: Kind,
         nr: u8,
     };
     pub const Message = packed struct {
+        kind: Kind,
         nr: u8,
     };
     pub const Message3 = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const Message4 = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const Message5 = packed struct {
+        kind: Kind,
         nr: u8,
     };
     pub const CallMessageBox = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: lu16,
         d: lu16,
     };
     pub const ColorMsgBox = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const TypeMessageBox = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CallTextMsgBox = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const StoreMenuStatus = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const YesNoBox = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const Multi = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: u8,
@@ -1695,6 +1719,7 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Multi2 = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: u8,
@@ -1702,10 +1727,12 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Cmd_42 = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
     };
     pub const Multi3 = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: u8,
@@ -1713,6 +1740,7 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Multi4 = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: u8,
@@ -1720,297 +1748,371 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const TxtMsgScrpMulti = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const PlayFanfare = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const MultiRow = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const PlayFanfare2 = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const WaitFanfare = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PlayCry = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Soundfr = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PlaySound = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Stop = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_53 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SwitchMusic = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreSayingLearned = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PlaySound2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_58 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CheckSayingLearned = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SwithMusic2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ApplyMovement = packed struct {
+        kind: Kind,
         a: lu16,
         adr: lu32,
     };
     pub const Lock = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Release = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const AddPeople = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const RemovePeople = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const LockCam = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckSpritePosition = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPersonPosition = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const ContinueFollow = packed struct {
+        kind: Kind,
         a: lu16,
         b: u8,
     };
     pub const FollowHero = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const TakeMoney = packed struct {
+        kind: Kind,
         a: lu32,
     };
     pub const CheckMoney = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu32,
     };
     pub const ShowMoney = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ShowCoins = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckCoins = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const GiveCoins = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TakeCoins = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TakeItem = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const GiveItem = packed struct {
+        kind: Kind,
         itemid: lu16,
         quantity: lu16,
         @"return": lu16,
     };
     pub const CheckStoreItem = packed struct {
+        kind: Kind,
         itemid: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckItem = packed struct {
+        kind: Kind,
         itemid: lu16,
         quantity: lu16,
         @"return": lu16,
     };
     pub const StoreItemTaken = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreItemType = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SendItemType1 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_84 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckUndergroundPcStatus = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_86 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SendItemType2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_88 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_89 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_8a = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_8b = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_8c = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_8d = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_8e = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SendItemType3 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPokemonParty = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StorePokemonParty = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetPokemonPartyStored = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const GivePokemon = packed struct {
+        kind: Kind,
         species: lu16,
         level: lu16,
         item: lu16,
         res: lu16,
     };
     pub const GiveEgg = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckMove = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPlaceStored = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_9b = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_a4 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const DressPokemon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const DisplayDressedPokemon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const DisplayContestPokemon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const OpenPcFunction = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const StoreWfcStatus = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StartWfc = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const BattleId = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckBattleType = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarBattle2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ChoosePokeNick = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const FadeScreen = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Warp = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2018,251 +2120,320 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const RockClimbAnimation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SurfAnimation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const WaterfallAnimation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PrepHmEffect = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckBike = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const RideBike = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const RideBike2 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const GivePokeHiroAnm = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarHero = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetVariableRival = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetVarAlter = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetVarPoke = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarItem = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarItemNum = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarAtkItem = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarAtk = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVariableNumber = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarPokeNick = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarObj = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarTrainer = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarWiFiSprite = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetVarPokeStored = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: lu16,
         d: u8,
     };
     pub const SetVarStrHero = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetVarStrRival = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const StoreStarter = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_df = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarItemStored = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarItemStored2 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const SetVarSwarmPoke = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckSwarmPoke = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StartBattleAnalysis = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TrainerBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const EndtrainerBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const TrainerBattleStored = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const TrainerBattleStored2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckTrainerStatus = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreLeagueTrainer = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckTrainerLost = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckTrainerStatus2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokePartyDefeated = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ChsFriend = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const WireBattleWait = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const StartOvation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StopOvation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_fa = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_fb = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_fc = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvarOtherEntry = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_fe = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvatHiroEntry = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvarTypeContest = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvarRankContest = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_104 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_105 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_106 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_107 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePeopleIdContest = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_109 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvatHiroEntry2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ActPeopleContest = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_10c = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_10d = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_10e = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_10f = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_110 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const FlashContest = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_115 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokerus = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const WarpMapElevator = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2270,152 +2441,197 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const CheckFloor = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StartLift = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: lu16,
         d: lu16,
     };
     pub const StoreSinPokemonSeen = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_11f = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreTotPokemonSeen = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreNatPokemonSeen = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarTextPokedex = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const WildBattle = packed struct {
+        kind: Kind,
         species: lu16,
         level: lu16,
     };
     pub const StarterBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckIfHoneySlathered = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreSaveData = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckSaveData = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckDress = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckContestWin = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StorePhotoName = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPtchAppl = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ActPktchAppl = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePoketchApp = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const FriendBT = packed struct {
+        kind: Kind,
         nr: lu16,
     };
     pub const Cmd_138 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const OpenUnionFunction2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetUnionFunctionId = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarUnionMessage = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreYourDecisionUnion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreOtherDecisionUnion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckOtherDecisionUnion = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreYourDecisionUnion2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreOtherDecisionUnion2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckOtherDecisionUnion2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Pokemart = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Pokemart1 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Pokemart2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Pokemart3 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ActBike = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckGender = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const UndergroundId = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreWiFiSprite = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ActWiFiSprite = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_157 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckBadge = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const EnableBadge = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const DisableBadge = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFollow = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_166 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PrepareDoorAnimation = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2423,78 +2639,101 @@ pub const Command = packed struct {
         e: u8,
     };
     pub const WaitAction = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const WaitClose = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const OpenDoor = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CloseDoor = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const StorePDCareNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SunishoreGymFunction = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SunishoreGymFunction2 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CheckPartyNumber = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const OpenBerryPouch = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const Cmd_179 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_17a = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_17b = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: lu16,
     };
     pub const SetNaturePokemon = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_17d = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_17e = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_17f = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_180 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_181 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckDeoxis = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_183 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_184 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ChangeOwPosition = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SetOwPosition = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2502,199 +2741,251 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const ChangeOwMovement = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ReleaseOw = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetTilePassable = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SetTileLocked = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SetOwsFollow = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_18f = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetSaveData = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokeMenu2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ChsPokeContest = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const StorePokeContest = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ShowPokeInfo = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokeMove = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokeEgg = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ComparePokeNick = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPartyNumberUnion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokePartyHealth = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPokePartyNumDCare = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckEggUnion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const UndergroundFunction = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const UndergroundFunction2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TakeMoneyDCare = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TakePokemonDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVarPokeAndMoneyDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckMoneyDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVarPokeAndLevelDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVarPokeChosenDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const GivePokeDCare = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const AddPeople2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const RemovePeople2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckMail = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ShowRecordList = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckTime = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckIdPlayer = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const RandomTextStored = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreHappyPoke = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreHappyStatus = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVarDataDayCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const CheckFacePosition = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokeDCareLove = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckStatusSolaceonEvent = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokeParty = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CopyPokemonHeight = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetVariablePokemonHeight = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ComparePokemonHeight = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPokemonHeight = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const StorePokeDelete = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreMoveDelete = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckMoveNumDelete = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreDeleteMove = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckDeleteMove = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SetvarMoveDelete = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: lu16,
     };
     pub const DeActivateLeader = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2702,155 +2993,199 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const HmFunctions = packed struct {
-        a: enum(u8) {
-            @"1" = 1,
-            @"2" = 2,
-        },
-        b: packed union {
-            @"1": void,
+        kind: Kind,
+        a: packed union {
+            kind: Kind2,
+            @"1": packed struct {
+                kind: Kind2,
+            },
             @"2": packed struct {
+                kind: Kind2,
                 b: lu16,
             },
         },
+
+        pub const Kind2 = enum(u8) {
+            @"1" = 1,
+            @"2" = 2,
+        };
     };
     pub const FlashDuration = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const DefogDuration = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const GiveAccessories = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckAccessories = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_1d4 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const GiveAccessories2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckAccessories2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const BerryPoffin = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetVarBTowerChs = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const BattleRoomResult = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreBTowerData = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CallBTowerFunctions = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const RandomTeamBTower = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const StorePrizeNumBTower = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePeopleIdBTower = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CallBTowerWireFunction = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const StorePChosenWireBTower = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreRankDataWireBTower = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_1e4 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const RandomEvent = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckSinnohPokedex = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckNationalPokedex = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreTrophyPokemon = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_1ef = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_1f0 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckActFossil = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckItemChosen = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CompareItemPokeFossil = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPokemonLevel = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckIsPokemonPoisoned = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreFurniture = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CopyFurniture = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetBCastleFunctionId = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const BCastleFunctReturn = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: lu16,
         d: u8,
     };
     pub const Cmd_200 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckEffectHm = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const GreatMarshFunction = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const BattlePokeColosseum = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -2858,149 +3193,228 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const StorePokeColosseumLost = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PokemonPicture = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_20a = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvarMtCoronet = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckQuicTrineCoordinates = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvarQuickTrainCoordinates = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const MoveTrainAnm = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const StorePokeNature = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPokeNature = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const RandomHallowes = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_216 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_217 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ChsRSPoke = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetSPoke = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckSPoke = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ActSwarmPoke = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const Cmd_21d = packed struct {
-        a: enum(u16) {
+        kind: Kind,
+        a: packed union {
+            kind: Kind2,
+            @"0": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"1": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"2": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"3": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"4": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+            @"5": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+        },
+
+        pub const Kind2 = enum(u16) {
             @"0" = lu16.init(0).inner,
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
             @"3" = lu16.init(3).inner,
             @"4" = lu16.init(4).inner,
             @"5" = lu16.init(5).inner,
-        },
-        b: packed union {
-            @"0": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"1": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"2": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"3": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"4": packed struct {
-                b: lu16,
-            },
-            @"5": packed struct {
-                b: lu16,
-            },
-        },
+        };
     };
     pub const CheckMoveRemember = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StorePokeRemember = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreRememberMove = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TeachMove = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckTeachMove = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetTradeId = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CheckPokemonTrade = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const TradeChosenPokemon = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckNatPokedexStatus = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckRibbonNumber = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckRibbon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const GiveRibbon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvarRibbon = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckHappyRibbon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPokemart = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFurniture = packed struct {
-        a: enum(u16) {
+        kind: Kind,
+        a: packed union {
+            kind: Kind2,
+            @"0": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+            @"1": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+                d: lu16,
+            },
+            @"2": packed struct {
+                kind: Kind2,
+            },
+            @"3": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+                d: lu16,
+            },
+            @"4": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"5": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+                d: lu16,
+            },
+            @"6": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+        },
+
+        pub const Kind2 = enum(u16) {
             @"0" = lu16.init(0).inner,
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
@@ -3008,65 +3422,45 @@ pub const Command = packed struct {
             @"4" = lu16.init(4).inner,
             @"5" = lu16.init(5).inner,
             @"6" = lu16.init(6).inner,
-        },
-        b: packed union {
-            @"0": packed struct {
-                b: lu16,
-            },
-            @"1": packed struct {
-                b: lu16,
-                c: lu16,
-                d: lu16,
-            },
-            @"2": void,
-            @"3": packed struct {
-                b: lu16,
-                c: lu16,
-                d: lu16,
-            },
-            @"4": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"5": packed struct {
-                b: lu16,
-                c: lu16,
-                d: lu16,
-            },
-            @"6": packed struct {
-                b: lu16,
-            },
-        },
+        };
     };
     pub const Cmd_236 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPhraseBoxInput = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const CheckStatusPhraseBox = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const DecideRules = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFootStep = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const HealPokemonAnimation = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreElevatorDirection = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ShipAnimation = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: lu16,
@@ -3074,60 +3468,75 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Cmd_23e = packed struct {
-        a: enum(u16) {
+        kind: Kind,
+        a: packed union {
+            kind: Kind2,
+            @"1": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+            @"2": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+            @"3": packed struct {
+                kind: Kind2,
+                b: lu16,
+            },
+            @"5": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+            @"6": packed struct {
+                kind: Kind2,
+                b: lu16,
+                c: lu16,
+            },
+        },
+
+        pub const Kind2 = enum(u16) {
             @"1" = lu16.init(1).inner,
             @"2" = lu16.init(2).inner,
             @"3" = lu16.init(3).inner,
             @"5" = lu16.init(5).inner,
             @"6" = lu16.init(6).inner,
-        },
-        b: packed union {
-            @"1": packed struct {
-                b: lu16,
-            },
-            @"2": packed struct {
-                b: lu16,
-            },
-            @"3": packed struct {
-                b: lu16,
-            },
-            @"5": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-            @"6": packed struct {
-                b: lu16,
-                c: lu16,
-            },
-        },
+        };
     };
     pub const StorePhraseBox1W = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const StorePhraseBox2W = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const SetvarPhraseBox1W = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const StoreMtCoronet = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFirstPokeParty = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokeType = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPhraseBoxInput2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3135,73 +3544,94 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const StoreUndTime = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PreparePcAnimation = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const OpenPcAnimation = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const ClosePcAnimation = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const CheckLottoNumber = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CompareLottoNumber = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const SetvarIdPokeBoxes = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckBoxesNumber = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StopGreatMarsh = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokeCatchingShow = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckCatchingShowRecords = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckElevLgAnm = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckElevPosition = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const MainEvent = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckAccessories3 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const ActDeoxisFormChange = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ChangeFormDeoxis = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckCoombeEvent = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Pokecasino = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckTime2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const RegigigasAnm = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3209,107 +3639,136 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const CresseliaAnm = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckRegi = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckMassage = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const UnownMessageBox = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPCatchingShow = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ShayminAnm = packed struct {
+        kind: Kind,
         a: lu16,
         b: u8,
     };
     pub const ThankNameInsert = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvarShaymin = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const SetvarAccessories2 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_274 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu32,
     };
     pub const CheckRecordCasino = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckCoinsCasino = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SrtRandomNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPokeLevel2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_279 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const SetvarAmityPokemon = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_27d = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckFirstTimeVShop = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_27f = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvarIdNumber = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: u8,
         d: u8,
     };
     pub const Cmd_281 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const SetvarUnk = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_283 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckRuinManiac = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckTurnBack = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckUgPeopleNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckUgFossilNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckUgTrapsNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckPoffinItem = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3319,97 +3778,123 @@ pub const Command = packed struct {
         g: lu16,
     };
     pub const CheckPoffinCaseStatus = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const UnkFunct2 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const PokemonPartyPicture = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetSoundLearning = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFirstTimeChampion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ChoosePokeDCare = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokeDCare = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_292 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const CheckMasterRank = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ShowBattlePointsBox = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
     };
     pub const TakeBPoints = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckBPoints = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_29c = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ChoiceMulti = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const HMEffect = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CameraBumpEffect = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const DoubleBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const ApplyMovement2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2a2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreActHeroFriendCode = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreActOtherFriendCode = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ChsPrizeCasino = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPlate = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const TakeCoinsCasino = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckCoinsCasino2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const ComparePhraseBoxInput = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3417,135 +3902,170 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const StoreSealNum = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckFollowBattle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2af = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const SetvarSealRandom = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const DarkraiFunction = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2b6 = packed struct {
+        kind: Kind,
         a: lu16,
         b: u8,
     };
     pub const StorePokeNumParty = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StorePokeNickname = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckBattleUnion = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const CheckWildBattle2 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const StoreTrainerCardStar = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2c0 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2c3 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const ShowBTowerSome = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const DeleteSavesBFactory = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckVersionGame = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const ShowBArcadeRecors = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const CheckPokeParty2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const CheckPokeCastle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const ActTeamGalacticEvents = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const ChooseWirePokeBCastle = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2d0 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2d1 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2d2 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2d3 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2d4 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2d5 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2d7 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2d8 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const Cmd_2d9 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2da = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2db = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2dc = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2dd = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2de = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3553,108 +4073,133 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Cmd_2df = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2e0 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2e1 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2e4 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2e5 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2e6 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2e7 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2e8 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2e9 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2ea = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2eb = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2ec = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_2ee = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_2f3 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_2f4 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_2f5 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu32,
         c: u8,
         d: u8,
     };
     pub const Cmd_2f6 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_2f7 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2f9 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2fa = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2fc = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_2fd = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_2fe = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_2ff = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_302 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
@@ -3662,91 +4207,116 @@ pub const Command = packed struct {
         e: lu16,
     };
     pub const Cmd_303 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_304 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_305 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_306 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_307 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_308 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_30a = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_30d = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_30e = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_30f = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_311 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_312 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_313 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_314 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_315 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_317 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
     };
     pub const Cmd_319 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_31a = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_31b = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_31c = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_31d = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_31e = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_321 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_323 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_324 = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
         c: u8,
@@ -3755,103 +4325,130 @@ pub const Command = packed struct {
         f: lu16,
     };
     pub const Cmd_325 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_326 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_327 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const PortalEffect = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_329 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_32a = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_32b = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_32c = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const Cmd_32f = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_333 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_334 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_335 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu32,
     };
     pub const Cmd_336 = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const Cmd_337 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_33a = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const Cmd_33c = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_33d = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_33e = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_33f = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_340 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_341 = packed struct {
+        kind: Kind,
         a: lu16,
         b: lu16,
     };
     pub const Cmd_342 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const Cmd_343 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_344 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_345 = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
     };
     pub const Cmd_346 = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const DisplayFloor = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
     };

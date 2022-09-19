@@ -181,13 +181,13 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
             }) |command| {
                 try printCommand(writer, command.*, decoder);
 
-                switch (command.tag) {
+                switch (command.kind) {
                     .jump, .compare_last_result_jump, .call, .compare_last_result_call => {
-                        const off = switch (command.tag) {
-                            .compare_last_result_call => command.data().compare_last_result_call.adr.value(),
-                            .call => command.data().call.adr.value(),
-                            .jump => command.data().jump.adr.value(),
-                            .compare_last_result_jump => command.data().compare_last_result_jump.adr.value(),
+                        const off = switch (command.kind) {
+                            .compare_last_result_call => command.compare_last_result_call.adr.value(),
+                            .call => command.call.adr.value(),
+                            .jump => command.jump.adr.value(),
+                            .compare_last_result_jump => command.compare_last_result_jump.adr.value(),
                             else => unreachable,
                         };
                         const location = off + @intCast(isize, decoder.i);
@@ -236,12 +236,12 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
             }) |command| {
                 try printCommand(writer, command.*, decoder);
 
-                switch (command.tag) {
+                switch (command.kind) {
                     .jump, .@"if", .call_routine => {
-                        const off = switch (command.tag) {
-                            .jump => command.data().jump.offset.value(),
-                            .@"if" => command.data().@"if".offset.value(),
-                            .call_routine => command.data().call_routine.offset.value(),
+                        const off = switch (command.kind) {
+                            .jump => command.jump.offset.value(),
+                            .@"if" => command.@"if".offset.value(),
+                            .call_routine => command.call_routine.offset.value(),
                             else => unreachable,
                         };
                         if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
@@ -290,36 +290,29 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
                 return printCommandHelper(writer, value.value());
 
             inline for (s.fields) |struct_field, i| {
-                switch (@typeInfo(struct_field.field_type)) {
-                    .Union => |u| {
-                        if (u.tag_type != null)
-                            @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
-
-                        // Find the field most likly to be this unions tag.
-                        const tag_field = (comptime script.findTagFieldName(T, struct_field.name)) orelse
-                            @compileError("Could not find a tag for " ++ struct_field.name);
-                        const tag = @field(value, tag_field);
-                        const union_value = @field(value, struct_field.name);
-                        const TagEnum = @TypeOf(tag);
-
-                        var found: bool = true;
-                        inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
-                            if (@field(TagEnum, enum_field.name) == tag) {
-                                try printCommandHelper(writer, @field(union_value, enum_field.name));
-                                found = true;
-                            }
-                        }
-
-                        // @"if" no member of 'TagEnum' match, then 'tag' must be a value
-                        // it is not suppose to be.
-                        if (!found)
-                            return error.InvalidTag;
-                    },
-                    else => try printCommandHelper(writer, @field(value, struct_field.name)),
-                }
+                try printCommandHelper(writer, @field(value, struct_field.name));
                 if (i + 1 != s.fields.len)
                     try writer.writeAll(" ");
             }
+        },
+        .Union => |u| {
+            if (u.layout != .Packed and u.layout != .Extern)
+                @compileError(@typeName(T) ++ " is not packed or extern");
+            if (u.tag_type != null)
+                @compileError(@typeName(T) ++ " cannot have a tag.");
+
+            const tag_field = u.fields[0];
+            const tag = @field(value, tag_field.name);
+            const TagEnum = @TypeOf(tag);
+
+            inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+                if (@field(TagEnum, enum_field.name) == tag) {
+                    const union_field = @field(value, enum_field.name);
+                    return printCommandHelper(writer, union_field);
+                }
+            }
+
+            return error.InvalidTag;
         },
         else => @compileError(@typeName(T) ++ " not supported"),
     }

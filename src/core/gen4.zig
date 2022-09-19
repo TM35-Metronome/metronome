@@ -1103,22 +1103,22 @@ pub const Game = struct {
                     var var_8008_tmp: ?*lu16 = null;
                     defer var_8008 = var_8008_tmp;
 
-                    switch (command.tag) {
+                    switch (command.kind) {
                         .wild_battle => try static_pokemons.append(.{
-                            .species = &command.data().wild_battle.species,
-                            .level = &command.data().wild_battle.level,
+                            .species = &command.wild_battle.species,
+                            .level = &command.wild_battle.level,
                         }),
                         .wild_battle2 => try static_pokemons.append(.{
-                            .species = &command.data().wild_battle2.species,
-                            .level = &command.data().wild_battle2.level,
+                            .species = &command.wild_battle2.species,
+                            .level = &command.wild_battle2.level,
                         }),
                         .wild_battle3 => try static_pokemons.append(.{
-                            .species = &command.data().wild_battle3.species,
-                            .level = &command.data().wild_battle3.level,
+                            .species = &command.wild_battle3.species,
+                            .level = &command.wild_battle3.level,
                         }),
                         .give_pokemon => try given_pokemons.append(.{
-                            .species = &command.data().give_pokemon.species,
-                            .level = &command.data().give_pokemon.level,
+                            .species = &command.give_pokemon.species,
+                            .level = &command.give_pokemon.level,
                         }),
 
                         // In scripts, field items are two SetVar commands
@@ -1126,10 +1126,10 @@ pub const Game = struct {
                         //   SetVar 0x8008 // Item given
                         //   SetVar 0x8009 // Amount of items
                         //   Jump ???
-                        .set_var => switch (command.data().set_var.destination.value()) {
-                            0x8008 => var_8008_tmp = &command.data().set_var.value,
+                        .set_var => switch (command.set_var.destination.value()) {
+                            0x8008 => var_8008_tmp = &command.set_var.value,
                             0x8009 => if (var_8008) |item| {
-                                const amount = &command.data().set_var.value;
+                                const amount = &command.set_var.value;
                                 try pokeball_items.append(PokeballItem{
                                     .item = item,
                                     .amount = amount,
@@ -1138,11 +1138,11 @@ pub const Game = struct {
                             else => {},
                         },
                         .jump, .compare_last_result_jump, .call, .compare_last_result_call => {
-                            const off = switch (command.tag) {
-                                .compare_last_result_call => command.data().compare_last_result_call.adr.value(),
-                                .call => command.data().call.adr.value(),
-                                .jump => command.data().jump.adr.value(),
-                                .compare_last_result_jump => command.data().compare_last_result_jump.adr.value(),
+                            const off = switch (command.kind) {
+                                .compare_last_result_call => command.compare_last_result_call.adr.value(),
+                                .call => command.call.adr.value(),
+                                .jump => command.jump.adr.value(),
+                                .compare_last_result_jump => command.compare_last_result_jump.adr.value(),
                                 else => unreachable,
                             };
                             const location = off + @intCast(isize, decoder.i);

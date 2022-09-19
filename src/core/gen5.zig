@@ -1375,56 +1375,56 @@ pub const Game = struct {
                     .i = offset,
                 };
                 while (decoder.next() catch continue) |command| : (command_offset = decoder.i) {
-                    switch (command.toZigUnion()) {
-                        .wild_battle => |battle| try static_pokemons.append(.{
-                            .species = &battle.species,
-                            .level = &battle.level,
+                    switch (command.kind) {
+                        .wild_battle => try static_pokemons.append(.{
+                            .species = &command.wild_battle.species,
+                            .level = &command.wild_battle.level,
                         }),
-                        .wild_battle_store_result => |battle| try static_pokemons.append(.{
-                            .species = &battle.species,
-                            .level = &battle.level,
+                        .wild_battle_store_result => try static_pokemons.append(.{
+                            .species = &command.wild_battle_store_result.species,
+                            .level = &command.wild_battle_store_result.level,
                         }),
-                        .give_pokemon_1 => |given| if (given.species.value() & 0x8000 == 0) {
+                        .give_pokemon_1 => if (command.give_pokemon_1.species.value() & 0x8000 == 0) {
                             try given_pokemons.append(.{
-                                .species = &given.species,
-                                .level = &given.level,
+                                .species = &command.give_pokemon_1.species,
+                                .level = &command.give_pokemon_1.level,
                             });
                         } else {
                             try given_pokemons_to_resolve.put(
-                                given.species.value(),
-                                &given.level,
+                                command.give_pokemon_1.species.value(),
+                                &command.give_pokemon_1.level,
                             );
                         },
-                        .give_pokemon_2 => |given| if (given.species.value() & 0x8000 == 0) {
+                        .give_pokemon_2 => if (command.give_pokemon_2.species.value() & 0x8000 == 0) {
                             try given_pokemons.append(.{
-                                .species = &given.species,
-                                .level = &given.level,
+                                .species = &command.give_pokemon_2.species,
+                                .level = &command.give_pokemon_2.level,
                             });
                         } else {
                             try given_pokemons_to_resolve.put(
-                                given.species.value(),
-                                &given.level,
+                                command.give_pokemon_2.species.value(),
+                                &command.give_pokemon_2.level,
                             );
                         },
-                        .give_pokemon_4 => |given| if (given.species.value() & 0x8000 == 0) {
+                        .give_pokemon_4 => if (command.give_pokemon_4.species.value() & 0x8000 == 0) {
                             try given_pokemons.append(.{
-                                .species = &given.species,
-                                .level = &given.level,
+                                .species = &command.give_pokemon_4.species,
+                                .level = &command.give_pokemon_4.level,
                             });
                         } else {
                             try given_pokemons_to_resolve.put(
-                                given.species.value(),
-                                &given.level,
+                                command.give_pokemon_4.species.value(),
+                                &command.give_pokemon_4.level,
                             );
                         },
                         .set_var_eq_val,
                         .set_var_2a,
                         => try set_var_offsets.append(command_offset),
                         .jump, .@"if", .call_routine => {
-                            const off = switch (command.toZigUnion()) {
-                                .jump => |jump| jump.offset.value(),
-                                .@"if" => |if_| if_.offset.value(),
-                                .call_routine => |call| call.offset.value(),
+                            const off = switch (command.kind) {
+                                .jump => command.jump.offset.value(),
+                                .@"if" => command.@"if".offset.value(),
+                                .call_routine => command.call_routine.offset.value(),
                                 else => unreachable,
                             };
                             if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
@@ -1445,43 +1445,45 @@ pub const Game = struct {
                 };
 
                 const first = (decoder.next() catch unreachable).?;
-                switch (first.toZigUnion()) {
-                    .set_var_eq_val => |set| if (given_pokemons_to_resolve.get(set.container.value())) |level| {
+                switch (first.kind) {
+                    .set_var_eq_val => if (given_pokemons_to_resolve.get(
+                        first.set_var_eq_val.container.value(),
+                    )) |level| {
                         try given_pokemons.append(.{
-                            .species = &set.value,
+                            .species = &first.set_var_eq_val.value,
                             .level = level,
                         });
                     } else {
-                        const item = set;
+                        const item = &first.set_var_eq_val;
                         const amount = script.expectNext(&decoder, .set_var_eq_val) orelse continue;
                         _ = script.expectNext(&decoder, .call_routine) orelse continue;
                         _ = script.expectNext(&decoder, .wait_moment) orelse continue;
                         _ = script.expectNext(&decoder, .unlock_all) orelse continue;
                         _ = script.expectNext(&decoder, .end) orelse continue;
                         if (item.container.value() != 32780 or
-                            amount.data().set_var_eq_val.container.value() != 32781)
+                            amount.set_var_eq_val.container.value() != 32781)
                             continue;
 
                         try pokeball_items.append(.{
                             .item = &item.value,
-                            .amount = &amount.data().set_var_eq_val.value,
+                            .amount = &amount.set_var_eq_val.value,
                         });
                     },
-                    .set_var_2a => |item| {
+                    .set_var_2a => {
                         const amount = script.expectNext(&decoder, .set_var_2a) orelse continue;
                         const unknown = script.expectNext(&decoder, .set_var_2a) orelse continue;
                         _ = script.expectNext(&decoder, .call_std) orelse continue;
                         _ = script.expectNext(&decoder, .wait_moment) orelse continue;
                         _ = script.expectNext(&decoder, .unlock_all) orelse continue;
                         _ = script.expectNext(&decoder, .end) orelse continue;
-                        if (item.container.value() != 32768 or
-                            amount.data().set_var_2a.container.value() != 32769 or
-                            unknown.data().set_var_2a.container.value() != 32770)
+                        if (first.set_var_2a.container.value() != 32768 or
+                            amount.set_var_2a.container.value() != 32769 or
+                            unknown.set_var_2a.container.value() != 32770)
                             continue;
 
                         try pokeball_items.append(.{
-                            .item = &item.value,
-                            .amount = &amount.data().set_var_2a.value,
+                            .item = &first.set_var_2a.value,
+                            .amount = &amount.set_var_2a.value,
                         });
                     },
                     else => {},

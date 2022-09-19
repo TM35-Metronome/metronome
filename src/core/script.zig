@@ -124,47 +124,39 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
             return res;
         },
         .Struct => |s| {
-            if (s.layout != .Packed)
-                @compileError(@typeName(T) ++ " is not packed");
-
             var res: usize = 0;
-            inline for (s.fields) |struct_field| {
-                switch (@typeInfo(struct_field.field_type)) {
-                    .Union => |u| {
-                        if (u.layout != .Packed and u.layout != .Extern)
-                            @compileError(@typeName(struct_field.field_type) ++ " is not packed or extern");
-                        if (u.tag_type != null)
-                            @compileError(@typeName(struct_field.field_type) ++ " cannot have a tag.");
+            inline for (s.fields) |struct_field|
+                res += try packedLength(@field(value, struct_field.name));
+            return res;
+        },
+        .Union => |u| {
+            if (u.layout != .Packed and u.layout != .Extern)
+                @compileError(@typeName(T) ++ " is not packed or extern");
+            if (u.tag_type != null)
+                @compileError(@typeName(T) ++ " cannot have a tag.");
 
-                        // Find the field most likly to be this unions tag.
-                        const tag_field = (comptime findTagFieldName(T, struct_field.name)) orelse
-                            @compileError("Could not find a tag for " ++ struct_field.name ++ " in " ++ @typeName(T));
-                        const tag = @field(value, tag_field);
-                        const union_value = @field(value, struct_field.name);
-                        const TagEnum = @TypeOf(tag);
+            // Find the field most likly to be this unions tag.
+            const tag_field = u.fields[0];
+            const tag = @field(value, tag_field.name);
+            const TagEnum = @TypeOf(tag);
+            if (@typeInfo(TagEnum) != .Enum)
+                @compileError(@typeName(T) ++ " tag is not enum: " ++ @typeName(TagEnum));
 
-                        // Switch over all tags. 'TagEnum' have the same field names as
-                        // 'union' so if one member of 'TagEnum' matches 'tag', then
-                        // we can add the size of ''@field(union, tag_name)' to res and
-                        // break out.
-                        var found: bool = false;
-                        inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
-                            if (@field(TagEnum, enum_field.name) == tag) {
-                                const union_field = @field(union_value, enum_field.name);
-                                res += try packedLength(union_field);
-                                found = true;
-                            }
-                        }
-
-                        // If no member of 'TagEnum' match, then 'tag' must be a value
-                        // it is not suppose to be.
-                        if (!found)
-                            return error.InvalidTag;
-                    },
-                    else => res += try packedLength(@field(value, struct_field.name)),
+            // Switch over all tags. 'TagEnum' have the same field names as
+            // 'union' so if one member of 'TagEnum' matches 'tag', then
+            // we can add the size of ''@field(union, tag_name)' to res and
+            // break out.
+            var res: ?usize = null;
+            inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+                if (@field(TagEnum, enum_field.name) == tag) {
+                    const union_field = @field(value, enum_field.name);
+                    res = try packedLength(union_field);
                 }
             }
-            return res;
+
+            // If no member of 'TagEnum' match, then 'tag' must be a value
+            // it is not suppose to be.
+            return res orelse return error.InvalidTag;
         },
         else => @compileError(@typeName(T) ++ " not supported"),
     }
@@ -209,7 +201,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
         bytes: []u8,
         i: usize = 0,
 
-        pub fn next(decoder: *@This()) !?*Command {
+        pub fn next(decoder: *@This()) !?*align(1) Command {
             const bytes = decoder.bytes[decoder.i..];
             if (bytes.len == 0)
                 return null;
@@ -234,7 +226,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             if (isEnd(command))
                 decoder.bytes = decoder.bytes[0..decoder.i];
 
-            return @ptrCast(*Command, bytes.ptr);
+            return @ptrCast(*align(1) Command, bytes.ptr);
         }
     };
 }

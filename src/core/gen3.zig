@@ -647,24 +647,22 @@ pub const Game = struct {
             text: std.ArrayList(*Ptr([*:0xff]u8)),
 
             fn processCommand(script_data: *@This(), gba_data: []u8, command: *script.Command) !void {
-                const tag = command.tag;
-                const data = command.data();
-                switch (tag) {
+                switch (command.kind) {
                     .setwildbattle => try script_data.static_pokemons.append(.{
-                        .species = &data.setwildbattle.species,
-                        .level = &data.setwildbattle.level,
+                        .species = &command.setwildbattle.species,
+                        .level = &command.setwildbattle.level,
                     }),
                     .givemon => try script_data.given_pokemons.append(.{
-                        .species = &data.givemon.species,
-                        .level = &data.givemon.level,
+                        .species = &command.givemon.species,
+                        .level = &command.givemon.level,
                     }),
                     .setorcopyvar => {
-                        if (data.setorcopyvar.destination.value() == 0x8000)
-                            script_data.VAR_0x8000 = &data.setorcopyvar.source;
-                        if (data.setorcopyvar.destination.value() == 0x8001)
-                            script_data.VAR_0x8001 = &data.setorcopyvar.source;
+                        if (command.setorcopyvar.destination.value() == 0x8000)
+                            script_data.VAR_0x8000 = &command.setorcopyvar.source;
+                        if (command.setorcopyvar.destination.value() == 0x8001)
+                            script_data.VAR_0x8001 = &command.setorcopyvar.source;
                     },
-                    .callstd => switch (data.callstd.function) {
+                    .callstd => switch (command.callstd.function) {
                         script.STD_OBTAIN_ITEM, script.STD_FIND_ITEM => {
                             try script_data.pokeball_items.append(PokeballItem{
                                 .item = script_data.VAR_0x8000 orelse return,
@@ -673,16 +671,16 @@ pub const Game = struct {
                         },
                         else => {},
                     },
-                    .loadword => switch (data.loadword.destination) {
+                    .loadword => switch (command.loadword.destination) {
                         0 => {
-                            _ = data.loadword.value.toSliceZ(gba_data) catch return;
-                            try script_data.text.append(&data.loadword.value);
+                            _ = command.loadword.value.toSliceZ(gba_data) catch return;
+                            try script_data.text.append(&command.loadword.value);
                         },
                         else => {},
                     },
                     .message => {
-                        _ = data.message.text.toSliceZ(gba_data) catch return;
-                        try script_data.text.append(&data.message.text);
+                        _ = command.message.text.toSliceZ(gba_data) catch return;
+                        try script_data.text.append(&command.message.text);
                     },
                     else => {},
                 }

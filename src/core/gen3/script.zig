@@ -11,9 +11,9 @@ const lu32 = rom.int.lu32;
 
 pub const CommandDecoder = script.CommandDecoder(Command, struct {
     fn isEnd(cmd: Command) bool {
-        switch (cmd.tag) {
-            Command.Kind.end,
-            Command.Kind.@"return",
+        switch (cmd.kind) {
+            .end,
+            .@"return",
             => return true,
             else => return false,
         }
@@ -32,617 +32,604 @@ pub const STD_OBTAIN_DECORATION = 7;
 pub const STD_OBTAIN_ITEM = 0;
 pub const STD_REGISTER_MATCH_CALL = 8;
 
-pub const Command = packed struct {
-    tag: Kind,
-    _data: Data,
+pub const Command = extern union {
+    kind: Kind,
+    // Does nothing.
+    nop: arg0,
 
-    /// HACK: Zig crashes when trying to access `_data` during code generation. This
-    ///       seem to happen because &cmd.data gives a bit aligned pointer, which then
-    ///       does not get properly handled in codegen. This function works around this
-    ///       by manually skipping the tag field to get the data field.
-    pub fn data(cmd: *Command) *Data {
-        const bytes = mem.asBytes(cmd);
-        return mem.bytesAsValue(Data, bytes[@sizeOf(Kind)..][0..@sizeOf(Data)]);
-    }
+    // Does nothing.
+    nop1: arg0,
 
-    const Data = packed union {
-        // Does nothing.
-        nop: void,
+    // Terminates script execution.
+    end: arg0,
 
-        // Does nothing.
-        nop1: void,
+    // Jumps back to after the last-executed call statement, and continues script execution from there.
+    @"return": arg0,
 
-        // Terminates script execution.
-        end: void,
+    // Jumps to destination and continues script execution from there. The location of the calling script is remembered and can be returned to later.
+    call: call,
 
-        // Jumps back to after the last-executed call statement, and continues script execution from there.
-        @"return": void,
+    // Jumps to destination and continues script execution from there.
+    goto: goto,
 
-        // Jumps to destination and continues script execution from there. The location of the calling script is remembered and can be returned to later.
-        call: call,
+    // If the result of the last comparison matches condition (see Comparison operators), jumps to destination and continues script execution from there.
+    goto_if: goto_if,
 
-        // Jumps to destination and continues script execution from there.
-        goto: goto,
+    // If the result of the last comparison matches condition (see Comparison operators), calls destination.
+    call_if: call_if,
 
-        // If the result of the last comparison matches condition (see Comparison operators), jumps to destination and continues script execution from there.
-        goto_if: goto_if,
+    // Jumps to the standard function at index function.
+    gotostd: gotostd,
 
-        // If the result of the last comparison matches condition (see Comparison operators), calls destination.
-        call_if: call_if,
+    // Calls the standard function at index function.
+    callstd: callstd,
 
-        // Jumps to the standard function at index function.
-        gotostd: gotostd,
+    // If the result of the last comparison matches condition (see Comparison operators), jumps to the standard function at index function.
+    gotostd_if: gotostd_if,
 
-        // Calls the standard function at index function.
-        callstd: callstd,
+    // If the result of the last comparison matches condition (see Comparison operators), calls the standard function at index function.
+    callstd_if: callstd_if,
 
-        // If the result of the last comparison matches condition (see Comparison operators), jumps to the standard function at index function.
-        gotostd_if: gotostd_if,
+    // Executes a script stored in a default RAM location.
+    gotoram: arg0,
 
-        // If the result of the last comparison matches condition (see Comparison operators), calls the standard function at index function.
-        callstd_if: callstd_if,
+    // Terminates script execution and "resets the script RAM".
+    killscript: arg0,
 
-        // Executes a script stored in a default RAM location.
-        gotoram: void,
+    // Sets some status related to Mystery Event.
+    setmysteryeventstatus: setmysteryeventstatus,
 
-        // Terminates script execution and "resets the script RAM".
-        killscript: void,
+    // Sets the specified script bank to value.
+    loadword: loadword,
 
-        // Sets some status related to Mystery Event.
-        setmysteryeventstatus: setmysteryeventstatus,
+    // Sets the specified script bank to value.
+    loadbyte: loadbyte,
 
-        // Sets the specified script bank to value.
-        loadword: loadword,
+    // Sets the byte at offset to value.
+    writebytetoaddr: writebytetoaddr,
 
-        // Sets the specified script bank to value.
-        loadbyte: loadbyte,
+    // Copies the byte value at source into the specified script bank.
+    loadbytefromaddr: loadbytefromaddr,
 
-        // Sets the byte at offset to value.
-        writebytetoaddr: writebytetoaddr,
+    // Not sure. Judging from XSE's description I think it takes the least-significant byte in bank source and writes it to destination.
+    setptrbyte: setptrbyte,
 
-        // Copies the byte value at source into the specified script bank.
-        loadbytefromaddr: loadbytefromaddr,
+    // Copies the contents of bank source into bank destination.
+    copylocal: copylocal,
 
-        // Not sure. Judging from XSE's description I think it takes the least-significant byte in bank source and writes it to destination.
-        setptrbyte: setptrbyte,
+    // Copies the byte at source to destination, replacing whatever byte was previously there.
+    copybyte: copybyte,
 
-        // Copies the contents of bank source into bank destination.
-        copylocal: copylocal,
+    // Changes the value of destination to value.
+    setvar: setvar,
 
-        // Copies the byte at source to destination, replacing whatever byte was previously there.
-        copybyte: copybyte,
+    //  // Changes the value of destination by adding value to it. Overflow is not prevented (0xFFFF + 1 = 0x0000).
+    addvar: addvar,
 
-        // Changes the value of destination to value.
-        setvar: setvar,
+    //  // Changes the value of destination by subtracting value to it. Overflow is not prevented (0x0000 - 1 = 0xFFFF).
+    subvar: subvar,
 
-        //  // Changes the value of destination by adding value to it. Overflow is not prevented (0xFFFF + 1 = 0x0000).
-        addvar: addvar,
+    // Copies the value of source into destination.
+    copyvar: copyvar,
 
-        //  // Changes the value of destination by subtracting value to it. Overflow is not prevented (0x0000 - 1 = 0xFFFF).
-        subvar: subvar,
+    // If source is not a variable, then this function acts like setvar. Otherwise, it acts like copyvar.
+    setorcopyvar: setorcopyvar,
 
-        // Copies the value of source into destination.
-        copyvar: copyvar,
+    // Compares the values of script banks a and b, after forcing the values to bytes.
+    compare_local_to_local: compare_local_to_local,
 
-        // If source is not a variable, then this function acts like setvar. Otherwise, it acts like copyvar.
-        setorcopyvar: setorcopyvar,
+    // Compares the least-significant byte of the value of script bank a to a fixed byte value (b).
+    compare_local_to_value: compare_local_to_value,
 
-        // Compares the values of script banks a and b, after forcing the values to bytes.
-        compare_local_to_local: compare_local_to_local,
+    // Compares the least-significant byte of the value of script bank a to the byte located at offset b.
+    compare_local_to_addr: compare_local_to_addr,
 
-        // Compares the least-significant byte of the value of script bank a to a fixed byte value (b).
-        compare_local_to_value: compare_local_to_value,
+    // Compares the byte located at offset a to the least-significant byte of the value of script bank b.
+    compare_addr_to_local: compare_addr_to_local,
 
-        // Compares the least-significant byte of the value of script bank a to the byte located at offset b.
-        compare_local_to_addr: compare_local_to_addr,
+    // Compares the byte located at offset a to a fixed byte value (b).
+    compare_addr_to_value: compare_addr_to_value,
 
-        // Compares the byte located at offset a to the least-significant byte of the value of script bank b.
-        compare_addr_to_local: compare_addr_to_local,
+    // Compares the byte located at offset a to the byte located at offset b.
+    compare_addr_to_addr: compare_addr_to_addr,
 
-        // Compares the byte located at offset a to a fixed byte value (b).
-        compare_addr_to_value: compare_addr_to_value,
+    // Compares the value of `var` to a fixed word value (b).
+    compare_var_to_value: compare_var_to_value,
 
-        // Compares the byte located at offset a to the byte located at offset b.
-        compare_addr_to_addr: compare_addr_to_addr,
+    // Compares the value of `var1` to the value of `var2`.
+    compare_var_to_var: compare_var_to_var,
 
-        // Compares the value of `var` to a fixed word value (b).
-        compare_var_to_value: compare_var_to_value,
+    // Calls the native C function stored at `func`.
+    callnative: callnative,
 
-        // Compares the value of `var1` to the value of `var2`.
-        compare_var_to_var: compare_var_to_var,
+    // Replaces the script with the function stored at `func`. Execution returns to the bytecode script when func returns TRUE.
+    gotonative: gotonative,
 
-        // Calls the native C function stored at `func`.
-        callnative: callnative,
+    // Calls a special function; that is, a function designed for use by scripts and listed in a table of pointers.
+    special: special,
 
-        // Replaces the script with the function stored at `func`. Execution returns to the bytecode script when func returns TRUE.
-        gotonative: gotonative,
+    // Calls a special function. That function's output (if any) will be written to the variable you specify.
+    specialvar: specialvar,
 
-        // Calls a special function; that is, a function designed for use by scripts and listed in a table of pointers.
-        special: special,
+    // Blocks script execution until a command or ASM code manually unblocks it. Generally used with specific commands and specials. If this command runs, and a subsequent command or piece of ASM does not unblock state, the script will remain blocked indefinitely (essentially a hang).
+    waitstate: arg0,
 
-        // Calls a special function. That function's output (if any) will be written to the variable you specify.
-        specialvar: specialvar,
+    // Blocks script execution for time (frames? milliseconds?).
+    delay: delay,
 
-        // Blocks script execution until a command or ASM code manually unblocks it. Generally used with specific commands and specials. If this command runs, and a subsequent command or piece of ASM does not unblock state, the script will remain blocked indefinitely (essentially a hang).
-        waitstate: void,
+    // Sets a to 1.
+    setflag: setflag,
 
-        // Blocks script execution for time (frames? milliseconds?).
-        delay: delay,
+    // Sets a to 0.
+    clearflag: clearflag,
 
-        // Sets a to 1.
-        setflag: setflag,
+    // Compares a to 1.
+    checkflag: checkflag,
 
-        // Sets a to 0.
-        clearflag: clearflag,
+    // Initializes the RTC`s local time offset to the given hour and minute. In FireRed, this command is a nop.
+    initclock: initclock,
 
-        // Compares a to 1.
-        checkflag: checkflag,
+    // Runs time based events. In FireRed, this command is a nop.
+    dodailyevents: arg0,
 
-        // Initializes the RTC`s local time offset to the given hour and minute. In FireRed, this command is a nop.
-        initclock: initclock,
+    // Sets the values of variables 0x8000, 0x8001, and 0x8002 to the current hour, minute, and second. In FRLG, this command sets those variables to zero.
+    gettime: arg0,
 
-        // Runs time based events. In FireRed, this command is a nop.
-        dodailyevents: void,
+    // Plays the specified (sound_number) sound. Only one sound may play at a time, with newer ones interrupting older ones.
+    playse: playse,
 
-        // Sets the values of variables 0x8000, 0x8001, and 0x8002 to the current hour, minute, and second. In FRLG, this command sets those variables to zero.
-        gettime: void,
+    // Blocks script execution until the currently-playing sound (triggered by playse) finishes playing.
+    waitse: arg0,
 
-        // Plays the specified (sound_number) sound. Only one sound may play at a time, with newer ones interrupting older ones.
-        playse: playse,
+    // Plays the specified (fanfare_number) fanfare.
+    playfanfare: playfanfare,
 
-        // Blocks script execution until the currently-playing sound (triggered by playse) finishes playing.
-        waitse: void,
+    // Blocks script execution until all currently-playing fanfares finish.
+    waitfanfare: arg0,
 
-        // Plays the specified (fanfare_number) fanfare.
-        playfanfare: playfanfare,
+    // Plays the specified (song_number) song. The byte is apparently supposed to be 0x00.
+    playbgm: playbgm,
 
-        // Blocks script execution until all currently-playing fanfares finish.
-        waitfanfare: void,
+    // Saves the specified (song_number) song to be played later.
+    savebgm: savebgm,
 
-        // Plays the specified (song_number) song. The byte is apparently supposed to be 0x00.
-        playbgm: playbgm,
+    // Crossfades the currently-playing song into the map's default song.
+    fadedefaultbgm: arg0,
 
-        // Saves the specified (song_number) song to be played later.
-        savebgm: savebgm,
+    // Crossfades the currently-playng song into the specified (song_number) song.
+    fadenewbgm: fadenewbgm,
 
-        // Crossfades the currently-playing song into the map's default song.
-        fadedefaultbgm: void,
+    // Fades out the currently-playing song.
+    fadeoutbgm: fadeoutbgm,
 
-        // Crossfades the currently-playng song into the specified (song_number) song.
-        fadenewbgm: fadenewbgm,
+    // Fades the previously-playing song back in.
+    fadeinbgm: fadeinbgm,
 
-        // Fades out the currently-playing song.
-        fadeoutbgm: fadeoutbgm,
+    // Sends the player to Warp warp on Map bank.map. If the specified warp is 0xFF, then the player will instead be sent to (X, Y) on the map.
+    warp: warp,
 
-        // Fades the previously-playing song back in.
-        fadeinbgm: fadeinbgm,
+    // Clone of warp that does not play a sound effect.
+    warpsilent: warpsilent,
 
-        // Sends the player to Warp warp on Map bank.map. If the specified warp is 0xFF, then the player will instead be sent to (X, Y) on the map.
-        warp: warp,
+    // Clone of warp that plays a door opening animation before stepping upwards into it.
+    warpdoor: warpdoor,
 
-        // Clone of warp that does not play a sound effect.
-        warpsilent: warpsilent,
+    // Warps the player to another map using a hole animation.
+    warphole: warphole,
 
-        // Clone of warp that plays a door opening animation before stepping upwards into it.
-        warpdoor: warpdoor,
+    // Clone of warp that uses a teleport effect. It is apparently only used in R/S/E.
+    warpteleport: warpteleport,
 
-        // Warps the player to another map using a hole animation.
-        warphole: warphole,
+    // Sets the warp destination to be used later.
+    setwarp: setwarp,
 
-        // Clone of warp that uses a teleport effect. It is apparently only used in R/S/E.
-        warpteleport: warpteleport,
+    // Sets the warp destination that a warp to Warp 127 on Map 127.127 will connect to. Useful when a map has warps that need to go to script-controlled locations (i.e. elevators).
+    setdynamicwarp: setdynamicwarp,
 
-        // Sets the warp destination to be used later.
-        setwarp: setwarp,
+    // Sets the destination that diving or emerging from a dive will take the player to.
+    setdivewarp: setdivewarp,
 
-        // Sets the warp destination that a warp to Warp 127 on Map 127.127 will connect to. Useful when a map has warps that need to go to script-controlled locations (i.e. elevators).
-        setdynamicwarp: setdynamicwarp,
+    // Sets the destination that falling into a hole will take the player to.
+    setholewarp: setholewarp,
 
-        // Sets the destination that diving or emerging from a dive will take the player to.
-        setdivewarp: setdivewarp,
+    // Retrieves the player's zero-indexed X- and Y-coordinates in the map, and stores them in the specified variables.
+    getplayerxy: getplayerxy,
 
-        // Sets the destination that falling into a hole will take the player to.
-        setholewarp: setholewarp,
+    // Retrieves the number of Pokemon in the player's party, and stores that number in variable 0x800D (LASTRESULT).
+    getpartysize: arg0,
 
-        // Retrieves the player's zero-indexed X- and Y-coordinates in the map, and stores them in the specified variables.
-        getplayerxy: getplayerxy,
+    // Attempts to add quantity of item index to the player's Bag. If the player has enough room, the item will be added and variable 0x800D (LASTRESULT) will be set to 0x0001; otherwise, LASTRESULT is set to 0x0000.
+    additem: additem,
 
-        // Retrieves the number of Pokemon in the player's party, and stores that number in variable 0x800D (LASTRESULT).
-        getpartysize: void,
+    // Removes quantity of item index from the player's Bag.
+    removeitem: removeitem,
 
-        // Attempts to add quantity of item index to the player's Bag. If the player has enough room, the item will be added and variable 0x800D (LASTRESULT) will be set to 0x0001; otherwise, LASTRESULT is set to 0x0000.
-        additem: additem,
+    // Checks if the player has enough space in their Bag to hold quantity more of item index. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room.
+    checkitemspace: checkitemspace,
 
-        // Removes quantity of item index from the player's Bag.
-        removeitem: removeitem,
+    // Checks if the player has quantity or more of item index in their Bag. Sets variable 0x800D (LASTRESULT) to 0x0001 if the player has enough of the item, or 0x0000 if they have fewer than quantity of the item.
+    checkitem: checkitem,
 
-        // Checks if the player has enough space in their Bag to hold quantity more of item index. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room.
-        checkitemspace: checkitemspace,
+    // Checks which Bag pocket the specified (index) item belongs in, and writes the value to variable 0x800D (LASTRESULT). This script is used to show the name of the proper Bag pocket when the player receives an item via callstd (simplified to giveitem in XSE).
+    checkitemtype: checkitemtype,
 
-        // Checks if the player has quantity or more of item index in their Bag. Sets variable 0x800D (LASTRESULT) to 0x0001 if the player has enough of the item, or 0x0000 if they have fewer than quantity of the item.
-        checkitem: checkitem,
+    // Adds a quantity amount of item index to the player's PC. Both arguments can be variables.
+    givepcitem: givepcitem,
 
-        // Checks which Bag pocket the specified (index) item belongs in, and writes the value to variable 0x800D (LASTRESULT). This script is used to show the name of the proper Bag pocket when the player receives an item via callstd (simplified to giveitem in XSE).
-        checkitemtype: checkitemtype,
+    // Checks for quantity amount of item index in the player's PC. Both arguments can be variables.
+    checkpcitem: checkpcitem,
 
-        // Adds a quantity amount of item index to the player's PC. Both arguments can be variables.
-        givepcitem: givepcitem,
+    // Adds decoration to the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
+    givedecoration: givedecoration,
 
-        // Checks for quantity amount of item index in the player's PC. Both arguments can be variables.
-        checkpcitem: checkpcitem,
+    // Removes a decoration from the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
+    takedecoration: takedecoration,
 
-        // Adds decoration to the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-        givedecoration: givedecoration,
+    // Checks for decoration in the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
+    checkdecor: checkdecor,
 
-        // Removes a decoration from the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-        takedecoration: takedecoration,
+    // Checks if the player has enough space in their PC to hold decoration. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
+    checkdecorspace: checkdecorspace,
 
-        // Checks for decoration in the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-        checkdecor: checkdecor,
+    // Applies the movement data at movements to the specified (index) Object. Also closes any standard message boxes that are still open.
+    // If no map is specified, then the current map is used.
+    applymovement: applymovement,
 
-        // Checks if the player has enough space in their PC to hold decoration. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-        checkdecorspace: checkdecorspace,
+    // Really only useful if the object has followed from one map to another (e.g. Wally during the catching event).
+    applymovementmap: applymovementmap,
 
-        // Applies the movement data at movements to the specified (index) Object. Also closes any standard message boxes that are still open.
-        // If no map is specified, then the current map is used.
-        applymovement: applymovement,
+    // Blocks script execution until the movements being applied to the specified (index) Object finish. If the specified Object is 0x0000, then the command will block script execution until all Objects affected by applymovement finish their movements. If the specified Object is not currently being manipulated with applymovement, then this command does nothing.
+    // If no map is specified, then the current map is used.
+    waitmovement: waitmovement,
+    waitmovementmap: waitmovementmap,
 
-        // Really only useful if the object has followed from one map to another (e.g. Wally during the catching event).
-        applymovementmap: applymovementmap,
+    // Attempts to hide the specified (index) Object on the specified (map_group, map_num) map, by setting its visibility flag if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
+    // If no map is specified, then the current map is used.
+    removeobject: removeobject,
+    removeobjectmap: removeobjectmap,
 
-        // Blocks script execution until the movements being applied to the specified (index) Object finish. If the specified Object is 0x0000, then the command will block script execution until all Objects affected by applymovement finish their movements. If the specified Object is not currently being manipulated with applymovement, then this command does nothing.
-        // If no map is specified, then the current map is used.
-        waitmovement: waitmovement,
-        waitmovementmap: waitmovementmap,
+    // Unsets the specified (index) Object's visibility flag on the specified (map_group, map_num) map if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
+    // If no map is specified, then the current map is used.
+    addobject: addobject,
+    addobjectmap: addobjectmap,
 
-        // Attempts to hide the specified (index) Object on the specified (map_group, map_num) map, by setting its visibility flag if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
-        // If no map is specified, then the current map is used.
-        removeobject: removeobject,
-        removeobjectmap: removeobjectmap,
+    // Sets the specified (index) Object's position on the current map.
+    setobjectxy: setobjectxy,
+    showobjectat: showobjectat,
+    hideobjectat: hideobjectat,
 
-        // Unsets the specified (index) Object's visibility flag on the specified (map_group, map_num) map if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
-        // If no map is specified, then the current map is used.
-        addobject: addobject,
-        addobjectmap: addobjectmap,
+    // If the script was called by an Object, then that Object will turn to face toward the metatile that the player is standing on.
+    faceplayer: arg0,
+    turnobject: turnobject,
 
-        // Sets the specified (index) Object's position on the current map.
-        setobjectxy: setobjectxy,
-        showobjectat: showobjectat,
-        hideobjectat: hideobjectat,
+    // If the Trainer flag for Trainer index is not set, this command does absolutely nothing.
+    trainerbattle: trainerbattle,
 
-        // If the script was called by an Object, then that Object will turn to face toward the metatile that the player is standing on.
-        faceplayer: void,
-        turnobject: turnobject,
+    // Starts a trainer battle using the battle information stored in RAM (usually by trainerbattle, which actually calls this command behind-the-scenes), and blocks script execution until the battle finishes.
+    trainerbattlebegin: arg0,
 
-        // If the Trainer flag for Trainer index is not set, this command does absolutely nothing.
-        trainerbattle: trainerbattle,
+    // Goes to address after the trainerbattle command (called by the battle functions, see battle_setup.c)
+    gotopostbattlescript: arg0,
 
-        // Starts a trainer battle using the battle information stored in RAM (usually by trainerbattle, which actually calls this command behind-the-scenes), and blocks script execution until the battle finishes.
-        trainerbattlebegin: void,
+    // Goes to address specified in the trainerbattle command (called by the battle functions, see battle_setup.c)
+    gotobeatenscript: arg0,
 
-        // Goes to address after the trainerbattle command (called by the battle functions, see battle_setup.c)
-        gotopostbattlescript: void,
+    // Compares Flag (trainer + 0x500) to 1. (If the flag is set, then the trainer has been defeated by the player.)
+    checktrainerflag: checktrainerflag,
 
-        // Goes to address specified in the trainerbattle command (called by the battle functions, see battle_setup.c)
-        gotobeatenscript: void,
+    // Sets Flag (trainer + 0x500).
+    settrainerflag: settrainerflag,
 
-        // Compares Flag (trainer + 0x500) to 1. (If the flag is set, then the trainer has been defeated by the player.)
-        checktrainerflag: checktrainerflag,
+    // Clears Flag (trainer + 0x500).
+    cleartrainerflag: cleartrainerflag,
+    setobjectxyperm: setobjectxyperm,
+    moveobjectoffscreen: moveobjectoffscreen,
+    setobjectmovementtype: setobjectmovementtype,
 
-        // Sets Flag (trainer + 0x500).
-        settrainerflag: settrainerflag,
+    // If a standard message box (or its text) is being drawn on-screen, this command blocks script execution until the box and its text have been fully drawn.
+    waitmessage: arg0,
 
-        // Clears Flag (trainer + 0x500).
-        cleartrainerflag: cleartrainerflag,
-        setobjectxyperm: setobjectxyperm,
-        moveobjectoffscreen: moveobjectoffscreen,
-        setobjectmovementtype: setobjectmovementtype,
+    // Starts displaying a standard message box containing the specified text. If text is a pointer, then the string at that offset will be loaded and used. If text is script bank 0, then the value of script bank 0 will be treated as a pointer to the text. (You can use loadpointer to place a string pointer in a script bank.)
+    message: message,
 
-        // If a standard message box (or its text) is being drawn on-screen, this command blocks script execution until the box and its text have been fully drawn.
-        waitmessage: void,
+    // Closes the current message box.
+    closemessage: arg0,
 
-        // Starts displaying a standard message box containing the specified text. If text is a pointer, then the string at that offset will be loaded and used. If text is script bank 0, then the value of script bank 0 will be treated as a pointer to the text. (You can use loadpointer to place a string pointer in a script bank.)
-        message: message,
+    // Ceases movement for all Objects on-screen.
+    lockall: arg0,
 
-        // Closes the current message box.
-        closemessage: void,
+    // If the script was called by an Object, then that Object's movement will cease.
+    lock: arg0,
 
-        // Ceases movement for all Objects on-screen.
-        lockall: void,
+    // Resumes normal movement for all Objects on-screen, and closes any standard message boxes that are still open.
+    releaseall: arg0,
 
-        // If the script was called by an Object, then that Object's movement will cease.
-        lock: void,
+    // If the script was called by an Object, then that Object's movement will resume. This command also closes any standard message boxes that are still open.
+    release: arg0,
 
-        // Resumes normal movement for all Objects on-screen, and closes any standard message boxes that are still open.
-        releaseall: void,
+    // Blocks script execution until the player presses any key.
+    waitbuttonpress: arg0,
 
-        // If the script was called by an Object, then that Object's movement will resume. This command also closes any standard message boxes that are still open.
-        release: void,
+    // Displays a YES/NO multichoice box at the specified coordinates, and blocks script execution until the user makes a selection. Their selection is stored in variable 0x800D (LASTRESULT); 0x0000 for "NO" or if the user pressed B, and 0x0001 for "YES".
+    yesnobox: yesnobox,
 
-        // Blocks script execution until the player presses any key.
-        waitbuttonpress: void,
+    // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
+    multichoice: multichoice,
 
-        // Displays a YES/NO multichoice box at the specified coordinates, and blocks script execution until the user makes a selection. Their selection is stored in variable 0x800D (LASTRESULT); 0x0000 for "NO" or if the user pressed B, and 0x0001 for "YES".
-        yesnobox: yesnobox,
+    // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The default argument determines the initial position of the cursor when the box is first opened; it is zero-indexed, and if it is too large, it is treated as 0x00. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
+    multichoicedefault: multichoicedefault,
 
-        // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
-        multichoice: multichoice,
+    // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The per_row argument determines how many list items will be shown on a single row of the box.
+    multichoicegrid: multichoicegrid,
 
-        // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The default argument determines the initial position of the cursor when the box is first opened; it is zero-indexed, and if it is too large, it is treated as 0x00. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
-        multichoicedefault: multichoicedefault,
+    // Nopped in Emerald.
+    drawbox: arg0,
 
-        // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The per_row argument determines how many list items will be shown on a single row of the box.
-        multichoicegrid: multichoicegrid,
+    // Nopped in Emerald, but still consumes parameters.
+    erasebox: erasebox,
 
-        // Nopped in Emerald.
-        drawbox: void,
+    // Nopped in Emerald, but still consumes parameters.
+    drawboxtext: drawboxtext,
 
-        // Nopped in Emerald, but still consumes parameters.
-        erasebox: erasebox,
+    // Displays a box containing the front sprite for the specified (species) Pokemon species.
+    drawmonpic: drawmonpic,
 
-        // Nopped in Emerald, but still consumes parameters.
-        drawboxtext: drawboxtext,
+    // Hides all boxes displayed with drawmonpic.
+    erasemonpic: arg0,
 
-        // Displays a box containing the front sprite for the specified (species) Pokemon species.
-        drawmonpic: drawmonpic,
+    // Draws an image of the winner of the contest. In FireRed, this command is a nop. (The argument is discarded.)
+    drawcontestwinner: drawcontestwinner,
 
-        // Hides all boxes displayed with drawmonpic.
-        erasemonpic: void,
+    // Displays the string at pointer as braille text in a standard message box. The string must be formatted to use braille characters and needs to provide six extra starting characters that are skipped (in RS, these characters determined the box's size and position, but in Emerald these are calculated automatically).
+    braillemessage: braillemessage,
 
-        // Draws an image of the winner of the contest. In FireRed, this command is a nop. (The argument is discarded.)
-        drawcontestwinner: drawcontestwinner,
+    // Gives the player one of the specified (species) Pokemon at level level holding item. The unknown arguments should all be zeroes.
+    givemon: givemon,
+    giveegg: giveegg,
+    setmonmove: setmonmove,
 
-        // Displays the string at pointer as braille text in a standard message box. The string must be formatted to use braille characters and needs to provide six extra starting characters that are skipped (in RS, these characters determined the box's size and position, but in Emerald these are calculated automatically).
-        braillemessage: braillemessage,
+    // Checks if at least one Pokemon in the player's party knows the specified (index) attack. If so, variable 0x800D (LASTRESULT) is set to the (zero-indexed) slot number of the first Pokemon that knows the move. If not, LASTRESULT is set to 0x0006. Variable 0x8004 is also set to this Pokemon's species.
+    checkpartymove: checkpartymove,
 
-        // Gives the player one of the specified (species) Pokemon at level level holding item. The unknown arguments should all be zeroes.
-        givemon: givemon,
-        giveegg: giveegg,
-        setmonmove: setmonmove,
+    // Writes the name of the Pokemon at index species to the specified buffer.
+    bufferspeciesname: bufferspeciesname,
 
-        // Checks if at least one Pokemon in the player's party knows the specified (index) attack. If so, variable 0x800D (LASTRESULT) is set to the (zero-indexed) slot number of the first Pokemon that knows the move. If not, LASTRESULT is set to 0x0006. Variable 0x8004 is also set to this Pokemon's species.
-        checkpartymove: checkpartymove,
+    // Writes the name of the species of the first Pokemon in the player's party to the specified buffer.
+    bufferleadmonspeciesname: bufferleadmonspeciesname,
 
-        // Writes the name of the Pokemon at index species to the specified buffer.
-        bufferspeciesname: bufferspeciesname,
+    // Writes the nickname of the Pokemon in slot slot (zero-indexed) of the player's party to the specified buffer. If an empty or invalid slot is specified, ten spaces ("") are written to the buffer.
+    bufferpartymonnick: bufferpartymonnick,
 
-        // Writes the name of the species of the first Pokemon in the player's party to the specified buffer.
-        bufferleadmonspeciesname: bufferleadmonspeciesname,
+    // Writes the name of the item at index item to the specified buffer. If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
+    bufferitemname: bufferitemname,
 
-        // Writes the nickname of the Pokemon in slot slot (zero-indexed) of the player's party to the specified buffer. If an empty or invalid slot is specified, ten spaces ("") are written to the buffer.
-        bufferpartymonnick: bufferpartymonnick,
+    // Writes the name of the decoration at index decoration to the specified buffer. In FireRed, this command is a nop.
+    bufferdecorationname: bufferdecorationname,
 
-        // Writes the name of the item at index item to the specified buffer. If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
-        bufferitemname: bufferitemname,
+    // Writes the name of the move at index move to the specified buffer.
+    buffermovename: buffermovename,
 
-        // Writes the name of the decoration at index decoration to the specified buffer. In FireRed, this command is a nop.
-        bufferdecorationname: bufferdecorationname,
+    // Converts the value of input to a decimal string, and writes that string to the specified buffer.
+    buffernumberstring: buffernumberstring,
 
-        // Writes the name of the move at index move to the specified buffer.
-        buffermovename: buffermovename,
+    // Writes the standard string identified by index to the specified buffer. This command has no protections in place at all, so specifying an invalid standard string (e.x. 0x2B) can and usually will cause data corruption.
+    bufferstdstring: bufferstdstring,
 
-        // Converts the value of input to a decimal string, and writes that string to the specified buffer.
-        buffernumberstring: buffernumberstring,
+    // Copies the string at offset to the specified buffer.
+    bufferstring: bufferstring,
 
-        // Writes the standard string identified by index to the specified buffer. This command has no protections in place at all, so specifying an invalid standard string (e.x. 0x2B) can and usually will cause data corruption.
-        bufferstdstring: bufferstdstring,
+    // Opens the Pokemart system, offering the specified products for sale.
+    pokemart: pokemart,
 
-        // Copies the string at offset to the specified buffer.
-        bufferstring: bufferstring,
+    // Opens the Pokemart system and treats the list of items as decorations.
+    pokemartdecoration: pokemartdecoration,
 
-        // Opens the Pokemart system, offering the specified products for sale.
-        pokemart: pokemart,
+    // Apparent clone of pokemartdecoration.
+    pokemartdecoration2: pokemartdecoration2,
 
-        // Opens the Pokemart system and treats the list of items as decorations.
-        pokemartdecoration: pokemartdecoration,
+    // Starts up the slot machine minigame.
+    playslotmachine: playslotmachine,
 
-        // Apparent clone of pokemartdecoration.
-        pokemartdecoration2: pokemartdecoration2,
+    // Sets a berry tree's specific berry and growth stage. In FireRed, this command is a nop.
+    setberrytree: setberrytree,
 
-        // Starts up the slot machine minigame.
-        playslotmachine: playslotmachine,
+    // This allows you to choose a Pokemon to use in a contest. In FireRed, this command sets the byte at 0x03000EA8 to 0x01.
+    choosecontestmon: arg0,
 
-        // Sets a berry tree's specific berry and growth stage. In FireRed, this command is a nop.
-        setberrytree: setberrytree,
+    // Starts a contest. In FireRed, this command is a nop.
+    startcontest: arg0,
 
-        // This allows you to choose a Pokemon to use in a contest. In FireRed, this command sets the byte at 0x03000EA8 to 0x01.
-        choosecontestmon: void,
+    // Shows the results of a contest. In FireRed, this command is a nop.
+    showcontestresults: arg0,
 
-        // Starts a contest. In FireRed, this command is a nop.
-        startcontest: void,
+    // Starts a contest over a link connection. In FireRed, this command is a nop.
+    contestlinktransfer: arg0,
 
-        // Shows the results of a contest. In FireRed, this command is a nop.
-        showcontestresults: void,
+    // Stores a random integer between 0 and limit in variable 0x800D (LASTRESULT).
+    random: random,
 
-        // Starts a contest over a link connection. In FireRed, this command is a nop.
-        contestlinktransfer: void,
+    // If check is 0x00, this command adds value to the player's money.
+    givemoney: givemoney,
 
-        // Stores a random integer between 0 and limit in variable 0x800D (LASTRESULT).
-        random: random,
+    // If check is 0x00, this command subtracts value from the player's money.
+    takemoney: takemoney,
 
-        // If check is 0x00, this command adds value to the player's money.
-        givemoney: givemoney,
+    // If check is 0x00, this command will check if the player has value or more money; script variable 0x800D (LASTRESULT) is set to 0x0001 if the player has enough money, or 0x0000 if the do not.
+    checkmoney: checkmoney,
 
-        // If check is 0x00, this command subtracts value from the player's money.
-        takemoney: takemoney,
+    // Spawns a secondary box showing how much money the player has.
+    showmoneybox: showmoneybox,
 
-        // If check is 0x00, this command will check if the player has value or more money; script variable 0x800D (LASTRESULT) is set to 0x0001 if the player has enough money, or 0x0000 if the do not.
-        checkmoney: checkmoney,
+    // Hides the secondary box spawned by showmoney.
+    hidemoneybox: arg0,
 
-        // Spawns a secondary box showing how much money the player has.
-        showmoneybox: showmoneybox,
+    // Updates the secondary box spawned by showmoney. Consumes but does not use arguments.
+    updatemoneybox: updatemoneybox,
 
-        // Hides the secondary box spawned by showmoney.
-        hidemoneybox: void,
+    // Gets the price reduction for the index given. In FireRed, this command is a nop.
+    getpricereduction: getpricereduction,
 
-        // Updates the secondary box spawned by showmoney. Consumes but does not use arguments.
-        updatemoneybox: updatemoneybox,
+    // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white.
+    fadescreen: fadescreen,
 
-        // Gets the price reduction for the index given. In FireRed, this command is a nop.
-        getpricereduction: getpricereduction,
+    // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white. Other modes may exist.
+    fadescreenspeed: fadescreenspeed,
+    setflashradius: setflashradius,
+    animateflash: animateflash,
+    messageautoscroll: messageautoscroll,
 
-        // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white.
-        fadescreen: fadescreen,
+    // Executes the specified field move animation.
+    dofieldeffect: dofieldeffect,
 
-        // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white. Other modes may exist.
-        fadescreenspeed: fadescreenspeed,
-        setflashradius: setflashradius,
-        animateflash: animateflash,
-        messageautoscroll: messageautoscroll,
+    // Sets up the field effect argument argument with the value value.
+    setfieldeffectargument: setfieldeffectargument,
 
-        // Executes the specified field move animation.
-        dofieldeffect: dofieldeffect,
+    // Blocks script execution until all playing field move animations complete.
+    waitfieldeffect: waitfieldeffect,
 
-        // Sets up the field effect argument argument with the value value.
-        setfieldeffectargument: setfieldeffectargument,
+    // Sets which healing place the player will return to if all of the Pokemon in their party faint.
+    setrespawn: setrespawn,
 
-        // Blocks script execution until all playing field move animations complete.
-        waitfieldeffect: waitfieldeffect,
+    // Checks the player's gender. If male, then 0x0000 is stored in variable 0x800D (LASTRESULT). If female, then 0x0001 is stored in LASTRESULT.
+    checkplayergender: arg0,
 
-        // Sets which healing place the player will return to if all of the Pokemon in their party faint.
-        setrespawn: setrespawn,
+    // Plays the specified (species) Pokemon's cry. You can use waitcry to block script execution until the sound finishes.
+    playmoncry: playmoncry,
 
-        // Checks the player's gender. If male, then 0x0000 is stored in variable 0x800D (LASTRESULT). If female, then 0x0001 is stored in LASTRESULT.
-        checkplayergender: void,
+    // Changes the metatile at (x, y) on the current map.
+    setmetatile: setmetatile,
 
-        // Plays the specified (species) Pokemon's cry. You can use waitcry to block script execution until the sound finishes.
-        playmoncry: playmoncry,
+    // Queues a weather change to the default weather for the map.
+    resetweather: arg0,
 
-        // Changes the metatile at (x, y) on the current map.
-        setmetatile: setmetatile,
+    // Queues a weather change to type weather.
+    setweather: setweather,
 
-        // Queues a weather change to the default weather for the map.
-        resetweather: void,
+    // Executes the weather change queued with resetweather or setweather. The current weather will smoothly fade into the queued weather.
+    doweather: arg0,
 
-        // Queues a weather change to type weather.
-        setweather: setweather,
+    // This command manages cases in which maps have tiles that change state when stepped on (specifically, cracked/breakable floors).
+    setstepcallback: setstepcallback,
+    setmaplayoutindex: setmaplayoutindex,
+    setobjectpriority: setobjectpriority,
+    resetobjectpriority: resetobjectpriority,
+    createvobject: createvobject,
+    turnvobject: turnvobject,
 
-        // Executes the weather change queued with resetweather or setweather. The current weather will smoothly fade into the queued weather.
-        doweather: void,
+    // Opens the door metatile at (X, Y) with an animation.
+    opendoor: opendoor,
 
-        // This command manages cases in which maps have tiles that change state when stepped on (specifically, cracked/breakable floors).
-        setstepcallback: setstepcallback,
-        setmaplayoutindex: setmaplayoutindex,
-        setobjectpriority: setobjectpriority,
-        resetobjectpriority: resetobjectpriority,
-        createvobject: createvobject,
-        turnvobject: turnvobject,
+    // Closes the door metatile at (X, Y) with an animation.
+    closedoor: closedoor,
 
-        // Opens the door metatile at (X, Y) with an animation.
-        opendoor: opendoor,
+    // Waits for the door animation started with opendoor or closedoor to finish.
+    waitdooranim: arg0,
 
-        // Closes the door metatile at (X, Y) with an animation.
-        closedoor: closedoor,
+    // Sets the door tile at (x, y) to be open without an animation.
+    setdooropen: setdooropen,
 
-        // Waits for the door animation started with opendoor or closedoor to finish.
-        waitdooranim: void,
+    // Sets the door tile at (x, y) to be closed without an animation.
+    setdoorclosed: setdoorclosed,
 
-        // Sets the door tile at (x, y) to be open without an animation.
-        setdooropen: setdooropen,
+    // In Emerald, this command consumes its parameters and does nothing. In FireRed, this command is a nop.
+    addelevmenuitem: addelevmenuitem,
 
-        // Sets the door tile at (x, y) to be closed without an animation.
-        setdoorclosed: setdoorclosed,
+    // In FireRed and Emerald, this command is a nop.
+    showelevmenu: arg0,
+    checkcoins: checkcoins,
+    givecoins: givecoins,
+    takecoins: takecoins,
 
-        // In Emerald, this command consumes its parameters and does nothing. In FireRed, this command is a nop.
-        addelevmenuitem: addelevmenuitem,
+    // Prepares to start a wild battle against a species at Level level holding item. Running this command will not affect normal wild battles. You start the prepared battle with dowildbattle.
+    setwildbattle: setwildbattle,
 
-        // In FireRed and Emerald, this command is a nop.
-        showelevmenu: void,
-        checkcoins: checkcoins,
-        givecoins: givecoins,
-        takecoins: takecoins,
+    // Starts a wild battle against the Pokemon generated by setwildbattle. Blocks script execution until the battle finishes.
+    dowildbattle: arg0,
+    setvaddress: setvaddress,
+    vgoto: vgoto,
+    vcall: vcall,
+    vgoto_if: vgoto_if,
+    vcall_if: vcall_if,
+    vmessage: vmessage,
+    vloadptr: vloadptr,
+    vbufferstring: vbufferstring,
 
-        // Prepares to start a wild battle against a species at Level level holding item. Running this command will not affect normal wild battles. You start the prepared battle with dowildbattle.
-        setwildbattle: setwildbattle,
+    // Spawns a secondary box showing how many Coins the player has.
+    showcoinsbox: showcoinsbox,
 
-        // Starts a wild battle against the Pokemon generated by setwildbattle. Blocks script execution until the battle finishes.
-        dowildbattle: void,
-        setvaddress: setvaddress,
-        vgoto: vgoto,
-        vcall: vcall,
-        vgoto_if: vgoto_if,
-        vcall_if: vcall_if,
-        vmessage: vmessage,
-        vloadptr: vloadptr,
-        vbufferstring: vbufferstring,
+    // Hides the secondary box spawned by showcoins. It consumes its arguments but doesn't use them.
+    hidecoinsbox: hidecoinsbox,
 
-        // Spawns a secondary box showing how many Coins the player has.
-        showcoinsbox: showcoinsbox,
+    // Updates the secondary box spawned by showcoins. It consumes its arguments but doesn't use them.
+    updatecoinsbox: updatecoinsbox,
 
-        // Hides the secondary box spawned by showcoins. It consumes its arguments but doesn't use them.
-        hidecoinsbox: hidecoinsbox,
+    // Increases the value of the specified game stat by 1. The stat's value will not be allowed to exceed 0x00FFFFFF.
+    incrementgamestat: incrementgamestat,
 
-        // Updates the secondary box spawned by showcoins. It consumes its arguments but doesn't use them.
-        updatecoinsbox: updatecoinsbox,
+    // Sets the destination that using an Escape Rope or Dig will take the player to.
+    setescapewarp: setescapewarp,
 
-        // Increases the value of the specified game stat by 1. The stat's value will not be allowed to exceed 0x00FFFFFF.
-        incrementgamestat: incrementgamestat,
+    // Blocks script execution until cry finishes.
+    waitmoncry: arg0,
 
-        // Sets the destination that using an Escape Rope or Dig will take the player to.
-        setescapewarp: setescapewarp,
+    // Writes the name of the specified (box) PC box to the specified buffer.
+    bufferboxname: bufferboxname,
 
-        // Blocks script execution until cry finishes.
-        waitmoncry: void,
+    // Sets the color of the text in standard message boxes. 0x00 produces blue (male) text, 0x01 produces red (female) text, 0xFF resets the color to the default for the current OW's gender, and all other values produce black text.
+    textcolor: textcolor,
 
-        // Writes the name of the specified (box) PC box to the specified buffer.
-        bufferboxname: bufferboxname,
+    // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
+    loadhelp: loadhelp,
 
-        // Sets the color of the text in standard message boxes. 0x00 produces blue (male) text, 0x01 produces red (female) text, 0xFF resets the color to the default for the current OW's gender, and all other values produce black text.
-        textcolor: textcolor,
+    // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
+    unloadhelp: arg0,
 
-        // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
-        loadhelp: loadhelp,
+    // After using this command, all standard message boxes will use the signpost frame.
+    signmsg: arg0,
 
-        // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
-        unloadhelp: void,
+    // Ends the effects of signmsg, returning message box frames to normal.
+    normalmsg: arg0,
 
-        // After using this command, all standard message boxes will use the signpost frame.
-        signmsg: void,
+    // Compares the value of a hidden variable to a dword.
+    comparehiddenvar: comparehiddenvar,
 
-        // Ends the effects of signmsg, returning message box frames to normal.
-        normalmsg: void,
+    // Makes the Pokemon in the specified slot of the player's party obedient. It will not randomly disobey orders in battle.
+    setmonobedient: setmonobedient,
 
-        // Compares the value of a hidden variable to a dword.
-        comparehiddenvar: comparehiddenvar,
+    // Checks if the Pokemon in the specified slot of the player's party is obedient. If the Pokemon is disobedient, 0x0001 is written to script variable 0x800D (LASTRESULT). If the Pokemon is obedient (or if the specified slot is empty or invalid), 0x0000 is written.
+    checkmonobedience: checkmonobedience,
 
-        // Makes the Pokemon in the specified slot of the player's party obedient. It will not randomly disobey orders in battle.
-        setmonobedient: setmonobedient,
+    // Depending on factors I haven't managed to understand yet, this command may cause script execution to jump to the offset specified by the pointer at 0x020375C0.
+    execram: arg0,
 
-        // Checks if the Pokemon in the specified slot of the player's party is obedient. If the Pokemon is disobedient, 0x0001 is written to script variable 0x800D (LASTRESULT). If the Pokemon is obedient (or if the specified slot is empty or invalid), 0x0000 is written.
-        checkmonobedience: checkmonobedience,
+    // Sets worldmapflag to 1. This allows the player to Fly to the corresponding map, if that map has a flightspot.
+    setworldmapflag: setworldmapflag,
 
-        // Depending on factors I haven't managed to understand yet, this command may cause script execution to jump to the offset specified by the pointer at 0x020375C0.
-        execram: void,
+    // Clone of warpteleport? It is apparently only used in FR/LG, and only with specials.[source]
+    warpteleport2: warpteleport2,
 
-        // Sets worldmapflag to 1. This allows the player to Fly to the corresponding map, if that map has a flightspot.
-        setworldmapflag: setworldmapflag,
+    // Changes the location where the player caught the Pokemon in the specified slot of their party.
+    setmonmetlocation: setmonmetlocation,
+    mossdeepgym1: mossdeepgym1,
+    mossdeepgym2: arg0,
 
-        // Clone of warpteleport? It is apparently only used in FR/LG, and only with specials.[source]
-        warpteleport2: warpteleport2,
+    // In FireRed, this command is a nop.
+    mossdeepgym3: mossdeepgym3,
+    mossdeepgym4: arg0,
+    warp7: warp7,
+    cmd_d8: arg0,
+    cmd_d9: arg0,
+    hidebox2: arg0,
+    message3: message3,
+    fadescreenswapbuffers: fadescreenswapbuffers,
+    buffertrainerclassname: buffertrainerclassname,
+    buffertrainername: buffertrainername,
+    pokenavcall: pokenavcall,
+    warp8: warp8,
+    buffercontesttypestring: buffercontesttypestring,
 
-        // Changes the location where the player caught the Pokemon in the specified slot of their party.
-        setmonmetlocation: setmonmetlocation,
-        mossdeepgym1: mossdeepgym1,
-        mossdeepgym2: void,
-
-        // In FireRed, this command is a nop.
-        mossdeepgym3: mossdeepgym3,
-        mossdeepgym4: void,
-        warp7: warp7,
-        cmd_d8: void,
-        cmd_d9: void,
-        hidebox2: void,
-        message3: message3,
-        fadescreenswapbuffers: fadescreenswapbuffers,
-        buffertrainerclassname: buffertrainerclassname,
-        buffertrainername: buffertrainername,
-        pokenavcall: pokenavcall,
-        warp8: warp8,
-        buffercontesttypestring: buffercontesttypestring,
-
-        // Writes the name of the specified (item) item to the specified buffer. If the specified item is a Berry (0x85 - 0xAE) or Poke Ball (0x4) and if the quantity is 2 or more, the buffered string will be pluralized ("IES" or "S" appended). If the specified item is the Enigma Berry, I have no idea what this command does (but testing showed no pluralization). If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
-        bufferitemnameplural: bufferitemnameplural,
-    };
+    // Writes the name of the specified (item) item to the specified buffer. If the specified item is a Berry (0x85 - 0xAE) or Poke Ball (0x4) and if the quantity is 2 or more, the buffered string will be pluralized ("IES" or "S" appended). If the specified item is the Enigma Berry, I have no idea what this command does (but testing showed no pluralization). If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
+    bufferitemnameplural: bufferitemnameplural,
 
     pub const Kind = enum(u8) {
         nop = 0x00,
@@ -874,306 +861,387 @@ pub const Command = packed struct {
         bufferitemnameplural = 0xe2,
     };
 
+    pub const arg0 = packed struct {
+        kind: Kind,
+    };
     pub const call = packed struct {
+        kind: Kind,
         destination: lu32,
     };
     pub const goto = packed struct {
+        kind: Kind,
         destination: lu32,
     };
     pub const goto_if = packed struct {
+        kind: Kind,
         condition: u8,
         destination: lu32,
     };
     pub const call_if = packed struct {
+        kind: Kind,
         condition: u8,
         destination: lu32,
     };
     pub const gotostd = packed struct {
+        kind: Kind,
         function: u8,
     };
     pub const callstd = packed struct {
+        kind: Kind,
         function: u8,
     };
     pub const gotostd_if = packed struct {
+        kind: Kind,
         condition: u8,
         function: u8,
     };
     pub const callstd_if = packed struct {
+        kind: Kind,
         condition: u8,
         function: u8,
     };
     pub const setmysteryeventstatus = packed struct {
+        kind: Kind,
         value: u8,
     };
     pub const loadword = packed struct {
+        kind: Kind,
         destination: u8,
         value: gen3.Ptr([*:0xff]u8),
     };
     pub const loadbyte = packed struct {
+        kind: Kind,
         destination: u8,
         value: u8,
     };
     pub const writebytetoaddr = packed struct {
+        kind: Kind,
         value: u8,
         offset: lu32,
     };
     pub const loadbytefromaddr = packed struct {
+        kind: Kind,
         destination: u8,
         source: lu32,
     };
     pub const setptrbyte = packed struct {
+        kind: Kind,
         source: u8,
         destination: lu32,
     };
     pub const copylocal = packed struct {
+        kind: Kind,
         destination: u8,
         source: u8,
     };
     pub const copybyte = packed struct {
+        kind: Kind,
         destination: lu32,
         source: lu32,
     };
     pub const setvar = packed struct {
+        kind: Kind,
         destination: lu16,
         value: lu16,
     };
     pub const addvar = packed struct {
+        kind: Kind,
         destination: lu16,
         value: lu16,
     };
     pub const subvar = packed struct {
+        kind: Kind,
         destination: lu16,
         value: lu16,
     };
     pub const copyvar = packed struct {
+        kind: Kind,
         destination: lu16,
         source: lu16,
     };
     pub const setorcopyvar = packed struct {
+        kind: Kind,
         destination: lu16,
         source: lu16,
     };
     pub const compare_local_to_local = packed struct {
+        kind: Kind,
         byte1: u8,
         byte2: u8,
     };
     pub const compare_local_to_value = packed struct {
+        kind: Kind,
         a: u8,
         b: u8,
     };
     pub const compare_local_to_addr = packed struct {
+        kind: Kind,
         a: u8,
         b: lu32,
     };
     pub const compare_addr_to_local = packed struct {
+        kind: Kind,
         a: lu32,
         b: u8,
     };
     pub const compare_addr_to_value = packed struct {
+        kind: Kind,
         a: lu32,
         b: u8,
     };
     pub const compare_addr_to_addr = packed struct {
+        kind: Kind,
         a: lu32,
         b: lu32,
     };
     pub const compare_var_to_value = packed struct {
+        kind: Kind,
         @"var": lu16,
         value: lu16,
     };
     pub const compare_var_to_var = packed struct {
+        kind: Kind,
         var1: lu16,
         var2: lu16,
     };
     pub const callnative = packed struct {
+        kind: Kind,
         func: lu32,
     };
     pub const gotonative = packed struct {
+        kind: Kind,
         func: lu32,
     };
     pub const special = packed struct {
+        kind: Kind,
         special_function: lu16,
     };
     pub const specialvar = packed struct {
+        kind: Kind,
         output: lu16,
         special_function: lu16,
     };
     pub const delay = packed struct {
+        kind: Kind,
         time: lu16,
     };
     pub const setflag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const clearflag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const checkflag = packed struct {
+        kind: Kind,
         a: lu16,
     };
     pub const initclock = packed struct {
+        kind: Kind,
         hour: lu16,
         minute: lu16,
     };
     pub const playse = packed struct {
+        kind: Kind,
         sound_number: lu16,
     };
     pub const playfanfare = packed struct {
+        kind: Kind,
         fanfare_number: lu16,
     };
     pub const playbgm = packed struct {
+        kind: Kind,
         song_number: lu16,
         unknown: u8,
     };
     pub const savebgm = packed struct {
+        kind: Kind,
         song_number: lu16,
     };
     pub const fadenewbgm = packed struct {
+        kind: Kind,
         song_number: lu16,
     };
     pub const fadeoutbgm = packed struct {
+        kind: Kind,
         speed: u8,
     };
     pub const fadeinbgm = packed struct {
+        kind: Kind,
         speed: u8,
     };
     pub const warp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const warpsilent = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const warpdoor = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const warphole = packed struct {
+        kind: Kind,
         map: lu16,
     };
     pub const warpteleport = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const setwarp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const setdynamicwarp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const setdivewarp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const setholewarp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const getplayerxy = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
     };
     pub const additem = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const removeitem = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const checkitemspace = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const checkitem = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const checkitemtype = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const givepcitem = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const checkpcitem = packed struct {
+        kind: Kind,
         index: lu16,
         quantity: lu16,
     };
     pub const givedecoration = packed struct {
+        kind: Kind,
         decoration: lu16,
     };
     pub const takedecoration = packed struct {
+        kind: Kind,
         decoration: lu16,
     };
     pub const checkdecor = packed struct {
+        kind: Kind,
         decoration: lu16,
     };
     pub const checkdecorspace = packed struct {
+        kind: Kind,
         decoration: lu16,
     };
     pub const applymovement = packed struct {
+        kind: Kind,
         index: lu16,
         movements: lu32,
     };
     pub const applymovementmap = packed struct {
+        kind: Kind,
         index: lu16,
         movements: lu32,
         map: lu16,
     };
     pub const waitmovement = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const waitmovementmap = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const removeobject = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const removeobjectmap = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const addobject = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const addobjectmap = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const setobjectxy = packed struct {
+        kind: Kind,
         index: lu16,
         x: lu16,
         y: lu16,
     };
     pub const showobjectat = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const hideobjectat = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const turnobject = packed struct {
+        kind: Kind,
         index: lu16,
         direction: u8,
     };
@@ -1195,106 +1263,154 @@ pub const Command = packed struct {
     };
 
     pub const trainerbattle = packed struct {
-        type: TrainerBattleType,
-        trainer: lu16,
-        local_id: lu16,
+        kind: Kind,
         pointers: packed union {
+            type: TrainerBattleType,
             trainer_battle_single: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
             trainer_battle_continue_script_no_music: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // event script
             },
             trainer_battle_continue_script: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // event script
             },
             trainer_battle_single_no_intro_text: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
             },
             trainer_battle_double: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
             },
             trainer_battle_rematch: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
             trainer_battle_continue_script_double: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
                 pointer4: lu32, // event script
             },
             trainer_battle_rematch_double: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
             },
             trainer_battle_continue_script_double_no_music: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
                 pointer3: lu32, // text
                 pointer4: lu32, // event script
             },
             trainer_battle_pyramid: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
             trainer_battle_set_trainer_a: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
             trainer_battle_set_trainer_b: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
             trainer_battle12: packed struct {
+                type: TrainerBattleType,
+                trainer: lu16,
+                local_id: lu16,
                 pointer1: lu32, // text
                 pointer2: lu32, // text
             },
         },
     };
     pub const checktrainerflag = packed struct {
+        kind: Kind,
         trainer: lu16,
     };
     pub const settrainerflag = packed struct {
+        kind: Kind,
         trainer: lu16,
     };
     pub const cleartrainerflag = packed struct {
+        kind: Kind,
         trainer: lu16,
     };
     pub const setobjectxyperm = packed struct {
+        kind: Kind,
         index: lu16,
         x: lu16,
         y: lu16,
     };
     pub const moveobjectoffscreen = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const setobjectmovementtype = packed struct {
+        kind: Kind,
         word: lu16,
         byte: u8,
     };
     pub const message = packed struct {
+        kind: Kind,
         text: gen3.Ptr([*:0xff]u8),
     };
     pub const yesnobox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
     };
     pub const multichoice = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
         list: u8,
         b: u8,
     };
     pub const multichoicedefault = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
         list: u8,
@@ -1302,6 +1418,7 @@ pub const Command = packed struct {
         b: u8,
     };
     pub const multichoicegrid = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
         list: u8,
@@ -1309,29 +1426,35 @@ pub const Command = packed struct {
         b: u8,
     };
     pub const erasebox = packed struct {
+        kind: Kind,
         byte1: u8,
         byte2: u8,
         byte3: u8,
         byte4: u8,
     };
     pub const drawboxtext = packed struct {
+        kind: Kind,
         byte1: u8,
         byte2: u8,
         byte3: u8,
         byte4: u8,
     };
     pub const drawmonpic = packed struct {
+        kind: Kind,
         species: lu16,
         x: u8,
         y: u8,
     };
     pub const drawcontestwinner = packed struct {
+        kind: Kind,
         a: u8,
     };
     pub const braillemessage = packed struct {
+        kind: Kind,
         text: lu32,
     };
     pub const givemon = packed struct {
+        kind: Kind,
         species: lu16,
         level: u8,
         item: lu16,
@@ -1340,153 +1463,194 @@ pub const Command = packed struct {
         unknown3: u8,
     };
     pub const giveegg = packed struct {
+        kind: Kind,
         species: lu16,
     };
     pub const setmonmove = packed struct {
+        kind: Kind,
         index: u8,
         slot: u8,
         move: lu16,
     };
     pub const checkpartymove = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const bufferspeciesname = packed struct {
+        kind: Kind,
         out: u8,
         species: lu16,
     };
     pub const bufferleadmonspeciesname = packed struct {
+        kind: Kind,
         out: u8,
     };
     pub const bufferpartymonnick = packed struct {
+        kind: Kind,
         out: u8,
         slot: lu16,
     };
     pub const bufferitemname = packed struct {
+        kind: Kind,
         out: u8,
         item: lu16,
     };
     pub const bufferdecorationname = packed struct {
+        kind: Kind,
         out: u8,
         decoration: lu16,
     };
     pub const buffermovename = packed struct {
+        kind: Kind,
         out: u8,
         move: lu16,
     };
     pub const buffernumberstring = packed struct {
+        kind: Kind,
         out: u8,
         input: lu16,
     };
     pub const bufferstdstring = packed struct {
+        kind: Kind,
         out: u8,
         index: lu16,
     };
     pub const bufferstring = packed struct {
+        kind: Kind,
         out: u8,
         offset: lu32,
     };
     pub const pokemart = packed struct {
+        kind: Kind,
         products: lu32,
     };
     pub const pokemartdecoration = packed struct {
+        kind: Kind,
         products: lu32,
     };
     pub const pokemartdecoration2 = packed struct {
+        kind: Kind,
         products: lu32,
     };
     pub const playslotmachine = packed struct {
+        kind: Kind,
         word: lu16,
     };
     pub const setberrytree = packed struct {
+        kind: Kind,
         tree_id: u8,
         berry: u8,
         growth_stage: u8,
     };
     pub const random = packed struct {
+        kind: Kind,
         limit: lu16,
     };
     pub const givemoney = packed struct {
+        kind: Kind,
         value: lu32,
         check: u8,
     };
     pub const takemoney = packed struct {
+        kind: Kind,
         value: lu32,
         check: u8,
     };
     pub const checkmoney = packed struct {
+        kind: Kind,
         value: lu32,
         check: u8,
     };
     pub const showmoneybox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
         check: u8,
     };
     pub const updatemoneybox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
     };
     pub const getpricereduction = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const fadescreen = packed struct {
+        kind: Kind,
         effect: u8,
     };
     pub const fadescreenspeed = packed struct {
+        kind: Kind,
         effect: u8,
         speed: u8,
     };
     pub const setflashradius = packed struct {
+        kind: Kind,
         word: lu16,
     };
     pub const animateflash = packed struct {
+        kind: Kind,
         byte: u8,
     };
     pub const messageautoscroll = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const dofieldeffect = packed struct {
+        kind: Kind,
         animation: lu16,
     };
     pub const setfieldeffectargument = packed struct {
+        kind: Kind,
         argument: u8,
         param: lu16,
     };
     pub const waitfieldeffect = packed struct {
+        kind: Kind,
         animation: lu16,
     };
     pub const setrespawn = packed struct {
+        kind: Kind,
         heallocation: lu16,
     };
     pub const playmoncry = packed struct {
+        kind: Kind,
         species: lu16,
         effect: lu16,
     };
     pub const setmetatile = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
         metatile_number: lu16,
         tile_attrib: lu16,
     };
     pub const setweather = packed struct {
+        kind: Kind,
         type: lu16,
     };
     pub const setstepcallback = packed struct {
+        kind: Kind,
         subroutine: u8,
     };
     pub const setmaplayoutindex = packed struct {
+        kind: Kind,
         index: lu16,
     };
     pub const setobjectpriority = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
         priority: u8,
     };
     pub const resetobjectpriority = packed struct {
+        kind: Kind,
         index: lu16,
         map: lu16,
     };
     pub const createvobject = packed struct {
+        kind: Kind,
         sprite: u8,
         byte2: u8,
         x: lu16,
@@ -1495,166 +1659,209 @@ pub const Command = packed struct {
         direction: u8,
     };
     pub const turnvobject = packed struct {
+        kind: Kind,
         index: u8,
         direction: u8,
     };
     pub const opendoor = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
     };
     pub const closedoor = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
     };
     pub const setdooropen = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
     };
     pub const setdoorclosed = packed struct {
+        kind: Kind,
         x: lu16,
         y: lu16,
     };
     pub const addelevmenuitem = packed struct {
+        kind: Kind,
         a: u8,
         b: lu16,
         c: lu16,
         d: lu16,
     };
     pub const checkcoins = packed struct {
+        kind: Kind,
         out: lu16,
     };
     pub const givecoins = packed struct {
+        kind: Kind,
         count: lu16,
     };
     pub const takecoins = packed struct {
+        kind: Kind,
         count: lu16,
     };
     pub const setwildbattle = packed struct {
+        kind: Kind,
         species: lu16,
         level: u8,
         item: lu16,
     };
     pub const setvaddress = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const vgoto = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const vcall = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const vgoto_if = packed struct {
+        kind: Kind,
         byte: u8,
         pointer: lu32,
     };
     pub const vcall_if = packed struct {
+        kind: Kind,
         byte: u8,
         pointer: lu32,
     };
     pub const vmessage = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const vloadptr = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const vbufferstring = packed struct {
+        kind: Kind,
         byte: u8,
         pointer: lu32,
     };
     pub const showcoinsbox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
     };
     pub const hidecoinsbox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
     };
     pub const updatecoinsbox = packed struct {
+        kind: Kind,
         x: u8,
         y: u8,
     };
     pub const incrementgamestat = packed struct {
+        kind: Kind,
         stat: u8,
     };
     pub const setescapewarp = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const bufferboxname = packed struct {
+        kind: Kind,
         out: u8,
         box: lu16,
     };
     pub const textcolor = packed struct {
+        kind: Kind,
         color: u8,
     };
     pub const loadhelp = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const comparehiddenvar = packed struct {
+        kind: Kind,
         a: u8,
         value: lu32,
     };
     pub const setmonobedient = packed struct {
+        kind: Kind,
         slot: lu16,
     };
     pub const checkmonobedience = packed struct {
+        kind: Kind,
         slot: lu16,
     };
     pub const setworldmapflag = packed struct {
+        kind: Kind,
         worldmapflag: lu16,
     };
     pub const warpteleport2 = packed struct {
+        kind: Kind,
         map: lu16,
         warp: u8,
         x: lu16,
         y: lu16,
     };
     pub const setmonmetlocation = packed struct {
+        kind: Kind,
         slot: lu16,
         location: u8,
     };
     pub const mossdeepgym1 = packed struct {
+        kind: Kind,
         unknown: lu16,
     };
     pub const mossdeepgym3 = packed struct {
+        kind: Kind,
         @"var": lu16,
     };
     pub const warp7 = packed struct {
+        kind: Kind,
         map: lu16,
         byte: u8,
         word1: lu16,
         word2: lu16,
     };
     pub const message3 = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const fadescreenswapbuffers = packed struct {
+        kind: Kind,
         byte: u8,
     };
     pub const buffertrainerclassname = packed struct {
+        kind: Kind,
         out: u8,
         class: lu16,
     };
     pub const buffertrainername = packed struct {
+        kind: Kind,
         out: u8,
         trainer: lu16,
     };
     pub const pokenavcall = packed struct {
+        kind: Kind,
         pointer: lu32,
     };
     pub const warp8 = packed struct {
+        kind: Kind,
         map: lu16,
         byte: u8,
         word1: lu16,
         word2: lu16,
     };
     pub const buffercontesttypestring = packed struct {
+        kind: Kind,
         out: u8,
         word: lu16,
     };
     pub const bufferitemnameplural = packed struct {
+        kind: Kind,
         out: u8,
         item: lu16,
         quantity: lu16,
