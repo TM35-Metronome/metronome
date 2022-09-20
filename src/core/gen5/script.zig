@@ -313,10 +313,6 @@ pub const Command = extern union {
     lock_24f: Arg0,
     give_pokemon_4: GivePokemon4,
 
-    comptime {
-        std.debug.assert(@sizeOf(Command) == 24);
-    }
-
     pub const Kind = enum(u16) {
         nop1 = lu16.init(0x00).value(),
         nop2 = lu16.init(0x01).value(),
@@ -591,24 +587,24 @@ pub const Command = extern union {
         give_pokemon_4 = lu16.init(0x2ea).value(),
     };
 
-    pub const Arg0 = packed struct {
+    pub const Arg0 = extern struct {
         kind: Kind,
     };
     pub fn Arg1(comptime T: type) type {
-        return packed struct {
+        return extern struct {
             kind: Kind,
             arg: T,
         };
     }
     pub fn Arg2(comptime T1: type, comptime T2: type) type {
-        return packed struct {
+        return extern struct {
             kind: Kind,
             arg1: T1,
             args2: T2,
         };
     }
     pub fn Arg3(comptime T1: type, comptime T2: type, comptime T3: type) type {
-        return packed struct {
+        return extern struct {
             kind: Kind,
             arg1: T1,
             args2: T2,
@@ -616,7 +612,7 @@ pub const Command = extern union {
         };
     }
     pub fn Arg4(comptime T1: type, comptime T2: type, comptime T3: type, comptime T4: type) type {
-        return packed struct {
+        return extern struct {
             kind: Kind,
             arg1: T1,
             args2: T2,
@@ -624,198 +620,198 @@ pub const Command = extern union {
             args4: T4,
         };
     }
-    pub const CallRoutine = packed struct {
+    pub const CallRoutine = extern struct {
         kind: Kind,
         offset: li32,
     };
-    pub const CompareTo = packed struct {
+    pub const CompareTo = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const StoreVar = packed struct {
+    pub const StoreVar = extern struct {
         kind: Kind,
         @"var": lu16,
     };
-    pub const ClearVar = packed struct {
+    pub const ClearVar = extern struct {
         kind: Kind,
         @"var": lu16,
     };
-    pub const Unknown_0B = packed struct {
+    pub const Unknown_0B = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_0C = packed struct {
+    pub const Unknown_0C = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_0D = packed struct {
+    pub const Unknown_0D = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_0E = packed struct {
+    pub const Unknown_0E = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_0F = packed struct {
+    pub const Unknown_0F = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const StoreFlag = packed struct {
+    pub const StoreFlag = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Condition = packed struct {
+    pub const Condition = extern struct {
         kind: Kind,
         condition: lu16,
     };
-    pub const Unknown_12 = packed struct {
+    pub const Unknown_12 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_13 = packed struct {
+    pub const Unknown_13 = extern struct {
         kind: Kind,
         value1: lu16,
         value2: lu16,
     };
-    pub const Unknown_14 = packed struct {
+    pub const Unknown_14 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_16 = packed struct {
+    pub const Unknown_16 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_17 = packed struct {
+    pub const Unknown_17 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Compare = packed struct {
+    pub const Compare = extern struct {
         kind: Kind,
         value1: lu16,
         value2: lu16,
     };
-    pub const CallStd = packed struct {
+    pub const CallStd = extern struct {
         kind: Kind,
         function: lu16,
     };
-    pub const Jump = packed struct {
+    pub const Jump = extern struct {
         kind: Kind,
         offset: li32,
     };
-    pub const If = packed struct {
+    pub const If = extern struct {
         kind: Kind,
         value: u8,
         offset: li32,
     };
-    pub const Unknown_21 = packed struct {
+    pub const Unknown_21 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_22 = packed struct {
+    pub const Unknown_22 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const SetFlag = packed struct {
+    pub const SetFlag = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const ClearFlag = packed struct {
+    pub const ClearFlag = extern struct {
         kind: Kind,
         flag: lu16,
     };
-    pub const SetVarFlagStatus = packed struct {
+    pub const SetVarFlagStatus = extern struct {
         kind: Kind,
         flag: lu16,
         status: lu16,
     };
-    pub const SetVar26 = packed struct {
+    pub const SetVar26 = extern struct {
         kind: Kind,
         value1: lu16,
         value2: lu16,
     };
-    pub const SetVar27 = packed struct {
+    pub const SetVar27 = extern struct {
         kind: Kind,
         value1: lu16,
         value2: lu16,
     };
-    pub const SetVarEqVal = packed struct {
+    pub const SetVarEqVal = extern struct {
         kind: Kind,
         container: lu16,
         value: lu16,
     };
-    pub const SetVar29 = packed struct {
+    pub const SetVar29 = extern struct {
         kind: Kind,
         container: lu16,
         value: lu16,
     };
-    pub const SetVar2A = packed struct {
+    pub const SetVar2A = extern struct {
         kind: Kind,
         container: lu16,
         value: lu16,
     };
-    pub const SetVar2B = packed struct {
+    pub const SetVar2B = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const Unknown_2D = packed struct {
+    pub const Unknown_2D = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const MusicalMessage = packed struct {
+    pub const MusicalMessage = extern struct {
         kind: Kind,
         id: lu16,
     };
-    pub const EventGreyMessage = packed struct {
+    pub const EventGreyMessage = extern struct {
         kind: Kind,
         id: lu16,
         view: lu16,
     };
-    pub const BubbleMessage = packed struct {
+    pub const BubbleMessage = extern struct {
         kind: Kind,
         id: lu16,
         location: u8,
     };
-    pub const ShowMessageAt = packed struct {
+    pub const ShowMessageAt = extern struct {
         kind: Kind,
         id: lu16,
         xcoord: lu16,
         ycoord: lu16,
         zcoord: lu16,
     };
-    pub const Message = packed struct {
+    pub const Message = extern struct {
         kind: Kind,
         id: lu16,
         npc: lu16,
         position: lu16,
         type: lu16,
     };
-    pub const Message2 = packed struct {
+    pub const Message2 = extern struct {
         kind: Kind,
         id: lu16,
         npc: lu16,
         position: lu16,
         type: lu16,
     };
-    pub const MoneyBox = packed struct {
+    pub const MoneyBox = extern struct {
         kind: Kind,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const BorderedMessage = packed struct {
+    pub const BorderedMessage = extern struct {
         kind: Kind,
         id: lu16,
         color: lu16,
     };
-    pub const PaperMessage = packed struct {
+    pub const PaperMessage = extern struct {
         kind: Kind,
         id: lu16,
         transcoord: lu16,
     };
-    pub const YesNo = packed struct {
+    pub const YesNo = extern struct {
         kind: Kind,
         yesno: lu16,
     };
-    pub const Message3 = packed struct {
+    pub const Message3 = extern struct {
         kind: Kind,
         id: lu16,
         npc: lu16,
@@ -823,7 +819,7 @@ pub const Command = extern union {
         type: lu16,
         unknown: lu16,
     };
-    pub const DoubleMessage = packed struct {
+    pub const DoubleMessage = extern struct {
         kind: Kind,
         idblack: lu16,
         idwhite: lu16,
@@ -831,174 +827,174 @@ pub const Command = extern union {
         position: lu16,
         type: lu16,
     };
-    pub const AngryMessage = packed struct {
+    pub const AngryMessage = extern struct {
         kind: Kind,
         id: lu16,
         unknownbyte: u8,
         position: lu16,
     };
-    pub const SetVarHero = packed struct {
+    pub const SetVarHero = extern struct {
         kind: Kind,
         arg: u8,
     };
-    pub const SetVarItem = packed struct {
+    pub const SetVarItem = extern struct {
         kind: Kind,
         arg: u8,
         item: lu16,
     };
-    pub const unknown_4E = packed struct {
+    pub const unknown_4E = extern struct {
         kind: Kind,
         arg1: u8,
         arg2: lu16,
         arg3: lu16,
         arg4: u8,
     };
-    pub const SetVarItem2 = packed struct {
+    pub const SetVarItem2 = extern struct {
         kind: Kind,
         arg: u8,
         item: lu16,
     };
-    pub const SetVarItem3 = packed struct {
+    pub const SetVarItem3 = extern struct {
         kind: Kind,
         arg: u8,
         item: lu16,
     };
-    pub const SetVarMove = packed struct {
+    pub const SetVarMove = extern struct {
         kind: Kind,
         arg: u8,
         move: lu16,
     };
-    pub const SetVarBag = packed struct {
+    pub const SetVarBag = extern struct {
         kind: Kind,
         arg: u8,
         item: lu16,
     };
-    pub const SetVarPartyPoke = packed struct {
+    pub const SetVarPartyPoke = extern struct {
         kind: Kind,
         arg: u8,
         party_poke: lu16,
     };
-    pub const SetVarPartyPoke2 = packed struct {
+    pub const SetVarPartyPoke2 = extern struct {
         kind: Kind,
         arg: u8,
         party_poke: lu16,
     };
-    pub const SetVar_Unknown = packed struct {
+    pub const SetVar_Unknown = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarType = packed struct {
+    pub const SetVarType = extern struct {
         kind: Kind,
         arg: u8,
         type: lu16,
     };
-    pub const SetVarPoke = packed struct {
+    pub const SetVarPoke = extern struct {
         kind: Kind,
         arg: u8,
         poke: lu16,
     };
-    pub const SetVarPoke2 = packed struct {
+    pub const SetVarPoke2 = extern struct {
         kind: Kind,
         arg: u8,
         poke: lu16,
     };
-    pub const SetVarLocation = packed struct {
+    pub const SetVarLocation = extern struct {
         kind: Kind,
         arg: u8,
         location: lu16,
     };
-    pub const SetVarPokeNick = packed struct {
+    pub const SetVarPokeNick = extern struct {
         kind: Kind,
         arg: u8,
         poke: lu16,
     };
-    pub const SetVar_Unknown2 = packed struct {
+    pub const SetVar_Unknown2 = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarStoreValue5C = packed struct {
+    pub const SetVarStoreValue5C = extern struct {
         kind: Kind,
         arg: u8,
         container: lu16,
         stat: lu16,
     };
-    pub const SetVarMusicalInfo = packed struct {
+    pub const SetVarMusicalInfo = extern struct {
         kind: Kind,
         arg: lu16,
         value: lu16,
     };
-    pub const SetVarNations = packed struct {
+    pub const SetVarNations = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarActivities = packed struct {
+    pub const SetVarActivities = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarPower = packed struct {
+    pub const SetVarPower = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarTrainerType = packed struct {
+    pub const SetVarTrainerType = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarTrainerType2 = packed struct {
+    pub const SetVarTrainerType2 = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const SetVarGeneralWord = packed struct {
+    pub const SetVarGeneralWord = extern struct {
         kind: Kind,
         arg: u8,
         value: lu16,
     };
-    pub const ApplyMovement = packed struct {
+    pub const ApplyMovement = extern struct {
         kind: Kind,
         npc: lu16,
         movementdata: lu32,
     };
-    pub const StoreHeroPosition = packed struct {
+    pub const StoreHeroPosition = extern struct {
         kind: Kind,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const Unknown_67 = packed struct {
+    pub const Unknown_67 = extern struct {
         kind: Kind,
         value: lu16,
         value2: lu16,
     };
-    pub const StoreHeroPosition2 = packed struct {
+    pub const StoreHeroPosition2 = extern struct {
         kind: Kind,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const StoreNPCPosition = packed struct {
+    pub const StoreNPCPosition = extern struct {
         kind: Kind,
         npc: lu16,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const Unknown_6A = packed struct {
+    pub const Unknown_6A = extern struct {
         kind: Kind,
         npc: lu16,
         flag: lu16,
     };
-    pub const AddNPC = packed struct {
+    pub const AddNPC = extern struct {
         kind: Kind,
         npc: lu16,
     };
-    pub const RemoveNPC = packed struct {
+    pub const RemoveNPC = extern struct {
         kind: Kind,
         npc: lu16,
     };
-    pub const SetOWPosition = packed struct {
+    pub const SetOWPosition = extern struct {
         kind: Kind,
         npc: lu16,
         xcoord: lu16,
@@ -1006,7 +1002,7 @@ pub const Command = extern union {
         zcoord: lu16,
         direction: lu16,
     };
-    pub const Unknown_70 = packed struct {
+    pub const Unknown_70 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
@@ -1014,192 +1010,192 @@ pub const Command = extern union {
         arg4: lu16,
         arg5: lu16,
     };
-    pub const Unknown_71 = packed struct {
+    pub const Unknown_71 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const Unknown_72 = packed struct {
+    pub const Unknown_72 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const Unknown_73 = packed struct {
+    pub const Unknown_73 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const Release = packed struct {
+    pub const Release = extern struct {
         kind: Kind,
         npc: lu16,
     };
-    pub const Lock = packed struct {
+    pub const Lock = extern struct {
         kind: Kind,
         npc: lu16,
     };
-    pub const Unknown_78 = packed struct {
+    pub const Unknown_78 = extern struct {
         kind: Kind,
         @"var": lu16,
     };
-    pub const Unknown_79 = packed struct {
+    pub const Unknown_79 = extern struct {
         kind: Kind,
         npc: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const MoveNPCTo = packed struct {
+    pub const MoveNPCTo = extern struct {
         kind: Kind,
         npc: lu16,
         xcoord: lu16,
         ycoord: lu16,
         zcoord: lu16,
     };
-    pub const Unknown_7C = packed struct {
+    pub const Unknown_7C = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const Unknown_7D = packed struct {
+    pub const Unknown_7D = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const TeleportUpNPC = packed struct {
+    pub const TeleportUpNPC = extern struct {
         kind: Kind,
         npc: lu16,
     };
-    pub const Unknown_7F = packed struct {
+    pub const Unknown_7F = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const Unknown_82 = packed struct {
+    pub const Unknown_82 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const SetVar83 = packed struct {
+    pub const SetVar83 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const SetVar84 = packed struct {
+    pub const SetVar84 = extern struct {
         kind: Kind,
         value: lu16,
     };
-    pub const SingleTrainerBattle = packed struct {
+    pub const SingleTrainerBattle = extern struct {
         kind: Kind,
         trainerid: lu16,
         trainerid2: lu16,
         logic: lu16,
     };
-    pub const DoubleTrainerBattle = packed struct {
+    pub const DoubleTrainerBattle = extern struct {
         kind: Kind,
         ally: lu16,
         trainerid: lu16,
         trainerid2: lu16,
         logic: lu16,
     };
-    pub const Unknown_87 = packed struct {
+    pub const Unknown_87 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const Unknown_88 = packed struct {
+    pub const Unknown_88 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const Unknown_8A = packed struct {
+    pub const Unknown_8A = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const PlayTrainerMusic = packed struct {
+    pub const PlayTrainerMusic = extern struct {
         kind: Kind,
         songid: lu16,
     };
-    pub const StoreBattleResult = packed struct {
+    pub const StoreBattleResult = extern struct {
         kind: Kind,
         variable: lu16,
     };
-    pub const DVar90 = packed struct {
+    pub const DVar90 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const DVar92 = packed struct {
+    pub const DVar92 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const DVar93 = packed struct {
+    pub const DVar93 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const TrainerBattle = packed struct {
+    pub const TrainerBattle = extern struct {
         kind: Kind,
         trainerid: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const DeactivateTrainerID = packed struct {
+    pub const DeactivateTrainerID = extern struct {
         kind: Kind,
         id: lu16,
     };
-    pub const Unknown_96 = packed struct {
+    pub const Unknown_96 = extern struct {
         kind: Kind,
         trainerid: lu16,
     };
-    pub const StoreActiveTrainerID = packed struct {
+    pub const StoreActiveTrainerID = extern struct {
         kind: Kind,
         trainerid: lu16,
         arg2: lu16,
     };
-    pub const ChangeMusic = packed struct {
+    pub const ChangeMusic = extern struct {
         kind: Kind,
         songid: lu16,
     };
-    pub const Unknown_A2 = packed struct {
+    pub const Unknown_A2 = extern struct {
         kind: Kind,
         sound: lu16,
         arg2: lu16,
     };
-    pub const Unknown_A5 = packed struct {
+    pub const Unknown_A5 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const PlaySound = packed struct {
+    pub const PlaySound = extern struct {
         kind: Kind,
         id: lu16,
     };
-    pub const PlayFanfare = packed struct {
+    pub const PlayFanfare = extern struct {
         kind: Kind,
         id: lu16,
     };
-    pub const PlayCry = packed struct {
+    pub const PlayCry = extern struct {
         kind: Kind,
         id: lu16,
         arg2: lu16,
     };
-    pub const SetTextScriptMessage = packed struct {
+    pub const SetTextScriptMessage = extern struct {
         kind: Kind,
         id: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const Multi2 = packed struct {
+    pub const Multi2 = extern struct {
         kind: Kind,
         arg: u8,
         arg2: u8,
@@ -1208,67 +1204,67 @@ pub const Command = extern union {
         arg5: u8,
         @"var": lu16,
     };
-    pub const FadeScreen = packed struct {
+    pub const FadeScreen = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const ResetScreen = packed struct {
+    pub const ResetScreen = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const Screen_B5 = packed struct {
+    pub const Screen_B5 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
     };
-    pub const TakeItem = packed struct {
+    pub const TakeItem = extern struct {
         kind: Kind,
         item: lu16,
         quantity: lu16,
         result: lu16,
     };
-    pub const CheckItemBagSpace = packed struct {
+    pub const CheckItemBagSpace = extern struct {
         kind: Kind,
         item: lu16,
         quantity: lu16,
         result: lu16,
     };
-    pub const CheckItemBagNumber = packed struct {
+    pub const CheckItemBagNumber = extern struct {
         kind: Kind,
         item: lu16,
         quantity: lu16,
         result: lu16,
     };
-    pub const StoreItemCount = packed struct {
+    pub const StoreItemCount = extern struct {
         kind: Kind,
         item: lu16,
         result: lu16,
     };
-    pub const Unknown_BA = packed struct {
+    pub const Unknown_BA = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
         arg3: lu16,
         arg4: lu16,
     };
-    pub const Unknown_BB = packed struct {
+    pub const Unknown_BB = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const Warp = packed struct {
+    pub const Warp = extern struct {
         kind: Kind,
         mapid: lu16,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const TeleportWarp = packed struct {
+    pub const TeleportWarp = extern struct {
         kind: Kind,
         mapid: lu16,
         xcoord: lu16,
@@ -1276,20 +1272,20 @@ pub const Command = extern union {
         zcoord: lu16,
         npcfacing: lu16,
     };
-    pub const FallWarp = packed struct {
+    pub const FallWarp = extern struct {
         kind: Kind,
         mapid: lu16,
         xcoord: lu16,
         ycoord: lu16,
     };
-    pub const FastWarp = packed struct {
+    pub const FastWarp = extern struct {
         kind: Kind,
         mapid: lu16,
         xcoord: lu16,
         ycoord: lu16,
         herofacing: lu16,
     };
-    pub const TeleportWarp2 = packed struct {
+    pub const TeleportWarp2 = extern struct {
         kind: Kind,
         mapid: lu16,
         xcoord: lu16,
@@ -1297,71 +1293,71 @@ pub const Command = extern union {
         zcoord: lu16,
         herofacing: lu16,
     };
-    pub const SpecialAnimation2 = packed struct {
+    pub const SpecialAnimation2 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const CallAnimation = packed struct {
+    pub const CallAnimation = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const StoreRandomNumber = packed struct {
+    pub const StoreRandomNumber = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const StoreDate = packed struct {
+    pub const StoreDate = extern struct {
         kind: Kind,
         month: lu16,
         date: lu16,
     };
-    pub const Store_D1 = packed struct {
+    pub const Store_D1 = extern struct {
         kind: Kind,
         arg: lu16,
         arg2: lu16,
     };
-    pub const StoreBirthDay = packed struct {
+    pub const StoreBirthDay = extern struct {
         kind: Kind,
         month: lu16,
         day: lu16,
     };
-    pub const StoreBadge = packed struct {
+    pub const StoreBadge = extern struct {
         kind: Kind,
         @"var": lu16,
         badge: lu16,
     };
-    pub const SetBadge = packed struct {
+    pub const SetBadge = extern struct {
         kind: Kind,
         badge: lu16,
     };
-    pub const StoreBadgeNumber = packed struct {
+    pub const StoreBadgeNumber = extern struct {
         kind: Kind,
         badge: lu16,
     };
-    pub const TakeMoney = packed struct {
+    pub const TakeMoney = extern struct {
         kind: Kind,
         amount: lu16,
     };
-    pub const CheckMoney = packed struct {
+    pub const CheckMoney = extern struct {
         kind: Kind,
         storage: lu16,
         value: lu16,
     };
-    pub const StorePartyNumberMinimum = packed struct {
+    pub const StorePartyNumberMinimum = extern struct {
         kind: Kind,
         result: lu16,
         number: lu16,
     };
-    pub const GivePokemon1 = packed struct {
+    pub const GivePokemon1 = extern struct {
         kind: Kind,
         result: lu16,
         species: lu16,
         item: lu16,
         level: lu16,
     };
-    pub const GivePokemon2 = packed struct {
+    pub const GivePokemon2 = extern struct {
         kind: Kind,
         result: lu16,
         species: lu16,
@@ -1373,13 +1369,13 @@ pub const Command = extern union {
         unknown_3: lu16,
         unknown_4: lu16,
     };
-    pub const GivePokemon3 = packed struct {
+    pub const GivePokemon3 = extern struct {
         kind: Kind,
         result: lu16,
         species: lu16,
         is_full: lu16,
     };
-    pub const GivePokemon4 = packed struct {
+    pub const GivePokemon4 = extern struct {
         kind: Kind,
         result: lu16,
         species: lu16,
@@ -1388,7 +1384,7 @@ pub const Command = extern union {
         unknown_1: lu16,
         unknown_2: lu16,
     };
-    pub const MoveCamera = packed struct {
+    pub const MoveCamera = extern struct {
         kind: Kind,
         arg1: lu16,
         arg2: lu16,
@@ -1398,7 +1394,7 @@ pub const Command = extern union {
         arg6: lu32,
         arg7: lu16,
     };
-    pub const ResetCamera = packed struct {
+    pub const ResetCamera = extern struct {
         kind: Kind,
         arg1: lu16,
         arg2: lu16,
@@ -1407,7 +1403,7 @@ pub const Command = extern union {
         arg5: lu16,
         arg6: lu16,
     };
-    pub const SwitchOwPosition = packed struct {
+    pub const SwitchOwPosition = extern struct {
         kind: Kind,
         arg1: lu16,
         arg2: lu16,
@@ -1415,12 +1411,12 @@ pub const Command = extern union {
         arg4: lu16,
         arg5: lu16,
     };
-    pub const WildBattle = packed struct {
+    pub const WildBattle = extern struct {
         kind: Kind,
         species: lu16,
         level: lu16,
     };
-    pub const WildBattleStoreResult = packed struct {
+    pub const WildBattleStoreResult = extern struct {
         kind: Kind,
         species: lu16,
         level: lu16,
