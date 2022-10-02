@@ -21,4 +21,7 @@
 	url = ../../Hejsil/ston.git
 [submodule "lib/webview"]
 	path = lib/webview
-	url = https://github.com/webview/webview.git
+	url = ../../webview/webview.git
+[submodule "lib/md4c"]
+	path = lib/md4c
+	url = ../../mity/md4c.git

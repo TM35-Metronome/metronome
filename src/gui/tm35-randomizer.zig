@@ -48,50 +48,757 @@ pub fn main() anyerror!void {
         else => {},
     }
 
+    var program = try Program.init(heap.c_allocator);
+    defer program.deinit();
+
+    try program.render();
+    program.run();
+}
+
+const Program = @This();
+
+allocator: mem.Allocator,
+view: c.webview_t,
+loaded_rom: ?util.Path = null,
+
+mode: enum { select, edit } = .select,
+render_buffer: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8){},
+new_settings_name: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8){},
+exes: Executables,
+settings: std.ArrayListUnmanaged(Settings),
+selected_settings: usize = math.maxInt(usize),
+selected_exe_command: usize = 0,
+selected_setting_command: usize = math.maxInt(usize),
+
+fn init(allocator: mem.Allocator) !Program {
+    const exes = try Executables.find(allocator);
+    errdefer exes.deinit();
+
+    const settings = try Settings.loadAll(allocator);
+    errdefer {
+        Settings.deinitAll(settings.items);
+        settings.deinit();
+    }
+
     const w = c.webview_create(1, null);
+    errdefer c.webview_destroy(w);
+
     c.webview_set_title(w, "Webview Example");
     c.webview_set_size(w, 800, 600, c.WEBVIEW_HINT_NONE);
-    c.webview_set_html(w, @embedFile("tm35-randomizer.html"));
 
-    c.webview_bind(w, "tm35GetSettings", tm35GetSettings, w);
+    return Program{
+        .allocator = allocator,
+        .exes = exes,
+        .settings = settings,
+        .view = w,
+    };
+}
 
+fn deinit(program: *Program) void {
+    for (program.settings.items) |*settings| settings.deinit(program.allocator);
+    program.render_buffer.deinit(program.allocator);
+    program.new_settings_name.deinit(program.allocator);
+    program.exes.deinit();
+    program.settings.deinit(program.allocator);
+    c.webview_destroy(program.view);
+}
+
+fn run(program: *Program) void {
+    const p = program;
+    const w = p.view;
+    c.webview_bind(w, "tm35SelectSettings", wrap(.redraw, selectSettings), p);
+    c.webview_bind(w, "tm35SelectExeCommand", wrap(.no_redraw, selectExeCommand), p);
+    c.webview_bind(w, "tm35SelectSettingCommand", wrap(.redraw, selectSettingCommand), p);
+    c.webview_bind(w, "tm35SetSettingName", wrap(.no_redraw, setSettingName), p);
+    c.webview_bind(w, "tm35SetSettingDescription", wrap(.no_redraw, setSettingDescription), p);
+    c.webview_bind(w, "tm35CheckCheckbox", wrap(.no_redraw, checkCheckbox), p);
+    c.webview_bind(w, "tm35SetInt", wrap(.no_redraw, setInt), p);
+    c.webview_bind(w, "tm35SetFloat", wrap(.no_redraw, setFloat), p);
+    c.webview_bind(w, "tm35SetEnum", wrap(.no_redraw, setEnum), p);
+    c.webview_bind(w, "tm35SetString", wrap(.no_redraw, setString), p);
+    c.webview_bind(w, "tm35AddCommand", wrap(.redraw, addCommand), p);
+    c.webview_bind(w, "tm35RemoveCommand", wrap(.redraw, removeCommand), p);
+    c.webview_bind(w, "tm35SetNewSettingsName", wrap(.no_redraw, setNewSettingsName), p);
+    c.webview_bind(w, "tm35NewSettings", wrap(.redraw, newSettings), p);
+    c.webview_bind(w, "tm35SwitchToEditMode", wrap(.redraw, switchToEditMode), p);
+    c.webview_bind(w, "tm35SwitchToSelectMode", wrap(.redraw, switchToSelectMode), p);
+    c.webview_bind(w, "tm35DeleteSelected", wrap(.redraw, deleteSelected), p);
+    c.webview_bind(w, "tm35LoadRom", wrap(.redraw, loadRom), p);
+    c.webview_bind(w, "tm35Randomize", wrap(.redraw, randomize), p);
     c.webview_run(w);
-    c.webview_destroy(w);
 }
 
-fn tm35GetSettings(seq: [*c]const u8, req: [*c]const u8, arg: ?*anyopaque) callconv(.C) void {
-    const w = @ptrCast(*c.webview_t, @alignCast(@alignOf(c.webview_t), arg));
-    _ = req;
+fn selectedSettings(program: Program) ?*Settings {
+    if (program.selected_settings < program.settings.items.len)
+        return &program.settings.items[program.selected_settings];
+    return null;
+}
 
-    var arena = heap.ArenaAllocator.init(heap.c_allocator);
-    defer arena.deinit();
+fn selectedExeCommand(program: Program) ?*const Executables.Command {
+    if (program.selected_exe_command < program.exes.commands.len)
+        return &program.exes.commands[program.selected_exe_command];
+    return null;
+}
 
-    if (getSettingsJson(arena.allocator())) |settings| {
-        c.webview_return(w, seq, 0, settings.ptr);
-    } else |_| {
-        c.webview_return(w, seq, 1, "\"Error!\"");
+fn selectedSettingCommand(program: Program) ?*Settings.Command {
+    const settings = program.selectedSettings() orelse return null;
+    if (program.selected_setting_command < settings.commands.items.len)
+        return &settings.commands.items[program.selected_setting_command];
+    return null;
+}
+
+fn render(program: *Program) !void {
+    program.render_buffer.shrinkRetainingCapacity(0);
+    const writer = program.render_buffer.writer(program.allocator);
+    try writer.writeAll(
+        \\<html lang="en">
+        \\<meta name='viewport' content='width=device-width, width=device-height, initial-scale=1.0'>
+        \\<style>
+        \\* {
+        \\    box-sizing: border-box;
+        \\    padding: 0;
+        \\    margin: 0;
+        \\    min-height: 0;
+        \\    min-width: 0;
+        \\}
+        \\textarea {
+        \\    resize: none;
+        \\}
+        \\.root {
+        \\    padding: 10px;
+        \\    width: 100vw;
+        \\    height: 100vh;
+        \\}
+        \\.grid {
+        \\    display: grid;
+        \\    gap: 4px 4px;
+        \\}
+        \\.col-1fr {
+        \\    grid-template-columns: 1fr;
+        \\}
+        \\.col-auto-auto {
+        \\    grid-template-columns: auto auto;
+        \\}
+        \\.col-220px-1fr {
+        \\    grid-template-columns: 220px 1fr;
+        \\}
+        \\.col-1fr-26px-26px {
+        \\    grid-template-columns: 1fr 26px 26px;
+        \\}
+        \\.col-1fr-1fr-1fr {
+        \\    grid-template-columns: 1fr 1fr 1fr;
+        \\}
+        \\.row-1fr {
+        \\    grid-template-rows: 1fr;
+        \\}
+        \\.row-1fr-26px-26px {
+        \\    grid-template-rows: 1fr 26px 26px;
+        \\}
+        \\.row-26px-26px {
+        \\    grid-template-rows: 26px 26px;
+        \\}
+        \\.row-auto-1fr {
+        \\    grid-template-rows: auto 1fr;
+        \\}
+        \\.row-auto-auto-1fr {
+        \\    grid-template-rows: auto auto 1fr;
+        \\}
+        \\.row-auto-1fr-26px-26px {
+        \\    grid-template-rows: auto 1fr 26px 26px;
+        \\}
+        \\.text-center {
+        \\    text-align: center;
+        \\}
+        \\</style>
+        \\<main class='root grid col-220px-1fr row-1fr'>
+        \\
+    );
+
+    switch (program.mode) {
+        .select => {
+            try program.renderSettingsList(writer);
+            try program.renderSettingsDetails(writer);
+        },
+        .edit => {
+            try program.renderCommandList(writer);
+            try program.renderCommandSettings(writer);
+        },
+    }
+
+    try writer.writeAll(
+        \\</main>
+        \\</html>
+        \\
+    );
+    try writer.writeByte(0);
+
+    const content = program.render_buffer.items;
+    const content_z = content[0 .. content.len - 1 :0];
+    c.webview_set_html(program.view, content_z.ptr);
+}
+
+fn renderSettingsList(program: Program, writer: anytype) !void {
+    try writer.writeAll(
+        \\<div class='grid col-1fr row-1fr-26px-26px'>
+        \\    <select autofocus size='2' onchange='tm35SelectSettings(this.selectedIndex)'>
+        \\
+    );
+
+    for (program.settings.items) |setting, i| {
+        const is_selected = program.selected_settings == i;
+        const selected = if (is_selected) " selected=true" else "";
+        try writer.writeAll("        ");
+        try writer.print("<option{s}>{s}</option>\n", .{
+            selected,
+            html.escapeFmt(setting.name.items),
+        });
+    }
+
+    const disabled = if (program.selectedSettings()) |_| "" else " disabled";
+    try writer.print(
+        \\    </select>
+        \\    <input placeholder='New settings name'
+        \\        onchange='tm35SetNewSettingsName(this.value)'
+        \\        value='{[name]s}'/>
+        \\    <div class='grid col-1fr-1fr-1fr row-1fr'>
+        \\        <button onclick='tm35NewSettings()'>New</button>
+        \\        <button{[disabled]s} onclick='tm35SwitchToEditMode()'>Edit</button>
+        \\        <button{[disabled]s} onclick='tm35DeleteSelected()'>Delete</button>
+        \\    </div>
+        \\</div>
+        \\
+    ,
+        .{
+            .name = html.escapeFmt(program.new_settings_name.items),
+            .disabled = disabled,
+        },
+    );
+}
+
+fn renderSettingsDetails(program: Program, writer: anytype) !void {
+    const title = if (program.selectedSettings()) |settings| settings.name.items else "Metronome";
+    const desc = if (program.selectedSettings()) |settings|
+        settings.description.items
+    else
+        \\Welcome to Metronome, the pokemon rom randomizer. What you see here is a menu for
+        \\selecting premade randomization settings and applying them to a rom of your choice.
+        \\
+        \\You can also create your own settings by using the buttons in the bottom left corner.
+        \\
+        ;
+    try writer.print(
+        \\<div class='grid col-1fr row-auto-1fr-26px-26px'>
+        \\    <h1 class='text-center'>{[title]s}</h1>
+        \\    <article>
+    ,
+        .{
+            .title = html_pretty.escapeFmt(title),
+        },
+    );
+
+    _ = c.md_html(
+        desc.ptr,
+        @intCast(c.MD_SIZE, desc.len),
+        generateMdRender(@TypeOf(writer)),
+        discardConst(&writer),
+        0,
+        0,
+    );
+
+    try writer.writeAll(
+        \\</article>
+        \\
+    );
+
+    const randomize_button = if (program.loaded_rom == null and program.selectedSettings() == null)
+        "<button disabled>Select settings and load a rom</button>"
+    else if (program.loaded_rom == null)
+        "<button disabled>Load a rom</button>"
+    else if (program.selectedSettings() == null)
+        "<button disabled>Select settings</button>"
+    else
+        "<button onclick='tm35Randomize()'>Randomize!</button>";
+
+    const rom = if (program.loaded_rom) |*rom| fs.path.basename(rom.slice()) else "Choose Rom";
+    try writer.print(
+        \\    <button onclick='tm35LoadRom()'>{s}</button>
+        \\    {s}
+        \\</div>
+        \\
+    ,
+        .{ html.escapeFmt(rom), randomize_button },
+    );
+}
+
+fn generateMdRender(
+    comptime Writer: type,
+) fn ([*c]const c.MD_CHAR, c.MD_SIZE, ?*anyopaque) callconv(.C) void {
+    return struct {
+        fn mdRender(
+            ptr: [*c]const c.MD_CHAR,
+            len: c.MD_SIZE,
+            userdata: ?*anyopaque,
+        ) callconv(.C) void {
+            const str = @ptrCast([*]const u8, ptr)[0..len];
+            const writer = @ptrCast(*const Writer, @alignCast(@alignOf(Writer), userdata));
+            writer.writeAll(str) catch {};
+        }
+    }.mdRender;
+}
+
+fn DiscardConst(comptime Ptr: type) type {
+    var info = @typeInfo(Ptr);
+    info.Pointer.is_const = false;
+    return @Type(info);
+}
+
+fn discardConst(ptr: anytype) DiscardConst(@TypeOf(ptr)) {
+    const Res = DiscardConst(@TypeOf(ptr));
+    switch (@typeInfo(Res).Pointer.size) {
+        .Slice => {
+            const res = discardConst(ptr.ptr);
+            return res[0..ptr.len];
+        },
+        else => return @intToPtr(Res, @ptrToInt(ptr)),
     }
 }
 
-fn getSettingsJson(allocator: mem.Allocator) ![:0]u8 {
-    const settings = try Settings.loadAll(allocator);
-    var res = std.ArrayList(u8).init(allocator);
+fn renderCommandList(program: Program, writer: anytype) !void {
+    try writer.writeAll(
+        \\<div class='grid col-1fr row-1fr-26px-26px'>
+        \\    <select autofocus size='2' onchange='tm35SelectSettingCommand(this.selectedIndex)'>
+        \\
+    );
 
-    try res.append('[');
-    for (settings.items) |setting, i| {
-        try setting.save(res.writer());
-        if (i + 1 != settings.items.len)
-            try res.append(',');
+    const settings = program.selectedSettings().?;
+    for (settings.commands.items) |command, i| {
+        const is_selected = program.selected_setting_command == i;
+        const selected = if (is_selected) " selected=true" else "";
+        try writer.writeAll("            ");
+        try writer.print("<option{s}>{s}</option>\n", .{
+            selected,
+            html_pretty.escapeFmt(command.name.items),
+        });
     }
-    try res.append(']');
 
-    return res.toOwnedSliceSentinel(0);
+    try writer.writeAll(
+        \\    </select>
+        \\    <div class='grid col-1fr-26px-26px row-1fr'>
+        \\        <select onchange='tm35SelectExeCommand(this.selectedIndex)'>
+        \\
+    );
+
+    for (program.exes.commands) |command, i| {
+        const is_selected = program.selected_exe_command == i;
+        const selected = if (is_selected) " selected=true" else "";
+        try writer.writeAll("        ");
+        try writer.print("<option{s}>{s}</option>\n", .{
+            selected,
+            html_pretty.escapeFmt(command.name()),
+        });
+    }
+
+    try writer.print(
+        \\        </select>
+        \\        <button onclick='tm35AddCommand()'>+</button>
+        \\        <button onclick='tm35RemoveCommand()'>-</button>
+        \\    </div>
+        \\    <div class='grid col-auto-auto row-1fr'>
+        \\        <button onclick='tm35SelectSettingCommand("{}")'>General settings</button>
+        \\        <button onclick='tm35SwitchToSelectMode()'>Done</button>
+        \\    </div>
+        \\</div>
+        \\
+    , .{math.maxInt(usize)});
 }
 
-fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const u8) !void {
+fn renderCommandSettings(program: Program, writer: anytype) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettingCommand() orelse {
+        const settings = program.selectedSettings().?;
+        try writer.print(
+            \\<div class='grid col-1fr row-auto-auto-1fr'>
+            \\    <div>
+            \\        <label for='name'>Name:</label>
+            \\        <input id='name' value='{s}' onchange='tm35SetSettingName(this.value)'/>
+            \\    </div>
+            \\    <label for='desc'>Description:</label>
+            \\    <textarea id='desc'
+            \\        onchange='tm35SetSettingDescription(this.value)'>{s}</textarea>
+            \\</div>
+            \\
+        , .{
+            html.escapeFmt(settings.name.items),
+            html.escapeFmt(settings.description.items),
+        });
+        return;
+    };
+
+    try writer.print(
+        \\<div class='grid col-1fr row-auto-1fr'>
+        \\    <h1 class='text-center'>{s}</h1>
+        \\    <div>
+        \\
+    , .{html_pretty.escapeFmt(settings.name.items)});
+
+    const command = program.exes.findByName(settings.name.items).?;
+    for (command.flags) |flag, i| {
+        const param = command.params[flag.i];
+        const name = param.names.longest().name;
+        const arg = try settings.getArg(allocator, name);
+        if (!arg.found_existing)
+            try arg.arg.value.appendSlice(allocator, "false");
+
+        const checked = if (mem.eql(u8, arg.arg.value.items, "true")) " checked" else "";
+        try writer.print(
+            \\<input{[checked]s} type='checkbox' id='{[name]s}' title='{[description]s}'
+            \\    onchange='tm35CheckCheckbox({[index]}, this.checked)'/>
+            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label><br/>
+            \\
+        , .{
+            .name = html.escapeFmt(name),
+            .pretty_name = html_pretty.escapeFmt(name),
+            .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
+            .checked = checked,
+            .index = i,
+        });
+    }
+
+    const is_num_constaint = "(event.charCode >= 48 && event.charCode <= 57)";
+    for (command.ints) |int, i| {
+        const param = command.params[int.i];
+        const name = param.names.longest().name;
+        const arg = try settings.getArg(allocator, name);
+        if (!arg.found_existing)
+            try arg.arg.value.writer(allocator).print("{}", .{int.default});
+
+        try writer.print(
+            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
+            \\<input id='{[name]s}' title='{[description]s}' value='{[value]s}'
+            \\    placeholder='{[default]d}'
+            \\    onkeypress='return {[constaint]s}'
+            \\    onchange='tm35SetInt({[index]}, this.value || "{[default]d}")'/>
+            \\<br/>
+            \\
+        ,
+            .{
+                .name = html_pretty.escapeFmt(name),
+                .pretty_name = html_pretty.escapeFmt(name),
+                .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
+                .value = html.escapeFmt(arg.arg.value.items),
+                .default = int.default,
+                .index = i,
+                .constaint = is_num_constaint,
+            },
+        );
+    }
+
+    const only_has_one_dot_constaint =
+        "(event.charCode == 46 && !this.value.includes(\".\"))";
+    for (command.floats) |float, i| {
+        const param = command.params[float.i];
+        const name = param.names.longest().name;
+        const arg = try settings.getArg(allocator, name);
+        if (!arg.found_existing)
+            try arg.arg.value.writer(allocator).print("{d}", .{float.default});
+
+        try writer.print(
+            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
+            \\<input id='{[name]s}' title='{[description]s}' value='{[value]s}'
+            \\    placeholder='{[default]d}'
+            \\    onkeypress='return {[constaint_1]s} || {[constaint_2]s}'
+            \\    onchange='tm35SetFloat({[index]}, this.value || "{[default]d}")'/>
+            \\<br/>
+            \\
+        , .{
+            .name = html_pretty.escapeFmt(name),
+            .pretty_name = html_pretty.escapeFmt(name),
+            .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
+            .value = html.escapeFmt(arg.arg.value.items),
+            .default = float.default,
+            .index = i,
+            .constaint_1 = is_num_constaint,
+            .constaint_2 = only_has_one_dot_constaint,
+        });
+    }
+
+    for (command.enums) |enumeration, i| {
+        const param = command.params[enumeration.i];
+        const name = param.names.longest().name;
+        const arg = try settings.getArg(allocator, name);
+        if (!arg.found_existing)
+            try arg.arg.value.appendSlice(allocator, enumeration.options[enumeration.default]);
+
+        try writer.print(
+            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
+            \\<select id='{[name]s}' title='{[description]s}'
+            \\    onchange='tm35SetEnum({[index]}, this.value)'>
+            \\
+        , .{
+            .name = html.escapeFmt(name),
+            .pretty_name = html_pretty.escapeFmt(name),
+            .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
+            .index = i,
+        });
+
+        for (enumeration.options) |option| {
+            const is_selected = mem.eql(u8, option, arg.arg.value.items);
+            const selected = if (is_selected) " selected=true" else "";
+            try writer.print(
+                \\<option{[selected]s}
+                \\    value='{[value]s}'>{[pretty_value]s}</option>
+                \\
+            , .{
+                .selected = selected,
+                .value = html.escapeFmt(option),
+                .pretty_value = html_pretty.escapeFmt(option),
+            });
+        }
+
+        try writer.writeAll(
+            \\</select><br/>
+            \\
+        );
+    }
+
+    for (command.multi_strings) |string, i| {
+        const param = command.params[string.i];
+        const name = param.names.longest().name;
+        const arg = try settings.getArg(allocator, name);
+
+        try writer.print(
+            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label><br/>
+            \\<textarea id='{[name]s}' title='{[description]s}' rows='4' cols='50'
+            \\    onchange='tm35SetString({[index]}, this.value)'>{[value]s}</textarea>
+            \\<br/>
+            \\
+        , .{
+            .name = html.escapeFmt(name),
+            .pretty_name = html_pretty.escapeFmt(name),
+            .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
+            .value = html.escapeFmt(arg.arg.value.items),
+            .index = i,
+        });
+    }
+
+    try writer.writeAll(
+        \\    </div>
+        \\</div>
+        \\
+    );
+}
+
+fn selectSettings(program: *Program, selected: usize) !void {
+    program.selected_settings = selected;
+}
+
+fn selectSettingCommand(program: *Program, selected: usize) !void {
+    program.selected_setting_command = selected;
+}
+
+fn selectExeCommand(program: *Program, selected: usize) !void {
+    program.selected_exe_command = selected;
+}
+
+fn setSettingName(program: *Program, value: []const u8) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    settings.name.shrinkRetainingCapacity(0);
+    try settings.name.appendSlice(allocator, value);
+    try settings.save();
+}
+
+fn setSettingDescription(program: *Program, value: []const u8) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    settings.description.shrinkRetainingCapacity(0);
+    try settings.description.appendSlice(allocator, value);
+    try settings.save();
+}
+
+fn checkCheckbox(program: *Program, flag: usize, value: bool) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    const command_settings = program.selectedSettingCommand().?;
+    const command = program.exes.findByName(command_settings.name.items).?;
+    const param = command.params[command.flags[flag].i];
+    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    arg.arg.value.shrinkRetainingCapacity(0);
+    try arg.arg.value.appendSlice(allocator, if (value) "true" else "false");
+    try settings.save();
+}
+
+fn setInt(program: *Program, int: usize, value: usize) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    const command_settings = program.selectedSettingCommand().?;
+    const command = program.exes.findByName(command_settings.name.items).?;
+    const param = command.params[command.ints[int].i];
+    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    arg.arg.value.shrinkRetainingCapacity(0);
+    try arg.arg.value.writer(allocator).print("{}", .{value});
+    try settings.save();
+}
+
+fn setFloat(program: *Program, float: usize, value: f64) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    const command_settings = program.selectedSettingCommand().?;
+    const command = program.exes.findByName(command_settings.name.items).?;
+    const param = command.params[command.floats[float].i];
+    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    arg.arg.value.shrinkRetainingCapacity(0);
+    try arg.arg.value.writer(allocator).print("{d}", .{value});
+    try settings.save();
+}
+
+fn setEnum(program: *Program, enumeration: usize, value: []const u8) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    const command_settings = program.selectedSettingCommand().?;
+    const command = program.exes.findByName(command_settings.name.items).?;
+    const param = command.params[command.enums[enumeration].i];
+    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    arg.arg.value.shrinkRetainingCapacity(0);
+    try arg.arg.value.appendSlice(allocator, value);
+    try settings.save();
+}
+
+fn setString(program: *Program, string: usize, value: []const u8) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+
+    const command_settings = program.selectedSettingCommand().?;
+    const command = program.exes.findByName(command_settings.name.items).?;
+    const param = command.params[command.multi_strings[string].i];
+    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    arg.arg.value.shrinkRetainingCapacity(0);
+    try arg.arg.value.appendSlice(allocator, value);
+    try settings.save();
+}
+
+fn addCommand(program: *Program) !void {
+    const allocator = program.allocator;
+    const settings = program.selectedSettings().?;
+    const command = program.selectedExeCommand().?;
+
+    {
+        var cmd = try Settings.Command.init(allocator, command.name());
+        errdefer cmd.deinit(allocator);
+        try settings.commands.append(allocator, cmd);
+    }
+
+    program.selected_setting_command = settings.commands.items.len - 1;
+    try settings.save();
+}
+
+fn removeCommand(program: *Program) !void {
+    _ = program.selectedSettingCommand() orelse return;
+
+    const settings = program.selectedSettings().?;
+    _ = settings.commands.orderedRemove(program.selected_setting_command);
+    program.selected_setting_command = math.maxInt(usize);
+
+    try settings.save();
+}
+
+fn setNewSettingsName(program: *Program, value: []const u8) !void {
+    program.new_settings_name.shrinkRetainingCapacity(0);
+    try program.new_settings_name.appendSlice(program.allocator, value);
+}
+
+fn newSettings(program: *Program) !void {
+    if (program.new_settings_name.items.len == 0)
+        return;
+
+    const allocator = program.allocator;
+    var settings = try Settings.new(allocator, program.new_settings_name.items);
+    errdefer settings.deinit(allocator);
+
+    try program.settings.append(allocator, settings);
+    program.selected_settings = program.settings.items.len - 1;
+}
+
+fn switchToEditMode(program: *Program) !void {
+    debug.assert(program.mode == .select);
+    program.mode = .edit;
+    program.selected_exe_command = 0;
+    program.selected_setting_command = math.maxInt(usize);
+}
+
+fn switchToSelectMode(program: *Program) !void {
+    debug.assert(program.mode == .edit);
+    program.mode = .select;
+}
+
+fn deleteSelected(program: *Program) !void {
+    // TODO: Confirmation
+    if (program.selectedSettings()) |settings| {
+        try std.fs.cwd().deleteFile(settings.path.items);
+
+        var removed = program.settings.orderedRemove(program.selected_settings);
+        removed.deinit(program.allocator);
+        program.selected_settings = math.maxInt(usize);
+    }
+}
+
+fn loadRom(program: *Program) !void {
+    var m_out_path: ?[*:0]u8 = null;
+    const rom_path = switch (c.NFD_OpenDialog("gb,gba,nds", null, &m_out_path)) {
+        c.NFD_ERROR => return error.DialogError,
+        c.NFD_CANCEL => return,
+        c.NFD_OKAY => blk: {
+            const out_path = m_out_path.?;
+            defer std.c.free(out_path);
+            break :blk try util.Path.fromSlice(mem.span(out_path));
+        },
+        else => unreachable,
+    };
+
+    const result = try std.ChildProcess.exec(.{
+        .allocator = program.allocator,
+        .argv = &[_][]const u8{
+            program.exes.identify.slice(),
+            rom_path.slice(),
+        },
+    });
+    defer {
+        program.allocator.free(result.stdout);
+        program.allocator.free(result.stderr);
+    }
+
+    if (result.term != .Exited or result.term.Exited != 0)
+        return error.NotAPokemonRom;
+
+    program.loaded_rom = rom_path;
+}
+
+fn randomize(program: *Program) !void {
+    var m_out_path: ?[*:0]u8 = null;
+    const out = switch (c.NFD_SaveDialog("gb,gba,nds", null, &m_out_path)) {
+        c.NFD_ERROR => return error.DialogError,
+        c.NFD_CANCEL => return,
+        c.NFD_OKAY => blk: {
+            const out_path = m_out_path.?;
+            defer std.c.free(out_path);
+            break :blk try util.Path.fromSlice(mem.span(out_path));
+        },
+        else => unreachable,
+    };
+
+    // Print to stderr for debugging
+    var buf_stderr = io.bufferedWriter(io.getStdErr().writer());
+    program.outputScript(buf_stderr.writer(), out.slice()) catch {};
+    buf_stderr.flush() catch {};
+
     var buf: [1024 * 40]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
-
     const term = switch (builtin.target.os.tag) {
         .linux => blk: {
             var sh = std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, fba.allocator());
@@ -99,7 +806,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
             try sh.spawn();
 
             const writer = sh.stdin.?.writer();
-            try outputScript(writer, exes, settings, in, out);
+            try program.outputScript(writer, out.slice());
 
             sh.stdin.?.close();
             sh.stdin = null;
@@ -120,7 +827,7 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
                 try fs.cwd().makePath(program_cache_dir.constSlice());
                 const file = try fs.cwd().createFile(script_file_name.constSlice(), .{});
                 defer file.close();
-                try outputScript(file.writer(), exes, settings, in, out);
+                try outputScript(file.writer(), out.slice());
             }
 
             var cmd = std.ChildProcess.init(
@@ -143,91 +850,64 @@ fn randomize(exes: Executables, settings: Settings, in: []const u8, out: []const
 }
 
 fn outputScript(
+    program: *Program,
     writer: anytype,
-    exes: Executables,
-    settings: Settings,
-    in: []const u8,
     out: []const u8,
 ) !void {
-    const escapes = switch (builtin.target.os.tag) {
-        .linux => [_]escape.Escape{
-            .{ .escaped = "'\\''", .unescaped = "\'" },
-        },
-        .windows => [_]escape.Escape{
-            .{ .escaped = "\\\"", .unescaped = "\"" },
-        },
-        else => @compileError("Unsupported os"),
-    };
-    const quotes = switch (builtin.target.os.tag) {
-        .linux => "'",
-        .windows => "\"",
-        else => @compileError("Unsupported os"),
-    };
-
     const esc = escape.generate(&escapes);
     try writer.writeAll(quotes);
-    try esc.escapeWrite(writer, exes.load.constSlice());
+    try esc.escapeWrite(writer, program.exes.load.constSlice());
     try writer.writeAll(quotes ++ " " ++ quotes);
-    try esc.escapeWrite(writer, in);
+    try esc.escapeWrite(writer, program.loaded_rom.?.slice());
     try writer.writeAll(quotes ++ " | ");
 
-    for (settings.commands.items) |setting| {
-        const command = exes.commands[setting.executable];
+    const settings = program.selectedSettings().?;
+
+    for (settings.commands.items) |*setting| {
+        const command = program.exes.findByName(setting.name.items) orelse continue;
 
         try writer.writeAll(quotes);
         try esc.escapeWrite(writer, command.path);
         try writer.writeAll(quotes);
 
-        for (command.flags) |flag_param, i| {
+        for (command.flags) |flag_param| {
             const param = command.params[flag_param.i];
             const prefix = if (param.names.long) |_| "--" else "-";
             const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-            const flag = setting.flags[i];
-            if (!flag)
+            const flag = try setting.getArg(program.allocator, param.names.longest().name);
+            if (!mem.eql(u8, flag.arg.value.items, "true"))
                 continue;
 
             try writer.writeAll(" " ++ quotes);
             try esc.escapePrint(writer, "{s}{s}", .{ prefix, name });
             try writer.writeAll(quotes);
         }
-        for (command.ints) |int_param, i| {
+        for (command.ints) |int_param| {
             const param = command.params[int_param.i];
-            try writer.writeAll(" " ++ quotes);
-            try outputArgument(writer, esc, param, setting.ints[i], "");
-            try writer.writeAll(quotes);
+            try program.outputArgument(writer, esc, setting, param);
         }
-        for (command.floats) |float_param, i| {
+        for (command.floats) |float_param| {
             const param = command.params[float_param.i];
-            try writer.writeAll(" " ++ quotes);
-            try outputArgument(writer, esc, param, setting.floats[i], "d");
-            try writer.writeAll(quotes);
+            try program.outputArgument(writer, esc, setting, param);
         }
-        for (command.enums) |enum_param, i| {
+        for (command.enums) |enum_param| {
             const param = command.params[enum_param.i];
-            const value = enum_param.options[setting.enums[i]];
-            try writer.writeAll(" " ++ quotes);
-            try outputArgument(writer, esc, param, value, "s");
-            try writer.writeAll(quotes);
+            try program.outputArgument(writer, esc, setting, param);
         }
-        for (command.strings) |string_param, i| {
-            const param = command.params[string_param.i];
-            try writer.writeAll(" " ++ quotes);
-            try outputArgument(writer, esc, param, setting.strings[i].items, "s");
-            try writer.writeAll(quotes);
-        }
-        for (command.files) |file_param, i| {
-            const param = command.params[file_param.i];
-            try writer.writeAll(" " ++ quotes);
-            try outputArgument(writer, esc, param, setting.files[i].items, "s");
-            try writer.writeAll(quotes);
-        }
-        for (command.multi_strings) |multi_param, i| {
+        for (command.multi_strings) |multi_param| {
             const param = command.params[multi_param.i];
+            const arg = try setting.getArg(program.allocator, param.names.longest().name);
+            const prefix = if (param.names.long) |_| "--" else "-";
+            const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
 
-            var it = mem.tokenize(u8, setting.multi_strings[i].items, "\r\n");
+            var it = mem.tokenize(u8, arg.arg.value.items, "\r\n");
             while (it.next()) |string| {
                 try writer.writeAll(" " ++ quotes);
-                try outputArgument(writer, esc, param, string, "s");
+                try esc.escapePrint(writer, "{s}{s}={s}", .{
+                    prefix,
+                    name,
+                    string,
+                });
                 try writer.writeAll(quotes);
             }
         }
@@ -236,61 +916,153 @@ fn outputScript(
     }
 
     try writer.writeAll(quotes);
-    try esc.escapeWrite(writer, exes.apply.constSlice());
+    try esc.escapeWrite(writer, program.exes.apply.constSlice());
     try writer.writeAll(quotes ++ " --replace --output " ++ quotes);
     try esc.escapeWrite(writer, out);
     try writer.writeAll(quotes ++ " " ++ quotes);
-    try esc.escapeWrite(writer, in);
+    try esc.escapeWrite(writer, program.loaded_rom.?.slice());
     try writer.writeAll(quotes);
     try writer.writeAll("\n");
 }
 
 fn outputArgument(
+    program: *Program,
     writer: anytype,
-    escapes: anytype,
+    esc: anytype,
+    settings: *Settings.Command,
     param: clap.Param(clap.Help),
-    value: anytype,
-    comptime value_fmt: []const u8,
 ) !void {
+    const arg = try settings.getArg(program.allocator, param.names.longest().name);
     const prefix = if (param.names.long) |_| "--" else "-";
     const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-    try escapes.escapePrint(writer, "{s}{s}={" ++ value_fmt ++ "}", .{
+    try writer.writeAll(" " ++ quotes);
+    try esc.escapePrint(writer, "{s}{s}={s}", .{
         prefix,
         name,
-        value,
+        arg.arg.value.items,
     });
+    try writer.writeAll(quotes);
 }
 
-fn toUserfriendly(human_out: []u8, programmer_in: []const u8) []u8 {
-    debug.assert(programmer_in.len <= human_out.len);
+const html = escape.generate(&.{
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
+    .{ .escaped = "&#39;", .unescaped = "'" },
+});
 
-    const suffixes = [_][]const u8{};
-    const prefixes = [_][]const u8{"tm35-"};
+const html_pretty = escape.generate(&.{
+    .{ .escaped = " ", .unescaped = "-" },
+    .{ .escaped = "", .unescaped = "tm35-" },
+    .{ .escaped = "random", .unescaped = "rand" },
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
+    .{ .escaped = "&#39;", .unescaped = "'" },
+});
 
-    var trimmed = programmer_in;
-    for (prefixes) |prefix| {
-        if (mem.startsWith(u8, trimmed, prefix)) {
-            trimmed = trimmed[prefix.len..];
-            break;
+const escapes = switch (builtin.target.os.tag) {
+    .linux => [_]escape.Escape{
+        .{ .escaped = "'\\''", .unescaped = "\'" },
+    },
+    .windows => [_]escape.Escape{
+        .{ .escaped = "\\\"", .unescaped = "\"" },
+    },
+    else => @compileError("Unsupported os"),
+};
+const quotes = switch (builtin.target.os.tag) {
+    .linux => "'",
+    .windows => "\"",
+    else => @compileError("Unsupported os"),
+};
+
+const ReDraw = enum {
+    redraw,
+    no_redraw,
+};
+
+fn wrap(
+    comptime redraw: ReDraw,
+    comptime func: anytype,
+) fn ([*c]const u8, [*c]const u8, ?*anyopaque) callconv(.C) void {
+    return struct {
+        fn wrapper(seq: [*c]const u8, req: [*c]const u8, arg: ?*anyopaque) callconv(.C) void {
+            const program = @ptrCast(*Program, @alignCast(@alignOf(Program), arg));
+            const req_slice = mem.span(req);
+
+            std.log.info("{s}", .{req_slice});
+            if (call(program, req_slice)) |_| {
+                c.webview_return(program.view, seq, 0, "{}");
+            } else |err| {
+                std.log.err("{s}", .{@errorName(err)});
+                c.webview_return(program.view, seq, 1, "{}");
+            }
         }
-    }
-    for (suffixes) |suffix| {
-        if (mem.endsWith(u8, trimmed, suffix)) {
-            trimmed = trimmed[0 .. trimmed.len - suffix.len];
-            break;
-        }
-    }
 
-    trimmed = mem.trim(u8, trimmed[0..trimmed.len], " \t");
-    const result = human_out[0..trimmed.len];
-    mem.copy(u8, result, trimmed);
-    for (result) |*char| switch (char.*) {
-        '-', '_' => char.* = ' ',
+        fn call(program: *Program, req: []const u8) !void {
+            var parser = std.json.Parser.init(program.allocator, false);
+            defer parser.deinit();
+
+            var parsed = try parser.parse(req);
+            defer parsed.deinit();
+
+            const tree = parsed.root;
+            const info = @typeInfo(@TypeOf(func)).Fn;
+            switch (info.args.len) {
+                1 => try func(program),
+                2 => try func(
+                    program,
+                    try parseArg(info.args[1].arg_type.?, tree, 0),
+                ),
+                3 => try func(
+                    program,
+                    try parseArg(info.args[1].arg_type.?, tree, 0),
+                    try parseArg(info.args[2].arg_type.?, tree, 1),
+                ),
+                else => comptime unreachable,
+            }
+            switch (redraw) {
+                .redraw => try program.render(),
+                .no_redraw => {},
+            }
+        }
+    }.wrapper;
+}
+
+fn parseArg(comptime T: type, tree: std.json.Value, arg: usize) !T {
+    if (tree != .Array)
+        return error.InvalidArgument;
+
+    const arg_values = tree.Array.items;
+    if (arg_values.len <= arg)
+        return error.TooFewArguments;
+
+    const arg_value = arg_values[arg];
+    switch (T) {
+        []const u8 => switch (arg_value) {
+            .String => |s| return s,
+            else => return error.InvalidArgument,
+        },
         else => {},
-    };
-    if (result.len != 0)
-        result[0] = std.ascii.toUpper(result[0]);
+    }
 
-    human_out[result.len] = 0;
-    return result;
+    switch (@typeInfo(T)) {
+        .Int => switch (arg_value) {
+            .Integer => |i| return std.math.cast(T, i) orelse return error.IntArgDoesNotFit,
+            .String => |s| return try fmt.parseInt(T, s, 0),
+            else => return error.InvalidArgument,
+        },
+        .Float => switch (arg_value) {
+            .Float => |f| return @floatCast(T, f),
+            .String => |s| return try fmt.parseFloat(T, s),
+            else => return error.InvalidArgument,
+        },
+        .Bool => switch (arg_value) {
+            .Bool => |b| return b,
+            else => return error.InvalidArgument,
+        },
+        else => @compileError("Cannot parse '" ++ @typeName(T) ++ "'"),
+    }
 }

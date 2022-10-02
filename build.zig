@@ -114,9 +114,13 @@ pub fn build(b: *Builder) void {
         }
 
         exe.addIncludePath("lib/nativefiledialog/src/include");
-        exe.addIncludePath("lib/webview/");
+        exe.addIncludePath("lib/webview");
+        exe.addIncludePath("lib/md4c/src");
         exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", &.{});
         exe.addCSourceFile("lib/webview/webview.cc", &.{});
+        exe.addCSourceFile("lib/md4c/src/entity.c", &.{});
+        exe.addCSourceFile("lib/md4c/src/md4c-html.c", &.{});
+        exe.addCSourceFile("lib/md4c/src/md4c.c", &.{});
 
         exe.linkLibC();
         exe.linkSystemLibrary("stdc++");

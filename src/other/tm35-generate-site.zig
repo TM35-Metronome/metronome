@@ -41,15 +41,12 @@ pub const params = clap.parseParamsComptime(
     \\-v, --version
     \\        Output version information and exit.
     \\
-    \\-o, --output <FILE>
-    \\        The file to output the file to. (default: site.html)
-    \\
 );
 
-pub fn init(allocator: mem.Allocator, args: anytype) !Program {
+pub fn init(allocator: mem.Allocator, _: anytype) !Program {
     return Program{
         .allocator = allocator,
-        .out = args.args.output orelse "site.html",
+        .out = "index.html",
     };
 }
 
