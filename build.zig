@@ -123,7 +123,7 @@ pub fn build(b: *Builder) void {
         exe.addCSourceFile("lib/md4c/src/md4c.c", &.{});
 
         exe.linkLibC();
-        exe.linkSystemLibrary("stdc++");
+        exe.linkLibCpp();
         exe.linkSystemLibrary("m");
     }
 }
