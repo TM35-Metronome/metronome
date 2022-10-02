@@ -4,9 +4,6 @@
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
 	url = ../../Hejsil/zig-clap.git
-[submodule "lib/nuklear"]
-	path = lib/nuklear
-	url = ../../Hejsil/Nuklear-1.git
 [submodule "lib/nativefiledialog"]
 	path = lib/nativefiledialog
 	url = ../../mlabbe/nativefiledialog.git
