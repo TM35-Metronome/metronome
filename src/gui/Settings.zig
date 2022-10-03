@@ -41,25 +41,33 @@ pub const Command = struct {
         command.args.deinit(allocator);
     }
 
-    pub const GetResult = struct {
+    pub fn get(command: Command, param: clap.Param(clap.Help)) ?*Arg {
+        const name = param.names.longest().name;
+        for (command.args.items) |*arg| {
+            if (mem.eql(u8, arg.name.items, name))
+                return arg;
+        }
+
+        return null;
+    }
+
+    pub const GetOrPutResult = struct {
         found_existing: bool,
         arg: *Arg,
     };
 
-    pub fn getArg(command: *Command, allocator: mem.Allocator, name: []const u8) !GetResult {
-        for (command.args.items) |*arg| {
-            if (mem.eql(u8, arg.name.items, name))
-                return GetResult{ .found_existing = true, .arg = arg };
-        }
+    pub fn getOrPut(command: *Command, allocator: mem.Allocator, param: clap.Param(clap.Help)) !GetOrPutResult {
+        if (command.get(param)) |arg|
+            return GetOrPutResult{ .found_existing = true, .arg = arg };
 
         const arg = try command.args.addOne(allocator);
         errdefer _ = command.args.pop();
 
-        var name_list = try toArrayList(u8, allocator, name);
-        errdefer name_list.deinit(allocator);
+        var name = try toArrayList(u8, allocator, param.names.longest().name);
+        errdefer name.deinit(allocator);
 
-        arg.* = .{ .name = name_list };
-        return GetResult{ .found_existing = false, .arg = arg };
+        arg.* = .{ .name = name };
+        return GetOrPutResult{ .found_existing = false, .arg = arg };
     }
 };
 

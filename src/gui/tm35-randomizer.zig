@@ -292,7 +292,7 @@ fn renderSettingsDetails(program: Program, writer: anytype) !void {
         \\    <article>
     ,
         .{
-            .title = html_pretty.escapeFmt(title),
+            .title = html.escapeFmt(title),
         },
     );
 
@@ -377,7 +377,7 @@ fn renderCommandList(program: Program, writer: anytype) !void {
         try writer.writeAll("            ");
         try writer.print("<option{s}>{s}</option>\n", .{
             selected,
-            html_pretty.escapeFmt(command.name.items),
+            html_pretty_command.escapeFmt(command.name.items),
         });
     }
 
@@ -394,7 +394,7 @@ fn renderCommandList(program: Program, writer: anytype) !void {
         try writer.writeAll("        ");
         try writer.print("<option{s}>{s}</option>\n", .{
             selected,
-            html_pretty.escapeFmt(command.name()),
+            html_pretty_command.escapeFmt(command.name()),
         });
     }
 
@@ -413,7 +413,6 @@ fn renderCommandList(program: Program, writer: anytype) !void {
 }
 
 fn renderCommandSettings(program: Program, writer: anytype) !void {
-    const allocator = program.allocator;
     const settings = program.selectedSettingCommand() orelse {
         const settings = program.selectedSettings().?;
         try writer.print(
@@ -438,22 +437,23 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
         \\<div class='grid col-1fr row-auto-1fr'>
         \\    <h1 class='text-center'>{s}</h1>
         \\    <div>
+        \\    <table>
         \\
-    , .{html_pretty.escapeFmt(settings.name.items)});
+    , .{html_pretty_command.escapeFmt(settings.name.items)});
 
     const command = program.exes.findByName(settings.name.items).?;
     for (command.flags) |flag, i| {
         const param = command.params[flag.i];
         const name = param.names.longest().name;
-        const arg = try settings.getArg(allocator, name);
-        if (!arg.found_existing)
-            try arg.arg.value.appendSlice(allocator, "false");
+        const arg = if (settings.get(param)) |arg| arg.value.items else "";
 
-        const checked = if (mem.eql(u8, arg.arg.value.items, "true")) " checked" else "";
+        const checked = if (mem.eql(u8, arg, "true")) " checked" else "";
         try writer.print(
-            \\<input{[checked]s} type='checkbox' id='{[name]s}' title='{[description]s}'
-            \\    onchange='tm35CheckCheckbox({[index]}, this.checked)'/>
-            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label><br/>
+            \\<tr>
+            \\<td><label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label></td>
+            \\<td><input{[checked]s} type='checkbox' id='{[name]s}' title='{[description]s}'
+            \\    onchange='tm35CheckCheckbox({[index]}, this.checked)'/></td>
+            \\</tr>
             \\
         , .{
             .name = html.escapeFmt(name),
@@ -468,24 +468,23 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
     for (command.ints) |int, i| {
         const param = command.params[int.i];
         const name = param.names.longest().name;
-        const arg = try settings.getArg(allocator, name);
-        if (!arg.found_existing)
-            try arg.arg.value.writer(allocator).print("{}", .{int.default});
+        const arg = if (settings.get(param)) |arg| arg.value.items else "";
 
         try writer.print(
-            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
-            \\<input id='{[name]s}' title='{[description]s}' value='{[value]s}'
+            \\<tr>
+            \\<td><label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label></td>
+            \\<td><input id='{[name]s}' title='{[description]s}' value='{[value]s}'
             \\    placeholder='{[default]d}'
             \\    onkeypress='return {[constaint]s}'
-            \\    onchange='tm35SetInt({[index]}, this.value || "{[default]d}")'/>
-            \\<br/>
+            \\    onchange='tm35SetInt({[index]}, this.value || "{[default]d}")'/></td>
+            \\</tr>
             \\
         ,
             .{
                 .name = html_pretty.escapeFmt(name),
                 .pretty_name = html_pretty.escapeFmt(name),
                 .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
-                .value = html.escapeFmt(arg.arg.value.items),
+                .value = html.escapeFmt(arg),
                 .default = int.default,
                 .index = i,
                 .constaint = is_num_constaint,
@@ -498,23 +497,22 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
     for (command.floats) |float, i| {
         const param = command.params[float.i];
         const name = param.names.longest().name;
-        const arg = try settings.getArg(allocator, name);
-        if (!arg.found_existing)
-            try arg.arg.value.writer(allocator).print("{d}", .{float.default});
+        const arg = if (settings.get(param)) |arg| arg.value.items else "";
 
         try writer.print(
-            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
-            \\<input id='{[name]s}' title='{[description]s}' value='{[value]s}'
+            \\<tr>
+            \\<td><label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label></td>
+            \\<td><input id='{[name]s}' title='{[description]s}' value='{[value]s}'
             \\    placeholder='{[default]d}'
             \\    onkeypress='return {[constaint_1]s} || {[constaint_2]s}'
-            \\    onchange='tm35SetFloat({[index]}, this.value || "{[default]d}")'/>
-            \\<br/>
+            \\    onchange='tm35SetFloat({[index]}, this.value || "{[default]d}")'/></td>
+            \\</tr>
             \\
         , .{
             .name = html_pretty.escapeFmt(name),
             .pretty_name = html_pretty.escapeFmt(name),
             .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
-            .value = html.escapeFmt(arg.arg.value.items),
+            .value = html.escapeFmt(arg),
             .default = float.default,
             .index = i,
             .constaint_1 = is_num_constaint,
@@ -525,13 +523,13 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
     for (command.enums) |enumeration, i| {
         const param = command.params[enumeration.i];
         const name = param.names.longest().name;
-        const arg = try settings.getArg(allocator, name);
-        if (!arg.found_existing)
-            try arg.arg.value.appendSlice(allocator, enumeration.options[enumeration.default]);
+        const default = enumeration.options[enumeration.default];
+        const arg = if (settings.get(param)) |arg| arg.value.items else default;
 
         try writer.print(
-            \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label>
-            \\<select id='{[name]s}' title='{[description]s}'
+            \\<tr>
+            \\<td><label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label></td>
+            \\<td><select id='{[name]s}' title='{[description]s}'
             \\    onchange='tm35SetEnum({[index]}, this.value)'>
             \\
         , .{
@@ -542,8 +540,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
         });
 
         for (enumeration.options) |option| {
-            const is_selected = mem.eql(u8, option, arg.arg.value.items);
-            const selected = if (is_selected) " selected=true" else "";
+            const selected = if (mem.eql(u8, option, arg)) " selected=true" else "";
             try writer.print(
                 \\<option{[selected]s}
                 \\    value='{[value]s}'>{[pretty_value]s}</option>
@@ -556,15 +553,21 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
         }
 
         try writer.writeAll(
-            \\</select><br/>
+            \\</select></td>
+            \\</tr>
             \\
         );
     }
 
+    try writer.writeAll(
+        \\    </table>
+        \\
+    );
+
     for (command.multi_strings) |string, i| {
         const param = command.params[string.i];
         const name = param.names.longest().name;
-        const arg = try settings.getArg(allocator, name);
+        const arg = if (settings.get(param)) |arg| arg.value.items else "";
 
         try writer.print(
             \\<label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label><br/>
@@ -576,7 +579,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
             .name = html.escapeFmt(name),
             .pretty_name = html_pretty.escapeFmt(name),
             .description = html.escapeFmt(mem.trim(u8, param.id.description(), " ")),
-            .value = html.escapeFmt(arg.arg.value.items),
+            .value = html.escapeFmt(arg),
             .index = i,
         });
     }
@@ -625,7 +628,7 @@ fn checkCheckbox(program: *Program, flag: usize, value: bool) !void {
     const command_settings = program.selectedSettingCommand().?;
     const command = program.exes.findByName(command_settings.name.items).?;
     const param = command.params[command.flags[flag].i];
-    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    const arg = try command_settings.getOrPut(allocator, param);
     arg.arg.value.shrinkRetainingCapacity(0);
     try arg.arg.value.appendSlice(allocator, if (value) "true" else "false");
     try settings.save();
@@ -638,7 +641,7 @@ fn setInt(program: *Program, int: usize, value: usize) !void {
     const command_settings = program.selectedSettingCommand().?;
     const command = program.exes.findByName(command_settings.name.items).?;
     const param = command.params[command.ints[int].i];
-    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    const arg = try command_settings.getOrPut(allocator, param);
     arg.arg.value.shrinkRetainingCapacity(0);
     try arg.arg.value.writer(allocator).print("{}", .{value});
     try settings.save();
@@ -651,7 +654,7 @@ fn setFloat(program: *Program, float: usize, value: f64) !void {
     const command_settings = program.selectedSettingCommand().?;
     const command = program.exes.findByName(command_settings.name.items).?;
     const param = command.params[command.floats[float].i];
-    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    const arg = try command_settings.getOrPut(allocator, param);
     arg.arg.value.shrinkRetainingCapacity(0);
     try arg.arg.value.writer(allocator).print("{d}", .{value});
     try settings.save();
@@ -664,7 +667,7 @@ fn setEnum(program: *Program, enumeration: usize, value: []const u8) !void {
     const command_settings = program.selectedSettingCommand().?;
     const command = program.exes.findByName(command_settings.name.items).?;
     const param = command.params[command.enums[enumeration].i];
-    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    const arg = try command_settings.getOrPut(allocator, param);
     arg.arg.value.shrinkRetainingCapacity(0);
     try arg.arg.value.appendSlice(allocator, value);
     try settings.save();
@@ -677,7 +680,7 @@ fn setString(program: *Program, string: usize, value: []const u8) !void {
     const command_settings = program.selectedSettingCommand().?;
     const command = program.exes.findByName(command_settings.name.items).?;
     const param = command.params[command.multi_strings[string].i];
-    const arg = try command_settings.getArg(allocator, param.names.longest().name);
+    const arg = try command_settings.getOrPut(allocator, param);
     arg.arg.value.shrinkRetainingCapacity(0);
     try arg.arg.value.appendSlice(allocator, value);
     try settings.save();
@@ -872,41 +875,37 @@ fn outputScript(
 
         for (command.flags) |flag_param| {
             const param = command.params[flag_param.i];
-            const prefix = if (param.names.long) |_| "--" else "-";
-            const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
-            const flag = try setting.getArg(program.allocator, param.names.longest().name);
-            if (!mem.eql(u8, flag.arg.value.items, "true"))
+            const flag = setting.get(param) orelse continue;
+            if (!mem.eql(u8, flag.value.items, "true"))
                 continue;
 
+            const longest = param.names.longest();
             try writer.writeAll(" " ++ quotes);
-            try esc.escapePrint(writer, "{s}{s}", .{ prefix, name });
+            try esc.escapePrint(writer, "{s}{s}", .{ longest.kind.prefix(), longest.name });
             try writer.writeAll(quotes);
         }
         for (command.ints) |int_param| {
             const param = command.params[int_param.i];
-            try program.outputArgument(writer, esc, setting, param);
+            try outputArgument(writer, esc, setting, param);
         }
         for (command.floats) |float_param| {
             const param = command.params[float_param.i];
-            try program.outputArgument(writer, esc, setting, param);
+            try outputArgument(writer, esc, setting, param);
         }
         for (command.enums) |enum_param| {
             const param = command.params[enum_param.i];
-            try program.outputArgument(writer, esc, setting, param);
+            try outputArgument(writer, esc, setting, param);
         }
         for (command.multi_strings) |multi_param| {
             const param = command.params[multi_param.i];
-            const arg = try setting.getArg(program.allocator, param.names.longest().name);
-            const prefix = if (param.names.long) |_| "--" else "-";
-            const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
+            const arg = setting.get(param) orelse continue;
+            const longest = param.names.longest();
 
-            var it = mem.tokenize(u8, arg.arg.value.items, "\r\n");
+            var it = mem.tokenize(u8, arg.value.items, "\r\n");
             while (it.next()) |string| {
                 try writer.writeAll(" " ++ quotes);
                 try esc.escapePrint(writer, "{s}{s}={s}", .{
-                    prefix,
-                    name,
-                    string,
+                    longest.kind.prefix(), longest.name, string,
                 });
                 try writer.writeAll(quotes);
             }
@@ -926,20 +925,16 @@ fn outputScript(
 }
 
 fn outputArgument(
-    program: *Program,
     writer: anytype,
     esc: anytype,
     settings: *Settings.Command,
     param: clap.Param(clap.Help),
 ) !void {
-    const arg = try settings.getArg(program.allocator, param.names.longest().name);
-    const prefix = if (param.names.long) |_| "--" else "-";
-    const name = param.names.long orelse @as(*const [1]u8, &param.names.short.?)[0..];
+    const arg = settings.get(param) orelse return;
+    const longest = param.names.longest();
     try writer.writeAll(" " ++ quotes);
     try esc.escapePrint(writer, "{s}{s}={s}", .{
-        prefix,
-        name,
-        arg.arg.value.items,
+        longest.kind.prefix(), longest.name, arg.value.items,
     });
     try writer.writeAll(quotes);
 }
@@ -952,10 +947,19 @@ const html = escape.generate(&.{
     .{ .escaped = "&#39;", .unescaped = "'" },
 });
 
-const html_pretty = escape.generate(&.{
+const html_pretty_command = escape.generate(&.{
     .{ .escaped = " ", .unescaped = "-" },
     .{ .escaped = "", .unescaped = "tm35-" },
     .{ .escaped = "random", .unescaped = "rand" },
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
+    .{ .escaped = "&#39;", .unescaped = "'" },
+});
+
+const html_pretty = escape.generate(&.{
+    .{ .escaped = " ", .unescaped = "-" },
     .{ .escaped = "&amp;", .unescaped = "&" },
     .{ .escaped = "&lt;", .unescaped = "<" },
     .{ .escaped = "&gt;", .unescaped = ">" },
