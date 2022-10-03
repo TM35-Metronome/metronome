@@ -284,7 +284,7 @@ pub fn load(allocator: mem.Allocator, path: []const u8, reader: anytype) !Settin
     return parse(allocator, path, str);
 }
 
-pub fn loadAllFrom(allocator: mem.Allocator, dir: fs.IterableDir) !std.ArrayListUnmanaged(Settings) {
+pub fn loadAllFrom(allocator: mem.Allocator, path: []const u8) !std.ArrayListUnmanaged(Settings) {
     var res = std.ArrayListUnmanaged(Settings){};
     errdefer {
         for (res.items) |*item|
@@ -292,18 +292,23 @@ pub fn loadAllFrom(allocator: mem.Allocator, dir: fs.IterableDir) !std.ArrayList
         res.deinit(allocator);
     }
 
+    var dir = try fs.cwd().openIterableDir(path, .{});
+    defer dir.close();
+
     var it = dir.iterate();
     while (try it.next()) |entry| switch (entry.kind) {
         .File => {
             try res.ensureUnusedCapacity(allocator, 1);
 
-            var path_buf: [fs.MAX_PATH_BYTES]u8 = undefined;
-            const path = try dir.dir.realpath(entry.name, &path_buf);
-
             const file = try dir.dir.openFile(entry.name, .{});
             defer file.close();
 
-            if (load(allocator, path, file.reader())) |settings| {
+            const full_path = util.path.join(&.{
+                path,
+                entry.name,
+            });
+
+            if (load(allocator, full_path.slice(), file.reader())) |settings| {
                 res.appendAssumeCapacity(settings);
             } else |err| switch (err) {
                 // Ignore all json parsing errors
@@ -358,20 +363,14 @@ pub fn loadAllFrom(allocator: mem.Allocator, dir: fs.IterableDir) !std.ArrayList
 }
 
 pub fn loadAll(allocator: mem.Allocator) !std.ArrayListUnmanaged(Settings) {
-    const self_exe_dir_path = (try util.dir.selfExeDir()).slice();
-    var self_exe_dir = try fs.openDirAbsolute(self_exe_dir_path, .{});
-    defer self_exe_dir.close();
+    const self_exe_dir_path = try util.dir.selfExeDir();
 
-    const dirs_to_try = [_]fs.Dir{ fs.cwd(), self_exe_dir };
+    const dirs_to_try = [_][]const u8{ ".", self_exe_dir_path.slice() };
     for (dirs_to_try) |dir| {
-        var settings_dir = dir.openIterableDir("settings", .{}) catch |err| switch (err) {
-            // Settings not found here. Try another dir
-            error.FileNotFound => continue,
-            else => |e| return e,
-        };
-        defer settings_dir.close();
-
-        return loadAllFrom(allocator, settings_dir);
+        const dir_path = util.path.join(&.{
+            dir, "settings",
+        });
+        return loadAllFrom(allocator, dir_path.slice());
     }
 
     return std.ArrayListUnmanaged(Settings){};

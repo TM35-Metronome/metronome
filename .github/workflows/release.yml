@@ -62,7 +62,7 @@ jobs:
       - run: |
           sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
           zig build -Dstrip=${{ matrix.strip }} -Drelease=${{ matrix.release }} -Dtarget=${{ matrix.target }}
-          ./make-zip.sh metronome-${{ matrix.name }}
+          ./make-zip.sh metronome-${{ matrix.name }} ${{ matrix.name }}
       - uses: actions/upload-artifact@v3
         with:
           name: metronome-${{ matrix.name }}

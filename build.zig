@@ -102,29 +102,53 @@ pub fn build(b: *Builder) void {
             .single_threaded = false,
         });
 
-        switch (target.getOsTag()) {
-            .windows => {
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", &.{});
-            },
-            .linux => {
-                exe.linkSystemLibrary("webkit2gtk-4.0");
-                exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", &.{});
-            },
-            else => unreachable, // TODO: More os support
-        }
-
-        exe.addIncludePath("lib/nativefiledialog/src/include");
-        exe.addIncludePath("lib/webview");
-        exe.addIncludePath("lib/md4c/src");
-        exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", &.{});
-        exe.addCSourceFile("lib/webview/webview.cc", &.{});
-        exe.addCSourceFile("lib/md4c/src/entity.c", &.{});
-        exe.addCSourceFile("lib/md4c/src/md4c-html.c", &.{});
-        exe.addCSourceFile("lib/md4c/src/md4c.c", &.{});
-
+        buildAndLinkMd4c(exe);
+        buildAndLinkNativeFileDialog(exe, target);
+        buildAndLinkWebview(exe, target);
         exe.linkLibC();
         exe.linkLibCpp();
         exe.linkSystemLibrary("m");
+    }
+}
+
+fn buildAndLinkWebview(exe: *LibExeObjStep, target: std.zig.CrossTarget) void {
+    exe.addIncludePath("lib/webview");
+    exe.addCSourceFile("lib/webview/webview.cc", &.{"-std=c++17"});
+    switch (target.getOsTag()) {
+        .windows => {
+            exe.addIncludePath("lib/webview-c/ms.webview2/include");
+            exe.addObjectFile("lib/webview-c/ms.webview2/x64/WebView2Loader.dll");
+            exe.linkSystemLibrary("shlwapi");
+        },
+        .linux => {
+            exe.linkSystemLibrary("webkit2gtk-4.0");
+        },
+        else => unreachable, // TODO: More os support
+    }
+}
+
+fn buildAndLinkMd4c(exe: *LibExeObjStep) void {
+    exe.addCSourceFiles(&.{
+        "lib/md4c/src/entity.c",
+        "lib/md4c/src/md4c.c",
+        "lib/md4c/src/md4c-html.c",
+    }, &.{});
+    exe.addIncludePath("lib/md4c/src");
+}
+
+fn buildAndLinkNativeFileDialog(exe: *LibExeObjStep, target: std.zig.CrossTarget) void {
+    exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", &.{});
+    exe.addIncludePath("lib/nativefiledialog/src/include");
+    switch (target.getOsTag()) {
+        .windows => {
+            exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", &.{});
+            exe.linkSystemLibrary("uuid");
+        },
+        .linux => {
+            exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", &.{});
+            exe.linkSystemLibrary("webkit2gtk-4.0");
+        },
+        else => unreachable, // TODO: More os support
     }
 }
 

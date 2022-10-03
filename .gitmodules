@@ -22,3 +22,6 @@
 [submodule "lib/md4c"]
 	path = lib/md4c
 	url = ../../mity/md4c.git
+[submodule "lib/webview-c"]
+	path = lib/webview-c
+	url = ../../javalikescript/webview-c.git

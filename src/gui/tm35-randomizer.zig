@@ -830,7 +830,7 @@ fn randomize(program: *Program) !void {
                 try fs.cwd().makePath(program_cache_dir.constSlice());
                 const file = try fs.cwd().createFile(script_file_name.constSlice(), .{});
                 defer file.close();
-                try outputScript(file.writer(), out.slice());
+                try program.outputScript(file.writer(), out.slice());
             }
 
             var cmd = std.ChildProcess.init(
