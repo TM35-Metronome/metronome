@@ -27,6 +27,8 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
+      - if: ${{matrix.os}} == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
       - run: zig build test -D${{ matrix.release }}
 
   build:
@@ -58,6 +60,7 @@ jobs:
         with:
           version: master
       - run: |
+          sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
           zig build -Dstrip=${{ matrix.strip }} -Drelease=${{ matrix.release }} -Dtarget=${{ matrix.target }}
           ./make-zip.sh metronome-${{ matrix.name }}
       - uses: actions/upload-artifact@v3
