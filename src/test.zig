@@ -6,7 +6,6 @@ test {
     _ = @import("core/tm35-identify.zig");
     _ = @import("core/tm35-load.zig");
     _ = @import("core/tm35-nds-extract.zig");
-    _ = @import("gui/tm35-randomizer.zig");
     _ = @import("other/tm35-generate-site.zig");
     _ = @import("other/tm35-misc.zig");
     _ = @import("other/tm35-no-trade-evolutions.zig");
