@@ -1,4 +1,6 @@
 pub usingnamespace @cImport({
-    @cInclude("impl.h");
+    @cDefine("WEBVIEW_HEADER", "");
+    @cInclude("webview.h");
     @cInclude("nfd.h");
+    @cInclude("md4c-html.h");
 });

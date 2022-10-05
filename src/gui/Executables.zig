@@ -25,8 +25,6 @@ pub const Command = struct {
     ints: []const Int,
     floats: []const Float,
     enums: []const Enum,
-    strings: []const String,
-    files: []const File,
     multi_strings: []const MultiString,
     params: []const clap.Param(clap.Help),
 
@@ -48,16 +46,6 @@ pub const Command = struct {
         i: usize,
         options: []const []const u8,
         default: usize,
-    };
-
-    const String = struct {
-        i: usize,
-        default: []const u8,
-    };
-
-    const File = struct {
-        i: usize,
-        default: []const u8,
     };
 
     const MultiString = struct {
@@ -92,6 +80,15 @@ const default_commands =
 
 pub fn deinit(exes: Executables) void {
     exes.arena.deinit();
+}
+
+pub fn findByName(exes: Executables, name: []const u8) ?*const Executables.Command {
+    for (exes.commands) |*command| {
+        if (mem.eql(u8, command.name(), name))
+            return command;
+    }
+
+    return null;
 }
 
 pub fn find(allocator: mem.Allocator) !Executables {
@@ -212,8 +209,6 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
     var ints = std.ArrayList(Command.Int).init(arena.allocator());
     var floats = std.ArrayList(Command.Float).init(arena.allocator());
     var enums = std.ArrayList(Command.Enum).init(arena.allocator());
-    var strings = std.ArrayList(Command.String).init(arena.allocator());
-    var files = std.ArrayList(Command.File).init(arena.allocator());
     var multi_strings = std.ArrayList(Command.MultiString).init(arena.allocator());
     var params = std.ArrayList(clap.Param(clap.Help)).init(arena.allocator());
 
@@ -276,12 +271,6 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
                     .options = options.toOwnedSlice(),
                     .default = default,
                 });
-            } else if (mem.eql(u8, param.id.value(), "FILE")) {
-                const default = findDefaultValue(param.id.description()) orelse "";
-                try files.append(.{ .i = i, .default = default });
-            } else {
-                const default = findDefaultValue(param.id.description()) orelse "";
-                try strings.append(.{ .i = i, .default = default });
             },
             .many => {
                 try multi_strings.append(.{ .i = i });
@@ -289,7 +278,7 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
         }
     }
 
-    const lists = .{ flags, ints, floats, enums, strings, files, multi_strings };
+    const lists = .{ flags, ints, floats, enums, multi_strings };
     comptime var i = 0;
     inline while (i < lists.len) : (i += 1) {
         const Item = @TypeOf(lists[i].items[0]);
@@ -303,8 +292,6 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
         .ints = ints.toOwnedSlice(),
         .floats = floats.toOwnedSlice(),
         .enums = enums.toOwnedSlice(),
-        .strings = strings.toOwnedSlice(),
-        .files = files.toOwnedSlice(),
         .multi_strings = multi_strings.toOwnedSlice(),
         .params = params.toOwnedSlice(),
     };

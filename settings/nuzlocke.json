@@ -1,0 +1,197 @@
+{
+    "name": "Nuzlocke",
+    "description": "",
+    "commands": [
+        {
+            "name": "tm35-rand-machines",
+            "args": [
+                {
+                    "name": "hms",
+                    "value": "false"
+                },
+                {
+                    "name": "exclude",
+                    "value": "cut\nfly\nsurf\nstrength\nwaterfall\ndive\nstruggle\nsnore\nrapid spin\npound\nscratch\ntackle\nbubble\npeck\nlick\nsmog\nastonish\nfeint\nabsorb\nrage\nmud-slap\nbind\nwrap\npoison sting\nconstrict\nwhirlwind\nsand attack\ntail whip\nleer\ngrowl\nroar\nsing\nsupersonic\nmist\nstring shot\nteleport\nmimic\nrecover\nharden\nsmokescreen\nwithdraw\ndefense curl\nhaze\nfocus energy\nbide\nkinesis\nsoft-boiled\ntransform\nflash\npsywave\nsplash\nmind reader\nconversion*\ncotten spore\nspite\nscary face\nforesight\nendure\ncharm\nmean look\npresent\nsafeguard\nsweet scent\nmorning sun\nsynthesis\nmoonlight\nstockpile\nspit up\nswallow\ntorment\nmemento\nfollow me\ncharge\nhelping hand\ntrick\nassist\nmagic coat\nimprison\nrefresh\ngrudge\nsnatch\ncamouflage\nmud sport\nslack off\naromatherapy\nheal bell\nodor sleuth\nblock\nwater sport\nroost\ngravity\nmiracle eye\nhealing wish\nnatural gift\nembargo\nfling\nheal block\nlucky chant\nworry seed\nheart swap\nmagnet rise\nswitcheroo\ndefog\ncaptivate\nwide guard\nwonder room\ntelekinesis\nmagic room\nsoak\nafter you\nquick guard\nally switch\nheal pulse\nreflect type"
+                }
+            ]
+        },
+        {
+            "name": "tm35-rand-pokemons",
+            "args": [
+                {
+                    "name": "same-total-stats",
+                    "value": "false"
+                },
+                {
+                    "name": "status-moves-are-stab",
+                    "value": "true"
+                },
+                {
+                    "name": "non-stab-machine-chance",
+                    "value": "0.2"
+                },
+                {
+                    "name": "stab-machine-chance",
+                    "value": "0.9"
+                },
+                {
+                    "name": "abilities",
+                    "value": "unchanged"
+                },
+                {
+                    "name": "items",
+                    "value": "random"
+                },
+                {
+                    "name": "machines",
+                    "value": "random"
+                },
+                {
+                    "name": "stats",
+                    "value": "unchanged"
+                },
+                {
+                    "name": "types",
+                    "value": "unchanged"
+                }
+            ]
+        },
+        {
+            "name": "tm35-rand-pokeball-items",
+            "args": [
+                {
+                    "name": "include-key-items",
+                    "value": "false"
+                },
+                {
+                    "name": "include-tms-hms",
+                    "value": "false"
+                },
+                {
+                    "name": "exclude",
+                    "value": "revive\nmax revive\nrevival herb\nsacred ash\nguard spec.\ndire hit\nx attack\nx defend\nx speed\nx accuracy\nx special\nx sp. def\n* flute\nshoal salt\nshoal shell\n*mushroom\n*pearl*\nstar*\n*nugget\n*mulch\nodd keystone\nrare bone\n*mail*\n*berry\niron ball\nlagging tail\ndestiny knot\nicy rock\nsmooth rock\nheat rock\nsticky barb\npower*\nshed shell\nbig root\nlucky punch\nmetal powder\nthick club\nleek\nred scarf\nblue scarf\npink scarf\ngreen scarf\nyellow scarf\nlight clay\nflame orb\nquick powder\nwhite herb\nmacho brace\nmental herb\neverstone\n* apricorn\ndata card *\nfloat stone\nair balloon\nred card\nring target\nabsorb bulb\ncell battery\neject button\n* gem\n* wing\npass orb\ncomet shard\nrelic *\nitem drop\n* urge\ndire hit 2\nx * 2\nx * 3\nx * 6"
+                }
+            ]
+        },
+        {
+            "name": "tm35-rand-trainers",
+            "args": [
+                {
+                    "name": "party-size-max",
+                    "value": "6"
+                },
+                {
+                    "name": "party-size-min",
+                    "value": "1"
+                },
+                {
+                    "name": "abilities",
+                    "value": "random"
+                },
+                {
+                    "name": "held-items",
+                    "value": "random"
+                },
+                {
+                    "name": "moves",
+                    "value": "none"
+                },
+                {
+                    "name": "party-pokemons",
+                    "value": "randomize"
+                },
+                {
+                    "name": "party-size",
+                    "value": "unchanged"
+                },
+                {
+                    "name": "stats",
+                    "value": "simular"
+                },
+                {
+                    "name": "types",
+                    "value": "themed"
+                },
+                {
+                    "name": "exclude-pokemon",
+                    "value": "charmander\ndratini\ngible\naxew\ndeino\nlitwick"
+                },
+                {
+                    "name": "exclude-trainer",
+                    "value": ""
+                },
+                {
+                    "name": "include-trainer",
+                    "value": ""
+                }
+            ]
+        },
+        {
+            "name": "tm35-rand-starters",
+            "args": [
+                {
+                    "name": "pick-lowest-evolution",
+                    "value": "true"
+                },
+                {
+                    "name": "evolutions",
+                    "value": "2"
+                }
+            ]
+        },
+        {
+            "name": "tm35-rand-wild",
+            "args": [
+                {
+                    "name": "simular-total-stats",
+                    "value": "false"
+                }
+            ]
+        },
+        {
+            "name": "tm35-no-trade-evolutions",
+            "args": []
+        },
+        {
+            "name": "tm35-misc",
+            "args": [
+                {
+                    "name": "easy-hms",
+                    "value": "true"
+                },
+                {
+                    "name": "fast-text",
+                    "value": "true"
+                },
+                {
+                    "name": "exp-yield-scaling",
+                    "value": "1"
+                },
+                {
+                    "name": "static-level-scaling",
+                    "value": "1"
+                },
+                {
+                    "name": "trainer-level-scaling",
+                    "value": "1"
+                },
+                {
+                    "name": "wild-level-scaling",
+                    "value": "1"
+                },
+                {
+                    "name": "allow-biking",
+                    "value": "everywhere"
+                },
+                {
+                    "name": "allow-running",
+                    "value": "everywhere"
+                }
+            ]
+        },
+        {
+            "name": "tm35-generate-site",
+            "args": []
+        }
+    ]
+}

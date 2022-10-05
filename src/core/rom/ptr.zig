@@ -28,13 +28,13 @@ pub fn RelativePointer(
         const Slice = @Type(blk: {
             var info = ptr_info;
             info.size = .Slice;
-            break :blk builtin.TypeInfo{ .Pointer = info };
+            break :blk builtin.Type{ .Pointer = info };
         });
         const SliceNoSentinel = @Type(blk: {
             var info = ptr_info;
             info.size = .Slice;
             info.sentinel = null;
-            break :blk builtin.TypeInfo{ .Pointer = info };
+            break :blk builtin.Type{ .Pointer = info };
         });
         const NonOptionalPtr = switch (@typeInfo(Ptr)) {
             .Optional => |opt| opt.child,
@@ -200,7 +200,7 @@ pub fn RelativeSlice(
     return packed struct {
         inner: Inner,
 
-        const Ptr = @Type(builtin.TypeInfo{
+        const Ptr = @Type(builtin.Type{
             .Pointer = .{
                 .size = .Many,
                 .is_const = @typeInfo(Slice).Pointer.is_const,

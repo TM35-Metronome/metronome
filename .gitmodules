@@ -4,9 +4,6 @@
 [submodule "lib/zig-clap"]
 	path = lib/zig-clap
 	url = ../../Hejsil/zig-clap.git
-[submodule "lib/nuklear"]
-	path = lib/nuklear
-	url = ../../Hejsil/Nuklear-1.git
 [submodule "lib/nativefiledialog"]
 	path = lib/nativefiledialog
 	url = ../../mlabbe/nativefiledialog.git
@@ -19,3 +16,12 @@
 [submodule "lib/ston"]
 	path = lib/ston
 	url = ../../Hejsil/ston.git
+[submodule "lib/webview"]
+	path = lib/webview
+	url = ../../webview/webview.git
+[submodule "lib/md4c"]
+	path = lib/md4c
+	url = ../../mity/md4c.git
+[submodule "lib/webview-c"]
+	path = lib/webview-c
+	url = ../../javalikescript/webview-c.git
