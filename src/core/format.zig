@@ -36,6 +36,8 @@ pub fn io(
     ctx: anytype,
     consume: anytype,
 ) !void {
+    @setEvalBranchQuota(100000);
+
     // WARNING: All the optimizations below have been done with the aid of profilers. Do not
     // simplify the code unless you have checked that the simplified code is just as fast.
     // Here is a simple oneliner you can use on linux to check:

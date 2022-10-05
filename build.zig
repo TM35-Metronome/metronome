@@ -81,11 +81,17 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
 
     const strip = b.option(bool, "strip", "") orelse false;
+    const use_stage2 = b.option(bool, "stage2", "") orelse false;
 
     const test_step = b.step("test", "Run all tests");
     testIt(b, test_step, mode, "src/test.zig");
 
-    const options = BuildProgramOptions{ .strip = strip, .target = target, .mode = mode };
+    const options = BuildProgramOptions{
+        .strip = strip,
+        .target = target,
+        .mode = mode,
+        .use_stage2 = use_stage2,
+    };
     for (core_exes) |name|
         _ = buildProgram(b, name, b.fmt("src/core/{s}.zig", .{name}), options);
     for (randomizer_exes) |name|
@@ -99,6 +105,7 @@ pub fn build(b: *Builder) void {
             .strip = strip,
             .target = target,
             .mode = mode,
+            .use_stage2 = use_stage2,
             .single_threaded = false,
         });
 
@@ -156,6 +163,7 @@ const BuildProgramOptions = struct {
     install: bool = true,
     strip: bool = false,
     single_threaded: bool = true,
+    use_stage2: bool = false,
     mode: std.builtin.Mode = .Debug,
     target: Target,
 };
@@ -177,7 +185,7 @@ fn buildProgram(
     exe.setTarget(opt.target);
     exe.setBuildMode(opt.mode);
     exe.single_threaded = opt.single_threaded;
-    exe.use_stage1 = true;
+    exe.use_stage1 = !opt.use_stage2;
     exe.strip = opt.strip;
     step.dependOn(&exe.step);
     b.default_step.dependOn(step);
