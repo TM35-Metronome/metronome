@@ -56,9 +56,10 @@ const Options = struct {
     party_pokemons: PartyPokemonsOption,
     stats: StatsOption,
     types: ThemeOption,
-    included_trainers: []const []const u8,
-    excluded_trainers: []const []const u8,
     excluded_pokemons: []const []const u8,
+    excluded_trainers: []const []const u8,
+    included_pokemons: []const []const u8,
+    included_trainers: []const []const u8,
 };
 
 const HeldItemOption = enum {
@@ -163,6 +164,10 @@ pub const params = clap.parseParamsComptime(
     \\--exclude-pokemon <STRING>...
     \\        List of pokemons to never pick. Case insensitive. Supports wildcards like 'nido*'.
     \\
+    \\--include-pokemon <STRING>...
+    \\        List of pokemons to pick from, ignoring --exlude-trainer. Case insensitive.
+    \\        Supports wildcards like 'nido*'.
+    \\
     \\-v, --version
     \\        Output version information and exit.
     \\
@@ -178,6 +183,11 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     var excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
     for (excluded_trainers) |_, i|
         excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
+
+    const included_pokemons_arg = args.args.@"include-pokemon";
+    var included_pokemons = try allocator.alloc([]const u8, included_pokemons_arg.len);
+    for (included_pokemons) |_, i|
+        included_pokemons[i] = try ascii.allocLowerString(allocator, included_pokemons_arg[i]);
 
     const included_trainers_arg = args.args.@"include-trainer";
     var included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
@@ -196,8 +206,9 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .stats = args.args.stats orelse .random,
         .types = args.args.types orelse .random,
         .excluded_pokemons = excluded_pokemons,
-        .included_trainers = included_trainers,
         .excluded_trainers = excluded_trainers,
+        .included_pokemons = included_pokemons,
+        .included_trainers = included_trainers,
     };
 
     return Program{
@@ -221,6 +232,7 @@ pub fn run(
         program.pokedex,
         program.pokemons,
         program.options.excluded_pokemons,
+        program.options.included_pokemons,
     );
     program.random = rand.DefaultPrng.init(program.options.seed).random();
     program.species = species;
@@ -801,6 +813,7 @@ fn pokedexPokemons(
     pokedex: Set,
     pokemons: Pokemons,
     excluded_pokemons: []const []const u8,
+    included_pokemons: []const []const u8,
 ) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
@@ -811,7 +824,8 @@ fn pokedexPokemons(
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)
             continue;
-        if (util.glob.matchesOneOf(pokemon.name, excluded_pokemons)) |_|
+        if (util.glob.matchesOneOf(pokemon.name, included_pokemons) == null and
+            util.glob.matchesOneOf(pokemon.name, excluded_pokemons) != null)
             continue;
 
         _ = try res.put(allocator, species, {});
@@ -1132,6 +1146,21 @@ test {
             },
         });
     }
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
+        .args = &[_][]const u8{
+            "--exclude-pokemon=*",
+            "--include-pokemon=Weedle",
+            "--party-pokemons=randomize",
+            "--seed=0",
+        },
+        .patterns = &[_]Pattern{
+            // All are Weedle
+            Pattern.glob(1808, 1808, ".trainers[*].party[*].species=*"),
+            Pattern.glob(1808, 1808, ".trainers[*].party[*].species=13"),
+        },
+    });
 }
 
 // TODO: Test these parameters
