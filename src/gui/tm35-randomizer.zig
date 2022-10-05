@@ -940,31 +940,33 @@ fn outputArgument(
 }
 
 const html = escape.generate(&.{
-    .{ .escaped = "&amp;", .unescaped = "&" },
-    .{ .escaped = "&lt;", .unescaped = "<" },
-    .{ .escaped = "&gt;", .unescaped = ">" },
-    .{ .escaped = "&quot;", .unescaped = "\"" },
     .{ .escaped = "&#39;", .unescaped = "'" },
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
 });
 
 const html_pretty_command = escape.generate(&.{
-    .{ .escaped = " ", .unescaped = "-" },
-    .{ .escaped = "", .unescaped = "tm35-" },
-    .{ .escaped = "random", .unescaped = "rand" },
-    .{ .escaped = "&amp;", .unescaped = "&" },
-    .{ .escaped = "&lt;", .unescaped = "<" },
-    .{ .escaped = "&gt;", .unescaped = ">" },
-    .{ .escaped = "&quot;", .unescaped = "\"" },
     .{ .escaped = "&#39;", .unescaped = "'" },
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
+    .{ .escaped = "random", .unescaped = "rand" },
+    .{ .escaped = " ", .unescaped = "-" },
+    .{ .escaped = " ", .unescaped = "_" },
+    .{ .escaped = "", .unescaped = "tm35-" },
 });
 
 const html_pretty = escape.generate(&.{
-    .{ .escaped = " ", .unescaped = "-" },
-    .{ .escaped = "&amp;", .unescaped = "&" },
-    .{ .escaped = "&lt;", .unescaped = "<" },
-    .{ .escaped = "&gt;", .unescaped = ">" },
-    .{ .escaped = "&quot;", .unescaped = "\"" },
     .{ .escaped = "&#39;", .unescaped = "'" },
+    .{ .escaped = "&amp;", .unescaped = "&" },
+    .{ .escaped = "&gt;", .unescaped = ">" },
+    .{ .escaped = "&lt;", .unescaped = "<" },
+    .{ .escaped = "&quot;", .unescaped = "\"" },
+    .{ .escaped = " ", .unescaped = "-" },
+    .{ .escaped = " ", .unescaped = "_" },
 });
 
 const escapes = switch (builtin.target.os.tag) {
