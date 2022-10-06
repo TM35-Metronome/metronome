@@ -29,7 +29,7 @@ jobs:
         with:
           version: master
       - if: matrix.os == 'windows-latest' && matrix.step == 'install'
-        uses: NuGet/setup-nuget@v1.0.5
+        uses: NuGet/setup-nuget@v1.0.7
       - if: matrix.os == 'windows-latest' && matrix.step == 'install'
         run: nuget install Microsoft.Web.Webview2
       - if: matrix.os == 'ubuntu-latest' && matrix.step == 'install'
