@@ -18,7 +18,7 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const escape = util.escape;
+const escape = util.escape.default;
 
 const Program = @This();
 
@@ -262,7 +262,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
                 .name => |name| {
-                    pokemon.name = try escape.default.unescapeAlloc(allocator, name);
+                    pokemon.name = try escape.unescapeAlloc(allocator, name);
                     for (pokemon.name) |*c|
                         c.* = ascii.toLower(c.*);
                 },
@@ -327,7 +327,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     }
                 },
                 .name => |_name| {
-                    const name = try escape.default.unescapeAlloc(allocator, _name);
+                    const name = try escape.unescapeAlloc(allocator, _name);
                     for (name) |*c|
                         c.* = ascii.toLower(c.*);
 

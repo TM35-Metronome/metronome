@@ -19,7 +19,7 @@ const unicode = std.unicode;
 
 const Utf8 = util.unicode.Utf8View;
 
-const escape = util.escape;
+const escape = util.escape.default;
 const parse = util.parse;
 
 const Program = @This();
@@ -103,7 +103,7 @@ fn output(program: *Program, writer: anytype) !void {
     });
     for (program.items.values()) |item, i| {
         try ston.serialize(writer, .{ .items = ston.index(program.items.keys()[i], .{
-            .description = ston.string(escape.default.escapeFmt(item.description)),
+            .description = ston.string(escape.escapeFmt(item.description)),
         }) });
     }
 }
@@ -126,12 +126,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             switch (moves.value) {
                 .pp => |pp| move.pp = pp,
                 .name => |_name| {
-                    move.name = try escape.default.unescapeAlloc(allocator, _name);
+                    move.name = try escape.unescapeAlloc(allocator, _name);
                     for (move.name) |*c|
                         c.* = ascii.toLower(c.*);
                 },
                 .description => |_desc| {
-                    const desc = try escape.default.unescapeAlloc(allocator, _desc);
+                    const desc = try escape.unescapeAlloc(allocator, _desc);
                     move.description = try Utf8.init(desc);
                 },
                 else => {},
@@ -142,9 +142,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .pocket => |pocket| item.pocket = pocket,
-                .name => |_name| item.name = try escape.default.unescapeAlloc(allocator, _name),
+                .name => |_name| {
+                    const name = try escape.unescapeAlloc(allocator, _name);
+                    item.name = name;
+                },
                 .description => |_desc| {
-                    const desc = try escape.default.unescapeAlloc(allocator, _desc);
+                    const desc = try escape.unescapeAlloc(allocator, _desc);
                     item.description = try Utf8.init(desc);
                 },
                 else => {},

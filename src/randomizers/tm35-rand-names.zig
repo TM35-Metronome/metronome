@@ -18,7 +18,7 @@ const unicode = std.unicode;
 
 const Utf8 = util.unicode.Utf8View;
 
-const escape = util.escape;
+const escape = util.escape.default;
 
 const Program = @This();
 
@@ -87,9 +87,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
     switch (parsed) {
         .pokemons => |pokemons| switch (pokemons.value) {
             .name => |str| {
-                _ = try program.pokemons.put(allocator, pokemons.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
-                });
+                _ = try program.pokemons.put(allocator, pokemons.index, .{ .name = .{
+                    .value = try escape.unescapeAlloc(allocator, str),
+                } });
                 return;
             },
             .stats,
@@ -114,9 +114,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         },
         .trainers => |trainers| switch (trainers.value) {
             .name => |str| {
-                _ = try program.trainers.put(allocator, trainers.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
-                });
+                _ = try program.trainers.put(allocator, trainers.index, .{ .name = .{
+                    .value = try escape.unescapeAlloc(allocator, str),
+                } });
                 return;
             },
             .class,
@@ -130,9 +130,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         },
         .moves => |moves| switch (moves.value) {
             .name => |str| {
-                _ = try program.moves.put(allocator, moves.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
-                });
+                _ = try program.moves.put(allocator, moves.index, .{ .name = .{
+                    .value = try escape.unescapeAlloc(allocator, str),
+                } });
                 return;
             },
             .description,
@@ -148,17 +148,17 @@ fn useGame(program: *Program, parsed: format.Game) !void {
         },
         .abilities => |abilities| switch (abilities.value) {
             .name => |str| {
-                _ = try program.abilities.put(allocator, abilities.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
-                });
+                _ = try program.abilities.put(allocator, abilities.index, .{ .name = .{
+                    .value = try escape.unescapeAlloc(allocator, str),
+                } });
                 return;
             },
         },
         .items => |items| switch (items.value) {
             .name => |str| {
-                _ = try program.items.put(allocator, items.index, .{
-                    .name = .{ .value = try escape.default.unescapeAlloc(allocator, str) },
-                });
+                _ = try program.items.put(allocator, items.index, .{ .name = .{
+                    .value = try escape.unescapeAlloc(allocator, str),
+                } });
                 return;
             },
             .battle_effect,

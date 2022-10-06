@@ -26,7 +26,7 @@ const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 
 const bit = util.bit;
-const escape = util.escape;
+const escape = util.escape.default;
 
 const Game = format.Game;
 
@@ -115,8 +115,8 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
 
     try ston.serialize(writer, .{
         .version = game.version,
-        .game_title = ston.string(escape.default.escapeFmt(game.header.game_title.span())),
-        .gamecode = ston.string(escape.default.escapeFmt(&game.header.gamecode)),
+        .game_title = ston.string(escape.escapeFmt(game.header.game_title.span())),
+        .gamecode = ston.string(escape.escapeFmt(&game.header.gamecode)),
         .starters = game.starters,
         .text_delays = game.text_delays,
         .tms = game.tms,
@@ -136,7 +136,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             .class = trainer.class,
             .encounter_music = trainer.encounter_music.music,
             .trainer_picture = trainer.trainer_picture,
-            .name = ston.string(escape.default.escapeFmt(decoded_name)),
+            .name = ston.string(escape.escapeFmt(decoded_name)),
             .items = trainer.items,
             .party_type = trainer.party_type,
             .party_size = trainer.partyLen(),
@@ -263,7 +263,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-            .name = ston.string(escape.default.escapeFmt(decoded_name)),
+            .name = ston.string(escape.escapeFmt(decoded_name)),
         }) });
     }
 
@@ -273,7 +273,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .abilities = ston.index(i, .{
-            .name = ston.string(escape.default.escapeFmt(decoded_name)),
+            .name = ston.string(escape.escapeFmt(decoded_name)),
         }) });
     }
 
@@ -283,7 +283,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
-            .name = ston.string(escape.default.escapeFmt(decoded_name)),
+            .name = ston.string(escape.escapeFmt(decoded_name)),
         }) });
     }
 
@@ -293,7 +293,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const decoded_name = fbs.getWritten();
 
         try ston.serialize(writer, .{ .types = ston.index(i, .{
-            .name = ston.string(escape.default.escapeFmt(decoded_name)),
+            .name = ston.string(escape.escapeFmt(decoded_name)),
         }) });
     }
 
@@ -319,7 +319,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             const decoded_name = fbs.getWritten();
 
             try ston.serialize(writer, .{ .items = ston.index(i, .{
-                .name = ston.string(escape.default.escapeFmt(decoded_name)),
+                .name = ston.string(escape.escapeFmt(decoded_name)),
             }) });
         }
 
@@ -329,7 +329,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             const decoded_description = fbs.getWritten();
 
             try ston.serialize(writer, .{ .items = ston.index(i, .{
-                .description = ston.string(escape.default.escapeFmt(decoded_description)),
+                .description = ston.string(escape.escapeFmt(decoded_description)),
             }) });
         } else |_| {}
     }
@@ -413,7 +413,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const decoded_text = fbs.getWritten();
 
         try ston.serialize(writer, .{
-            .text = ston.index(i, ston.string(escape.default.escapeFmt(decoded_text))),
+            .text = ston.index(i, ston.string(escape.escapeFmt(decoded_text))),
         });
     }
 }
@@ -422,8 +422,8 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
     const header = game.rom.header();
     try ston.serialize(writer, .{
         .version = game.info.version,
-        .game_title = ston.string(escape.default.escapeFmt(header.game_title.span())),
-        .gamecode = ston.string(escape.default.escapeFmt(&header.gamecode)),
+        .game_title = ston.string(escape.escapeFmt(header.game_title.span())),
+        .gamecode = ston.string(escape.escapeFmt(&header.gamecode)),
         .instant_text = false,
         .starters = game.ptrs.starters,
         .tms = game.ptrs.tms,
@@ -772,8 +772,8 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     const header = game.rom.header();
     try ston.serialize(writer, .{
         .version = game.info.version,
-        .game_title = ston.string(escape.default.escapeFmt(header.game_title.span())),
-        .gamecode = ston.string(escape.default.escapeFmt(&header.gamecode)),
+        .game_title = ston.string(escape.escapeFmt(header.game_title.span())),
+        .gamecode = ston.string(escape.escapeFmt(&header.gamecode)),
         .instant_text = false,
         .hms = game.ptrs.hms,
         .static_pokemons = game.ptrs.static_pokemons,
@@ -1044,7 +1044,7 @@ fn outputString(
 ) !void {
     try ston.serialize(writer, ston.field(array_name, ston.index(
         i,
-        ston.field(field_name, ston.string(escape.default.escapeFmt(string))),
+        ston.field(field_name, ston.string(escape.escapeFmt(string))),
     )));
 }
 

@@ -24,6 +24,7 @@ const gba = rom.gba;
 const nds = rom.nds;
 
 const bit = util.bit;
+const escape = util.escape.default;
 
 const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
@@ -706,7 +707,7 @@ fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !v
 
 fn applyGen3String(out: []u8, str: []const u8) !void {
     var fbs = io.fixedBufferStream(str);
-    var unescape = util.escape.default.unescapingReader(fbs.reader());
+    var unescape = escape.unescapingReader(fbs.reader());
     try gen3.encodings.encode(.en_us, unescape.reader(), out);
 }
 
@@ -1200,7 +1201,7 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try util.escape.default.unescapeWrite(writer, value);
+    try escape.unescapeWrite(writer, value);
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)
@@ -1657,7 +1658,7 @@ fn applyGen5StringReplace(
     var buf: [1024]u8 = undefined;
     const writer = io.fixedBufferStream(&buf).writer();
     try writer.writeAll(before);
-    try util.escape.default.unescapeWrite(writer, replace_with);
+    try escape.unescapeWrite(writer, replace_with);
     try writer.writeAll(after);
     _ = writer.write("\x00") catch undefined;
 
@@ -1679,7 +1680,7 @@ fn applyGen5String(strs: gen5.StringTable, index: usize, value: []const u8) !voi
 
     const buf = strs.get(index);
     const writer = io.fixedBufferStream(buf).writer();
-    try util.escape.default.unescapeWrite(writer, value);
+    try escape.unescapeWrite(writer, value);
 
     // Null terminate, if we didn't fill the buffer
     if (writer.context.pos < buf.len)

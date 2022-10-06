@@ -16,7 +16,7 @@ const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
 
-const escape = util.escape;
+const escape = util.escape.default;
 
 const Program = @This();
 
@@ -117,7 +117,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .pocket => |pocket| item.pocket = pocket,
                 .price => |price| item.price = price,
                 .name => |name| {
-                    item.name = try escape.default.unescapeAlloc(allocator, name);
+                    item.name = try escape.unescapeAlloc(allocator, name);
                     for (item.name) |*c|
                         c.* = ascii.toLower(c.*);
                 },

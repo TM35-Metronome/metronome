@@ -42,23 +42,15 @@ pub fn io(
     // simplify the code unless you have checked that the simplified code is just as fast.
     // Here is a simple oneliner you can use on linux to check:
     // ```
-    // zig build build-tm35-noop -Drelease && \\
+    // zig build tm35-noop -Drelease && \
     //   perf stat -r 250 dash -c 'zig-out/bin/tm35-noop < src/common/test_file.tm35 > /dev/null'
     // ```
 
-    // Two arraylists used for buffering input and output. These are used over buffered streams
-    // for two reasons:
-    // * For input, this allows us to ensure that there is always at least one entire line in the
-    //   input. This allows ston.Deserializer to work straight on the input data without having
-    //   to read the lines into a buffer first.
-    // * For output, this allows us to collect all non consumed lines into one buffer and output
-    //   it at the same time we are reading more into into `in`. Because we know that non cosumed
-    //   lines is always a subset of the input we can ensure that `out` has the same capacity as
-    //   `in` and call `appendSliceAssumeCapacity` to avoid allocating in the hot loop.
+    // Use an arraylist for buffering input. This allows us to ensure that there is always at
+    // least one entire line in the input. ston.Deserializer can then work straight on the input
+    // data without having to read the lines into a buffer first.
     var in = std.ArrayList(u8).init(allocator);
     defer in.deinit();
-    var out = std.ArrayList([]const u8).init(allocator);
-    defer out.deinit();
 
     try in.ensureUnusedCapacity(util.io.bufsize);
 
@@ -68,14 +60,15 @@ pub fn io(
         in_slice[in.items.len] = 0;
     }
 
-    var first_none_consumed_line: ?usize = null;
+    const max_usize = math.maxInt(usize);
+    var first_none_consumed_line: usize = max_usize;
     var start_of_line: usize = 0;
     var parser = ston.Parser{ .str = in.items.ptr[0..in.items.len :0] };
     var des = ston.Deserializer(Game){ .parser = &parser };
     while (parser.str.len != 0) : (start_of_line = parser.i) {
         while (des.next()) |res| : (start_of_line = parser.i) {
             if (consume(ctx, res)) |_| {
-                if (first_none_consumed_line) |start| {
+                if (first_none_consumed_line != max_usize) {
                     // Ok, `consume` just consumed a line after we have had at least one line
                     // that was not consumed. we can now slice from
                     // `first_none_consumed_line..start_of_line` to get all the lines we need to
@@ -83,15 +76,16 @@ pub fn io(
                     // appending none consumed lines one at the time because this feeds more data
                     // to mem.copy which then causes us to hit a codepath that is really fast
                     // on a lot of data.
+                    const start = first_none_consumed_line;
                     const lines = parser.str[start..start_of_line];
-                    try out.append(lines);
-                    first_none_consumed_line = null;
+                    try writer.writeAll(lines);
+                    first_none_consumed_line = max_usize;
                 }
             } else |err| switch (err) {
                 // When `consume` returns `DidNotConsumeData` it communicates to us that they
                 // could not handle the result in any meaningful way, so we are responsible
                 // for writing the parsed string back out.
-                error.DidNotConsumeData => if (first_none_consumed_line == null) {
+                error.DidNotConsumeData => if (first_none_consumed_line == max_usize) {
                     first_none_consumed_line = start_of_line;
                 },
                 else => return err,
@@ -100,7 +94,7 @@ pub fn io(
         // If we couldn't parse a portion of the buffer, then we skip to the next line
         // and try again. The current line will just be written out again.
         if (mem.indexOfScalarPos(u8, parser.str, parser.i, '\n')) |index| {
-            if (first_none_consumed_line == null)
+            if (first_none_consumed_line == max_usize)
                 first_none_consumed_line = start_of_line;
 
             const line = parser.str[start_of_line .. index + 1];
@@ -111,15 +105,12 @@ pub fn io(
 
         // Ok, we are done deserializing this batch of input. We need to output all the
         // lines that wasn't consumed and write them to `writer`.
-        if (first_none_consumed_line) |start| {
+        if (first_none_consumed_line != max_usize) {
+            const start = first_none_consumed_line;
             const lines = parser.str[start..start_of_line];
-            try out.append(lines);
-            first_none_consumed_line = null;
-        }
-
-        for (out.items) |lines|
             try writer.writeAll(lines);
-        out.shrinkRetainingCapacity(0);
+            first_none_consumed_line = max_usize;
+        }
 
         // There is probably some leftover which wasn't part of a full line. Copy that to the
         // start and make room for more data. Here we need to ensure that `out` has at least as
@@ -133,7 +124,7 @@ pub fn io(
         in.items.len += num;
 
         if (num == 0 and in.items.len != 0) {
-            // If get here, then the input did not have a terminating newline. In that case
+            // If we get here, then the input did not have a terminating newline. In that case
             // the above parsing logic will never succeed. Let's append a newline here so that
             // we can handle that egde case.
             in.appendAssumeCapacity('\n');

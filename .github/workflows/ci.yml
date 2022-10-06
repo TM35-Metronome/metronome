@@ -28,10 +28,6 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      - if: matrix.os == 'windows-latest' && matrix.step == 'install'
-        uses: NuGet/setup-nuget@v1.0.5
-      - if: matrix.os == 'windows-latest' && matrix.step == 'install'
-        run: nuget install Microsoft.Web.Webview2
       - if: matrix.os == 'ubuntu-latest' && matrix.step == 'install'
         run: sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
       - run: zig build ${{ matrix.step }} -D${{ matrix.release }}

@@ -17,7 +17,7 @@ const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
-const escape = util.escape;
+const escape = util.escape.default;
 
 const Utf8 = util.unicode.Utf8View;
 
@@ -105,8 +105,8 @@ fn output(program: *Program, writer: anytype) !void {
     for (program.items.values()) |item, i| {
         const item_id = program.items.keys()[i];
         try ston.serialize(writer, .{ .items = ston.index(item_id, .{
-            .name = ston.string(escape.default.escapeFmt(item.name)),
-            .description = ston.string(escape.default.escapeFmt(item.desc)),
+            .name = ston.string(escape.escapeFmt(item.name)),
+            .description = ston.string(escape.escapeFmt(item.desc)),
         }) });
     }
 
@@ -155,11 +155,13 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             const item = (try program.items.getOrPutValue(allocator, items.index, .{})).value_ptr;
             switch (items.value) {
                 .name => |str| {
-                    item.name = try Utf8.init(try util.escape.default.unescapeAlloc(allocator, str));
+                    const name = try escape.unescapeAlloc(allocator, str);
+                    item.name = try Utf8.init(name);
                     return;
                 },
-                .description => |desc| {
-                    item.desc = try Utf8.init(try util.escape.default.unescapeAlloc(allocator, desc));
+                .description => |str| {
+                    const desc = try escape.unescapeAlloc(allocator, str);
+                    item.desc = try Utf8.init(desc);
                     return;
                 },
                 .price => |price| item.price = price,
