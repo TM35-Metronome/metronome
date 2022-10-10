@@ -29,7 +29,8 @@ pub const BasePokemon = extern struct {
     catch_rate: u8,
     base_exp_yield: u8,
 
-    ev_yield: common.EvYield,
+    // ev_yield: common.EvYield,
+    ev_yield: lu16,
     items: [2]lu16,
 
     gender_ratio: u8,
@@ -46,7 +47,11 @@ pub const BasePokemon = extern struct {
 
     // Memory layout
     // TMS 01-92, HMS 01-08
-    machine_learnset: lu128,
+    machine_learnset: [16]u8,
+
+    pub fn machineLearnset(mon: *align(1) BasePokemon) *align(1) lu128 {
+        return @ptrCast(*align(1) lu128, &mon.machine_learnset);
+    }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);
@@ -98,8 +103,9 @@ pub const PartyMemberBase = extern struct {
         ability: u4 = 0,
     };
 
-    pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
-        return @fieldParentPtr(Parent, "base", base);
+    pub fn toParent(base: *align(1) PartyMemberBase, comptime Parent: type) *align(1) Parent {
+        return @ptrCast(*align(1) Parent, base);
+        // return @fieldParentPtr(Parent, "base", base);
     }
 };
 
@@ -165,7 +171,12 @@ pub const Trainer = extern struct {
         std.debug.assert(@sizeOf(@This()) == 20);
     }
 
-    pub fn partyMember(trainer: Trainer, version: common.Version, party: []u8, i: usize) ?*PartyMemberBase {
+    pub fn partyMember(
+        trainer: Trainer,
+        version: common.Version,
+        party: []u8,
+        i: usize,
+    ) ?*align(1) PartyMemberBase {
         return switch (version) {
             .diamond,
             .pearl,
@@ -190,7 +201,7 @@ pub const Trainer = extern struct {
         };
     }
 
-    fn partyMemberHelper(party: []u8, member_size: usize, i: usize) ?*PartyMemberBase {
+    fn partyMemberHelper(party: []u8, member_size: usize, i: usize) ?*align(1) PartyMemberBase {
         const start = i * member_size;
         const end = start + member_size;
         if (party.len < end)
@@ -353,45 +364,16 @@ pub const Item = extern struct {
     fling_power: u8,
     natural_gift_power: u8,
     flag: u8,
-    pocket: packed struct {
-        pocket: Pocket,
-        pad: u4,
-    },
-    type: u8,
-    category: u8,
-    category2: lu16,
-    index: u8,
-    statboosts: Boost,
-    ev_yield: common.EvYield,
-    hp_restore: u8,
-    pp_restore: u8,
-    happy1: u8,
-    happy2: u8,
-    happy3: u8,
-    padding1: u8,
-    padding2: u8,
-    padding3: u8,
-    padding4: u8,
-    padding5: u8,
-    padding6: u8,
-    padding7: u8,
-    padding8: u8,
+    _pocket: u8,
+    unknown: [26]u8,
 
-    pub const Boost = packed struct {
-        hp: u2,
-        level: u1,
-        evolution: u1,
-        attack: u4,
-        defense: u4,
-        sp_attack: u4,
-        sp_defense: u4,
-        speed: u4,
-        accuracy: u4,
-        crit: u2,
-        pp: u2,
-        target: u8,
-        target2: u8,
-    };
+    pub fn pocket(item: Item) Pocket {
+        return @intToEnum(Pocket, item._pocket & 0x0F);
+    }
+
+    pub fn setPocket(item: *align(1) Item, p: Pocket) void {
+        item._pocket = (item._pocket & 0xf0) | @enumToInt(p);
+    }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 36);
@@ -430,13 +412,13 @@ pub const MapHeader = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *lu16,
-    level: *lu16,
+    species: *align(1) lu16,
+    level: *align(1) lu16,
 };
 
 const PokeballItem = struct {
-    item: *lu16,
-    amount: *lu16,
+    item: *align(1) lu16,
+    amount: *align(1) lu16,
 };
 
 pub const EncryptedStringTable = struct {
@@ -446,7 +428,7 @@ pub const EncryptedStringTable = struct {
         return table.header().count.value();
     }
 
-    pub fn getEncryptedString(table: EncryptedStringTable, i: u32) []lu16 {
+    pub fn getEncryptedString(table: EncryptedStringTable, i: u32) []align(1) lu16 {
         const key = @truncate(u16, @as(u32, table.header().key.value()) * 0x2FD);
         const encrypted_slice = table.slices()[i];
         const slice = decryptSlice(key, i, encrypted_slice);
@@ -459,11 +441,11 @@ pub const EncryptedStringTable = struct {
         key: lu16,
     };
 
-    fn header(table: EncryptedStringTable) *Header {
-        return @ptrCast(*Header, table.data[0..@sizeOf(Header)]);
+    fn header(table: EncryptedStringTable) *align(1) Header {
+        return @ptrCast(*align(1) Header, table.data[0..@sizeOf(Header)]);
     }
 
-    fn slices(table: EncryptedStringTable) []nds.Slice {
+    fn slices(table: EncryptedStringTable) []align(1) nds.Slice {
         const data = table.data[@sizeOf(Header)..][0 .. table.count() * @sizeOf(nds.Slice)];
         return mem.bytesAsSlice(nds.Slice, data);
     }
@@ -482,7 +464,7 @@ pub const EncryptedStringTable = struct {
     }
 };
 
-fn decryptAndDecode(data: []const lu16, key: u16, out: anytype) !void {
+fn decryptAndDecode(data: []align(1) const lu16, key: u16, out: anytype) !void {
     const first = decryptChar(key, @intCast(u32, 0), data[0].value());
     const compressed = first == 0xF100;
     const start = @boolToInt(compressed);
@@ -510,7 +492,7 @@ fn decryptAndDecode(data: []const lu16, key: u16, out: anytype) !void {
     }
 }
 
-fn encrypt(data: []lu16, key: u16) void {
+fn encrypt(data: []align(1) lu16, key: u16) void {
     for (data) |*c, i|
         c.* = lu16.init(decryptChar(key, @intCast(u32, i), c.value()));
 }
@@ -621,25 +603,25 @@ pub const Game = struct {
     // The fields below are pointers into the nds rom and will
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
-        starters: [3]*lu16,
-        pokemons: []BasePokemon,
-        moves: []Move,
-        trainers: []Trainer,
+        starters: [3]*align(1) lu16,
+        pokemons: []align(1) BasePokemon,
+        moves: []align(1) Move,
+        trainers: []align(1) Trainer,
         wild_pokemons: union {
-            dppt: []DpptWildPokemons,
-            hgss: []HgssWildPokemons,
+            dppt: []align(1) DpptWildPokemons,
+            hgss: []align(1) HgssWildPokemons,
         },
-        items: []Item,
-        tms: []lu16,
-        hms: []lu16,
-        evolutions: []EvolutionTable,
+        items: []align(1) Item,
+        tms: []align(1) lu16,
+        hms: []align(1) lu16,
+        evolutions: []align(1) EvolutionTable,
 
         level_up_moves: nds.fs.Fs,
 
         pokedex: nds.fs.Fs,
-        pokedex_heights: []lu32,
-        pokedex_weights: []lu32,
-        species_to_national_dex: []lu16,
+        pokedex_heights: []align(1) lu32,
+        pokedex_weights: []align(1) lu32,
+        species_to_national_dex: []align(1) lu16,
 
         text: nds.fs.Fs,
         scripts: nds.fs.Fs,
@@ -669,7 +651,8 @@ pub const Game = struct {
     }
 
     pub fn fromRom(allocator: mem.Allocator, nds_rom: *nds.Rom) !Game {
-        const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
+        var fbs = io.fixedBufferStream(nds_rom.data.items);
+        const info = try identify(fbs.reader());
         const arm9 = if (info.arm9_is_encoded)
             try nds.blz.decode(allocator, nds_rom.arm9())
         else
@@ -774,7 +757,7 @@ pub const Game = struct {
                         if (owned.arm9.len < offset + offsets.starters_len)
                             return error.CouldNotFindStarters;
                         const starters_section = mem.bytesAsSlice(lu16, owned.arm9[offset..][0..offsets.starters_len]);
-                        break :blk [_]*lu16{
+                        break :blk [_]*align(1) lu16{
                             &starters_section[0],
                             &starters_section[2],
                             &starters_section[4],
@@ -785,7 +768,7 @@ pub const Game = struct {
                         const fat_entry = file_system.fat[overlay_entry.file_id.value()];
                         const file_data = file_system.data[fat_entry.start.value()..fat_entry.end.value()];
                         const starters_section = mem.bytesAsSlice(lu16, file_data[overlay.offset..][0..offsets.starters_len]);
-                        break :blk [_]*lu16{
+                        break :blk [_]*align(1) lu16{
                             &starters_section[0],
                             &starters_section[2],
                             &starters_section[4],
@@ -992,7 +975,8 @@ pub const Game = struct {
 
             // Non of the writes here can fail as long as we calculated the size
             // of the file correctly above
-            const writer = io.fixedBufferStream(bytes).writer();
+            var fbs = io.fixedBufferStream(bytes);
+            const writer = fbs.writer();
             const chars_per_entry = table.maxStringLen() + 1; // Always make room for a terminator
             const bytes_per_entry = chars_per_entry * 2;
             try writer.writeAll(&mem.toBytes(Header{
@@ -1081,7 +1065,7 @@ pub const Game = struct {
 
             // The variable 0x8008 is the variables that stores items given
             // from Pokéballs.
-            var var_8008: ?*lu16 = null;
+            var var_8008: ?*align(1) lu16 = null;
 
             var offset_i: usize = 0;
             while (offset_i < script_offsets.items.len) : (offset_i += 1) {
@@ -1100,7 +1084,7 @@ pub const Game = struct {
                     // Var_8008 will become var_8008_tmp. Then the next iteration
                     // of this loop will set var_8008 to null again. This allows us
                     // to store this state for only the next iteration of the loop.
-                    var var_8008_tmp: ?*lu16 = null;
+                    var var_8008_tmp: ?*align(1) lu16 = null;
                     defer var_8008 = var_8008_tmp;
 
                     switch (command.kind) {
@@ -1183,9 +1167,9 @@ pub const Game = struct {
         while (i < res.number_of_strings) : (i += 1) {
             const id = @intCast(u32, i);
             const buf = res.get(i);
-            const writer = io.fixedBufferStream(buf).writer();
+            var fbs = io.fixedBufferStream(buf);
             const encrypted_string = table.getEncryptedString(id);
-            try decryptAndDecode(encrypted_string, getKey(id), writer);
+            try decryptAndDecode(encrypted_string, getKey(id), fbs.writer());
         }
 
         return res;

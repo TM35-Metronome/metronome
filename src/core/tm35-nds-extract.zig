@@ -75,6 +75,7 @@ pub fn run(
 
     const rom_file = try cwd.openFile(program.in, .{});
     defer rom_file.close();
+
     var nds_rom = try nds.Rom.fromFile(rom_file, allocator);
 
     try cwd.makePath(program.out);
@@ -106,8 +107,8 @@ pub fn run(
         try out_dir.writeFile("banner", mem.asBytes(banner));
 
     const file_system = nds_rom.fileSystem();
-    try writeOverlays(arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable(), allocator);
-    try writeOverlays(arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable(), allocator);
+    try writeOverlays(allocator, arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable());
+    try writeOverlays(allocator, arm7_overlays_dir, file_system, nds_rom.arm7OverlayTable());
 
     try writeFs(root_dir, file_system, nds.fs.root);
 }
@@ -128,7 +129,12 @@ fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!voi
     }
 }
 
-fn writeOverlays(dir: fs.Dir, file_system: nds.fs.Fs, overlays: []const nds.Overlay, allocator: mem.Allocator) !void {
+fn writeOverlays(
+    allocator: mem.Allocator,
+    dir: fs.Dir,
+    file_system: nds.fs.Fs,
+    overlays: []align(1) const nds.Overlay,
+) !void {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
 
     for (overlays) |*overlay, i| {

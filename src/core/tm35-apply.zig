@@ -298,8 +298,6 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
-                .encounter_music => |encounter_music| trainer.encounter_music.music = math.cast(u7, encounter_music) orelse
-                    return error.Error,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
@@ -355,7 +353,6 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             const pokemon = &game.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
-                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -438,7 +435,6 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                         .target => |target| evolution.target = lu16.init(target),
                     }
                 },
-                .color => |color| pokemon.color.color = color,
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = math.cast(u8, base_exp_yield) orelse
                     return error.Error,
@@ -509,7 +505,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .description => |str| {
                     const desc_small = try item.description.toSliceZ(game.data);
                     const desc = try item.description.toSlice(game.data, desc_small.len + 1);
-                    applyGen3String(desc, str) catch unreachable;
+                    try applyGen3String(desc, str);
                 },
                 .pocket => |pocket| switch (game.version) {
                     .ruby, .sapphire, .emerald => item.pocket = gen3.Pocket{
@@ -690,10 +686,15 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
 fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !void {
     switch (area) {
-        .encounter_rate => |encounter_rate| rate.* = math.cast(u8, encounter_rate) orelse return error.Error,
+        .encounter_rate => |encounter_rate| {
+            rate.* = math.cast(u8, encounter_rate) orelse return error.Error;
+            return;
+        },
         .pokemons => |pokemons| {
-            if (pokemons.index >= wilds.len)
+            if (pokemons.index >= wilds.len) {
+                std.log.info("{} {} {}", .{ area, pokemons.index, wilds.len });
                 return error.IndexOutOfBound;
+            }
 
             const wild = &wilds[pokemons.index];
             switch (pokemons.value) {
@@ -768,7 +769,6 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         },
                     }
                 },
-                .encounter_music,
                 .trainer_picture,
                 .name,
                 => return error.DidNotConsumeData,
@@ -819,14 +819,14 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .description, .name => unreachable,
                 .price => |price| item.price = lu16.init(math.cast(u16, price) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
-                .pocket => |pocket| item.pocket.pocket = switch (pocket) {
+                .pocket => |pocket| item.setPocket(switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,
                     .tms_hms => .tms_hms,
                     .berries => .berries,
                     .poke_balls => .poke_balls,
                     .none => return error.DidNotConsumeData,
-                },
+                }),
             }
         },
         .pokedex => |pokedex| {
@@ -864,7 +864,6 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const pokemon = &game.ptrs.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
-                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -891,7 +890,6 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
-                .color => |color| pokemon.color.color = color,
                 .name => |str| try applyGen4String(names, pokemons.index, str),
                 .tms, .hms => |ms| {
                     const is_tms = pokemons.value == .tms;
@@ -900,7 +898,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         return error.Error;
 
                     const index = ms.index + game.ptrs.tms.len * @boolToInt(!is_tms);
-                    const learnset = &pokemon.machine_learnset;
+                    const learnset = pokemon.machineLearnset();
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
                 .moves => |moves| {
@@ -1127,7 +1125,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
     }
 }
 
-fn applyHgssGrass(area: format.WildArea, wilds: *gen4.HgssWildPokemons, grass: *[12]lu16) !void {
+fn applyHgssGrass(area: format.WildArea, wilds: *align(1) gen4.HgssWildPokemons, grass: *[12]lu16) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| wilds.grass_rate = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
@@ -1200,12 +1198,12 @@ fn applyGen4String(strs: gen4.StringTable, index: usize, value: []const u8) !voi
         return error.Error;
 
     const buf = strs.get(index);
-    const writer = io.fixedBufferStream(buf).writer();
-    try escape.unescapeWrite(writer, value);
+    var fbs = io.fixedBufferStream(buf);
+    try escape.unescapeWrite(fbs.writer(), value);
 
     // Null terminate, if we didn't fill the buffer
-    if (writer.context.pos < buf.len)
-        buf[writer.context.pos] = 0;
+    if (fbs.pos < buf.len)
+        buf[fbs.pos] = 0;
 }
 
 fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
@@ -1268,9 +1266,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                         },
                     }
                 },
-                .encounter_music,
-                .trainer_picture,
-                => return error.DidNotConsumeData,
+                .trainer_picture => return error.DidNotConsumeData,
             }
         },
         .pokemons => |pokemons| {
@@ -1281,7 +1277,6 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
-                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -1308,7 +1303,6 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = lu16.init(base_exp_yield),
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
-                .color => |color| pokemon.color.color = color,
                 .name => |str| try applyGen5String(names, pokemons.index, str),
                 .tms, .hms => |ms| {
                     const is_tms = pokemons.value == .tms;
@@ -1317,7 +1311,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                         return error.Error;
 
                     const index = if (is_tms) ms.index else ms.index + game.ptrs.tms1.len + game.ptrs.tms2.len;
-                    const learnset = &pokemon.machine_learnset;
+                    const learnset = pokemon.machineLearnset();
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
                 .moves => |moves| {
@@ -1425,7 +1419,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     applyGen5StringReplace(names_on_ground, items.index, old_name, str) catch {};
                     try applyGen5String(item_names, items.index, str);
                 },
-                .pocket => |pocket| item.pocket.pocket = switch (pocket) {
+                .pocket => |pocket| item.setPocket(switch (pocket) {
                     .items => .items,
                     .key_items => .key_items,
                     .poke_balls => .poke_balls,
@@ -1433,7 +1427,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     .berries,
                     .none,
                     => return error.DidNotConsumeData,
-                },
+                }),
             }
         },
         .pokedex => |pokedex| {
@@ -1505,7 +1499,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 return error.Error;
 
             const file = nds.fs.File{ .i = pokemons.index };
-            const wilds = game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
+            const wilds: []align(1) gen5.WildPokemons =
+                game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
                 try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
 
             switch (pokemons.value) {
@@ -1617,7 +1612,7 @@ fn applyGen5Area(
     comptime field: []const u8,
     wild_index: usize,
     rate_index: usize,
-    wilds: []gen5.WildPokemons,
+    wilds: []align(1) gen5.WildPokemons,
 ) !void {
     if (wilds.len <= wild_index)
         return error.DidNotConsumeData;
@@ -1656,7 +1651,8 @@ fn applyGen5StringReplace(
     const after = str[i + search_for.len ..];
 
     var buf: [1024]u8 = undefined;
-    const writer = io.fixedBufferStream(&buf).writer();
+    var fbs = io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
     try writer.writeAll(before);
     try escape.unescapeWrite(writer, replace_with);
     try writer.writeAll(after);
@@ -1679,10 +1675,10 @@ fn applyGen5String(strs: gen5.StringTable, index: usize, value: []const u8) !voi
         return error.Error;
 
     const buf = strs.get(index);
-    const writer = io.fixedBufferStream(buf).writer();
-    try escape.unescapeWrite(writer, value);
+    var fbs = io.fixedBufferStream(buf);
+    try escape.unescapeWrite(fbs.writer(), value);
 
     // Null terminate, if we didn't fill the buffer
-    if (writer.context.pos < buf.len)
-        buf[writer.context.pos] = 0;
+    if (fbs.pos < buf.len)
+        buf[fbs.pos] = 0;
 }

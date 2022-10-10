@@ -43,7 +43,8 @@ pub const BasePokemon = extern struct {
     catch_rate: u8,
     base_exp_yield: u8,
 
-    ev_yield: common.EvYield,
+    ev_yield: lu16,
+    // ev_yield: common.EvYield,
 
     items: [2]lu16,
 
@@ -74,10 +75,11 @@ pub const Gender = enum(u1) {
 pub const Trainer = extern struct {
     party_type: common.PartyType,
     class: u8,
-    encounter_music: packed struct {
-        music: u7,
-        gender: Gender,
-    },
+    // encounter_music: packed struct {
+    //     music: u7,
+    //     gender: Gender,
+    // },
+    encounter_music: u8,
     trainer_picture: u8,
     name: [12]u8,
     items: [4]lu16,
@@ -117,7 +119,7 @@ pub const Trainer = extern struct {
     }
 };
 
-pub const Party = packed union {
+pub const Party = extern union {
     none: Slice([]PartyMemberNone),
     item: Slice([]PartyMemberItem),
     moves: Slice([]PartyMemberMoves),
@@ -305,8 +307,8 @@ pub const RSFrLgPokedexEntry = extern struct {
 };
 
 pub const Pokedex = union {
-    emerald: []EmeraldPokedexEntry,
-    rsfrlg: []RSFrLgPokedexEntry,
+    emerald: []align(1) EmeraldPokedexEntry,
+    rsfrlg: []align(1) RSFrLgPokedexEntry,
 };
 
 pub const WildPokemon = extern struct {
@@ -502,12 +504,18 @@ pub const BgEvent = extern struct {
 };
 
 pub const MapScript = extern struct {
-    @"type": u8,
-    addr: packed union {
+    type: u8,
+    _addr: [4]u8,
+
+    pub fn addr(s: *align(1) MapScript) *align(1) Addr {
+        return @ptrCast(*align(1) Addr, &s._addr);
+    }
+
+    const Addr = extern union {
         @"0": void,
         @"2": Ptr([*]MapScript2),
         other: Ptr([*]u8),
-    },
+    };
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 5);
@@ -525,18 +533,82 @@ pub const MapScript2 = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *lu16,
+    species: *align(1) lu16,
     level: *u8,
 };
 
 const PokeballItem = struct {
-    item: *lu16,
-    amount: *lu16,
+    item: *align(1) lu16,
+    amount: *align(1) lu16,
 };
 
 const TrainerParty = struct {
     size: u32 = 0,
     members: [6]PartyMemberBoth = [_]PartyMemberBoth{PartyMemberBoth{}} ** 6,
+};
+
+const ScriptData = struct {
+
+    // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
+    // was last set to by the script. This variables are used by callstd
+    // to give and optain items.
+    VAR_0x8000: ?*align(1) lu16 = null,
+    VAR_0x8001: ?*align(1) lu16 = null,
+    static_pokemons: std.ArrayList(StaticPokemon),
+    given_pokemons: std.ArrayList(StaticPokemon),
+    pokeball_items: std.ArrayList(PokeballItem),
+    text: std.ArrayList(*align(1) Ptr([*:0xff]u8)),
+
+    fn processCommand(
+        script_data: *@This(),
+        gba_data: []u8,
+        command: *align(1) script.Command,
+    ) !void {
+        switch (command.kind) {
+            .setwildbattle => try script_data.static_pokemons.append(.{
+                .species = &command.setwildbattle.species,
+                .level = &command.setwildbattle.level,
+            }),
+            .givemon => try script_data.given_pokemons.append(.{
+                .species = &command.givemon.species,
+                .level = &command.givemon.level,
+            }),
+            .setorcopyvar => {
+                if (command.setorcopyvar.dest.value() == 0x8000)
+                    script_data.VAR_0x8000 = &command.setorcopyvar.src;
+                if (command.setorcopyvar.dest.value() == 0x8001)
+                    script_data.VAR_0x8001 = &command.setorcopyvar.src;
+            },
+            .callstd => switch (command.callstd.function) {
+                script.STD_OBTAIN_ITEM, script.STD_FIND_ITEM => {
+                    try script_data.pokeball_items.append(PokeballItem{
+                        .item = script_data.VAR_0x8000 orelse return,
+                        .amount = script_data.VAR_0x8001 orelse return,
+                    });
+                },
+                else => {},
+            },
+            .loadword => switch (command.loadword.destination) {
+                0 => {
+                    _ = command.loadword.value.toSliceZ(gba_data) catch return;
+                    try script_data.text.append(&command.loadword.value);
+                },
+                else => {},
+            },
+            .message => {
+                _ = command.message.text.toSliceZ(gba_data) catch return;
+                try script_data.text.append(&command.message.text);
+            },
+            else => {},
+        }
+    }
+
+    fn deinit(data: @This()) void {
+        data.static_pokemons.deinit();
+        data.given_pokemons.deinit();
+        data.pokeball_items.deinit();
+        data.text.deinit();
+    }
 };
 
 pub const Game = struct {
@@ -553,22 +625,22 @@ pub const Game = struct {
     // All these fields point into data
     header: *gba.Header,
 
-    starters: [3]*lu16,
-    starters_repeat: [3]*lu16,
+    starters: [3]*align(1) lu16,
+    starters_repeat: [3]*align(1) lu16,
     text_delays: []u8,
-    trainers: []Trainer,
+    trainers: []align(1) Trainer,
     moves: []Move,
-    machine_learnsets: []lu64,
-    pokemons: []BasePokemon,
-    evolutions: [][5]Evolution,
-    level_up_learnset_pointers: []Ptr([*]LevelUpMove),
-    hms: []lu16,
-    tms: []lu16,
-    items: []Item,
+    machine_learnsets: []align(1) lu64,
+    pokemons: []align(1) BasePokemon,
+    evolutions: []align(1) [5]Evolution,
+    level_up_learnset_pointers: []align(1) Ptr([*]LevelUpMove),
+    hms: []align(1) lu16,
+    tms: []align(1) lu16,
+    items: []align(1) Item,
     pokedex: Pokedex,
-    species_to_national_dex: []lu16,
-    wild_pokemon_headers: []WildPokemonHeader,
-    map_headers: []MapHeader,
+    species_to_national_dex: []align(1) lu16,
+    wild_pokemon_headers: []align(1) WildPokemonHeader,
+    map_headers: []align(1) MapHeader,
     pokemon_names: [][11]u8,
     ability_names: [][13]u8,
     move_names: [][13]u8,
@@ -577,7 +649,7 @@ pub const Game = struct {
     static_pokemons: []StaticPokemon,
     given_pokemons: []StaticPokemon,
     pokeball_items: []PokeballItem,
-    text: []*Ptr([*:0xff]u8),
+    text: []*align(1) Ptr([*:0xff]u8),
 
     pub fn identify(reader: anytype) !offsets.Info {
         const header = try reader.readStruct(gba.Header);
@@ -634,70 +706,11 @@ pub const Game = struct {
             }
         }
 
-        const ScriptData = struct {
-
-            // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
-            // was last set to by the script. This variables are used by callstd
-            // to give and optain items.
-            VAR_0x8000: ?*lu16 = null,
-            VAR_0x8001: ?*lu16 = null,
-            static_pokemons: std.ArrayList(StaticPokemon),
-            given_pokemons: std.ArrayList(StaticPokemon),
-            pokeball_items: std.ArrayList(PokeballItem),
-            text: std.ArrayList(*Ptr([*:0xff]u8)),
-
-            fn processCommand(script_data: *@This(), gba_data: []u8, command: *script.Command) !void {
-                switch (command.kind) {
-                    .setwildbattle => try script_data.static_pokemons.append(.{
-                        .species = &command.setwildbattle.species,
-                        .level = &command.setwildbattle.level,
-                    }),
-                    .givemon => try script_data.given_pokemons.append(.{
-                        .species = &command.givemon.species,
-                        .level = &command.givemon.level,
-                    }),
-                    .setorcopyvar => {
-                        if (command.setorcopyvar.destination.value() == 0x8000)
-                            script_data.VAR_0x8000 = &command.setorcopyvar.source;
-                        if (command.setorcopyvar.destination.value() == 0x8001)
-                            script_data.VAR_0x8001 = &command.setorcopyvar.source;
-                    },
-                    .callstd => switch (command.callstd.function) {
-                        script.STD_OBTAIN_ITEM, script.STD_FIND_ITEM => {
-                            try script_data.pokeball_items.append(PokeballItem{
-                                .item = script_data.VAR_0x8000 orelse return,
-                                .amount = script_data.VAR_0x8001 orelse return,
-                            });
-                        },
-                        else => {},
-                    },
-                    .loadword => switch (command.loadword.destination) {
-                        0 => {
-                            _ = command.loadword.value.toSliceZ(gba_data) catch return;
-                            try script_data.text.append(&command.loadword.value);
-                        },
-                        else => {},
-                    },
-                    .message => {
-                        _ = command.message.text.toSliceZ(gba_data) catch return;
-                        try script_data.text.append(&command.message.text);
-                    },
-                    else => {},
-                }
-            }
-
-            fn deinit(data: @This()) void {
-                data.static_pokemons.deinit();
-                data.given_pokemons.deinit();
-                data.pokeball_items.deinit();
-                data.text.deinit();
-            }
-        };
         var script_data = ScriptData{
             .static_pokemons = std.ArrayList(StaticPokemon).init(allocator),
             .given_pokemons = std.ArrayList(StaticPokemon).init(allocator),
             .pokeball_items = std.ArrayList(PokeballItem).init(allocator),
-            .text = std.ArrayList(*Ptr([*:0xff]u8)).init(allocator),
+            .text = std.ArrayList(*align(1) Ptr([*:0xff]u8)).init(allocator),
         };
         errdefer script_data.deinit();
 
@@ -706,13 +719,13 @@ pub const Game = struct {
         for (map_headers) |map_header| {
             const scripts = try map_header.map_scripts.toSliceEnd(gba_rom);
 
-            for (scripts) |s| {
+            for (scripts) |*s| {
                 if (s.@"type" == 0)
                     break;
                 if (s.@"type" == 2 or s.@"type" == 4)
                     continue;
 
-                const script_bytes = try s.addr.other.toSliceEnd(gba_rom);
+                const script_bytes = try s.addr().other.toSliceEnd(gba_rom);
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(gba_rom, command);
@@ -750,12 +763,12 @@ pub const Game = struct {
             .trainer_parties = trainer_parties,
 
             .header = @ptrCast(*gba.Header, &gba_rom[0]),
-            .starters = [_]*lu16{
+            .starters = [3]*align(1) lu16{
                 info.starters[0].ptr(gba_rom),
                 info.starters[1].ptr(gba_rom),
                 info.starters[2].ptr(gba_rom),
             },
-            .starters_repeat = [3]*lu16{
+            .starters_repeat = [3]*align(1) lu16{
                 info.starters_repeat[0].ptr(gba_rom),
                 info.starters_repeat[1].ptr(gba_rom),
                 info.starters_repeat[2].ptr(gba_rom),
@@ -818,7 +831,8 @@ pub const Game = struct {
             else
                 party_bytes;
 
-            const writer = io.fixedBufferStream(bytes).writer();
+            var fbs = io.fixedBufferStream(bytes);
+            const writer = fbs.writer();
             for (party.members[0..party.size]) |member| {
                 switch (party_type) {
                     .none => writer.writeAll(&mem.toBytes(PartyMemberNone{

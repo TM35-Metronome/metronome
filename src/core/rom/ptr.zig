@@ -21,7 +21,7 @@ pub fn RelativePointer(
     /// an optional pointer.
     comptime null_ptr: comptime_int,
 ) type {
-    return packed struct {
+    return extern struct {
         inner: Inner,
 
         const Inner = int.Int(Int, endian);
@@ -197,7 +197,7 @@ pub fn RelativeSlice(
     /// integer before it is converted to a real slice.
     comptime offset: comptime_int,
 ) type {
-    return packed struct {
+    return extern struct {
         inner: Inner,
 
         const Ptr = @Type(builtin.Type{
@@ -214,11 +214,11 @@ pub fn RelativeSlice(
         });
         const RPtr = RelativePointer(Ptr, Int, endian, offset, 0);
         const Inner = switch (layout) {
-            .pointer_first => packed struct {
+            .pointer_first => extern struct {
                 ptr: RPtr,
                 len: RPtr.Inner,
             },
-            .len_first => packed struct {
+            .len_first => extern struct {
                 len: RPtr.Inner,
                 ptr: RPtr,
             },

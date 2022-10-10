@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const format = @import("format");
-const it = @import("ziter");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -138,11 +137,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     return;
                 },
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .gender_ratio,
                 .egg_cycles,
-                .color,
                 .moves,
                 .tms,
                 .hms,
@@ -204,7 +201,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 fn randomize(program: *Program) !void {
     @setEvalBranchQuota(1000000000);
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
 
     // First, let's find items that are used for evolving Pokémons.
     // We will use these items as our stones.
@@ -554,7 +552,11 @@ fn randomize(program: *Program) !void {
                         else => unreachable,
                     };
                     const number = switch (stone) {
-                        stat_stone => it.fold(&pokemon.stats, @as(u16, 0), foldu8),
+                        stat_stone => blk2: {
+                            var res: u16 = 0;
+                            for (pokemon.stats) |item| res += item;
+                            break :blk2 res;
+                        },
                         growth_stone => @enumToInt(pokemon.growth_rate),
                         buddy_stone => pokemon.base_friendship,
                         else => unreachable,
@@ -606,7 +608,7 @@ fn filterBy(
     allocator: mem.Allocator,
     species: Set,
     pokemons: Pokemons,
-    filter: fn (Pokemon, []u16) []const u16,
+    filter: std.meta.FnPtr(fn (Pokemon, []u16) []const u16),
 ) !PokemonBy {
     var buf: [16]u16 = undefined;
     var pokemons_by = PokemonBy{};
@@ -621,7 +623,8 @@ fn filterBy(
 }
 
 fn statsFilter(pokemon: Pokemon, buf: []u16) []const u16 {
-    buf[0] = it.fold(&pokemon.stats, @as(u16, 0), foldu8);
+    buf[0] = 0;
+    for (pokemon.stats) |item| buf[0] += item;
     return buf[0..1];
 }
 

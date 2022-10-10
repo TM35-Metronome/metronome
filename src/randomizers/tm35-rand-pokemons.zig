@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const format = @import("format");
-const it = @import("ziter");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -245,13 +244,11 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 },
                 .catch_rate,
                 .base_exp_yield,
-                .ev_yield,
                 .gender_ratio,
                 .egg_cycles,
                 .base_friendship,
                 .growth_rate,
                 .egg_groups,
-                .color,
                 .moves,
                 .name,
                 .pokedex_entry,
@@ -310,7 +307,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 }
 
 fn randomize(program: *Program) !void {
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
 
     if (program.types.keys().len != 0) switch (program.options.types) {
         .unchanged => {},
@@ -446,9 +444,13 @@ fn randomizeStatsEx(
 ) void {
     const new_total = if (program.options.same_total_stats) blk: {
         const stats = pokemon.statsToArray();
-        break :blk it.fold(stats.constSlice(), @as(usize, 0), foldu8);
+        var res: usize = 0;
+        for (stats.slice()) |item| res += item;
+        break :blk res;
     } else blk: {
-        const min_total = it.fold(stats_to_start_from.constSlice(), @as(usize, 0), foldu8) + 1;
+        var min_total: usize = 1;
+        for (stats_to_start_from.slice()) |item| min_total += item;
+
         const max_total = stats_to_start_from.len * math.maxInt(u8);
         break :blk random.intRangeAtMost(usize, math.min(min_total, max_total), max_total);
     };
@@ -471,7 +473,9 @@ fn randomUntilSum(
     buf: []T,
     sum: usize,
 ) void {
-    var curr = it.fold(buf, @as(usize, 0), foldu8);
+    var curr: usize = 0;
+    for (buf) |item| curr += item;
+
     const max = math.min(sum, buf.len * math.maxInt(T));
     while (curr < max) {
         const item = util.random.item(random, buf).?;
@@ -554,6 +558,8 @@ fn runProgram(arena: mem.Allocator, opt: util.testing.RunProgramOptions) !Progra
 }
 
 fn collectData(arena: mem.Allocator, data: [:0]const u8) !Program {
+    @setEvalBranchQuota(10000000);
+
     var program = Program{ .allocator = arena, .options = undefined };
     var parser = ston.Parser{ .str = data };
     var des = ston.Deserializer(format.Game){ .parser = &parser };
@@ -576,11 +582,15 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
     const pokemons = program.pokemons.values();
     for (pokemons) |*pokemon| {
         const pokemon_stats = pokemon.statsToArray();
-        const pokemon_total = it.fold(pokemon_stats.constSlice(), @as(usize, 0), foldu8);
+        var pokemon_total: usize = 0;
+        for (pokemon_stats.slice()) |item| pokemon_total += item;
+
         for (pokemon.evos.values()) |species| {
             const evo = program.pokemons.getPtr(species).?;
             const evo_stats = evo.statsToArray();
-            const evo_total = it.fold(evo_stats.constSlice(), @as(usize, 0), foldu8);
+
+            var evo_total: usize = 0;
+            for (evo_stats.slice()) |item| evo_total += item;
 
             try testing.expectEqual(pokemon_stats.len, evo_stats.len);
             for (pokemon_stats.constSlice()) |poke_stat, i| {
@@ -620,9 +630,14 @@ fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
 
         try testing.expectEqual(old_keys[i], new_keys[i]);
         try testing.expectEqual(old_stats.len, new_stats.len);
+
+        var old_total: usize = 0;
+        var new_total: usize = 0;
+        for (old_stats.slice()) |item| old_total += item;
+        for (new_stats.slice()) |item| new_total += item;
         try testing.expectEqual(
-            it.fold(old_stats.constSlice(), @as(usize, 0), foldu8),
-            it.fold(new_stats.constSlice(), @as(usize, 0), foldu8),
+            old_total,
+            new_total,
         );
     }
 }

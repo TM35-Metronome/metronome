@@ -154,7 +154,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
 
     var z: usize = 0;
     var excluded_pockets_buffer: [2]format.Pocket = undefined;
@@ -244,7 +245,7 @@ test "tm35-rand-pokeball-items" {
         }
     };
 
-    const items = H.item("0", "key_items", "item 0") ++
+    const items = comptime H.item("0", "key_items", "item 0") ++
         H.item("1", "items", "item 1") ++
         H.item("2", "tms_hms", "item 2") ++
         H.item("3", "berries", "item 3");

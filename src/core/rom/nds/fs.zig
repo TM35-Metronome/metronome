@@ -26,9 +26,9 @@ pub const Handle = union(enum) {
 pub const root = Dir{ .i = 0 };
 
 pub const Fs = struct {
-    fnt_main: []FntMainEntry,
+    fnt_main: []align(1) FntMainEntry,
     fnt: []u8,
-    fat: []nds.Range,
+    fat: []align(1) nds.Range,
     data: []u8,
 
     pub fn openNarc(fs: nds.fs.Fs, dir: Dir, path: []const u8) !nds.fs.Fs {
@@ -88,11 +88,11 @@ pub const Fs = struct {
         };
     }
 
-    pub fn fileAs(fs: Fs, file: File, comptime T: type) !*T {
+    pub fn fileAs(fs: Fs, file: File, comptime T: type) !*align(1) T {
         const data = fs.fileData(file);
         if (@sizeOf(T) > data.len)
             return error.FileToSmall;
-        return @ptrCast(*T, data.ptr);
+        return @ptrCast(*align(1) T, data.ptr);
     }
 
     pub fn fileData(fs: Fs, file: File) []u8 {
@@ -108,7 +108,7 @@ pub const Fs = struct {
     ///
     /// This function is useful when working with roms that stores arrays
     /// of structs in narc file systems.
-    pub fn toSlice(fs: Fs, first: usize, comptime T: type) ![]T {
+    pub fn toSlice(fs: Fs, first: usize, comptime T: type) ![]align(1) T {
         if (fs.fat.len == first)
             return &[0]T{};
 
@@ -124,7 +124,7 @@ pub const Fs = struct {
         return mem.bytesAsSlice(T, fs.data[start..end]);
     }
 
-    pub fn fromFnt(fnt: []u8, fat: []nds.Range, data: []u8) Fs {
+    pub fn fromFnt(fnt: []u8, fat: []align(1) nds.Range, data: []u8) Fs {
         return Fs{
             .fnt_main = fntMainTable(fnt),
             .fnt = fnt,
@@ -133,7 +133,7 @@ pub const Fs = struct {
         };
     }
 
-    fn fntMainTable(fnt: []u8) []FntMainEntry {
+    fn fntMainTable(fnt: []u8) []align(1) FntMainEntry {
         const rem = fnt.len % @sizeOf(FntMainEntry);
         const fnt_mains = mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
         const len = fnt_mains[0].parent_id.value();
@@ -233,7 +233,7 @@ pub const Iterator = struct {
     }
 };
 
-pub const FntMainEntry = packed struct {
+pub const FntMainEntry = extern struct {
     offset_to_subtable: lu32,
     first_file_handle: lu16,
 
@@ -241,6 +241,10 @@ pub const FntMainEntry = packed struct {
     // the total number of directories (See FNT Directory Main-Table):
     // http://problemkaputt.de/gbatek.htm#dscartridgenitroromandnitroarcfilesystems
     parent_id: lu16,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
 pub fn narcSize(file_count: usize, data_size: usize) usize {
@@ -256,7 +260,8 @@ pub const SimpleNarcBuilder = struct {
     stream: io.FixedBufferStream([]u8),
 
     pub fn init(buf: []u8, file_count: usize) SimpleNarcBuilder {
-        const writer = io.fixedBufferStream(buf).writer();
+        var fbs = io.fixedBufferStream(buf);
+        const writer = fbs.writer();
         writer.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
         writer.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
         writer.context.pos += file_count * @sizeOf(nds.Range);
@@ -277,7 +282,7 @@ pub const SimpleNarcBuilder = struct {
         return SimpleNarcBuilder{ .stream = writer.context.* };
     }
 
-    pub fn fat(builder: SimpleNarcBuilder) []nds.Range {
+    pub fn fat(builder: SimpleNarcBuilder) []align(1) nds.Range {
         const res = builder.stream.buffer;
         const off = @sizeOf(formats.Header);
         const fat_header = mem.bytesAsValue(

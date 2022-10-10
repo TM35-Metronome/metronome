@@ -42,6 +42,10 @@ pub const Range = extern struct {
     pub fn slice(r: Range, s: anytype) mem.Span(@TypeOf(s)) {
         return s[r.start.value()..r.end.value()];
     }
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
 pub const Slice = extern struct {
@@ -67,6 +71,10 @@ pub const Slice = extern struct {
     pub fn slice(sl: Slice, s: anytype) mem.Span(@TypeOf(s)) {
         return s[sl.start.value()..sl.end()];
     }
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
 pub const Overlay = extern struct {
@@ -78,6 +86,10 @@ pub const Overlay = extern struct {
     static_initialiser_end_address: lu32,
     file_id: lu32,
     reserved: [4]u8,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 32);
+    }
 };
 
 pub const Rom = struct {
@@ -123,11 +135,11 @@ pub const Rom = struct {
         return res;
     }
 
-    pub fn header(rom: Rom) *Header {
+    pub fn header(rom: Rom) *align(1) Header {
         return mem.bytesAsValue(Header, rom.data.items[0..@sizeOf(Header)]);
     }
 
-    pub fn banner(rom: Rom) ?*Banner {
+    pub fn banner(rom: Rom) ?*align(1) Banner {
         const h = rom.header();
         const offset = h.banner_offset.value();
         if (offset == 0)
@@ -160,13 +172,13 @@ pub const Rom = struct {
         return rom.data.items[offset..][0..h.arm7.size.value()];
     }
 
-    pub fn arm9OverlayTable(rom: Rom) []Overlay {
+    pub fn arm9OverlayTable(rom: Rom) []align(1) Overlay {
         const h = rom.header();
         const bytes = h.arm9_overlay.slice(rom.data.items);
         return mem.bytesAsSlice(Overlay, bytes);
     }
 
-    pub fn arm7OverlayTable(rom: Rom) []Overlay {
+    pub fn arm7OverlayTable(rom: Rom) []align(1) Overlay {
         const h = rom.header();
         const bytes = h.arm7_overlay.slice(rom.data.items);
         return mem.bytesAsSlice(Overlay, bytes);
@@ -310,27 +322,40 @@ pub const Rom = struct {
             slice,
         };
 
-        fn fromRange(data: []const u8, range: *const Range) Section {
+        fn fromRange(data: []const u8, range: *align(1) const Range) Section {
             return fromStartEnd(data, &range.start, &range.end);
         }
 
-        fn fromSlice(data: []const u8, slice: *const Slice) Section {
+        fn fromSlice(data: []const u8, slice: *align(1) const Slice) Section {
             return fromStartLen(data, &slice.start, &slice.len);
         }
 
-        fn fromArm(data: []const u8, arm: *const Header.Arm) Section {
+        fn fromArm(data: []const u8, arm: *align(1) const Header.Arm) Section {
             return fromStartLen(data, &arm.offset, &arm.size);
         }
 
-        fn fromStartEnd(data: []const u8, start: *const lu32, end: *const lu32) Section {
+        fn fromStartEnd(
+            data: []const u8,
+            start: *align(1) const lu32,
+            end: *align(1) const lu32,
+        ) Section {
             return fromAny(data, .range, start, end);
         }
 
-        fn fromStartLen(data: []const u8, start: *const lu32, len: *const lu32) Section {
+        fn fromStartLen(
+            data: []const u8,
+            start: *align(1) const lu32,
+            len: *align(1) const lu32,
+        ) Section {
             return fromAny(data, .slice, start, len);
         }
 
-        fn fromAny(data: []const u8, kind: Kind, start: *const lu32, other: *const lu32) Section {
+        fn fromAny(
+            data: []const u8,
+            kind: Kind,
+            start: *align(1) const lu32,
+            other: *align(1) const lu32,
+        ) Section {
             const data_end = @ptrToInt(data.ptr) + data.len;
             const start_index = @ptrToInt(start) - @ptrToInt(data.ptr);
             const other_index = @ptrToInt(other) - @ptrToInt(data.ptr);
@@ -355,7 +380,7 @@ pub const Rom = struct {
             return Slice.init(start, len);
         }
 
-        fn getPtr(section: Section, data: []u8, field: enum { start, other }) *lu32 {
+        fn getPtr(section: Section, data: []u8, field: enum { start, other }) *align(1) lu32 {
             const index = switch (field) {
                 .start => section.start_index,
                 .other => section.other_index,
@@ -413,7 +438,10 @@ pub const Rom = struct {
         const size = try file.getEndPos();
         try file.seekTo(0);
 
-        if (size < @sizeOf(Header))
+        // FIXME: Compiler crashes if we test agains the actual size of `Header`
+        // if (size < @sizeOf(Header))
+        //     return error.InvalidRom;
+        if (size < 4096)
             return error.InvalidRom;
 
         var data = std.ArrayList(u8).init(allocator);

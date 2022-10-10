@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const format = @import("format");
-const it = @import("ziter");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -157,12 +156,10 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     => return error.DidNotConsumeData,
                 },
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .egg_cycles,
                 .base_friendship,
                 .abilities,
-                .color,
                 .moves,
                 .tms,
                 .hms,
@@ -244,7 +241,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
     const species = try getPokedexPokemons(allocator, program.pokemons, program.pokedex);
 
     for ([_]StaticMons{
@@ -295,7 +293,8 @@ fn randomize(program: *Program) !void {
                     // is simular/same as itself.
                     const prev_pokemon = program.pokemons.get(static.species) orelse continue;
 
-                    var min = @intCast(i64, it.fold(&prev_pokemon.stats, @as(usize, 0), foldu8));
+                    var min: i64 = 0;
+                    for (prev_pokemon.stats) |item| min += item;
                     var max = min;
 
                     // For same-stats, we can just make this loop run once, which will
@@ -313,7 +312,8 @@ fn randomize(program: *Program) !void {
                             .random => for (species.keys()) |s| {
                                 const pokemon = program.pokemons.get(s).?;
 
-                                const total = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                                var total: i64 = 0;
+                                for (pokemon.stats) |item| total += item;
                                 if (min <= total and total <= max)
                                     try simular.append(s);
                             },
@@ -333,7 +333,8 @@ fn randomize(program: *Program) !void {
                                     for (pokemons_of_type.keys()) |s| {
                                         const pokemon = program.pokemons.get(s).?;
 
-                                        const total = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                                        var total: i64 = 0;
+                                        for (pokemon.stats) |item| total += item;
                                         if (min <= total and total <= max)
                                             try simular.append(s);
                                     }

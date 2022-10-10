@@ -160,6 +160,7 @@ fn getOffsets(
 ) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons
     const Trainers = Searcher(gen3.Trainer, &[_][]const []const u8{
+        &[_][]const u8{"encounter_music"},
         &[_][]const u8{"party"},
         &[_][]const u8{"name"},
     });
@@ -167,6 +168,7 @@ fn getOffsets(
     const Machines = Searcher(lu64, &[_][]const []const u8{});
     const Pokemons = Searcher(gen3.BasePokemon, &[_][]const []const u8{
         &[_][]const u8{"padding"},
+        &[_][]const u8{"ev_yield"},
         &[_][]const u8{"egg_group1_pad"},
         &[_][]const u8{"egg_group2_pad"},
     });
@@ -378,20 +380,20 @@ fn getOffsets(
 // fields and nested fields.
 pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []const u8) type {
     return struct {
-        pub fn find1(data: []u8, item: T) !*T {
+        pub fn find1(data: []u8, item: T) !*align(1) T {
             const slice = try find2(data, &[_]T{item});
             return &slice[0];
         }
 
-        pub fn find2(data: []u8, items: []const T) ![]T {
+        pub fn find2(data: []u8, items: []const T) ![]align(1) T {
             return find4(data, items, &[_]T{});
         }
 
-        pub fn find3(data: []u8, start: T, end: T) ![]T {
+        pub fn find3(data: []u8, start: T, end: T) ![]align(1) T {
             return find4(data, &[_]T{start}, &[_]T{end});
         }
 
-        pub fn find4(data: []u8, start: []const T, end: []const T) ![]T {
+        pub fn find4(data: []u8, start: []const T, end: []const T) ![]align(1) T {
             const found_start = try findSliceHelper(data, 0, 1, start);
             const start_offset = @ptrToInt(found_start.ptr);
             const next_offset = (start_offset - @ptrToInt(data.ptr)) + start.len * @sizeOf(T);
@@ -403,7 +405,7 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
             return found_start.ptr[0..len];
         }
 
-        fn findSliceHelper(data: []u8, offset: usize, skip: usize, items: []const T) ![]T {
+        fn findSliceHelper(data: []u8, offset: usize, skip: usize, items: []const T) ![]align(1) T {
             const bytes = items.len * @sizeOf(T);
             if (data.len < bytes)
                 return error.DataNotFound;
@@ -423,7 +425,7 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
                 //       the length of the data passed in is 0. I need the pointer to point into
                 //       `data_slice` so I bypass `data_items` here. I feel like this is a design
                 //       mistake by the Zig `std`.
-                return @ptrCast([*]T, data_slice.ptr)[0..data_items.len];
+                return @ptrCast([*]align(1) T, data_slice.ptr)[0..data_items.len];
             }
 
             return error.DataNotFound;
@@ -479,13 +481,13 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
                 break :blk res;
             };
 
-            ignore: inline for (struct_info.fields) |field| {
-                inline for (ignored_fields) |fields| {
-                    if (comptime fields.len == 1 and mem.eql(u8, fields[0], field.name))
-                        continue :ignore;
+            inline for (struct_info.fields) |field| {
+                if (comptime !shouldIgnore(ignored_fields, field.name)) {
+                    const field_a = @field(a, field.name);
+                    const field_b = @field(b, field.name);
+                    if (!matches(field.field_type, next_ignored, field_a, field_b))
+                        return false;
                 }
-                if (!matches(field.field_type, next_ignored, @field(a, field.name), @field(b, field.name)))
-                    return false;
             }
 
             return true;
@@ -500,10 +502,21 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
                     debug.assert(@sizeOf(f.field_type) == size);
             }
 
-            return matches(first_field.field_type, ignored_fields, @field(a, first_field.name), @field(b, first_field.name));
+            const field_a = @field(a, first_field.name);
+            const field_b = @field(b, first_field.name);
+            return matches(first_field.field_type, ignored_fields, field_a, field_b);
         },
         else => return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b)),
     }
+}
+
+fn shouldIgnore(ignored_fields: []const []const []const u8, name: []const u8) bool {
+    for (ignored_fields) |fields| {
+        if (fields.len == 1 and mem.eql(u8, fields[0], name))
+            return true;
+    }
+
+    return false;
 }
 
 test "searcher.Searcher.find" {
@@ -640,10 +653,7 @@ const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -654,10 +664,7 @@ const em_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x02,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x0b,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -670,10 +677,7 @@ const em_first_trainers = [_]gen3.Trainer{
 const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = .none,
     .class = 0x41,
-    .encounter_music = .{
-        .gender = .female,
-        .music = 0x00,
-    },
+    .encounter_music = undefined,
     .trainer_picture = 0x5c,
     .name = undefined,
     .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -686,10 +690,7 @@ const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x00,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -700,10 +701,7 @@ const rs_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x02,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x06,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0x46,
         .name = undefined,
         .items = [_]lu16{ lu16.init(0x16), lu16.init(0x16), lu16.init(0), lu16.init(0) },
@@ -716,10 +714,7 @@ const rs_first_trainers = [_]gen3.Trainer{
 const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .party_type = .none,
     .class = 0x21,
-    .encounter_music = .{
-        .gender = .male,
-        .music = 0x0b,
-    },
+    .encounter_music = undefined,
     .trainer_picture = 0x06,
     .name = undefined,
     .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
@@ -732,10 +727,7 @@ const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x00,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{
@@ -751,10 +743,7 @@ const frls_first_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 2,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x06,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
         .items = [_]lu16{
@@ -773,10 +762,7 @@ const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .both,
         .class = 90,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x00,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 125,
         .name = undefined,
         .items = [_]lu16{
@@ -792,10 +778,7 @@ const frls_last_trainers = [_]gen3.Trainer{
     gen3.Trainer{
         .party_type = .none,
         .class = 0x47,
-        .encounter_music = .{
-            .gender = .male,
-            .music = 0x00,
-        },
+        .encounter_music = undefined,
         .trainer_picture = 0x60,
         .name = undefined,
         .items = [_]lu16{
@@ -888,14 +871,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .types = [_]u8{ 0, 0 },
         .catch_rate = 0,
         .base_exp_yield = 0,
-        .ev_yield = common.EvYield{
-            .hp = 0,
-            .attack = 0,
-            .defense = 0,
-            .speed = 0,
-            .sp_attack = 0,
-            .sp_defense = 0,
-        },
+        .ev_yield = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
         .gender_ratio = 0,
         .egg_cycles = 0,
@@ -904,10 +880,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .egg_groups = [_]common.EggGroup{ .invalid, .invalid },
         .abilities = [_]u8{ 0, 0 },
         .safari_zone_rate = 0,
-        .color = common.Color{
-            .color = .red,
-            .flip = false,
-        },
+        .color = .red,
         .padding = undefined,
     },
     // Bulbasaur
@@ -923,14 +896,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .types = [_]u8{ 12, 3 },
         .catch_rate = 45,
         .base_exp_yield = 64,
-        .ev_yield = common.EvYield{
-            .hp = 0,
-            .attack = 0,
-            .defense = 0,
-            .speed = 0,
-            .sp_attack = 1,
-            .sp_defense = 0,
-        },
+        .ev_yield = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
         .gender_ratio = percentFemale(12.5),
         .egg_cycles = 20,
@@ -939,10 +905,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .egg_groups = [_]common.EggGroup{ .monster, .grass },
         .abilities = [_]u8{ 65, 0 },
         .safari_zone_rate = 0,
-        .color = common.Color{
-            .color = .green,
-            .flip = false,
-        },
+        .color = .green,
         .padding = undefined,
     },
 };
@@ -964,14 +927,7 @@ gen3.BasePokemon{
     .catch_rate = 45,
     .base_exp_yield = 147,
 
-    .ev_yield = common.EvYield{
-        .hp = 0,
-        .attack = 0,
-        .defense = 0,
-        .speed = 0,
-        .sp_attack = 1,
-        .sp_defense = 1,
-    },
+    .ev_yield = undefined,
 
     .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
@@ -985,10 +941,7 @@ gen3.BasePokemon{
     .abilities = [_]u8{ 26, 0 },
     .safari_zone_rate = 0,
 
-    .color = common.Color{
-        .color = .blue,
-        .flip = false,
-    },
+    .color = .blue,
 
     .padding = undefined,
 }};

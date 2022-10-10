@@ -179,7 +179,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
 
     const pick_from = try program.getMoves();
     randomizeMachines(random, pick_from.keys(), program.tms.values());
@@ -316,6 +317,8 @@ fn runProgram(opt: util.testing.RunProgramOptions) !CollectedMachines {
 }
 
 fn collectMachines(in: [:0]const u8) !CollectedMachines {
+    @setEvalBranchQuota(10000000);
+
     var res = CollectedMachines{
         .hms = CollectedMachinesSet.init(testing.allocator),
         .tms = CollectedMachinesSet.init(testing.allocator),

@@ -162,7 +162,7 @@ pub const Replacement = struct {
     find: []const u8,
     replace: []const u8,
 
-    fn lessThan(_: void, a: Replacement, b: Replacement) bool {
+    fn lessThan(_: u8, a: Replacement, b: Replacement) bool {
         return mem.lessThan(u8, a.find, b.find);
     }
 };
@@ -217,7 +217,7 @@ test "transion" {
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
     @setEvalBranchQuota(1000000);
     comptime var replacements_sorted = replacements[0..replacements.len].*;
-    std.sort.sort(Replacement, &replacements_sorted, {}, Replacement.lessThan);
+    std.sort.sort(Replacement, &replacements_sorted, @as(u8, 0), Replacement.lessThan);
 
     return struct {
         child_writer: ChildWriter,

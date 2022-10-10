@@ -1,5 +1,4 @@
 const crc = @import("crc");
-const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -211,10 +210,14 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        if (!it.all(header.game_title.span(), notLower))
-            return error.InvalidGameTitle;
-        if (!it.all(&header.gamecode, ascii.isUpper))
-            return error.InvalidGamecode;
+        for (header.game_title.span()) |item| {
+            if (ascii.isLower(item))
+                return error.InvalidGameTitle;
+        }
+        for (header.gamecode) |item| {
+            if (!ascii.isUpper(item))
+                return error.InvalidGamecode;
+        }
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
@@ -297,9 +300,5 @@ pub const Header = extern struct {
 
     fn isZero(b: u8) bool {
         return b == 0;
-    }
-
-    fn notLower(char: u8) bool {
-        return !ascii.isLower(char);
     }
 };

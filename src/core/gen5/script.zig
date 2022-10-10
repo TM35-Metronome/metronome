@@ -9,7 +9,7 @@ const li32 = rom.int.li32;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 
-pub fn getScriptOffsets(data: []const u8) []const li32 {
+pub fn getScriptOffsets(data: []const u8) []align(1) const li32 {
     var len: usize = 0;
     while (true) : (len += 1) {
         const rest = data[len * 4 ..];
@@ -49,39 +49,39 @@ pub const Command = extern union {
     end_function: Arg1(lu16),
     logic06: Arg1(lu16),
     logic07: Arg1(lu16),
-    compare_to: CompareTo,
-    store_var: StoreVar,
-    clear_var: ClearVar,
-    unknown_0b: Unknown_0B,
-    unknown_0c: Unknown_0C,
-    unknown_0d: Unknown_0D,
-    unknown_0e: Unknown_0E,
-    unknown_0f: Unknown_0F,
-    store_flag: StoreFlag,
+    compare_to: Value,
+    store_var: Var,
+    clear_var: Var,
+    unknown_0b: Value,
+    unknown_0c: Value,
+    unknown_0d: Value,
+    unknown_0e: Value,
+    unknown_0f: Value,
+    store_flag: Value,
     condition: Condition,
-    unknown_12: Unknown_12,
-    unknown_13: Unknown_13,
-    unknown_14: Unknown_14,
-    unknown_16: Unknown_16,
-    unknown_17: Unknown_17,
-    compare: Compare,
+    unknown_12: Value,
+    unknown_13: Arg2(lu16, lu16),
+    unknown_14: Value,
+    unknown_16: Value,
+    unknown_17: Value,
+    compare: Value2,
     call_std: CallStd,
     return_std: Arg0,
     jump: Jump,
     @"if": If,
-    unknown_21: Unknown_21,
-    unknown_22: Unknown_22,
-    set_flag: SetFlag,
+    unknown_21: Value,
+    unknown_22: Value,
+    set_flag: Value,
     clear_flag: ClearFlag,
     set_var_flag_status: SetVarFlagStatus,
-    set_var_26: SetVar26,
-    set_var_27: SetVar27,
-    set_var_eq_val: SetVarEqVal,
-    set_var_29: SetVar29,
-    set_var_2a: SetVar2A,
-    set_var_2b: SetVar2B,
+    set_var_26: Value2,
+    set_var_27: Value2,
+    set_var_eq_val: SetVarContainer,
+    set_var_29: SetVarContainer,
+    set_var_2a: SetVarContainer,
+    set_var_2b: Value,
     dir_vars: Arg2(lu16, lu16),
-    unknown_2d: Unknown_2D,
+    unknown_2d: Value,
     lock_all: Arg0,
     unlock_all: Arg0,
     wait_moment: Arg0,
@@ -95,10 +95,10 @@ pub const Command = extern union {
     show_message_at: ShowMessageAt,
     close_show_message_at: Arg0,
     message: Message,
-    message2: Message2,
+    message2: Message,
     close_message_k_p: Arg0,
     close_message_k_p2: Arg0,
-    money_box: MoneyBox,
+    money_box: Coord,
     close_money_box: Arg0,
     update_money_box: Arg0,
     bordered_message: BorderedMessage,
@@ -110,67 +110,67 @@ pub const Command = extern union {
     double_message: DoubleMessage,
     angry_message: AngryMessage,
     close_angry_message: Arg0,
-    set_var_hero: SetVarHero,
-    set_var_item: SetVarItem,
-    unknown_4e: unknown_4E,
-    set_var_item2: SetVarItem2,
-    set_var_item3: SetVarItem3,
-    set_var_move: SetVarMove,
-    set_var_bag: SetVarBag,
-    set_var_party_poke: SetVarPartyPoke,
-    set_var_party_poke2: SetVarPartyPoke2,
-    set_var_unknown: SetVar_Unknown,
-    set_var_type: SetVarType,
-    set_var_poke: SetVarPoke,
-    set_var_poke2: SetVarPoke2,
-    set_var_location: SetVarLocation,
-    set_var_poke_nick: SetVarPokeNick,
-    set_var_unknown2: SetVar_Unknown2,
+    set_var_hero: Arg1(u8),
+    set_var_item: ArgValue(u8, lu16),
+    unknown_4e: Arg4(u8, lu16, lu16, u8),
+    set_var_item2: ArgValue(u8, lu16),
+    set_var_item3: ArgValue(u8, lu16),
+    set_var_move: ArgValue(u8, lu16),
+    set_var_bag: ArgValue(u8, lu16),
+    set_var_party_poke: ArgValue(u8, lu16),
+    set_var_party_poke2: ArgValue(u8, lu16),
+    set_var_unknown: ArgValue(u8, lu16),
+    set_var_type: ArgValue(u8, lu16),
+    set_var_poke: ArgValue(u8, lu16),
+    set_var_poke2: ArgValue(u8, lu16),
+    set_var_location: ArgValue(u8, lu16),
+    set_var_poke_nick: ArgValue(u8, lu16),
+    set_var_unknown2: ArgValue(u8, lu16),
     set_var_store_value5_c: SetVarStoreValue5C,
-    set_var_musical_info: SetVarMusicalInfo,
-    set_var_nations: SetVarNations,
-    set_var_activities: SetVarActivities,
-    set_var_power: SetVarPower,
-    set_var_trainer_type: SetVarTrainerType,
-    set_var_trainer_type2: SetVarTrainerType2,
-    set_var_general_word: SetVarGeneralWord,
+    set_var_musical_info: ArgValue(lu16, lu16),
+    set_var_nations: ArgValue(u8, lu16),
+    set_var_activities: ArgValue(u8, lu16),
+    set_var_power: ArgValue(u8, lu16),
+    set_var_trainer_type: ArgValue(u8, lu16),
+    set_var_trainer_type2: ArgValue(u8, lu16),
+    set_var_general_word: ArgValue(u8, lu16),
     apply_movement: ApplyMovement,
     wait_movement: Arg0,
-    store_hero_position: StoreHeroPosition,
-    unknown_67: Unknown_67,
-    store_hero_position2: StoreHeroPosition2,
+    store_hero_position: Coord,
+    unknown_67: Arg2(lu16, lu16),
+    store_hero_position2: Coord,
     store_npc_position: StoreNPCPosition,
     unknown_6a: Unknown_6A,
-    add_npc: AddNPC,
-    remove_npc: RemoveNPC,
+    add_npc: NPC,
+    remove_npc: NPC,
     set_o_w_position: SetOWPosition,
     unknown_6e: Arg1(lu16),
     unknown_6f: Arg1(lu16),
     unknown_70: Unknown_70,
-    unknown_71: Unknown_71,
-    unknown_72: Unknown_72,
-    unknown_73: Unknown_73,
+    unknown_71: Arg3(lu16, lu16, lu16),
+    unknown_72: Arg4(lu16, lu16, lu16, lu16),
+    unknown_73: Arg2(lu16, lu16),
     face_player: Arg0,
-    release: Release,
+    release: NPC,
     release_all: Arg0,
-    lock_77: Lock,
-    unknown_78: Unknown_78,
+    lock_77: NPC,
+    unknown_78: Var,
     unknown_79: Unknown_79,
     move_npc_to: MoveNPCTo,
-    unknown_7c: Unknown_7C,
-    unknown_7d: Unknown_7D,
+    unknown_7c: Arg4(lu16, lu16, lu16, lu16),
+    unknown_7d: Arg4(lu16, lu16, lu16, lu16),
     teleport_up_npc: TeleportUpNPC,
-    unknown_7f: Unknown_7F,
+    unknown_7f: Arg2(lu16, lu16),
     unknown_80: Arg1(lu16),
     unknown_81: Arg0,
-    unknown_82: Unknown_82,
-    set_var83: SetVar83,
-    set_var84: SetVar84,
+    unknown_82: Arg2(lu16, lu16),
+    set_var83: Value,
+    set_var84: Value,
     single_trainer_battle: SingleTrainerBattle,
     double_trainer_battle: DoubleTrainerBattle,
-    unknown_87: Unknown_87,
-    unknown_88: Unknown_88,
-    unknown_8a: Unknown_8A,
+    unknown_87: Arg3(lu16, lu16, lu16),
+    unknown_88: Arg3(lu16, lu16, lu16),
+    unknown_8a: Arg2(lu16, lu16),
     play_trainer_music: PlayTrainerMusic,
     end_battle: Arg0,
     store_battle_result: StoreBattleResult,
@@ -182,9 +182,9 @@ pub const Command = extern union {
     show_cg: Arg1(lu16),
     call_screen_animation: Arg1(lu16),
     disable_trainer: Arg0,
-    d_var90: DVar90,
-    d_var92: DVar92,
-    d_var93: DVar93,
+    d_var90: Arg2(lu16, lu16),
+    d_var92: Arg2(lu16, lu16),
+    d_var93: Arg2(lu16, lu16),
     trainer_battle: TrainerBattle,
     deactivate_trainer_i_d: DeactivateTrainerID,
     unknown_96: Unknown_96,
@@ -195,7 +195,7 @@ pub const Command = extern union {
     unknown_a2: Unknown_A2,
     unknown_a3: Arg1(lu16),
     unknown_a4: Arg1(lu16),
-    unknown_a5: Unknown_A5,
+    unknown_a5: Arg2(lu16, lu16),
     play_sound: PlaySound,
     wait_sound_a7: Arg0,
     wait_sound: Arg0,
@@ -207,15 +207,15 @@ pub const Command = extern union {
     close_multi: Arg0,
     unknown_b1: Arg0,
     multi2: Multi2,
-    fade_screen: FadeScreen,
-    reset_screen: ResetScreen,
-    screen_b5: Screen_B5,
+    fade_screen: Arg4(lu16, lu16, lu16, lu16),
+    reset_screen: Arg3(lu16, lu16, lu16),
+    screen_b5: Arg3(lu16, lu16, lu16),
     take_item: TakeItem,
     check_item_bag_space: CheckItemBagSpace,
     check_item_bag_number: CheckItemBagNumber,
     store_item_count: StoreItemCount,
-    unknown_ba: Unknown_BA,
-    unknown_bb: Unknown_BB,
+    unknown_ba: Arg4(lu16, lu16, lu16, lu16),
+    unknown_bb: Arg2(lu16, lu16),
     unknown_bc: Arg1(lu16),
     warp: Warp,
     teleport_warp: TeleportWarp,
@@ -225,21 +225,21 @@ pub const Command = extern union {
     teleport_warp2: TeleportWarp2,
     surf_animation: Arg0,
     special_animation: Arg1(lu16),
-    special_animation2: SpecialAnimation2,
-    call_animation: CallAnimation,
-    store_random_number: StoreRandomNumber,
+    special_animation2: Arg2(lu16, lu16),
+    call_animation: Arg2(lu16, lu16),
+    store_random_number: Arg2(lu16, lu16),
     store_var_item: Arg1(lu16),
     store_var_cd: Arg1(lu16),
     store_var_ce: Arg1(lu16),
     store_var_cf: Arg1(lu16),
     store_date: StoreDate,
-    store_d1: Store_D1,
+    store_d1: Arg2(lu16, lu16),
     store_d2: Arg1(lu16),
     store_d3: Arg1(lu16),
     store_birth_day: StoreBirthDay,
     store_badge: StoreBadge,
-    set_badge: SetBadge,
-    store_badge_number: StoreBadgeNumber,
+    set_badge: Badge,
+    store_badge_number: Badge,
     store_version: Arg1(lu16),
     store_gender: Arg1(lu16),
     activate_key_item: Arg1(lu16),
@@ -588,838 +588,466 @@ pub const Command = extern union {
     };
 
     pub const Arg0 = extern struct {
-        kind: Kind,
+        kind: Kind align(1),
     };
     pub fn Arg1(comptime T: type) type {
         return extern struct {
-            kind: Kind,
-            arg: T,
+            kind: Kind align(1),
+            arg: T align(1),
         };
     }
+
     pub fn Arg2(comptime T1: type, comptime T2: type) type {
         return extern struct {
-            kind: Kind,
-            arg1: T1,
-            args2: T2,
+            kind: Kind align(1),
+            arg1: T1 align(1),
+            arg2: T2 align(1),
         };
     }
     pub fn Arg3(comptime T1: type, comptime T2: type, comptime T3: type) type {
         return extern struct {
-            kind: Kind,
-            arg1: T1,
-            args2: T2,
-            args3: T3,
+            kind: Kind align(1),
+            arg1: T1 align(1),
+            arg2: T2 align(1),
+            arg3: T3 align(1),
         };
     }
     pub fn Arg4(comptime T1: type, comptime T2: type, comptime T3: type, comptime T4: type) type {
         return extern struct {
-            kind: Kind,
-            arg1: T1,
-            args2: T2,
-            args3: T3,
-            args4: T4,
+            kind: Kind align(1),
+            arg1: T1 align(1),
+            arg2: T2 align(1),
+            arg3: T3 align(1),
+            arg4: T4 align(1),
         };
     }
+    pub fn ArgValue(comptime T1: type, comptime T2: type) type {
+        return extern struct {
+            kind: Kind align(1),
+            arg: T1 align(1),
+            value: T2 align(1),
+        };
+    }
+    pub const Value = extern struct {
+        kind: Kind align(1),
+        value: lu16 align(1),
+    };
+    pub const Value2 = extern struct {
+        kind: Kind align(1),
+        value1: lu16 align(1),
+        value2: lu16 align(1),
+    };
     pub const CallRoutine = extern struct {
-        kind: Kind,
-        offset: li32,
+        kind: Kind align(1),
+        offset: li32 align(1),
     };
-    pub const CompareTo = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const StoreVar = extern struct {
-        kind: Kind,
-        @"var": lu16,
-    };
-    pub const ClearVar = extern struct {
-        kind: Kind,
-        @"var": lu16,
-    };
-    pub const Unknown_0B = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_0C = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_0D = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_0E = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_0F = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const StoreFlag = extern struct {
-        kind: Kind,
-        value: lu16,
+    pub const Var = extern struct {
+        kind: Kind align(1),
+        @"var": lu16 align(1),
     };
     pub const Condition = extern struct {
-        kind: Kind,
-        condition: lu16,
-    };
-    pub const Unknown_12 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_13 = extern struct {
-        kind: Kind,
-        value1: lu16,
-        value2: lu16,
-    };
-    pub const Unknown_14 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_16 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_17 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Compare = extern struct {
-        kind: Kind,
-        value1: lu16,
-        value2: lu16,
+        kind: Kind align(1),
+        condition: lu16 align(1),
     };
     pub const CallStd = extern struct {
-        kind: Kind,
-        function: lu16,
+        kind: Kind align(1),
+        function: lu16 align(1),
     };
     pub const Jump = extern struct {
-        kind: Kind,
-        offset: li32,
+        kind: Kind align(1),
+        offset: li32 align(1),
     };
     pub const If = extern struct {
-        kind: Kind,
-        value: u8,
-        offset: li32,
-    };
-    pub const Unknown_21 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_22 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const SetFlag = extern struct {
-        kind: Kind,
-        value: lu16,
+        kind: Kind align(1),
+        value: u8 align(1),
+        offset: li32 align(1),
     };
     pub const ClearFlag = extern struct {
-        kind: Kind,
-        flag: lu16,
+        kind: Kind align(1),
+        flag: lu16 align(1),
     };
     pub const SetVarFlagStatus = extern struct {
-        kind: Kind,
-        flag: lu16,
-        status: lu16,
+        kind: Kind align(1),
+        flag: lu16 align(1),
+        status: lu16 align(1),
     };
-    pub const SetVar26 = extern struct {
-        kind: Kind,
-        value1: lu16,
-        value2: lu16,
-    };
-    pub const SetVar27 = extern struct {
-        kind: Kind,
-        value1: lu16,
-        value2: lu16,
-    };
-    pub const SetVarEqVal = extern struct {
-        kind: Kind,
-        container: lu16,
-        value: lu16,
-    };
-    pub const SetVar29 = extern struct {
-        kind: Kind,
-        container: lu16,
-        value: lu16,
-    };
-    pub const SetVar2A = extern struct {
-        kind: Kind,
-        container: lu16,
-        value: lu16,
-    };
-    pub const SetVar2B = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const Unknown_2D = extern struct {
-        kind: Kind,
-        value: lu16,
+    pub const SetVarContainer = extern struct {
+        kind: Kind align(1),
+        container: lu16 align(1),
+        value: lu16 align(1),
     };
     pub const MusicalMessage = extern struct {
-        kind: Kind,
-        id: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
     };
     pub const EventGreyMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        view: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        view: lu16 align(1),
     };
     pub const BubbleMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        location: u8,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        location: u8 align(1),
     };
     pub const ShowMessageAt = extern struct {
-        kind: Kind,
-        id: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        zcoord: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        zcoord: lu16 align(1),
     };
     pub const Message = extern struct {
-        kind: Kind,
-        id: lu16,
-        npc: lu16,
-        position: lu16,
-        type: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        npc: lu16 align(1),
+        position: lu16 align(1),
+        type: lu16 align(1),
     };
-    pub const Message2 = extern struct {
-        kind: Kind,
-        id: lu16,
-        npc: lu16,
-        position: lu16,
-        type: lu16,
-    };
-    pub const MoneyBox = extern struct {
-        kind: Kind,
-        xcoord: lu16,
-        ycoord: lu16,
+    pub const Coord = extern struct {
+        kind: Kind align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
     };
     pub const BorderedMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        color: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        color: lu16 align(1),
     };
     pub const PaperMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        transcoord: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        transcoord: lu16 align(1),
     };
     pub const YesNo = extern struct {
-        kind: Kind,
-        yesno: lu16,
+        kind: Kind align(1),
+        yesno: lu16 align(1),
     };
     pub const Message3 = extern struct {
-        kind: Kind,
-        id: lu16,
-        npc: lu16,
-        position: lu16,
-        type: lu16,
-        unknown: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        npc: lu16 align(1),
+        position: lu16 align(1),
+        type: lu16 align(1),
+        unknown: lu16 align(1),
     };
     pub const DoubleMessage = extern struct {
-        kind: Kind,
-        idblack: lu16,
-        idwhite: lu16,
-        npc: lu16,
-        position: lu16,
-        type: lu16,
+        kind: Kind align(1),
+        idblack: lu16 align(1),
+        idwhite: lu16 align(1),
+        npc: lu16 align(1),
+        position: lu16 align(1),
+        type: lu16 align(1),
     };
     pub const AngryMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        unknownbyte: u8,
-        position: lu16,
-    };
-    pub const SetVarHero = extern struct {
-        kind: Kind,
-        arg: u8,
-    };
-    pub const SetVarItem = extern struct {
-        kind: Kind,
-        arg: u8,
-        item: lu16,
-    };
-    pub const unknown_4E = extern struct {
-        kind: Kind,
-        arg1: u8,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: u8,
-    };
-    pub const SetVarItem2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        item: lu16,
-    };
-    pub const SetVarItem3 = extern struct {
-        kind: Kind,
-        arg: u8,
-        item: lu16,
-    };
-    pub const SetVarMove = extern struct {
-        kind: Kind,
-        arg: u8,
-        move: lu16,
-    };
-    pub const SetVarBag = extern struct {
-        kind: Kind,
-        arg: u8,
-        item: lu16,
-    };
-    pub const SetVarPartyPoke = extern struct {
-        kind: Kind,
-        arg: u8,
-        party_poke: lu16,
-    };
-    pub const SetVarPartyPoke2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        party_poke: lu16,
-    };
-    pub const SetVar_Unknown = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarType = extern struct {
-        kind: Kind,
-        arg: u8,
-        type: lu16,
-    };
-    pub const SetVarPoke = extern struct {
-        kind: Kind,
-        arg: u8,
-        poke: lu16,
-    };
-    pub const SetVarPoke2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        poke: lu16,
-    };
-    pub const SetVarLocation = extern struct {
-        kind: Kind,
-        arg: u8,
-        location: lu16,
-    };
-    pub const SetVarPokeNick = extern struct {
-        kind: Kind,
-        arg: u8,
-        poke: lu16,
-    };
-    pub const SetVar_Unknown2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        unknownbyte: u8 align(1),
+        position: lu16 align(1),
     };
     pub const SetVarStoreValue5C = extern struct {
-        kind: Kind,
-        arg: u8,
-        container: lu16,
-        stat: lu16,
-    };
-    pub const SetVarMusicalInfo = extern struct {
-        kind: Kind,
-        arg: lu16,
-        value: lu16,
-    };
-    pub const SetVarNations = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarActivities = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarPower = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarTrainerType = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarTrainerType2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
-    };
-    pub const SetVarGeneralWord = extern struct {
-        kind: Kind,
-        arg: u8,
-        value: lu16,
+        kind: Kind align(1),
+        arg: u8 align(1),
+        container: lu16 align(1),
+        stat: lu16 align(1),
     };
     pub const ApplyMovement = extern struct {
-        kind: Kind,
-        npc: lu16,
-        movementdata: lu32,
-    };
-    pub const StoreHeroPosition = extern struct {
-        kind: Kind,
-        xcoord: lu16,
-        ycoord: lu16,
-    };
-    pub const Unknown_67 = extern struct {
-        kind: Kind,
-        value: lu16,
-        value2: lu16,
-    };
-    pub const StoreHeroPosition2 = extern struct {
-        kind: Kind,
-        xcoord: lu16,
-        ycoord: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        movementdata: lu32 align(1),
     };
     pub const StoreNPCPosition = extern struct {
-        kind: Kind,
-        npc: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
     };
     pub const Unknown_6A = extern struct {
-        kind: Kind,
-        npc: lu16,
-        flag: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        flag: lu16 align(1),
     };
-    pub const AddNPC = extern struct {
-        kind: Kind,
-        npc: lu16,
-    };
-    pub const RemoveNPC = extern struct {
-        kind: Kind,
-        npc: lu16,
+    pub const NPC = extern struct {
+        kind: Kind align(1),
+        npc: lu16 align(1),
     };
     pub const SetOWPosition = extern struct {
-        kind: Kind,
-        npc: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        zcoord: lu16,
-        direction: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        zcoord: lu16 align(1),
+        direction: lu16 align(1),
     };
     pub const Unknown_70 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-        arg5: lu16,
-    };
-    pub const Unknown_71 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-    };
-    pub const Unknown_72 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-    };
-    pub const Unknown_73 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const Release = extern struct {
-        kind: Kind,
-        npc: lu16,
-    };
-    pub const Lock = extern struct {
-        kind: Kind,
-        npc: lu16,
-    };
-    pub const Unknown_78 = extern struct {
-        kind: Kind,
-        @"var": lu16,
+        kind: Kind align(1),
+        arg: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
+        arg4: lu16 align(1),
+        arg5: lu16 align(1),
     };
     pub const Unknown_79 = extern struct {
-        kind: Kind,
-        npc: lu16,
-        arg2: lu16,
-        arg3: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
     };
     pub const MoveNPCTo = extern struct {
-        kind: Kind,
-        npc: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        zcoord: lu16,
-    };
-    pub const Unknown_7C = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-    };
-    pub const Unknown_7D = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        zcoord: lu16 align(1),
     };
     pub const TeleportUpNPC = extern struct {
-        kind: Kind,
-        npc: lu16,
-    };
-    pub const Unknown_7F = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const Unknown_82 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const SetVar83 = extern struct {
-        kind: Kind,
-        value: lu16,
-    };
-    pub const SetVar84 = extern struct {
-        kind: Kind,
-        value: lu16,
+        kind: Kind align(1),
+        npc: lu16 align(1),
     };
     pub const SingleTrainerBattle = extern struct {
-        kind: Kind,
-        trainerid: lu16,
-        trainerid2: lu16,
-        logic: lu16,
+        kind: Kind align(1),
+        trainerid: lu16 align(1),
+        trainerid2: lu16 align(1),
+        logic: lu16 align(1),
     };
     pub const DoubleTrainerBattle = extern struct {
-        kind: Kind,
-        ally: lu16,
-        trainerid: lu16,
-        trainerid2: lu16,
-        logic: lu16,
-    };
-    pub const Unknown_87 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-    };
-    pub const Unknown_88 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-    };
-    pub const Unknown_8A = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        ally: lu16 align(1),
+        trainerid: lu16 align(1),
+        trainerid2: lu16 align(1),
+        logic: lu16 align(1),
     };
     pub const PlayTrainerMusic = extern struct {
-        kind: Kind,
-        songid: lu16,
+        kind: Kind align(1),
+        songid: lu16 align(1),
     };
     pub const StoreBattleResult = extern struct {
-        kind: Kind,
-        variable: lu16,
-    };
-    pub const DVar90 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const DVar92 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const DVar93 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        variable: lu16 align(1),
     };
     pub const TrainerBattle = extern struct {
-        kind: Kind,
-        trainerid: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
+        kind: Kind align(1),
+        trainerid: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
+        arg4: lu16 align(1),
     };
     pub const DeactivateTrainerID = extern struct {
-        kind: Kind,
-        id: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
     };
     pub const Unknown_96 = extern struct {
-        kind: Kind,
-        trainerid: lu16,
+        kind: Kind align(1),
+        trainerid: lu16 align(1),
     };
     pub const StoreActiveTrainerID = extern struct {
-        kind: Kind,
-        trainerid: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        trainerid: lu16 align(1),
+        arg2: lu16 align(1),
     };
     pub const ChangeMusic = extern struct {
-        kind: Kind,
-        songid: lu16,
+        kind: Kind align(1),
+        songid: lu16 align(1),
     };
     pub const Unknown_A2 = extern struct {
-        kind: Kind,
-        sound: lu16,
-        arg2: lu16,
-    };
-    pub const Unknown_A5 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        sound: lu16 align(1),
+        arg2: lu16 align(1),
     };
     pub const PlaySound = extern struct {
-        kind: Kind,
-        id: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
     };
     pub const PlayFanfare = extern struct {
-        kind: Kind,
-        id: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
     };
     pub const PlayCry = extern struct {
-        kind: Kind,
-        id: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        arg2: lu16 align(1),
     };
     pub const SetTextScriptMessage = extern struct {
-        kind: Kind,
-        id: lu16,
-        arg2: lu16,
-        arg3: lu16,
+        kind: Kind align(1),
+        id: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
     };
     pub const Multi2 = extern struct {
-        kind: Kind,
-        arg: u8,
-        arg2: u8,
-        arg3: u8,
-        arg4: u8,
-        arg5: u8,
-        @"var": lu16,
-    };
-    pub const FadeScreen = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-    };
-    pub const ResetScreen = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-    };
-    pub const Screen_B5 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
+        kind: Kind align(1),
+        arg: u8 align(1),
+        arg2: u8 align(1),
+        arg3: u8 align(1),
+        arg4: u8 align(1),
+        arg5: u8 align(1),
+        @"var": lu16 align(1),
     };
     pub const TakeItem = extern struct {
-        kind: Kind,
-        item: lu16,
-        quantity: lu16,
-        result: lu16,
+        kind: Kind align(1),
+        item: lu16 align(1),
+        quantity: lu16 align(1),
+        result: lu16 align(1),
     };
     pub const CheckItemBagSpace = extern struct {
-        kind: Kind,
-        item: lu16,
-        quantity: lu16,
-        result: lu16,
+        kind: Kind align(1),
+        item: lu16 align(1),
+        quantity: lu16 align(1),
+        result: lu16 align(1),
     };
     pub const CheckItemBagNumber = extern struct {
-        kind: Kind,
-        item: lu16,
-        quantity: lu16,
-        result: lu16,
+        kind: Kind align(1),
+        item: lu16 align(1),
+        quantity: lu16 align(1),
+        result: lu16 align(1),
     };
     pub const StoreItemCount = extern struct {
-        kind: Kind,
-        item: lu16,
-        result: lu16,
-    };
-    pub const Unknown_BA = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-    };
-    pub const Unknown_BB = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        item: lu16 align(1),
+        result: lu16 align(1),
     };
     pub const Warp = extern struct {
-        kind: Kind,
-        mapid: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
+        kind: Kind align(1),
+        mapid: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
     };
     pub const TeleportWarp = extern struct {
-        kind: Kind,
-        mapid: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        zcoord: lu16,
-        npcfacing: lu16,
+        kind: Kind align(1),
+        mapid: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        zcoord: lu16 align(1),
+        npcfacing: lu16 align(1),
     };
     pub const FallWarp = extern struct {
-        kind: Kind,
-        mapid: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
+        kind: Kind align(1),
+        mapid: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
     };
     pub const FastWarp = extern struct {
-        kind: Kind,
-        mapid: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        herofacing: lu16,
+        kind: Kind align(1),
+        mapid: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        herofacing: lu16 align(1),
     };
     pub const TeleportWarp2 = extern struct {
-        kind: Kind,
-        mapid: lu16,
-        xcoord: lu16,
-        ycoord: lu16,
-        zcoord: lu16,
-        herofacing: lu16,
-    };
-    pub const SpecialAnimation2 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const CallAnimation = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
-    };
-    pub const StoreRandomNumber = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        mapid: lu16 align(1),
+        xcoord: lu16 align(1),
+        ycoord: lu16 align(1),
+        zcoord: lu16 align(1),
+        herofacing: lu16 align(1),
     };
     pub const StoreDate = extern struct {
-        kind: Kind,
-        month: lu16,
-        date: lu16,
-    };
-    pub const Store_D1 = extern struct {
-        kind: Kind,
-        arg: lu16,
-        arg2: lu16,
+        kind: Kind align(1),
+        month: lu16 align(1),
+        date: lu16 align(1),
     };
     pub const StoreBirthDay = extern struct {
-        kind: Kind,
-        month: lu16,
-        day: lu16,
+        kind: Kind align(1),
+        month: lu16 align(1),
+        day: lu16 align(1),
     };
     pub const StoreBadge = extern struct {
-        kind: Kind,
-        @"var": lu16,
-        badge: lu16,
+        kind: Kind align(1),
+        @"var": lu16 align(1),
+        badge: lu16 align(1),
     };
-    pub const SetBadge = extern struct {
-        kind: Kind,
-        badge: lu16,
-    };
-    pub const StoreBadgeNumber = extern struct {
-        kind: Kind,
-        badge: lu16,
+    pub const Badge = extern struct {
+        kind: Kind align(1),
+        badge: lu16 align(1),
     };
     pub const TakeMoney = extern struct {
-        kind: Kind,
-        amount: lu16,
+        kind: Kind align(1),
+        amount: lu16 align(1),
     };
     pub const CheckMoney = extern struct {
-        kind: Kind,
-        storage: lu16,
-        value: lu16,
+        kind: Kind align(1),
+        storage: lu16 align(1),
+        value: lu16 align(1),
     };
     pub const StorePartyNumberMinimum = extern struct {
-        kind: Kind,
-        result: lu16,
-        number: lu16,
+        kind: Kind align(1),
+        result: lu16 align(1),
+        number: lu16 align(1),
     };
     pub const GivePokemon1 = extern struct {
-        kind: Kind,
-        result: lu16,
-        species: lu16,
-        item: lu16,
-        level: lu16,
+        kind: Kind align(1),
+        result: lu16 align(1),
+        species: lu16 align(1),
+        item: lu16 align(1),
+        level: lu16 align(1),
     };
     pub const GivePokemon2 = extern struct {
-        kind: Kind,
-        result: lu16,
-        species: lu16,
-        form: lu16,
-        level: lu16,
-        unknown_0: lu16,
-        unknown_1: lu16,
-        unknown_2: lu16,
-        unknown_3: lu16,
-        unknown_4: lu16,
+        kind: Kind align(1),
+        result: lu16 align(1),
+        species: lu16 align(1),
+        form: lu16 align(1),
+        level: lu16 align(1),
+        unknown_0: lu16 align(1),
+        unknown_1: lu16 align(1),
+        unknown_2: lu16 align(1),
+        unknown_3: lu16 align(1),
+        unknown_4: lu16 align(1),
     };
     pub const GivePokemon3 = extern struct {
-        kind: Kind,
-        result: lu16,
-        species: lu16,
-        is_full: lu16,
+        kind: Kind align(1),
+        result: lu16 align(1),
+        species: lu16 align(1),
+        is_full: lu16 align(1),
     };
     pub const GivePokemon4 = extern struct {
-        kind: Kind,
-        result: lu16,
-        species: lu16,
-        level: lu16,
-        unknown_0: lu16,
-        unknown_1: lu16,
-        unknown_2: lu16,
+        kind: Kind align(1),
+        result: lu16 align(1),
+        species: lu16 align(1),
+        level: lu16 align(1),
+        unknown_0: lu16 align(1),
+        unknown_1: lu16 align(1),
+        unknown_2: lu16 align(1),
     };
     pub const MoveCamera = extern struct {
-        kind: Kind,
-        arg1: lu16,
-        arg2: lu16,
-        arg3: lu32,
-        arg4: lu32,
-        arg5: lu32,
-        arg6: lu32,
-        arg7: lu16,
+        kind: Kind align(1),
+        arg1: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu32 align(1),
+        arg4: lu32 align(1),
+        arg5: lu32 align(1),
+        arg6: lu32 align(1),
+        arg7: lu16 align(1),
     };
     pub const ResetCamera = extern struct {
-        kind: Kind,
-        arg1: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-        arg5: lu16,
-        arg6: lu16,
+        kind: Kind align(1),
+        arg1: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
+        arg4: lu16 align(1),
+        arg5: lu16 align(1),
+        arg6: lu16 align(1),
     };
     pub const SwitchOwPosition = extern struct {
-        kind: Kind,
-        arg1: lu16,
-        arg2: lu16,
-        arg3: lu16,
-        arg4: lu16,
-        arg5: lu16,
+        kind: Kind align(1),
+        arg1: lu16 align(1),
+        arg2: lu16 align(1),
+        arg3: lu16 align(1),
+        arg4: lu16 align(1),
+        arg5: lu16 align(1),
     };
     pub const WildBattle = extern struct {
-        kind: Kind,
-        species: lu16,
-        level: lu16,
+        kind: Kind align(1),
+        species: lu16 align(1),
+        level: lu16 align(1),
     };
     pub const WildBattleStoreResult = extern struct {
-        kind: Kind,
-        species: lu16,
-        level: lu16,
-        variable: lu16,
+        kind: Kind align(1),
+        species: lu16 align(1),
+        level: lu16 align(1),
+        variable: lu16 align(1),
     };
+
+    comptime {
+        @setEvalBranchQuota(1000000);
+        std.debug.assert(script.isPacked(@This()));
+    }
 };

@@ -88,7 +88,6 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             switch (trainers.value) {
                 .name => |str| trainer.name = try escape.unescapeAlloc(allocator, str),
                 .class => |class| trainer.class = class,
-                .encounter_music => |encounter_music| trainer.encounter_music = encounter_music,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| trainer.party_size = party_size,
@@ -125,14 +124,12 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             switch (pokemons.value) {
                 .name => |str| pokemon.name = try escape.unescapeAlloc(allocator, str),
                 .stats => |stats| format.setField(&pokemon.stats, stats),
-                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
-                .color => |color| pokemon.color = color,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
                 .abilities => |ability| _ = try pokemon.abilities.put(allocator, ability.index, ability.value),
                 .egg_groups => |egg_group| _ = try pokemon.egg_groups.put(allocator, egg_group.value, {}),
@@ -456,13 +453,6 @@ fn generate(writer: anytype, game: Game) !void {
             \\
         );
 
-        total_stats = 0;
-        inline for (stat_names) |stat| {
-            const value = @field(pokemon.ev_yield, stat[0]);
-            try writer.print("<tr><td>{s}:</td><td>{}</td></tr>\n", .{ stat[1], value });
-            total_stats += value;
-        }
-
         try writer.print("<tr><td>Total:</td><td>{}</td></tr>\n", .{total_stats});
         try writer.writeAll(
             \\</table></details>
@@ -595,10 +585,10 @@ fn generate(writer: anytype, game: Game) !void {
 }
 
 pub fn printSimpleFields(writer: anytype, value: anytype, comptime blacklist: []const []const u8) !void {
-    outer: inline for (@typeInfo(@TypeOf(value)).Struct.fields) |field| {
+    inline for (@typeInfo(@TypeOf(value)).Struct.fields) |field| outer: {
         comptime for (blacklist) |blacklist_item| {
             if (mem.eql(u8, field.name, blacklist_item))
-                continue :outer;
+                break :outer;
         };
         switch (@typeInfo(field.field_type)) {
             .Int => {
@@ -668,7 +658,6 @@ const Game = struct {
 
 const Trainer = struct {
     class: u8 = 0,
-    encounter_music: u8 = 0,
     trainer_picture: u8 = 0,
     name: []const u8 = "",
     party_type: format.PartyType = .none,
@@ -712,7 +701,6 @@ pub fn Stats(comptime T: type) type {
 const Pokemon = struct {
     name: []const u8 = "",
     stats: Stats(u8) = Stats(u8){},
-    ev_yield: Stats(u2) = Stats(u2){},
     catch_rate: u8 = 0,
     base_exp_yield: u16 = 0,
     gender_ratio: u8 = 0,
@@ -720,7 +708,6 @@ const Pokemon = struct {
     base_friendship: u8 = 0,
     pokedex_entry: u16 = 0,
     growth_rate: format.GrowthRate = .medium_fast,
-    color: format.Color = .blue,
     tms: Map(u8, void) = Map(u8, void){},
     hms: Map(u8, void) = Map(u8, void){},
     types: Map(u8, void) = Map(u8, void){},

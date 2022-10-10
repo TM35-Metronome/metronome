@@ -184,7 +184,7 @@ pub const EggGroup = enum(u8) {
     _,
 };
 
-pub const ColorKind = enum(u7) {
+pub const Color = enum(u8) {
     red = 0x00,
     blue = 0x01,
     yellow = 0x02,
@@ -196,11 +196,19 @@ pub const ColorKind = enum(u7) {
     white = 0x08,
     pink = 0x09,
     green2 = 0x0A,
-};
 
-pub const Color = packed struct {
-    color: ColorKind,
-    flip: bool,
+    flipped_red = 0x80,
+    flipped_blue = 0x81,
+    flipped_yellow = 0x82,
+    flipped_green = 0x83,
+    flipped_black = 0x84,
+    flipped_brown = 0x85,
+    flipped_purple = 0x86,
+    flipped_gray = 0x87,
+    flipped_white = 0x88,
+    flipped_pink = 0x89,
+    flipped_green2 = 0x8A,
+    _,
 };
 
 // Common between gen3-4

@@ -87,7 +87,8 @@ fn output(program: *Program, writer: anytype) !void {
 }
 
 fn randomize(program: *Program) !void {
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
     const pick_from = try program.getStartersToPickFrom();
 
     const starters = program.starters.values();
@@ -163,7 +164,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .stats,
                 .types,
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .gender_ratio,
                 .egg_cycles,
@@ -171,7 +171,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .growth_rate,
                 .egg_groups,
                 .abilities,
-                .color,
                 .moves,
                 .tms,
                 .hms,

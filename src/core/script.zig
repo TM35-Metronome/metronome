@@ -60,7 +60,8 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
 
             // If no member of 'TagEnum' match, then 'tag' must be a value
             // it is not suppose to be.
-            return res orelse return error.InvalidTag;
+            return res orelse
+                return error.InvalidTag;
         },
         else => @compileError(@typeName(T) ++ " not supported"),
     }
@@ -136,4 +137,102 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             return @ptrCast(*align(1) Command, bytes.ptr);
         }
     };
+}
+
+/// Return true if the type in runtime memory is guaranteed to have no padding.
+pub fn isPacked(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .AnyFrame,
+        .BoundFn,
+        .ComptimeFloat,
+        .ComptimeInt,
+        .EnumLiteral,
+        .ErrorUnion,
+        .Fn,
+        .Frame,
+        .NoReturn,
+        .Opaque,
+        .Optional,
+        .Type,
+        .Undefined,
+        => return false,
+        .Bool,
+        .Enum,
+        .ErrorSet,
+        .Float,
+        .Int,
+        .Null,
+        .Void,
+        => return true,
+        .Struct => |info| switch (info.layout) {
+            .Auto => return false,
+            .Packed,
+            .Extern,
+            => {
+                var expected_size: usize = 0;
+                inline for (info.fields) |field| {
+                    expected_size += @sizeOf(field.field_type);
+                    if (!isPacked(field.field_type))
+                        return false;
+                }
+
+                return expected_size == @sizeOf(T);
+            },
+        },
+        .Vector => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
+            isPacked(info.child),
+        .Array => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
+            isPacked(info.child),
+        .Pointer => |info| switch (info.size) {
+            .One,
+            .Many,
+            .C,
+            => return true,
+            .Slice => return false,
+        },
+        .Union => |info| switch (info.layout) {
+            .Auto => return false,
+            .Packed,
+            .Extern,
+            => {
+                inline for (info.fields) |field| {
+                    if (!isPacked(field.field_type))
+                        return false;
+                }
+
+                return true;
+            },
+        },
+    }
+}
+
+test "isPacked" {
+    try testing.expect(!isPacked(comptime_float));
+    try testing.expect(!isPacked(comptime_int));
+    try testing.expect(!isPacked(error{}!u8));
+    try testing.expect(!isPacked(fn () u8));
+    try testing.expect(!isPacked(anyopaque));
+    try testing.expect(!isPacked(?u8));
+    try testing.expect(!isPacked(type));
+    try testing.expect(isPacked(u8));
+    try testing.expect(isPacked(bool));
+    try testing.expect(isPacked(enum { a }));
+    try testing.expect(isPacked(error{a}));
+    try testing.expect(isPacked(void));
+    try testing.expect(!isPacked(struct {}));
+    try testing.expect(isPacked(extern struct {}));
+    try testing.expect(isPacked(packed struct {}));
+    try testing.expect(!isPacked(union { a: void }));
+    try testing.expect(isPacked(extern union { a: void }));
+    try testing.expect(isPacked(packed union { a: void }));
+
+    try testing.expect(isPacked(extern struct { a: u8, b: u8 }));
+    try testing.expect(isPacked(extern struct { a: u16, b: u16 }));
+    try testing.expect(!isPacked(extern struct { a: u8, b: u16 }));
+    try testing.expect(!isPacked(extern struct { a: u16, b: u8 }));
+
+    try testing.expect(isPacked(extern union { a: extern struct { a: u8, b: u8 } }));
+    try testing.expect(isPacked(extern union { a: extern struct { a: u16, b: u16 } }));
+    try testing.expect(!isPacked(extern union { a: extern struct { a: u8, b: u16 } }));
+    try testing.expect(!isPacked(extern union { a: extern struct { a: u16, b: u8 } }));
 }
