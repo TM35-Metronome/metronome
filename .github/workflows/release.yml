@@ -35,20 +35,20 @@ jobs:
         include:
             - name: linux
               target: native
-              strip: true
-              release: true
+              strip: strip=true
+              release: release=true
             - name: windows
               target: x86_64-windows-gnu
-              strip: true
-              release: true
+              strip: strip=true
+              release: release=true
             - name: linux-debug
               target: native
-              strip: false
-              release: false
+              strip: strip=false
+              release: release=false
             - name: windows-debug
               target: x86_64-windows-gnu
-              strip: false
-              release: false
+              strip: strip=false
+              release: release=false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -59,7 +59,7 @@ jobs:
           version: master
       - run: |
           sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
-          zig build -Dstrip=${{ matrix.strip }} -Drelease=${{ matrix.release }} -Dtarget=${{ matrix.target }}
+          zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
           ./make-zip.sh metronome-${{ matrix.name }} ${{ matrix.name }}
       - uses: actions/upload-artifact@v3
         with:
