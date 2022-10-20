@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const format = @import("format");
-const it = @import("ziter");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -106,7 +105,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
                 .types,
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .gender_ratio,
                 .egg_cycles,
@@ -114,7 +112,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .growth_rate,
                 .egg_groups,
                 .abilities,
-                .color,
                 .evos,
                 .moves,
                 .tms,
@@ -178,7 +175,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.options.seed).random();
+    var default_random = rand.DefaultPrng.init(program.options.seed);
+    const random = default_random.random();
     var simular = std.ArrayList(u16).init(allocator);
 
     const species = try pokedexPokemons(allocator, program.pokemons, program.pokedex);
@@ -195,7 +193,8 @@ fn randomize(program: *Program) !void {
                         break :blk;
                     };
 
-                    var min = @intCast(i64, it.fold(&pokemon.stats, @as(usize, 0), foldu8));
+                    var min: i64 = 0;
+                    for (pokemon.stats) |item| min += item;
                     var max = min;
 
                     simular.shrinkRetainingCapacity(0);
@@ -205,7 +204,8 @@ fn randomize(program: *Program) !void {
 
                         for (species.keys()) |s| {
                             const p = program.pokemons.get(s).?;
-                            const total = @intCast(i64, it.fold(&p.stats, @as(usize, 0), foldu8));
+                            var total: i64 = 0;
+                            for (p.stats) |item| total += item;
                             if (min <= total and total <= max)
                                 try simular.append(s);
                         }

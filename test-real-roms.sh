@@ -24,10 +24,17 @@ for release in $(printf "false\ntrue\n"); do
         diff -q "$expect" "$found"
 
         sed -i -E \
-            -e "/party_size/b ;/pokedex_entry/b; s/=([0-9])[0-9].*$/=\10/" \
-            -e "s/\.name=.*$/.name=a/" \
-            -e "s/\.instant_text=.*/.instant_text=true/" \
+            -e "/party_size/b; /pokedex_entry/b; s/=([0-9])[0-9].*$/=10/" \
+            -e "s/=true$/=<replace_with_false>/" \
+            -e "s/=false$/=true/" \
+            -e "s/=<replace_with_false>$/=false/" \
+            -e "s/\.name=..*$/.name=a/" \
+            -e "s/\.description=..*$/.description=b/" \
+            -e "s/\.pocket=.*$/.pocket=items/" \
             -e "s/\.text_delays\[([0-9]*)\]=.*/.text_delays[\1]=0/" \
+            -e "s/\.text\[([0-9]*)\]=..*/.text[\1]=c/" \
+            -e "s/\.egg_groups\[([0-9]*)\]=.*/.egg_groups[\1]=field/" \
+            -e "s/\.growth_rate=.*/.growth_rate=medium_slow/" \
             "$expect"
 
         zig-out/bin/tm35-apply "$rom" -aro "$rom_dest" <"$expect"

@@ -87,7 +87,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .types,
                 .catch_rate,
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .gender_ratio,
                 .egg_cycles,
@@ -95,7 +94,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .growth_rate,
                 .egg_groups,
                 .abilities,
-                .color,
                 .moves,
                 .tms,
                 .hms,
@@ -231,7 +229,7 @@ test "tm35-no-trade-evolutions" {
         }
     };
 
-    const test_string = H.evo("0", "level_up", "12") ++
+    const test_string = comptime H.evo("0", "level_up", "12") ++
         H.evo("1", "trade", "1") ++
         H.evo("2", "trade_holding_item", "1") ++
         H.evo("3", "trade_with_pokemon", "1");
@@ -240,7 +238,7 @@ test "tm35-no-trade-evolutions" {
         Program,
         &[_][]const u8{},
         test_string,
-        H.evo("0", "level_up", "12") ++
+        comptime H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up", "36") ++
             H.evo("3", "level_up", "36"),
@@ -248,9 +246,9 @@ test "tm35-no-trade-evolutions" {
     try util.testing.testProgram(
         Program,
         &[_][]const u8{},
-        test_string ++
+        comptime test_string ++
             H.evo("4", "level_up_holding_item_during_daytime", "1"),
-        H.evo("0", "level_up", "12") ++
+        comptime H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up_holding_item_during_daytime", "1") ++
             H.evo("3", "level_up", "36") ++
@@ -259,9 +257,9 @@ test "tm35-no-trade-evolutions" {
     try util.testing.testProgram(
         Program,
         &[_][]const u8{},
-        test_string ++
+        comptime test_string ++
             H.evo("4", "level_up_with_other_pokemon_in_party", "1"),
-        H.evo("0", "level_up", "12") ++
+        comptime H.evo("0", "level_up", "12") ++
             H.evo("1", "level_up", "36") ++
             H.evo("2", "level_up", "36") ++
             H.evo("3", "level_up", "36") ++

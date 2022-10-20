@@ -8,7 +8,7 @@ const li32 = rom.int.li32;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 
-pub fn getScriptOffsets(data: []const u8) []const li32 {
+pub fn getScriptOffsets(data: []const u8) []align(1) const li32 {
     var len: usize = 0;
     while (true) : (len += 1) {
         const rest = data[len * 4 ..];
@@ -1564,1444 +1564,1444 @@ pub const Command = extern union {
         display_floor = lu16.init(0x347).inner,
     };
     pub const Arg0 = extern struct {
-        kind: Kind,
+        kind: Kind align(1),
     };
     pub const Return2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_a = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
     };
     pub const If = extern struct {
-        kind: Kind,
-        @"var": lu16,
-        nr: lu16,
+        kind: Kind align(1),
+        @"var": lu16 align(1),
+        nr: lu16 align(1),
     };
     pub const If2 = extern struct {
-        kind: Kind,
-        @"var": lu16,
-        nr: lu16,
+        kind: Kind align(1),
+        @"var": lu16 align(1),
+        nr: lu16 align(1),
     };
     pub const CallStandard = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Jump = extern struct {
-        kind: Kind,
-        adr: li32,
+        kind: Kind align(1),
+        adr: li32 align(1),
     };
     pub const Call = extern struct {
-        kind: Kind,
-        adr: li32,
+        kind: Kind align(1),
+        adr: li32 align(1),
     };
     pub const CompareLastResultJump = extern struct {
-        kind: Kind,
-        cond: u8,
-        adr: li32,
+        kind: Kind align(1),
+        cond: u8 align(1),
+        adr: li32 align(1),
     };
     pub const CompareLastResultCall = extern struct {
-        kind: Kind,
-        cond: u8,
-        adr: li32,
+        kind: Kind align(1),
+        cond: u8 align(1),
+        adr: li32 align(1),
     };
     pub const SetFlag = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ClearFlag = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFlag = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_21 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_22 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetTrainerId = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_24 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ClearTrainerId = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ScriptCmd_AddValue = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ScriptCmd_SubValue = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVar = extern struct {
-        kind: Kind,
-        destination: lu16,
-        value: lu16,
+        kind: Kind align(1),
+        destination: lu16 align(1),
+        value: lu16 align(1),
     };
     pub const CopyVar = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Message2 = extern struct {
-        kind: Kind,
-        nr: u8,
+        kind: Kind align(1),
+        nr: u8 align(1),
     };
     pub const Message = extern struct {
-        kind: Kind,
-        nr: u8,
+        kind: Kind align(1),
+        nr: u8 align(1),
     };
     pub const Message3 = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const Message4 = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const Message5 = extern struct {
-        kind: Kind,
-        nr: u8,
+        kind: Kind align(1),
+        nr: u8 align(1),
     };
     pub const CallMessageBox = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const ColorMsgBox = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const TypeMessageBox = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CallTextMsgBox = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const StoreMenuStatus = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const YesNoBox = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const Multi = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
+        e: lu16 align(1),
     };
     pub const Multi2 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
+        e: lu16 align(1),
     };
     pub const Cmd_42 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
     };
     pub const Multi3 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
+        e: lu16 align(1),
     };
     pub const Multi4 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
+        e: lu16 align(1),
     };
     pub const TxtMsgScrpMulti = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const PlayFanfare = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const MultiRow = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const PlayFanfare2 = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const WaitFanfare = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PlayCry = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Soundfr = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PlaySound = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Stop = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_53 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SwitchMusic = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreSayingLearned = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PlaySound2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_58 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CheckSayingLearned = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SwithMusic2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ApplyMovement = extern struct {
-        kind: Kind,
-        a: lu16,
-        adr: lu32,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        adr: lu32 align(1),
     };
     pub const Lock = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Release = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const AddPeople = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const RemovePeople = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const LockCam = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckSpritePosition = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPersonPosition = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const ContinueFollow = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: u8,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: u8 align(1),
     };
     pub const FollowHero = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const TakeMoney = extern struct {
-        kind: Kind,
-        a: lu32,
+        kind: Kind align(1),
+        a: lu32 align(1),
     };
     pub const CheckMoney = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu32,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu32 align(1),
     };
     pub const ShowMoney = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ShowCoins = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckCoins = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const GiveCoins = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TakeCoins = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TakeItem = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const GiveItem = extern struct {
-        kind: Kind,
-        itemid: lu16,
-        quantity: lu16,
-        @"return": lu16,
+        kind: Kind align(1),
+        itemid: lu16 align(1),
+        quantity: lu16 align(1),
+        @"return": lu16 align(1),
     };
     pub const CheckStoreItem = extern struct {
-        kind: Kind,
-        itemid: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        itemid: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckItem = extern struct {
-        kind: Kind,
-        itemid: lu16,
-        quantity: lu16,
-        @"return": lu16,
+        kind: Kind align(1),
+        itemid: lu16 align(1),
+        quantity: lu16 align(1),
+        @"return": lu16 align(1),
     };
     pub const StoreItemTaken = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreItemType = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SendItemType1 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_84 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckUndergroundPcStatus = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_86 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SendItemType2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_88 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_89 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_8a = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_8b = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_8c = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_8d = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_8e = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SendItemType3 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPokemonParty = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StorePokemonParty = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetPokemonPartyStored = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const GivePokemon = extern struct {
-        kind: Kind,
-        species: lu16,
-        level: lu16,
-        item: lu16,
-        res: lu16,
+        kind: Kind align(1),
+        species: lu16 align(1),
+        level: lu16 align(1),
+        item: lu16 align(1),
+        res: lu16 align(1),
     };
     pub const GiveEgg = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckMove = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPlaceStored = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_9b = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_a4 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const DressPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const DisplayDressedPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const DisplayContestPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const OpenPcFunction = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const StoreWfcStatus = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StartWfc = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const BattleId = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckBattleType = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarBattle2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ChoosePokeNick = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const FadeScreen = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Warp = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const RockClimbAnimation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SurfAnimation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const WaterfallAnimation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PrepHmEffect = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckBike = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const RideBike = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const RideBike2 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const GivePokeHiroAnm = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarHero = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetVariableRival = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetVarAlter = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetVarPoke = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarItem = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarItemNum = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarAtkItem = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarAtk = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVariableNumber = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarPokeNick = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarObj = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarTrainer = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarWiFiSprite = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetVarPokeStored = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
-        c: lu16,
-        d: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: u8 align(1),
     };
     pub const SetVarStrHero = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetVarStrRival = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const StoreStarter = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_df = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarItemStored = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarItemStored2 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarSwarmPoke = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckSwarmPoke = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StartBattleAnalysis = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TrainerBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const EndtrainerBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const TrainerBattleStored = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const TrainerBattleStored2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckTrainerStatus = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreLeagueTrainer = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckTrainerLost = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckTrainerStatus2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokePartyDefeated = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ChsFriend = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const WireBattleWait = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const StartOvation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StopOvation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_fa = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_fb = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_fc = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvarOtherEntry = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_fe = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvatHiroEntry = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvarTypeContest = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvarRankContest = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_104 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_105 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_106 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_107 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePeopleIdContest = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_109 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvatHiroEntry2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ActPeopleContest = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_10c = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_10d = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_10e = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_10f = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_110 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const FlashContest = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_115 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokerus = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const WarpMapElevator = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const CheckFloor = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StartLift = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const StoreSinPokemonSeen = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_11f = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreTotPokemonSeen = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreNatPokemonSeen = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarTextPokedex = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const WildBattle = extern struct {
-        kind: Kind,
-        species: lu16,
-        level: lu16,
+        kind: Kind align(1),
+        species: lu16 align(1),
+        level: lu16 align(1),
     };
     pub const StarterBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckIfHoneySlathered = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreSaveData = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckSaveData = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckDress = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckContestWin = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StorePhotoName = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPtchAppl = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ActPktchAppl = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePoketchApp = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const FriendBT = extern struct {
-        kind: Kind,
-        nr: lu16,
+        kind: Kind align(1),
+        nr: lu16 align(1),
     };
     pub const Cmd_138 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const OpenUnionFunction2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetUnionFunctionId = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarUnionMessage = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreYourDecisionUnion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreOtherDecisionUnion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckOtherDecisionUnion = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreYourDecisionUnion2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreOtherDecisionUnion2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckOtherDecisionUnion2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Pokemart = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Pokemart1 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Pokemart2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Pokemart3 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ActBike = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckGender = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const UndergroundId = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreWiFiSprite = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ActWiFiSprite = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_157 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckBadge = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const EnableBadge = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const DisableBadge = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFollow = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_166 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PrepareDoorAnimation = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: u8,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: u8 align(1),
     };
     pub const WaitAction = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const WaitClose = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const OpenDoor = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CloseDoor = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const StorePDCareNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SunishoreGymFunction = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SunishoreGymFunction2 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CheckPartyNumber = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const OpenBerryPouch = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const Cmd_179 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_17a = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_17b = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetNaturePokemon = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_17d = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_17e = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_17f = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_180 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_181 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckDeoxis = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_183 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_184 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ChangeOwPosition = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetOwPosition = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const ChangeOwMovement = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ReleaseOw = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetTilePassable = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetTileLocked = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetOwsFollow = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_18f = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetSaveData = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokeMenu2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ChsPokeContest = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const StorePokeContest = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ShowPokeInfo = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokeMove = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokeEgg = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ComparePokeNick = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPartyNumberUnion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokePartyHealth = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPokePartyNumDCare = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckEggUnion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const UndergroundFunction = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const UndergroundFunction2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TakeMoneyDCare = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TakePokemonDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarPokeAndMoneyDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckMoneyDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarPokeAndLevelDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarPokeChosenDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const GivePokeDCare = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const AddPeople2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const RemovePeople2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckMail = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ShowRecordList = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckTime = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckIdPlayer = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const RandomTextStored = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreHappyPoke = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreHappyStatus = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVarDataDayCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const CheckFacePosition = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokeDCareLove = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckStatusSolaceonEvent = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokeParty = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CopyPokemonHeight = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetVariablePokemonHeight = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ComparePokemonHeight = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPokemonHeight = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const StorePokeDelete = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreMoveDelete = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckMoveNumDelete = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreDeleteMove = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckDeleteMove = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetvarMoveDelete = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const DeActivateLeader = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const HmFunctions = extern struct {
-        kind: Kind,
-        a: packed union {
+        kind: Kind align(1),
+        a: extern union {
             kind: Kind2,
             @"1": extern struct {
-                kind: Kind2,
+                kind: Kind2 align(1),
             },
             @"2": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
         },
 
@@ -3011,289 +3011,289 @@ pub const Command = extern union {
         };
     };
     pub const FlashDuration = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const DefogDuration = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const GiveAccessories = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckAccessories = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_1d4 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const GiveAccessories2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckAccessories2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const BerryPoffin = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetVarBTowerChs = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const BattleRoomResult = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreBTowerData = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CallBTowerFunctions = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const RandomTeamBTower = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const StorePrizeNumBTower = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePeopleIdBTower = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CallBTowerWireFunction = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const StorePChosenWireBTower = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreRankDataWireBTower = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_1e4 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const RandomEvent = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckSinnohPokedex = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckNationalPokedex = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreTrophyPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_1ef = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_1f0 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckActFossil = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckItemChosen = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CompareItemPokeFossil = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPokemonLevel = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckIsPokemonPoisoned = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreFurniture = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CopyFurniture = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetBCastleFunctionId = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const BCastleFunctReturn = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
-        c: lu16,
-        d: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: u8 align(1),
     };
     pub const Cmd_200 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckEffectHm = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const GreatMarshFunction = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const BattlePokeColosseum = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const StorePokeColosseumLost = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PokemonPicture = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_20a = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvarMtCoronet = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckQuicTrineCoordinates = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvarQuickTrainCoordinates = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const MoveTrainAnm = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const StorePokeNature = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPokeNature = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const RandomHallowes = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_216 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_217 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ChsRSPoke = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetSPoke = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckSPoke = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ActSwarmPoke = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const Cmd_21d = extern struct {
-        kind: Kind,
-        a: packed union {
+        kind: Kind align(1),
+        a: extern union {
             kind: Kind2,
             @"0": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"1": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"2": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"3": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"4": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
             @"5": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
         },
 
@@ -3307,110 +3307,110 @@ pub const Command = extern union {
         };
     };
     pub const CheckMoveRemember = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StorePokeRemember = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreRememberMove = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TeachMove = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckTeachMove = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetTradeId = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CheckPokemonTrade = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const TradeChosenPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckNatPokedexStatus = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckRibbonNumber = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckRibbon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const GiveRibbon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvarRibbon = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckHappyRibbon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPokemart = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFurniture = extern struct {
-        kind: Kind,
-        a: packed union {
+        kind: Kind align(1),
+        a: extern union {
             kind: Kind2,
             @"0": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
             @"1": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
-                d: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
+                d: lu16 align(1),
             },
             @"2": extern struct {
-                kind: Kind2,
+                kind: Kind2 align(1),
             },
             @"3": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
-                d: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
+                d: lu16 align(1),
             },
             @"4": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"5": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
-                d: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
+                d: lu16 align(1),
             },
             @"6": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
         },
 
@@ -3425,73 +3425,73 @@ pub const Command = extern union {
         };
     };
     pub const Cmd_236 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPhraseBoxInput = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const CheckStatusPhraseBox = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const DecideRules = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFootStep = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const HealPokemonAnimation = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreElevatorDirection = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ShipAnimation = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const Cmd_23e = extern struct {
-        kind: Kind,
-        a: packed union {
+        kind: Kind align(1),
+        a: extern union {
             kind: Kind2,
             @"1": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
             @"2": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
             @"3": extern struct {
-                kind: Kind2,
-                b: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
             },
             @"5": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
             @"6": extern struct {
-                kind: Kind2,
-                b: lu16,
-                c: lu16,
+                kind: Kind2 align(1),
+                b: lu16 align(1),
+                c: lu16 align(1),
             },
         },
 
@@ -3504,952 +3504,957 @@ pub const Command = extern union {
         };
     };
     pub const StorePhraseBox1W = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const StorePhraseBox2W = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const SetvarPhraseBox1W = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const StoreMtCoronet = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFirstPokeParty = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokeType = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPhraseBoxInput2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const StoreUndTime = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PreparePcAnimation = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const OpenPcAnimation = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const ClosePcAnimation = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const CheckLottoNumber = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CompareLottoNumber = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const SetvarIdPokeBoxes = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckBoxesNumber = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StopGreatMarsh = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokeCatchingShow = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckCatchingShowRecords = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckElevLgAnm = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckElevPosition = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const MainEvent = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckAccessories3 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const ActDeoxisFormChange = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ChangeFormDeoxis = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckCoombeEvent = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Pokecasino = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckTime2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const RegigigasAnm = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const CresseliaAnm = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckRegi = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckMassage = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const UnownMessageBox = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPCatchingShow = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ShayminAnm = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: u8,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: u8 align(1),
     };
     pub const ThankNameInsert = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvarShaymin = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const SetvarAccessories2 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_274 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu32,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu32 align(1),
     };
     pub const CheckRecordCasino = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckCoinsCasino = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SrtRandomNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPokeLevel2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_279 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const SetvarAmityPokemon = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_27d = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckFirstTimeVShop = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_27f = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvarIdNumber = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
-        c: u8,
-        d: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
     };
     pub const Cmd_281 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const SetvarUnk = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_283 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckRuinManiac = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckTurnBack = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckUgPeopleNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckUgFossilNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckUgTrapsNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckPoffinItem = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
-        f: lu16,
-        g: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
+        f: lu16 align(1),
+        g: lu16 align(1),
     };
     pub const CheckPoffinCaseStatus = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const UnkFunct2 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const PokemonPartyPicture = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetSoundLearning = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFirstTimeChampion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ChoosePokeDCare = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokeDCare = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_292 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const CheckMasterRank = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ShowBattlePointsBox = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
     };
     pub const TakeBPoints = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckBPoints = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_29c = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ChoiceMulti = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const HMEffect = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CameraBumpEffect = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const DoubleBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const ApplyMovement2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2a2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreActHeroFriendCode = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreActOtherFriendCode = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ChsPrizeCasino = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPlate = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const TakeCoinsCasino = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckCoinsCasino2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const ComparePhraseBoxInput = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const StoreSealNum = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckFollowBattle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2af = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const SetvarSealRandom = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const DarkraiFunction = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2b6 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: u8,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: u8 align(1),
     };
     pub const StorePokeNumParty = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StorePokeNickname = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckBattleUnion = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const CheckWildBattle2 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const StoreTrainerCardStar = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2c0 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2c3 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const ShowBTowerSome = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const DeleteSavesBFactory = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckVersionGame = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const ShowBArcadeRecors = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const CheckPokeParty2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const CheckPokeCastle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const ActTeamGalacticEvents = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const ChooseWirePokeBCastle = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2d0 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2d1 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2d2 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2d3 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2d4 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2d5 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2d7 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2d8 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const Cmd_2d9 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2da = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2db = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2dc = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2dd = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2de = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const Cmd_2df = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2e0 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2e1 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2e4 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2e5 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2e6 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2e7 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2e8 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2e9 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2ea = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2eb = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2ec = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_2ee = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_2f3 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2f4 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_2f5 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu32,
-        c: u8,
-        d: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu32 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
     };
     pub const Cmd_2f6 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_2f7 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2f9 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2fa = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2fc = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_2fd = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2fe = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_2ff = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_302 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
-        e: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
+        e: lu16 align(1),
     };
     pub const Cmd_303 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_304 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_305 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_306 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_307 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_308 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_30a = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_30d = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_30e = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_30f = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_311 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_312 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_313 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_314 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_315 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_317 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
     };
     pub const Cmd_319 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_31a = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_31b = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_31c = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_31d = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_31e = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_321 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_323 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_324 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: lu16,
-        f: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
+        c: u8 align(1),
+        d: u8 align(1),
+        e: lu16 align(1),
+        f: lu16 align(1),
     };
     pub const Cmd_325 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_326 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_327 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const PortalEffect = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_329 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_32a = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_32b = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_32c = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
-        c: lu16,
-        d: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
+        c: lu16 align(1),
+        d: lu16 align(1),
     };
     pub const Cmd_32f = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_333 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_334 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_335 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu32,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu32 align(1),
     };
     pub const Cmd_336 = extern struct {
-        kind: Kind,
-        a: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
     };
     pub const Cmd_337 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_33a = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const Cmd_33c = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_33d = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_33e = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_33f = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_340 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_341 = extern struct {
-        kind: Kind,
-        a: lu16,
-        b: lu16,
+        kind: Kind align(1),
+        a: lu16 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_342 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const Cmd_343 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_344 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_345 = extern struct {
-        kind: Kind,
-        a: u8,
-        b: lu16,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: lu16 align(1),
     };
     pub const Cmd_346 = extern struct {
-        kind: Kind,
-        a: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
     };
     pub const DisplayFloor = extern struct {
-        kind: Kind,
-        a: u8,
-        b: u8,
+        kind: Kind align(1),
+        a: u8 align(1),
+        b: u8 align(1),
     };
+
+    comptime {
+        @setEvalBranchQuota(1000000);
+        std.debug.assert(script.isPacked(@This()));
+    }
 };

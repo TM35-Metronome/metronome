@@ -96,7 +96,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .types,
             .catch_rate,
             .base_exp_yield,
-            .ev_yield,
             .items,
             .gender_ratio,
             .egg_cycles,
@@ -104,7 +103,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .growth_rate,
             .egg_groups,
             .abilities,
-            .color,
             .evos,
             .moves,
             .tms,
@@ -120,7 +118,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 return;
             },
             .class,
-            .encounter_music,
             .trainer_picture,
             .items,
             .party_type,
@@ -191,7 +188,8 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    const random = rand.DefaultPrng.init(program.seed).random();
+    var default_random = rand.DefaultPrng.init(program.seed);
+    const random = default_random.random();
 
     for ([_]NameSet{
         program.pokemons,

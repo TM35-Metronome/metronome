@@ -1170,5 +1170,6 @@ pub fn decode(reader: anytype, writer: anytype) !void {
 }
 
 pub fn decode2(in: []const u8, writer: anytype) !void {
-    try decode(io.fixedBufferStream(in).reader(), writer);
+    var fbs = io.fixedBufferStream(in);
+    try decode(fbs.reader(), writer);
 }

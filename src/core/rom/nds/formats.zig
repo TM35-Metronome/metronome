@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const int = @import("../int.zig");
 const nds = @import("../nds.zig");
 
@@ -22,6 +24,10 @@ pub const Header = extern struct {
             .following_chunks = lu16.init(0x0003),
         };
     }
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 16);
+    }
 };
 
 pub const Chunk = extern struct {
@@ -34,6 +40,10 @@ pub const Chunk = extern struct {
         pub const fnt = "BTNF";
         pub const file_data = "GMIF";
     };
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 8);
+    }
 };
 
 pub const FatChunk = extern struct {
@@ -52,5 +62,9 @@ pub const FatChunk = extern struct {
             },
             .file_count = lu16.init(file_count),
         };
+    }
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 12);
     }
 };

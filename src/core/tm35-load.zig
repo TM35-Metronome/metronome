@@ -81,7 +81,8 @@ pub fn run(
     } else |err| err;
 
     try file.seekTo(0);
-    if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
+    var m_nds_rom = nds.Rom.fromFile(file, allocator);
+    if (m_nds_rom) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
             try outputGen4Data(game.*, stdio.out);
@@ -134,7 +135,6 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         const party = game.trainer_parties[i];
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .class = trainer.class,
-            .encounter_music = trainer.encounter_music.music,
             .trainer_picture = trainer.trainer_picture,
             .name = ston.string(escape.escapeFmt(decoded_name)),
             .items = trainer.items,
@@ -180,27 +180,14 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     }
 
     for (game.pokemons) |pokemon, i| {
-        // Wonna crash the compiler? Follow this one simple trick!!!
-        // Remove these variables and do the initialization directly in `ston.serialize`
-        const stats = pokemon.stats;
-        const ev_yield = .{
-            .hp = pokemon.ev_yield.hp,
-            .attack = pokemon.ev_yield.attack,
-            .defense = pokemon.ev_yield.defense,
-            .speed = pokemon.ev_yield.speed,
-            .sp_attack = pokemon.ev_yield.sp_attack,
-            .sp_defense = pokemon.ev_yield.sp_defense,
-        };
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-            .stats = stats,
+            .stats = pokemon.stats,
             .catch_rate = pokemon.catch_rate,
             .base_exp_yield = pokemon.base_exp_yield,
-            .ev_yield = ev_yield,
             .gender_ratio = pokemon.gender_ratio,
             .egg_cycles = pokemon.egg_cycles,
             .base_friendship = pokemon.base_friendship,
             .growth_rate = pokemon.growth_rate,
-            .color = pokemon.color.color,
             .types = pokemon.types,
             .items = pokemon.items,
             .egg_groups = pokemon.egg_groups,
@@ -480,36 +467,25 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ptrs.pokemons) |pokemon, i| {
+    for (game.ptrs.pokemons) |*pokemon, i| {
         // Wonna crash the compiler? Follow this one simple trick!!!
         // Remove these variables and do the initialization directly in `ston.serialize`
         const stats = pokemon.stats;
-        const ev_yield = .{
-            .hp = pokemon.ev_yield.hp,
-            .attack = pokemon.ev_yield.attack,
-            .defense = pokemon.ev_yield.defense,
-            .speed = pokemon.ev_yield.speed,
-            .sp_attack = pokemon.ev_yield.sp_attack,
-            .sp_defense = pokemon.ev_yield.sp_defense,
-        };
-
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .stats = stats,
             .catch_rate = pokemon.catch_rate,
             .base_exp_yield = pokemon.base_exp_yield,
-            .ev_yield = ev_yield,
             .gender_ratio = pokemon.gender_ratio,
             .egg_cycles = pokemon.egg_cycles,
             .base_friendship = pokemon.base_friendship,
             .growth_rate = pokemon.growth_rate,
-            .color = pokemon.color.color,
             .types = pokemon.types,
             .items = pokemon.items,
             .egg_groups = pokemon.egg_groups,
             .abilities = pokemon.abilities,
         }) });
 
-        const machine_learnset = pokemon.machine_learnset;
+        const machine_learnset = pokemon.machineLearnset();
         var j: u7 = 0;
         while (j < game.ptrs.tms.len) : (j += 1) {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -571,11 +547,11 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ptrs.items) |item, i| {
+    for (game.ptrs.items) |*item, i| {
         try ston.serialize(writer, .{ .items = ston.index(i, .{
             .price = item.price,
             .battle_effect = item.battle_effect,
-            .pocket = item.pocket.pocket,
+            .pocket = item.pocket(),
         }) });
     }
 
@@ -850,24 +826,11 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     for (game.ptrs.pokemons.fat) |_, i| {
         const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.BasePokemon);
 
-        // Wonna crash the compiler? Follow this one simple trick!!!
-        // Remove these variables and do the initialization directly in `ston.serialize`
-        const stats = pokemon.stats;
-        const ev_yield = .{
-            .hp = pokemon.ev_yield.hp,
-            .attack = pokemon.ev_yield.attack,
-            .defense = pokemon.ev_yield.defense,
-            .speed = pokemon.ev_yield.speed,
-            .sp_attack = pokemon.ev_yield.sp_attack,
-            .sp_defense = pokemon.ev_yield.sp_defense,
-        };
-
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .pokedex_entry = i,
-            .stats = stats,
+            .stats = pokemon.stats,
             .base_exp_yield = pokemon.base_exp_yield,
             .catch_rate = pokemon.catch_rate,
-            .ev_yield = ev_yield,
             .gender_ratio = pokemon.gender_ratio,
             .egg_cycles = pokemon.egg_cycles,
             .base_friendship = pokemon.base_friendship,
@@ -890,7 +853,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             }
         }
 
-        const machine_learnset = pokemon.machine_learnset;
+        const machine_learnset = pokemon.machineLearnset();
         var j: u7 = 0;
         while (j < game.ptrs.tms1.len + game.ptrs.tms2.len) : (j += 1) {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -934,13 +897,13 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.items) |item, i| {
+    for (game.ptrs.items) |*item, i| {
         // Price in gen5 is actually price * 10. I imagine they where trying to avoid
         // having price be more than a u16
         try ston.serialize(writer, .{ .items = ston.index(i, .{
             .price = @as(usize, item.price.value()) * 10,
             .battle_effect = item.battle_effect,
-            .pocket = item.pocket.pocket,
+            .pocket = item.pocket(),
         }) });
     }
 
@@ -953,7 +916,8 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
 
     for (game.ptrs.wild_pokemons.fat) |_, i| {
         const file = nds.fs.File{ .i = @intCast(u32, i) };
-        const wilds = game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
+        const wilds: []align(1) gen5.WildPokemons =
+            game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
             try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
 
         for (wilds) |wild_mons, wild_i| {

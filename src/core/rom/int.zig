@@ -35,6 +35,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
         pub const endian = _endian;
 
         pub fn init(v: Inner) @This() {
+            @setEvalBranchQuota(100000000);
             return .{ .inner = swap(v) };
         }
 

@@ -1,4 +1,3 @@
-const it = @import("ziter");
 const std = @import("std");
 const util = @import("util");
 
@@ -30,10 +29,14 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        if (!it.all(header.game_title.span(), notLower))
-            return error.InvalidGameTitle;
-        if (!it.all(&header.gamecode, ascii.isUpper))
-            return error.InvalidGamecode;
+        for (header.game_title.span()) |item| {
+            if (ascii.isLower(item))
+                return error.InvalidGameTitle;
+        }
+        for (header.gamecode) |item| {
+            if (!ascii.isUpper(item))
+                return error.InvalidGamecode;
+        }
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
@@ -43,17 +46,13 @@ pub const Header = extern struct {
         if (header.fixed_value != 0x96)
             return error.InvalidFixedValue;
 
-        if (!it.all(&header.reserved1, isZero))
-            return error.InvalidReserved1;
-        if (!it.all(&header.reserved2, isZero))
-            return error.InvalidReserved2;
-    }
-
-    fn isZero(b: u8) bool {
-        return b == 0;
-    }
-
-    fn notLower(char: u8) bool {
-        return !ascii.isLower(char);
+        for (header.reserved1) |item| {
+            if (item != 0)
+                return error.InvalidReserved1;
+        }
+        for (header.reserved2) |item| {
+            if (item != 0)
+                return error.InvalidReserved1;
+        }
     }
 };

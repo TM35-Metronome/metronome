@@ -1,6 +1,5 @@
 const clap = @import("clap");
 const format = @import("format");
-const it = @import("ziter");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -224,6 +223,7 @@ pub fn run(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
 ) anyerror!void {
+    var default_random = rand.DefaultPrng.init(program.options.seed);
     const allocator = program.allocator;
     try format.io(allocator, stdio.in, stdio.out, program, useGame);
 
@@ -234,7 +234,7 @@ pub fn run(
         program.options.excluded_pokemons,
         program.options.included_pokemons,
     );
-    program.random = rand.DefaultPrng.init(program.options.seed).random();
+    program.random = default_random.random();
     program.species = species;
     program.species_by_ability = try speciesByAbility(allocator, program.pokemons, species);
     program.species_by_type = try speciesByType(allocator, program.pokemons, species);
@@ -290,14 +290,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     format.setField(move, moves.value);
                 },
                 .base_exp_yield,
-                .ev_yield,
                 .items,
                 .gender_ratio,
                 .egg_cycles,
                 .base_friendship,
                 .growth_rate,
                 .egg_groups,
-                .color,
                 .evos,
                 .tms,
                 .hms,
@@ -335,7 +333,6 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     return error.DidNotConsumeData;
                 },
                 .class,
-                .encounter_music,
                 .trainer_picture,
                 .items,
                 => return error.DidNotConsumeData,
@@ -778,19 +775,19 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
 }
 
 fn hasMove(moves: []const u16, id: u16) bool {
-    return it.anyEx(moves, id, struct {
-        fn f(m: u16, e: u16) bool {
-            return m == e;
-        }
-    }.f);
+    for (moves) |move| {
+        if (move == id) return true;
+    }
+    return false;
 }
 
-fn findAbility(abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
-    return it.findEx(abilities, ability, struct {
-        fn f(m: u16, e: Abilities.Entry) bool {
-            return m == e.value_ptr.*;
-        }
-    }.f);
+fn findAbility(_abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
+    var abilities = _abilities;
+    while (abilities.next()) |entry| {
+        if (entry.value_ptr.* == ability)
+            return entry;
+    }
+    return null;
 }
 
 fn MinMax(comptime T: type) type {

@@ -1,6 +1,7 @@
 const clap = @import("clap");
 const format = @import("format");
 const std = @import("std");
+const ston = @import("ston");
 const util = @import("util");
 
 const debug = std.debug;
@@ -25,10 +26,15 @@ pub const description =
 ;
 
 allocator: mem.Allocator,
+serialize: bool,
 
 pub const parsers = .{};
 
 pub const params = clap.parseParamsComptime(
+    \\-s, --serialize
+    \\        Instead of not consuming the data, the tm35-noop will instead serialize the data
+    \\        itself.
+    \\
     \\-h, --help
     \\        Display this help text and exit.
     \\
@@ -38,8 +44,10 @@ pub const params = clap.parseParamsComptime(
 );
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    _ = args;
-    return Program{ .allocator = allocator };
+    return Program{
+        .allocator = allocator,
+        .serialize = args.args.serialize,
+    };
 }
 
 pub fn run(
@@ -48,11 +56,31 @@ pub fn run(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
 ) !void {
-    try format.io(program.allocator, stdio.in, stdio.out, .{}, useGame);
+    try format.io(
+        program.allocator,
+        stdio.in,
+        stdio.out,
+        .{ .out = stdio.out, .program = program },
+        useGame,
+    );
 }
 
 fn useGame(ctx: anytype, game: format.Game) !void {
-    _ = ctx;
-    _ = game;
-    return error.DidNotConsumeData;
+    const out = ctx.out;
+    const program = ctx.program;
+    if (program.serialize) {
+        try ston.serialize(out, game);
+        try out.context.flush();
+    } else {
+        return error.DidNotConsumeData;
+    }
+}
+
+test {
+    const test_string =
+        \\.wild_pokemons[1].surf_0.pokemons[4].species=118
+        \\.wild_pokemons[1].fishing_0.encounter_rate=30
+        \\
+    ;
+    try util.testing.testProgram(Program, &[_][]const u8{"--serialize"}, test_string, test_string);
 }

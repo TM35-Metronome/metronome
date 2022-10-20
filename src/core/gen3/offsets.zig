@@ -31,7 +31,7 @@ pub fn Offset(comptime _T: type) type {
             return offset.offset + @sizeOf(T);
         }
 
-        pub fn ptr(offset: @This(), data: []u8) *T {
+        pub fn ptr(offset: @This(), data: []u8) *align(1) T {
             return &mem.bytesAsSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
         }
     };
@@ -44,7 +44,7 @@ pub fn Section(comptime _Item: type) type {
         start: usize,
         len: usize,
 
-        pub fn init(data_slice: []const u8, items: []const Item) @This() {
+        pub fn init(data_slice: []const u8, items: []align(1) const Item) @This() {
             const data_ptr = @ptrToInt(data_slice.ptr);
             const item_ptr = @ptrToInt(items.ptr);
             debug.assert(data_ptr <= item_ptr);
@@ -60,7 +60,7 @@ pub fn Section(comptime _Item: type) type {
             return sec.start + @sizeOf(Item) * sec.len;
         }
 
-        pub fn slice(sec: @This(), data: []u8) []Item {
+        pub fn slice(sec: @This(), data: []u8) []align(1) Item {
             return mem.bytesAsSlice(Item, data[sec.start..sec.end()]);
         }
     };

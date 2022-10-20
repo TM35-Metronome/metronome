@@ -27,7 +27,8 @@ pub const BasePokemon = extern struct {
     catch_rate: u8,
     stage: u8,
 
-    ev_yield: common.EvYield,
+    ev_yield: lu16,
+    // ev_yield: common.EvYield,
     items: [3]lu16,
 
     gender_ratio: u8,
@@ -52,7 +53,11 @@ pub const BasePokemon = extern struct {
 
     // Memory layout
     // TMS 01-92, HMS 01-06, TMS 93-95
-    machine_learnset: lu128,
+    machine_learnset: [16]u8,
+
+    pub fn machineLearnset(mon: *align(1) BasePokemon) *align(1) lu128 {
+        return @ptrCast(*align(1) lu128, &mon.machine_learnset);
+    }
 
     // TODO: Tutor data only exists in BW2
     //special_tutors: lu32,
@@ -83,8 +88,9 @@ pub const PartyMemberBase = extern struct {
         ability: u4 = 0,
     };
 
-    pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
-        return @fieldParentPtr(Parent, "base", base);
+    pub fn toParent(base: *align(1) PartyMemberBase, comptime Parent: type) *align(1) Parent {
+        return @ptrCast(*align(1) Parent, base);
+        // return @fieldParentPtr(Parent, "base", base);
     }
 };
 
@@ -139,7 +145,7 @@ pub const Trainer = extern struct {
         debug.assert(@sizeOf(@This()) == 20);
     }
 
-    pub fn partyMember(trainer: Trainer, party: []u8, i: usize) ?*PartyMemberBase {
+    pub fn partyMember(trainer: Trainer, party: []u8, i: usize) ?*align(1) PartyMemberBase {
         const member_size: usize = switch (trainer.party_type) {
             .none => @sizeOf(PartyMemberNone),
             .item => @sizeOf(PartyMemberItem),
@@ -156,7 +162,7 @@ pub const Trainer = extern struct {
     }
 };
 
-pub const Move = packed struct {
+pub const Move = extern struct {
     type: u8,
     effect_category: u8,
     category: Category,
@@ -164,8 +170,9 @@ pub const Move = packed struct {
     accuracy: u8,
     pp: u8,
     priority: u8,
-    min_hits: u4,
-    max_hits: u4,
+    // min_hits: u4,
+    // max_hits: u4,
+    min_max_hits: u8,
     result_effect: lu16,
     effect_chance: u8,
     status: u8,
@@ -340,48 +347,19 @@ pub const Item = extern struct {
     fling_power: u8,
     natural_gift_power: u8,
     flag: u8,
-    pocket: packed struct {
-        pocket: Pocket,
-        pad: u4,
-    },
-    type: u8,
-    category: u8,
-    category2: lu16,
-    category3: u8,
-    index: u8,
-    anti_index: u8,
-    statboosts: Boost,
-    ev_yield: common.EvYield,
-    hp_restore: u8,
-    pp_restore: u8,
-    happy1: u8,
-    happy2: u8,
-    happy3: u8,
-    padding1: u8,
-    padding2: u8,
-    padding3: u8,
-    padding4: u8,
-    padding5: u8,
-    padding6: u8,
+    _pocket: u8,
+    unknown: [26]u8,
 
-    pub const Boost = packed struct {
-        hp: u2,
-        level: u1,
-        evolution: u1,
-        attack: u4,
-        defense: u4,
-        sp_attack: u4,
-        sp_defense: u4,
-        speed: u4,
-        accuracy: u4,
-        crit: u2,
-        pp: u2,
-        target: u8,
-        target2: u8,
-    };
+    pub fn pocket(item: Item) Pocket {
+        return @intToEnum(Pocket, item._pocket & 0x0F);
+    }
+
+    pub fn setPocket(item: *align(1) Item, p: Pocket) void {
+        item._pocket = (item._pocket & 0xf0) | @enumToInt(p);
+    }
 
     comptime {
-        debug.assert(@sizeOf(@This()) == 36);
+        std.debug.assert(@sizeOf(@This()) == 36);
     }
 };
 
@@ -547,13 +525,13 @@ const HollowPokemons = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *lu16,
-    level: *lu16,
+    species: *align(1) lu16,
+    level: *align(1) lu16,
 };
 
 const PokeballItem = struct {
-    item: *lu16,
-    amount: *lu16,
+    item: *align(1) lu16,
+    amount: *align(1) lu16,
 };
 
 const EncryptedStringTable = struct {
@@ -567,7 +545,11 @@ const EncryptedStringTable = struct {
         return table.header().entries.value();
     }
 
-    fn getEncryptedString(table: EncryptedStringTable, section_i: usize, entry_i: usize) []lu16 {
+    fn getEncryptedString(
+        table: EncryptedStringTable,
+        section_i: usize,
+        entry_i: usize,
+    ) []align(1) lu16 {
         const section_offset = table.sectionOffsets()[section_i].value();
         const entry = table.entries(section_offset)[entry_i];
         const offset = section_offset + entry.offset.value();
@@ -575,30 +557,30 @@ const EncryptedStringTable = struct {
         return mem.bytesAsSlice(lu16, res);
     }
 
-    const Header = packed struct {
+    const Header = extern struct {
         sections: lu16,
         entries: lu16,
         file_size: lu32,
         unknown2: lu32,
     };
 
-    const Entry = packed struct {
+    const Entry = extern struct {
         offset: lu32,
         count: lu16,
         unknown: lu16,
     };
 
-    fn header(table: EncryptedStringTable) *Header {
-        return @ptrCast(*Header, table.data[0..@sizeOf(Header)]);
+    fn header(table: EncryptedStringTable) *align(1) Header {
+        return @ptrCast(*align(1) Header, table.data[0..@sizeOf(Header)]);
     }
 
-    fn sectionOffsets(table: EncryptedStringTable) []lu32 {
+    fn sectionOffsets(table: EncryptedStringTable) []align(1) lu32 {
         const h = table.header();
         const rest = table.data[@sizeOf(Header)..];
         return mem.bytesAsSlice(lu32, rest[0 .. @sizeOf(lu32) * h.sections.value()]);
     }
 
-    fn entries(table: EncryptedStringTable, section_offset: u32) []Entry {
+    fn entries(table: EncryptedStringTable, section_offset: u32) []align(1) Entry {
         const h = table.header();
         _ = mem.bytesAsValue(lu32, table.data[section_offset..][0..@sizeOf(lu32)]);
         const rest = table.data[section_offset + @sizeOf(lu32) ..];
@@ -615,7 +597,7 @@ const EncryptedStringTable = struct {
     }
 };
 
-fn decrypt(data: []const lu16, out: anytype) !u16 {
+fn decrypt(data: []align(1) const lu16, out: anytype) !u16 {
     const H = struct {
         fn output(out2: anytype, char: u16) !bool {
             const Pair = struct {
@@ -674,7 +656,7 @@ fn decrypt(data: []const lu16, out: anytype) !u16 {
     return res;
 }
 
-fn getKey(data: []const lu16) u16 {
+fn getKey(data: []align(1) const lu16) u16 {
     const last = data[data.len - 1].value();
     debug.assert(last ^ (last ^ 0xFFFF) == 0xFFFF);
     return last ^ 0xFFFF;
@@ -707,7 +689,7 @@ fn encode(data: []const u8, out: anytype) !void {
     try out.writeIntLittle(u16, 0xffff);
 }
 
-fn encrypt(data: []lu16, _key: u16) void {
+fn encrypt(data: []align(1) lu16, _key: u16) void {
     var key = _key;
     for (data) |*c| {
         c.* = lu16.init(c.value() ^ key);
@@ -892,16 +874,16 @@ pub const Game = struct {
     // The fields below are pointers into the nds rom and will
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
-        starters: [3][]*lu16,
-        moves: []Move,
-        trainers: []Trainer,
-        items: []Item,
-        tms1: []lu16,
-        hms: []lu16,
-        tms2: []lu16,
-        evolutions: []EvolutionTable,
-        map_headers: []MapHeader,
-        hidden_hollows: ?[]HiddenHollow,
+        starters: [3][]*align(1) lu16,
+        moves: []align(1) Move,
+        trainers: []align(1) Trainer,
+        items: []align(1) Item,
+        tms1: []align(1) lu16,
+        hms: []align(1) lu16,
+        tms2: []align(1) lu16,
+        evolutions: []align(1) EvolutionTable,
+        map_headers: []align(1) MapHeader,
+        hidden_hollows: ?[]align(1) HiddenHollow,
 
         wild_pokemons: nds.fs.Fs,
         pokemons: nds.fs.Fs,
@@ -937,7 +919,8 @@ pub const Game = struct {
 
     pub fn fromRom(allocator: mem.Allocator, nds_rom: *nds.Rom) !Game {
         const file_system = nds_rom.fileSystem();
-        const info = try identify(io.fixedBufferStream(nds_rom.data.items).reader());
+        var fbs = io.fixedBufferStream(nds_rom.data.items);
+        const info = try identify(fbs.reader());
         const arm9 = try nds.blz.decode(allocator, nds_rom.arm9());
         errdefer allocator.free(arm9);
 
@@ -1060,7 +1043,7 @@ pub const Game = struct {
             .owned = owned,
             .ptrs = .{
                 .starters = blk: {
-                    var res: [3][]*lu16 = undefined;
+                    var res: [3][]*align(1) lu16 = undefined;
                     var filled: usize = 0;
                     errdefer for (res[0..filled]) |item|
                         allocator.free(item);
@@ -1273,7 +1256,8 @@ pub const Game = struct {
 
             // Non of the writes here can fail as long as we calculated the size
             // of the file correctly above
-            const writer = io.fixedBufferStream(bytes).writer();
+            var fbs = io.fixedBufferStream(bytes);
+            const writer = fbs.writer();
             const number_of_entries = @intCast(u16, table.keys.len);
             writer.writeAll(&mem.toBytes(Header{
                 .sections = lu16.init(1),
@@ -1349,7 +1333,7 @@ pub const Game = struct {
         var set_var_offsets = std.ArrayList(usize).init(allocator);
         defer set_var_offsets.deinit();
 
-        var given_pokemons_to_resolve = std.AutoArrayHashMap(usize, *lu16).init(allocator);
+        var given_pokemons_to_resolve = std.AutoArrayHashMap(usize, *align(1) lu16).init(allocator);
         defer given_pokemons_to_resolve.deinit();
 
         for (scripts.fat) |fat| {
@@ -1515,9 +1499,9 @@ pub const Game = struct {
         for (res.keys) |*key, i| {
             const buf = res.get(i);
 
-            const writer = io.fixedBufferStream(buf).writer();
+            var fbs = io.fixedBufferStream(buf);
             const encrypted_string = table.getEncryptedString(0, i);
-            key.* = try decrypt(encrypted_string, writer);
+            key.* = try decrypt(encrypted_string, fbs.writer());
         }
 
         return res;

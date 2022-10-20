@@ -88,7 +88,13 @@ pub fn io(
                 error.DidNotConsumeData => if (first_none_consumed_line == max_usize) {
                     first_none_consumed_line = start_of_line;
                 },
-                else => return err,
+                else => |e| {
+                    std.log.err("{s}: {s}", .{
+                        @errorName(e),
+                        parser.str[start_of_line .. parser.i - 1],
+                    });
+                    return e;
+                },
             }
         } else |err|
         // If we couldn't parse a portion of the buffer, then we skip to the next line
@@ -153,17 +159,17 @@ pub fn setField(struct_ptr: anytype, union_val: anytype) void {
 
 fn getUnionValue(
     val: anytype,
-) @TypeOf(&@field(val, @typeInfo(@TypeOf(val)).Union.fields[0].name)) {
+) @TypeOf(&@field(val, std.meta.fieldNames(std.meta.Child(@TypeOf(val)))[0])) {
     const T = @TypeOf(val);
-    inline for (@typeInfo(T).Union.fields) |field| {
-        if (val == @field(meta.Tag(T), field.name)) {
-            return &@field(val, field.name);
-        }
+    const Union = std.meta.Child(T);
+    inline for (comptime std.meta.fieldNames(Union)) |field| {
+        if (val.* == @field(meta.Tag(Union), field))
+            return &@field(val, field);
     }
     unreachable;
 }
 
-pub const Color = common.ColorKind;
+pub const Color = common.Color;
 pub const EggGroup = common.EggGroup;
 pub const GrowthRate = common.GrowthRate;
 pub const PartyType = common.PartyType;
@@ -196,7 +202,6 @@ pub const Game = union(enum) {
 
 pub const Trainer = union(enum) {
     class: u8,
-    encounter_music: u8,
     trainer_picture: u8,
     name: []const u8,
     items: ston.Index(u8, u16),
@@ -238,7 +243,7 @@ pub fn Stats(comptime T: type) type {
         sp_defense: T,
 
         pub fn value(stats: @This()) T {
-            return getUnionValue(stats).*;
+            return getUnionValue(&stats).*;
         }
     };
 }
@@ -246,7 +251,6 @@ pub fn Stats(comptime T: type) type {
 pub const Pokemon = union(enum) {
     name: []const u8,
     stats: Stats(u8),
-    ev_yield: Stats(u2),
     base_exp_yield: u16,
     base_friendship: u8,
     catch_rate: u8,
@@ -254,7 +258,6 @@ pub const Pokemon = union(enum) {
     gender_ratio: u8,
     pokedex_entry: u16,
     growth_rate: GrowthRate,
-    color: Color,
     egg_groups: ston.Index(u1, EggGroup),
     types: ston.Index(u1, u8),
     abilities: ston.Index(u2, u8),
@@ -397,7 +400,7 @@ pub const WildPokemons = union(enum) {
     }
 
     pub fn value(pokemons: @This()) WildArea {
-        return getUnionValue(pokemons).*;
+        return getUnionValue(&pokemons).*;
     }
 };
 

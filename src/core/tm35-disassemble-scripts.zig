@@ -75,7 +75,8 @@ pub fn run(
     } else |err| err;
 
     try file.seekTo(0);
-    if (nds.Rom.fromFile(file, allocator)) |*nds_rom| {
+    var m_nds_rom = nds.Rom.fromFile(file, allocator);
+    if (m_nds_rom) |*nds_rom| {
         const gen4_error = if (gen4.Game.fromRom(allocator, nds_rom)) |*game| {
             defer game.deinit();
             try outputGen4GameScripts(game.*, allocator, stdio.out);
@@ -104,13 +105,13 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
     for (game.map_headers) |map_header, map_id| {
         const scripts = try map_header.map_scripts.toSliceEnd(game.data);
 
-        for (scripts) |s, script_id| {
+        for (scripts) |*s, script_id| {
             if (s.@"type" == 0)
                 break;
             if (s.@"type" == 2 or s.@"type" == 4)
                 continue;
 
-            const script_data = try s.addr.other.toSliceEnd(game.data);
+            const script_data = try s.addr().other.toSliceEnd(game.data);
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try writer.print("map_header[{}].map_script[{}]:\n", .{ map_id, script_id });
             while (try decoder.next()) |command|
