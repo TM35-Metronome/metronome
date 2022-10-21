@@ -795,44 +795,35 @@ fn randomize(program: *Program) !void {
         else => unreachable,
     };
 
-    // Print to stderr for debugging
-    var buf_stderr = io.bufferedWriter(io.getStdErr().writer());
-    program.outputScript(buf_stderr.writer(), out.slice()) catch {};
-    buf_stderr.flush() catch {};
+    const cache_dir = try util.dir.folder(.cache);
+    const program_cache_dir = util.path.join(&[_][]const u8{
+        cache_dir.constSlice(),
+        Executables.program_name,
+    });
+    const script_file_name = util.path.join(&[_][]const u8{
+        program_cache_dir.constSlice(),
+        "tmp_scipt",
+    });
+    std.log.info("{s}", .{script_file_name.constSlice()});
+
+    {
+        try fs.cwd().makePath(program_cache_dir.constSlice());
+        const file = try fs.cwd().createFile(script_file_name.constSlice(), .{});
+        defer file.close();
+        try program.outputScript(file.writer(), out.slice());
+    }
 
     var buf: [1024 * 40]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
     const term = switch (builtin.target.os.tag) {
         .linux => blk: {
-            var sh = std.ChildProcess.init(&[_][]const u8{ "sh", "-e" }, fba.allocator());
-            sh.stdin_behavior = .Pipe;
-            try sh.spawn();
-
-            const writer = sh.stdin.?.writer();
-            try program.outputScript(writer, out.slice());
-
-            sh.stdin.?.close();
-            sh.stdin = null;
-
-            break :blk try sh.wait();
+            var sh = std.ChildProcess.init(
+                &[_][]const u8{ "sh", script_file_name.constSlice() },
+                fba.allocator(),
+            );
+            break :blk try sh.spawnAndWait();
         },
         .windows => blk: {
-            const cache_dir = try util.dir.folder(.cache);
-            const program_cache_dir = util.path.join(&[_][]const u8{
-                cache_dir.constSlice(),
-                Executables.program_name,
-            });
-            const script_file_name = util.path.join(&[_][]const u8{
-                program_cache_dir.constSlice(),
-                "tmp_scipt.bat",
-            });
-            {
-                try fs.cwd().makePath(program_cache_dir.constSlice());
-                const file = try fs.cwd().createFile(script_file_name.constSlice(), .{});
-                defer file.close();
-                try program.outputScript(file.writer(), out.slice());
-            }
-
             var cmd = std.ChildProcess.init(
                 &[_][]const u8{ "cmd", "/c", "call", script_file_name.constSlice() },
                 fba.allocator(),
