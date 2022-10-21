@@ -269,10 +269,6 @@ fn useGame(ctx: anytype, game: format.Game) !void {
 }
 
 test {
-    var disabled = true;
-    if (disabled)
-        return error.SkipZigTest;
-
     const Pattern = util.testing.Pattern;
     const test_input = try util.testing.filter(util.testing.test_case, &.{
         ".maps[*].allow_*=*",

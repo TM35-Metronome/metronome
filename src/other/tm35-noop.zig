@@ -56,24 +56,33 @@ pub fn run(
     comptime Writer: type,
     stdio: util.CustomStdIoStreams(Reader, Writer),
 ) !void {
-    try format.io(
-        program.allocator,
-        stdio.in,
-        stdio.out,
-        .{ .out = stdio.out, .program = program },
-        useGame,
-    );
+    const ctx = .{ .out = stdio.out, .program = program };
+    if (program.serialize) {
+        try format.io(
+            program.allocator,
+            stdio.in,
+            stdio.out,
+            ctx,
+            useGameSerialize,
+        );
+    } else {
+        try format.io(
+            program.allocator,
+            stdio.in,
+            stdio.out,
+            ctx,
+            useGame,
+        );
+    }
 }
 
-fn useGame(ctx: anytype, game: format.Game) !void {
-    const out = ctx.out;
-    const program = ctx.program;
-    if (program.serialize) {
-        try ston.serialize(out, game);
-        try out.context.flush();
-    } else {
-        return error.DidNotConsumeData;
-    }
+fn useGame(_: anytype, _: format.Game) anyerror!void {
+    return error.DidNotConsumeData;
+}
+
+fn useGameSerialize(ctx: anytype, game: format.Game) anyerror!void {
+    try ston.serialize(ctx.out, game);
+    try ctx.out.context.flush();
 }
 
 test {
