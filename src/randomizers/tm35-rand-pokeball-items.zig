@@ -26,6 +26,7 @@ options: struct {
     include_tms_hms: bool,
     include_key_items: bool,
     excluded_items: []const []const u8,
+    included_items: []const []const u8,
 },
 pokeballs: Pokeballs = Pokeballs{},
 items: Items = Items{},
@@ -61,6 +62,10 @@ pub const params = clap.parseParamsComptime(
     \\-e, --exclude <STRING>...
     \\        List of items to never pick. Case insensitive. Supports wildcards like '*mail'.
     \\
+    \\-i, --include <STRING>...
+    \\        List of items to pick from, ignoring --exclude. Case insensitive. Supports
+    \\        wildcards like '*mail'.
+    \\
     \\-v, --version
     \\        Output version information and exit.
     \\
@@ -68,12 +73,14 @@ pub const params = clap.parseParamsComptime(
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_items_arg = args.args.exclude;
-    var excluded_items = try std.ArrayList([]const u8).initCapacity(
-        allocator,
-        excluded_items_arg.len,
-    );
-    for (excluded_items_arg) |exclude|
-        excluded_items.appendAssumeCapacity(try ascii.allocLowerString(allocator, exclude));
+    const excluded_items = try allocator.alloc([]const u8, excluded_items_arg.len);
+    for (excluded_items) |_, i|
+        excluded_items[i] = try ascii.allocLowerString(allocator, excluded_items_arg[i]);
+
+    const included_items_arg = args.args.include;
+    const included_items = try allocator.alloc([]const u8, included_items_arg.len);
+    for (included_items) |_, i|
+        included_items[i] = try ascii.allocLowerString(allocator, included_items_arg[i]);
 
     return Program{
         .allocator = allocator,
@@ -81,7 +88,8 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
             .seed = args.args.seed orelse std.crypto.random.int(u64),
             .include_tms_hms = args.args.@"include-tms-hms",
             .include_key_items = args.args.@"include-key-items",
-            .excluded_items = excluded_items.toOwnedSlice(),
+            .excluded_items = excluded_items,
+            .included_items = included_items,
         },
     };
 }
@@ -173,6 +181,7 @@ fn randomize(program: *Program) !void {
         program.items,
         excluded_pockets.items,
         program.options.excluded_items,
+        program.options.included_items,
     );
 
     outer: for (program.pokeballs.values()) |*ball, i| {
@@ -196,6 +205,7 @@ fn getItems(
     items: Items,
     excluded_pockets: []const format.Pocket,
     excluded_items: []const []const u8,
+    included_items: []const []const u8,
 ) !Set {
     var res = Set{};
     errdefer res.deinit(allocator);
@@ -210,7 +220,8 @@ fn getItems(
             if (item.pocket == pocket)
                 continue :outer;
         }
-        if (util.glob.matchesOneOf(item.name, excluded_items)) |_|
+        if (util.glob.matchesOneOf(item.name, included_items) == null and
+            util.glob.matchesOneOf(item.name, excluded_items) != null)
             continue;
 
         _ = try res.put(allocator, item_key, {});
@@ -228,6 +239,8 @@ const Item = struct {
 const Pokeball = struct {
     item: u16,
 };
+
+const Pattern = util.testing.Pattern;
 
 test "tm35-rand-pokeball-items" {
     const H = struct {
@@ -312,4 +325,18 @@ test "tm35-rand-pokeball-items" {
 
         try testing.expect(mem.indexOf(u8, out, ".item=1") == null);
     }
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_string,
+        .args = &[_][]const u8{
+            "--exclude=*",
+            "--include=item 1",
+            "--include-tms-hms",
+            "--include-key-items",
+        },
+        .patterns = &[_]Pattern{
+            Pattern.glob(4, 4, ".pokeball_items[*].item=*"),
+            Pattern.glob(4, 4, ".pokeball_items[*].item=1"),
+        },
+    });
 }

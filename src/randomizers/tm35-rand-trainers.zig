@@ -174,22 +174,22 @@ pub const params = clap.parseParamsComptime(
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_pokemons_arg = args.args.@"exclude-pokemon";
-    var excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
+    const excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
     for (excluded_pokemons) |_, i|
         excluded_pokemons[i] = try ascii.allocLowerString(allocator, excluded_pokemons_arg[i]);
 
     const excluded_trainers_arg = args.args.@"exclude-trainer";
-    var excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
+    const excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
     for (excluded_trainers) |_, i|
         excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
 
     const included_pokemons_arg = args.args.@"include-pokemon";
-    var included_pokemons = try allocator.alloc([]const u8, included_pokemons_arg.len);
+    const included_pokemons = try allocator.alloc([]const u8, included_pokemons_arg.len);
     for (included_pokemons) |_, i|
         included_pokemons[i] = try ascii.allocLowerString(allocator, included_pokemons_arg[i]);
 
     const included_trainers_arg = args.args.@"include-trainer";
-    var included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
+    const included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
     for (included_trainers) |_, i|
         included_trainers[i] = try ascii.allocLowerString(allocator, included_trainers_arg[i]);
 
