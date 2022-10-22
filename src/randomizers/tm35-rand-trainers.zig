@@ -37,6 +37,7 @@ held_items: Set = Set{},
 species: Set = undefined,
 species_by_ability: SpeciesBy = undefined,
 species_by_type: SpeciesBy = undefined,
+species_by_dual_type: SpeciesByDualType = undefined,
 stats: MinMax(u16) = undefined,
 
 // Containers we reuse often enough that keeping them around with
@@ -46,7 +47,7 @@ intersection: Set = Set{},
 
 const Options = struct {
     seed: u64,
-    abilities: ThemeOption,
+    abilities: AbilityThemeOption,
     held_items: HeldItemOption,
     moves: MoveOption,
     party_size_max: u8,
@@ -54,7 +55,7 @@ const Options = struct {
     party_size: PartySizeOption,
     party_pokemons: PartyPokemonsOption,
     stats: StatsOption,
-    types: ThemeOption,
+    types: TypeThemeOption,
     excluded_pokemons: []const []const u8,
     excluded_trainers: []const []const u8,
     included_pokemons: []const []const u8,
@@ -76,10 +77,17 @@ const MoveOption = enum {
     random,
 };
 
-const ThemeOption = enum {
+const AbilityThemeOption = enum {
     same,
     random,
     themed,
+};
+
+const TypeThemeOption = enum {
+    same,
+    random,
+    themed,
+    dual_themed,
 };
 
 const StatsOption = enum {
@@ -114,7 +122,8 @@ pub const parsers = .{
     .@"unchanged|randomize" = clap.parsers.enumeration(PartyPokemonsOption),
     .@"unchanged|minimum|random" = clap.parsers.enumeration(PartySizeOption),
     .@"random|simular|follow_level" = clap.parsers.enumeration(StatsOption),
-    .@"random|same|themed" = clap.parsers.enumeration(ThemeOption),
+    .@"random|same|themed" = clap.parsers.enumeration(AbilityThemeOption),
+    .@"random|same|themed|dual_themed" = clap.parsers.enumeration(TypeThemeOption),
 };
 
 pub const params = clap.parseParamsComptime(
@@ -147,7 +156,7 @@ pub const params = clap.parseParamsComptime(
     \\        The total stats the picked pokemon should have if pokemons are randomized.
     \\        (default: random)
     \\
-    \\-t, --types <random|same|themed>
+    \\-t, --types <random|same|themed|dual_themed>
     \\        Which types each trainer should use if pokemons are randomized. (default: random)
     \\
     \\-a, --abilities <random|same|themed>
@@ -238,6 +247,7 @@ pub fn run(
     program.species = species;
     program.species_by_ability = try speciesByAbility(allocator, program.pokemons, species);
     program.species_by_type = try speciesByType(allocator, program.pokemons, species);
+    program.species_by_dual_type = try speciesByDualType(allocator, program.pokemons, species);
     program.stats = minMaxStats(program.pokemons, species);
 
     try program.randomize();
@@ -416,15 +426,21 @@ fn randomize(program: *Program) !void {
 
 fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
     const allocator = program.allocator;
+    const types = switch (program.options.types) {
+        .themed => blk: {
+            const t = util.random.item(program.random, program.species_by_type.keys()).?.*;
+            break :blk [_]u16{ t, t };
+        },
+        .dual_themed => util.random.item(program.random, program.species_by_dual_type.keys()).?.*,
+        else => undefined,
+    };
+    const ability = switch (program.options.abilities) {
+        .themed => util.random.item(program.random, program.species_by_ability.keys()).?.*,
+        else => undefined,
+    };
     const themes = Themes{
-        .type = switch (program.options.types) {
-            .themed => util.random.item(program.random, program.species_by_type.keys()).?.*,
-            else => undefined,
-        },
-        .ability = switch (program.options.abilities) {
-            .themed => util.random.item(program.random, program.species_by_ability.keys()).?.*,
-            else => undefined,
-        },
+        .types = types,
+        .ability = ability,
     };
 
     const wants_moves = switch (program.options.moves) {
@@ -631,7 +647,7 @@ fn fillWithRandomLevelUpMoves(
 }
 
 const Themes = struct {
-    type: u16,
+    types: [2]u16,
     ability: u16,
 };
 
@@ -655,7 +671,8 @@ fn randomizePartyMember(
             const t = util.random.item(program.random, pokemon.types.keys()).?.*;
             break :blk program.species_by_type.get(t).?;
         },
-        .themed => program.species_by_type.get(themes.type).?,
+        .themed => program.species_by_type.get(themes.types[0]).?,
+        .dual_themed => program.species_by_dual_type.get(themes.types).?,
         .random => program.species,
     };
 
@@ -801,6 +818,7 @@ const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 const Party = std.AutoArrayHashMapUnmanaged(u8, PartyMember);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+const SpeciesByDualType = std.AutoArrayHashMapUnmanaged([2]u16, Set);
 const SpeciesBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const TrainerNames = std.AutoArrayHashMapUnmanaged(u16, []const u8);
 const Trainers = std.AutoArrayHashMapUnmanaged(u16, Trainer);
@@ -858,6 +876,34 @@ fn speciesByType(allocator: mem.Allocator, pokemons: Pokemons, species: Set) !Sp
             const set = (try res.getOrPutValue(allocator, t, .{})).value_ptr;
             _ = try set.put(allocator, s, {});
         }
+    }
+
+    return res;
+}
+
+fn speciesByDualType(
+    allocator: mem.Allocator,
+    pokemons: Pokemons,
+    species: Set,
+) !SpeciesByDualType {
+    var res = SpeciesByDualType{};
+    errdefer {
+        for (res.values()) |*set|
+            set.deinit(allocator);
+        res.deinit(allocator);
+    }
+
+    for (species.keys()) |s| {
+        const pokemon = pokemons.get(s).?;
+        const p_types = pokemon.types.keys();
+        const types = switch (p_types.len) {
+            0 => continue,
+            1 => [2]u16{ p_types[0], p_types[0] },
+            else => p_types[0..2].*,
+        };
+
+        const set = (try res.getOrPutValue(allocator, types, .{})).value_ptr;
+        _ = try set.put(allocator, s, {});
     }
 
     return res;
