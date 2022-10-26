@@ -71,7 +71,7 @@ pub const Context = struct {
     }
 
     pub fn toSlice(ctx: Context, comptime T: type) []const T {
-        const ptr = @ptrCast([*]const T, ctx.handle);
+        const ptr = @ptrCast([*]const T, @alignCast(@alignOf(T), ctx.handle));
         return ptr[0..ctx.len];
     }
 };
@@ -80,43 +80,61 @@ pub const Pattern = struct {
     min: usize,
     max: usize,
     ctx: Context,
-    find: std.meta.FnPtr(fn (Context, []const u8, usize) ?usize),
+    matches: std.meta.FnPtr(fn (Context, []const u8) bool),
+    deinit: std.meta.FnPtr(fn (Context, mem.Allocator) void),
 
     pub fn string(min: usize, max: usize, str: []const u8) Pattern {
         return .{
             .min = min,
             .max = max,
             .ctx = Context.fromSlice(str),
-            .find = findString,
+            .matches = matchesString,
+            .deinit = deinitString,
         };
     }
 
-    fn findString(ctx: Context, haystack: []const u8, pos: usize) ?usize {
+    fn matchesString(ctx: Context, haystack: []const u8) bool {
         const slice = ctx.toSlice(u8);
-        const index = mem.indexOfPos(u8, haystack, pos, slice) orelse return null;
-        return index + slice.len;
+        return mem.indexOf(u8, haystack, slice) != null;
     }
 
-    pub fn glob(min: usize, max: usize, str: []const u8) Pattern {
+    fn deinitString(_: Context, _: mem.Allocator) void {}
+
+    pub fn endsWith(min: usize, max: usize, str: []const u8) Pattern {
         return .{
             .min = min,
             .max = max,
             .ctx = Context.fromSlice(str),
-            .find = findGlob,
+            .matches = matchesEndsWith,
+            .deinit = deinitEndsWith,
         };
     }
 
-    fn findGlob(ctx: Context, haystack: []const u8, pos: usize) ?usize {
-        const glob_str = ctx.toSlice(u8);
-        var it = mem.split(u8, haystack, "\n");
-        it.index = pos;
+    fn matchesEndsWith(ctx: Context, haystack: []const u8) bool {
+        const slice = ctx.toSlice(u8);
+        return mem.endsWith(u8, haystack, slice);
+    }
 
-        while (it.next()) |line| {
-            if (util.glob.match(glob_str, line))
-                return it.index;
-        }
+    fn deinitEndsWith(_: Context, _: mem.Allocator) void {}
 
-        return null;
+    pub fn glob(min: usize, max: usize, str: []const u8) Pattern {
+        const split = util.glob.split(testing.allocator, str) catch unreachable;
+        return .{
+            .min = min,
+            .max = max,
+            .ctx = Context.fromSlice(split),
+            .matches = matchesGlob,
+            .deinit = deinitGlob,
+        };
+    }
+
+    fn matchesGlob(ctx: Context, haystack: []const u8) bool {
+        const glob_split = ctx.toSlice([]const u8);
+        return util.glob.matchSplit(glob_split, haystack);
+    }
+
+    fn deinitGlob(ctx: Context, allocator: mem.Allocator) void {
+        allocator.free(ctx.toSlice([]const u8));
     }
 };
 
@@ -130,21 +148,29 @@ pub const FindMatchesOptions = struct {
 /// something that can be found in a string, and a pattern also specifies how many of that
 /// pattern is expected to be found in the output.
 pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !void {
-    const res = try runProgram(Program, .{ .args = opt.args, .in = opt.in });
-    defer testing.allocator.free(res);
+    const str = try runProgram(Program, .{ .args = opt.args, .in = opt.in });
+    defer testing.allocator.free(str);
 
-    var fail: bool = false;
-    for (opt.patterns) |pattern| {
-        var i: usize = 0;
-        var matches: usize = 0;
-        while (pattern.find(pattern.ctx, res, i)) |end| : (i = end)
-            matches += 1;
+    const matches = try testing.allocator.alloc(usize, opt.patterns.len);
+    defer testing.allocator.free(matches);
+    mem.set(usize, matches, 0);
 
-        if (matches < pattern.min or pattern.max < matches) {
+    defer for (opt.patterns) |pattern|
+        pattern.deinit(pattern.ctx, testing.allocator);
+
+    var it = mem.split(u8, str, "\n");
+    while (it.next()) |line| {
+        for (opt.patterns) |pattern, i|
+            matches[i] += @boolToInt(pattern.matches(pattern.ctx, line));
+    }
+
+    var fail = false;
+    for (opt.patterns) |pattern, i| {
+        if (matches[i] < pattern.min or pattern.max < matches[i]) {
             std.debug.print("\nexpected between {} and {} matches, found {}", .{
                 pattern.min,
                 pattern.max,
-                matches,
+                matches[i],
             });
             fail = true;
         }
@@ -157,12 +183,19 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
 }
 
 pub fn filter(in: []const u8, globs: []const []const u8) ![:0]u8 {
+    const split = try util.glob.splitAll(testing.allocator, globs);
+    defer {
+        for (split) |item|
+            testing.allocator.free(item);
+        testing.allocator.free(split);
+    }
+
     var res = std.ArrayList(u8).init(testing.allocator);
     errdefer res.deinit();
 
     var it = mem.split(u8, in, "\n");
     while (it.next()) |line| {
-        if (util.glob.matchesOneOf(line, globs) == null)
+        if (util.glob.matchesOneOfSplit(line, split) == null)
             continue;
 
         try res.appendSlice(line);

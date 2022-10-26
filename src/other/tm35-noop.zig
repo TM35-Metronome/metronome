@@ -85,7 +85,7 @@ fn useGameSerialize(ctx: anytype, game: format.Game) anyerror!void {
     try ctx.out.context.flush();
 }
 
-test {
+test "tm35-noop" {
     const test_string =
         \\.wild_pokemons[1].surf_0.pokemons[4].species=118
         \\.wild_pokemons[1].fishing_0.encounter_rate=30

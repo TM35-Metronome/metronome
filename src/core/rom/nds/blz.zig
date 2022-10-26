@@ -273,7 +273,7 @@ fn testIt(expected_decoded: []const u8, expected_encoded: []const u8) !void {
     try testing.expectEqualSlices(u8, expected_decoded, decoded);
 }
 
-test {
+test "blz" {
     // Tests are only valid for original 0x1002 window
     var disabled = true;
     if (disabled)

@@ -268,7 +268,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
     unreachable;
 }
 
-test {
+test "tm35-misc" {
     const Pattern = util.testing.Pattern;
     const test_input = try util.testing.filter(util.testing.test_case, &.{
         ".maps[*].allow_*=*",
@@ -286,58 +286,58 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=unchanged"},
         .patterns = &[_]Pattern{
-            Pattern.string(165, 165, "].allow_cycling=true\n"),
-            Pattern.string(353, 353, "].allow_cycling=false\n"),
+            Pattern.endsWith(165, 165, "].allow_cycling=true"),
+            Pattern.endsWith(353, 353, "].allow_cycling=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=everywhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(518, 518, "].allow_cycling=true\n"),
-            Pattern.string(0, 0, "].allow_cycling=false\n"),
+            Pattern.endsWith(518, 518, "].allow_cycling=true"),
+            Pattern.endsWith(0, 0, "].allow_cycling=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-biking=nowhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(0, 0, "].allow_cycling=true\n"),
-            Pattern.string(518, 518, "].allow_cycling=false\n"),
+            Pattern.endsWith(0, 0, "].allow_cycling=true"),
+            Pattern.endsWith(518, 518, "].allow_cycling=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=unchanged"},
         .patterns = &[_]Pattern{
-            Pattern.string(228, 228, "].allow_running=true\n"),
-            Pattern.string(290, 290, "].allow_running=false\n"),
+            Pattern.endsWith(228, 228, "].allow_running=true"),
+            Pattern.endsWith(290, 290, "].allow_running=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=everywhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(518, 518, "].allow_running=true\n"),
-            Pattern.string(0, 0, "].allow_running=false\n"),
+            Pattern.endsWith(518, 518, "].allow_running=true"),
+            Pattern.endsWith(0, 0, "].allow_running=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--allow-running=nowhere"},
         .patterns = &[_]Pattern{
-            Pattern.string(0, 0, "].allow_running=true\n"),
-            Pattern.string(518, 518, "].allow_running=false\n"),
+            Pattern.endsWith(0, 0, "].allow_running=true"),
+            Pattern.endsWith(518, 518, "].allow_running=false"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--fast-text"},
         .patterns = &[_]Pattern{
-            Pattern.string(1, 1, ".instant_text=true\n"),
-            Pattern.string(1, 1, ".text_delays[0]=2\n"),
-            Pattern.string(1, 1, ".text_delays[1]=1\n"),
-            Pattern.string(1, 1, ".text_delays[2]=0\n"),
+            Pattern.endsWith(1, 1, ".instant_text=true"),
+            Pattern.endsWith(1, 1, ".text_delays[0]=2"),
+            Pattern.endsWith(1, 1, ".text_delays[1]=1"),
+            Pattern.endsWith(1, 1, ".text_delays[2]=0"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -398,16 +398,16 @@ test {
         .in = test_input,
         .args = &[_][]const u8{"--exp-yield-scaling=1.0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(6, 6, ".pokemons[*].base_exp_yield=50"),
-            Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=60"),
+            Pattern.endsWith(6, 6, "].base_exp_yield=50"),
+            Pattern.endsWith(20, 20, "].base_exp_yield=60"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_input,
         .args = &[_][]const u8{"--exp-yield-scaling=2.0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(6, 6, ".pokemons[*].base_exp_yield=100"),
-            Pattern.glob(20, 20, ".pokemons[*].base_exp_yield=120"),
+            Pattern.endsWith(6, 6, "].base_exp_yield=100"),
+            Pattern.endsWith(20, 20, "].base_exp_yield=120"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{

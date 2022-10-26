@@ -899,7 +899,10 @@ fn speciesByDualType(
         const types = switch (p_types.len) {
             0 => continue,
             1 => [2]u16{ p_types[0], p_types[0] },
-            else => p_types[0..2].*,
+            else => [2]u16{
+                math.min(p_types[0], p_types[1]),
+                math.max(p_types[0], p_types[1]),
+            },
         };
 
         const set = (try res.getOrPutValue(allocator, types, .{})).value_ptr;
@@ -1010,7 +1013,7 @@ const Pokemon = struct {
 const number_of_seeds = 40;
 const Pattern = util.testing.Pattern;
 
-test {
+test "tm35-rand-trainers" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".items[*].battle_effect=*",
         ".moves[*].power=*",
@@ -1025,7 +1028,8 @@ test {
         ".pokemons[*].abilities[*]=*",
         ".pokemons[*].moves[*].*",
         ".pokedex[*].*",
-        ".trainers[*].*",
+        ".trainers[*].party*",
+        ".trainers[*].name=*",
     });
     defer testing.allocator.free(test_case);
 
@@ -1033,18 +1037,18 @@ test {
         .in = test_case,
         .args = &[_][]const u8{"--seed=0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
             Pattern.glob(408, 408, ".trainers[*].party[*].item=*"),
             Pattern.glob(2400, 2400, ".trainers[*].party[*].moves[*]=*"),
-            Pattern.glob(252, 252, ".trainers[*].party_size=1"),
-            Pattern.glob(296, 296, ".trainers[*].party_size=2"),
-            Pattern.glob(187, 187, ".trainers[*].party_size=3"),
-            Pattern.glob(26, 26, ".trainers[*].party_size=4"),
-            Pattern.glob(13, 13, ".trainers[*].party_size=5"),
-            Pattern.glob(39, 39, ".trainers[*].party_size=6"),
+            Pattern.endsWith(252, 252, "].party_size=1"),
+            Pattern.endsWith(296, 296, "].party_size=2"),
+            Pattern.endsWith(187, 187, "].party_size=3"),
+            Pattern.endsWith(26, 26, "].party_size=4"),
+            Pattern.endsWith(13, 13, "].party_size=5"),
+            Pattern.endsWith(39, 39, "].party_size=6"),
         },
     });
 
@@ -1053,30 +1057,30 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(178, 178, ".trainers[*].party_type=moves"),
-            Pattern.glob(635, 635, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(178, 178, "].party_type=moves"),
+            Pattern.endsWith(635, 635, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=unchanged", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=random", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(178, 178, ".trainers[*].party_type=both"),
-            Pattern.glob(635, 635, ".trainers[*].party_type=item"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=none"),
+            Pattern.endsWith(178, 178, "].party_type=both"),
+            Pattern.endsWith(635, 635, "].party_type=item"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(0, 0, "].party_type=none"),
             Pattern.glob(1808, 1808, ".trainers[*].party[*].item=*"),
         },
     });
@@ -1087,30 +1091,30 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--moves=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(105, 105, ".trainers[*].party_type=item"),
-            Pattern.glob(708, 708, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(105, 105, "].party_type=item"),
+            Pattern.endsWith(708, 708, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--moves=unchanged", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--moves=random", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(105, 105, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(708, 708, ".trainers[*].party_type=moves"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=none"),
+            Pattern.endsWith(105, 105, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(708, 708, "].party_type=moves"),
+            Pattern.endsWith(0, 0, "].party_type=none"),
             Pattern.glob(7232, 7232, ".trainers[*].party[*].moves[*]=*"),
         },
     });
@@ -1120,10 +1124,10 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=none", "--moves=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(813, 813, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(813, 813, "].party_type=none"),
         },
     });
 
@@ -1132,12 +1136,12 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--party-size-min=2", "--party-size-max=5", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(548, 548, ".trainers[*].party_size=2"),
-            Pattern.glob(187, 187, ".trainers[*].party_size=3"),
-            Pattern.glob(26, 26, ".trainers[*].party_size=4"),
-            Pattern.glob(52, 52, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(548, 548, "].party_size=2"),
+            Pattern.endsWith(187, 187, "].party_size=3"),
+            Pattern.endsWith(26, 26, "].party_size=4"),
+            Pattern.endsWith(52, 52, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -1147,12 +1151,12 @@ test {
             "--party-size-max=5",   "--seed=0",
         },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(813, 813, ".trainers[*].party_size=2"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=3"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=4"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(813, 813, "].party_size=2"),
+            Pattern.endsWith(0, 0, "].party_size=3"),
+            Pattern.endsWith(0, 0, "].party_size=4"),
+            Pattern.endsWith(0, 0, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -1162,12 +1166,12 @@ test {
             "--party-size-max=5",  "--seed=0",
         },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=2"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=3"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=4"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(0, 813, "].party_size=2"),
+            Pattern.endsWith(0, 813, "].party_size=3"),
+            Pattern.endsWith(0, 813, "].party_size=4"),
+            Pattern.endsWith(0, 813, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
 
