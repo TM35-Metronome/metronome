@@ -713,6 +713,6 @@ const PokeballItem = struct {
     item: u16,
 };
 
-test "tm35-random stones" {
+test "tm35-random-stones" {
     // TODO: Tests
 }

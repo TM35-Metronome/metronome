@@ -645,7 +645,7 @@ fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
 const number_of_seeds = 40;
 const Pattern = util.testing.Pattern;
 
-test "stats" {
+test "tm35-rand-pokemons - stats" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".pokemons[*].stats.*",
         ".pokemons[*].evos[*].*",
@@ -660,12 +660,12 @@ test "stats" {
         .in = test_case,
         .args = &[_][]const u8{"--stats=random"},
         .patterns = &[_]Pattern{
-            Pattern.glob(710, 710, ".pokemons[*].stats.hp=*"),
-            Pattern.glob(710, 710, ".pokemons[*].stats.attack=*"),
-            Pattern.glob(710, 710, ".pokemons[*].stats.defense=*"),
-            Pattern.glob(710, 710, ".pokemons[*].stats.speed=*"),
-            Pattern.glob(710, 710, ".pokemons[*].stats.sp_attack=*"),
-            Pattern.glob(710, 710, ".pokemons[*].stats.sp_defense=*"),
+            Pattern.string(710, 710, "].stats.hp="),
+            Pattern.string(710, 710, "].stats.attack="),
+            Pattern.string(710, 710, "].stats.defense="),
+            Pattern.string(710, 710, "].stats.speed="),
+            Pattern.string(710, 710, "].stats.sp_attack="),
+            Pattern.string(710, 710, "].stats.sp_defense="),
         },
     });
 
@@ -704,7 +704,7 @@ test "stats" {
     }
 }
 
-test "machines" {
+test "tm35-rand-pokemons - machines" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".pokemons[*].types[*]=*",
         ".pokemons[*].tms[*]=*",
@@ -936,7 +936,7 @@ test "machines" {
     });
 }
 
-test "types" {
+test "tm35-rand-pokemons - types" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".pokemons[*].types[*]=*",
         ".pokemons[*].evos[*].*",
@@ -971,7 +971,7 @@ test "types" {
     }
 }
 
-test "abilities" {
+test "tm35-rand-pokemons - abilities" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".pokemons[*].abilities[*]=*",
         ".pokemons[*].evos[*].*",
@@ -1006,7 +1006,7 @@ test "abilities" {
     }
 }
 
-test "items" {
+test "tm35-rand-pokemons - items" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".pokemons[*].items[*]=*",
         ".pokemons[*].evos[*].*",

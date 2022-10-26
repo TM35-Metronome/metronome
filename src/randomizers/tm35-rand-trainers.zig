@@ -37,6 +37,7 @@ held_items: Set = Set{},
 species: Set = undefined,
 species_by_ability: SpeciesBy = undefined,
 species_by_type: SpeciesBy = undefined,
+species_by_dual_type: SpeciesByDualType = undefined,
 stats: MinMax(u16) = undefined,
 
 // Containers we reuse often enough that keeping them around with
@@ -46,7 +47,7 @@ intersection: Set = Set{},
 
 const Options = struct {
     seed: u64,
-    abilities: ThemeOption,
+    abilities: AbilityThemeOption,
     held_items: HeldItemOption,
     moves: MoveOption,
     party_size_max: u8,
@@ -54,7 +55,7 @@ const Options = struct {
     party_size: PartySizeOption,
     party_pokemons: PartyPokemonsOption,
     stats: StatsOption,
-    types: ThemeOption,
+    types: TypeThemeOption,
     excluded_pokemons: []const []const u8,
     excluded_trainers: []const []const u8,
     included_pokemons: []const []const u8,
@@ -76,10 +77,17 @@ const MoveOption = enum {
     random,
 };
 
-const ThemeOption = enum {
+const AbilityThemeOption = enum {
     same,
     random,
     themed,
+};
+
+const TypeThemeOption = enum {
+    same,
+    random,
+    themed,
+    dual_themed,
 };
 
 const StatsOption = enum {
@@ -114,7 +122,8 @@ pub const parsers = .{
     .@"unchanged|randomize" = clap.parsers.enumeration(PartyPokemonsOption),
     .@"unchanged|minimum|random" = clap.parsers.enumeration(PartySizeOption),
     .@"random|simular|follow_level" = clap.parsers.enumeration(StatsOption),
-    .@"random|same|themed" = clap.parsers.enumeration(ThemeOption),
+    .@"random|same|themed" = clap.parsers.enumeration(AbilityThemeOption),
+    .@"random|same|themed|dual_themed" = clap.parsers.enumeration(TypeThemeOption),
 };
 
 pub const params = clap.parseParamsComptime(
@@ -147,7 +156,7 @@ pub const params = clap.parseParamsComptime(
     \\        The total stats the picked pokemon should have if pokemons are randomized.
     \\        (default: random)
     \\
-    \\-t, --types <random|same|themed>
+    \\-t, --types <random|same|themed|dual_themed>
     \\        Which types each trainer should use if pokemons are randomized. (default: random)
     \\
     \\-a, --abilities <random|same|themed>
@@ -238,6 +247,7 @@ pub fn run(
     program.species = species;
     program.species_by_ability = try speciesByAbility(allocator, program.pokemons, species);
     program.species_by_type = try speciesByType(allocator, program.pokemons, species);
+    program.species_by_dual_type = try speciesByDualType(allocator, program.pokemons, species);
     program.stats = minMaxStats(program.pokemons, species);
 
     try program.randomize();
@@ -416,15 +426,21 @@ fn randomize(program: *Program) !void {
 
 fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
     const allocator = program.allocator;
+    const types = switch (program.options.types) {
+        .themed => blk: {
+            const t = util.random.item(program.random, program.species_by_type.keys()).?.*;
+            break :blk [_]u16{ t, t };
+        },
+        .dual_themed => util.random.item(program.random, program.species_by_dual_type.keys()).?.*,
+        else => undefined,
+    };
+    const ability = switch (program.options.abilities) {
+        .themed => util.random.item(program.random, program.species_by_ability.keys()).?.*,
+        else => undefined,
+    };
     const themes = Themes{
-        .type = switch (program.options.types) {
-            .themed => util.random.item(program.random, program.species_by_type.keys()).?.*,
-            else => undefined,
-        },
-        .ability = switch (program.options.abilities) {
-            .themed => util.random.item(program.random, program.species_by_ability.keys()).?.*,
-            else => undefined,
-        },
+        .types = types,
+        .ability = ability,
     };
 
     const wants_moves = switch (program.options.moves) {
@@ -631,7 +647,7 @@ fn fillWithRandomLevelUpMoves(
 }
 
 const Themes = struct {
-    type: u16,
+    types: [2]u16,
     ability: u16,
 };
 
@@ -655,7 +671,8 @@ fn randomizePartyMember(
             const t = util.random.item(program.random, pokemon.types.keys()).?.*;
             break :blk program.species_by_type.get(t).?;
         },
-        .themed => program.species_by_type.get(themes.type).?,
+        .themed => program.species_by_type.get(themes.types[0]).?,
+        .dual_themed => program.species_by_dual_type.get(themes.types).?,
         .random => program.species,
     };
 
@@ -801,6 +818,7 @@ const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 const Party = std.AutoArrayHashMapUnmanaged(u8, PartyMember);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+const SpeciesByDualType = std.AutoArrayHashMapUnmanaged([2]u16, Set);
 const SpeciesBy = std.AutoArrayHashMapUnmanaged(u16, Set);
 const TrainerNames = std.AutoArrayHashMapUnmanaged(u16, []const u8);
 const Trainers = std.AutoArrayHashMapUnmanaged(u16, Trainer);
@@ -858,6 +876,37 @@ fn speciesByType(allocator: mem.Allocator, pokemons: Pokemons, species: Set) !Sp
             const set = (try res.getOrPutValue(allocator, t, .{})).value_ptr;
             _ = try set.put(allocator, s, {});
         }
+    }
+
+    return res;
+}
+
+fn speciesByDualType(
+    allocator: mem.Allocator,
+    pokemons: Pokemons,
+    species: Set,
+) !SpeciesByDualType {
+    var res = SpeciesByDualType{};
+    errdefer {
+        for (res.values()) |*set|
+            set.deinit(allocator);
+        res.deinit(allocator);
+    }
+
+    for (species.keys()) |s| {
+        const pokemon = pokemons.get(s).?;
+        const p_types = pokemon.types.keys();
+        const types = switch (p_types.len) {
+            0 => continue,
+            1 => [2]u16{ p_types[0], p_types[0] },
+            else => [2]u16{
+                math.min(p_types[0], p_types[1]),
+                math.max(p_types[0], p_types[1]),
+            },
+        };
+
+        const set = (try res.getOrPutValue(allocator, types, .{})).value_ptr;
+        _ = try set.put(allocator, s, {});
     }
 
     return res;
@@ -964,7 +1013,7 @@ const Pokemon = struct {
 const number_of_seeds = 40;
 const Pattern = util.testing.Pattern;
 
-test {
+test "tm35-rand-trainers" {
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".items[*].battle_effect=*",
         ".moves[*].power=*",
@@ -979,7 +1028,8 @@ test {
         ".pokemons[*].abilities[*]=*",
         ".pokemons[*].moves[*].*",
         ".pokedex[*].*",
-        ".trainers[*].*",
+        ".trainers[*].party*",
+        ".trainers[*].name=*",
     });
     defer testing.allocator.free(test_case);
 
@@ -987,18 +1037,18 @@ test {
         .in = test_case,
         .args = &[_][]const u8{"--seed=0"},
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
             Pattern.glob(408, 408, ".trainers[*].party[*].item=*"),
             Pattern.glob(2400, 2400, ".trainers[*].party[*].moves[*]=*"),
-            Pattern.glob(252, 252, ".trainers[*].party_size=1"),
-            Pattern.glob(296, 296, ".trainers[*].party_size=2"),
-            Pattern.glob(187, 187, ".trainers[*].party_size=3"),
-            Pattern.glob(26, 26, ".trainers[*].party_size=4"),
-            Pattern.glob(13, 13, ".trainers[*].party_size=5"),
-            Pattern.glob(39, 39, ".trainers[*].party_size=6"),
+            Pattern.endsWith(252, 252, "].party_size=1"),
+            Pattern.endsWith(296, 296, "].party_size=2"),
+            Pattern.endsWith(187, 187, "].party_size=3"),
+            Pattern.endsWith(26, 26, "].party_size=4"),
+            Pattern.endsWith(13, 13, "].party_size=5"),
+            Pattern.endsWith(39, 39, "].party_size=6"),
         },
     });
 
@@ -1007,30 +1057,30 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(178, 178, ".trainers[*].party_type=moves"),
-            Pattern.glob(635, 635, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(178, 178, "].party_type=moves"),
+            Pattern.endsWith(635, 635, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=unchanged", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=random", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(178, 178, ".trainers[*].party_type=both"),
-            Pattern.glob(635, 635, ".trainers[*].party_type=item"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=none"),
+            Pattern.endsWith(178, 178, "].party_type=both"),
+            Pattern.endsWith(635, 635, "].party_type=item"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(0, 0, "].party_type=none"),
             Pattern.glob(1808, 1808, ".trainers[*].party[*].item=*"),
         },
     });
@@ -1041,30 +1091,30 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--moves=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(105, 105, ".trainers[*].party_type=item"),
-            Pattern.glob(708, 708, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(105, 105, "].party_type=item"),
+            Pattern.endsWith(708, 708, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--moves=unchanged", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(91, 91, ".trainers[*].party_type=both"),
-            Pattern.glob(14, 14, ".trainers[*].party_type=item"),
-            Pattern.glob(87, 87, ".trainers[*].party_type=moves"),
-            Pattern.glob(621, 621, ".trainers[*].party_type=none"),
+            Pattern.endsWith(91, 91, "].party_type=both"),
+            Pattern.endsWith(14, 14, "].party_type=item"),
+            Pattern.endsWith(87, 87, "].party_type=moves"),
+            Pattern.endsWith(621, 621, "].party_type=none"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
         .in = test_case,
         .args = &[_][]const u8{ "--moves=random", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(105, 105, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(708, 708, ".trainers[*].party_type=moves"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=none"),
+            Pattern.endsWith(105, 105, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(708, 708, "].party_type=moves"),
+            Pattern.endsWith(0, 0, "].party_type=none"),
             Pattern.glob(7232, 7232, ".trainers[*].party[*].moves[*]=*"),
         },
     });
@@ -1074,10 +1124,10 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--held-items=none", "--moves=none", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_type=both"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=item"),
-            Pattern.glob(0, 0, ".trainers[*].party_type=moves"),
-            Pattern.glob(813, 813, ".trainers[*].party_type=none"),
+            Pattern.endsWith(0, 0, "].party_type=both"),
+            Pattern.endsWith(0, 0, "].party_type=item"),
+            Pattern.endsWith(0, 0, "].party_type=moves"),
+            Pattern.endsWith(813, 813, "].party_type=none"),
         },
     });
 
@@ -1086,12 +1136,12 @@ test {
         .in = test_case,
         .args = &[_][]const u8{ "--party-size-min=2", "--party-size-max=5", "--seed=0" },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(548, 548, ".trainers[*].party_size=2"),
-            Pattern.glob(187, 187, ".trainers[*].party_size=3"),
-            Pattern.glob(26, 26, ".trainers[*].party_size=4"),
-            Pattern.glob(52, 52, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(548, 548, "].party_size=2"),
+            Pattern.endsWith(187, 187, "].party_size=3"),
+            Pattern.endsWith(26, 26, "].party_size=4"),
+            Pattern.endsWith(52, 52, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -1101,12 +1151,12 @@ test {
             "--party-size-max=5",   "--seed=0",
         },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(813, 813, ".trainers[*].party_size=2"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=3"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=4"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(813, 813, "].party_size=2"),
+            Pattern.endsWith(0, 0, "].party_size=3"),
+            Pattern.endsWith(0, 0, "].party_size=4"),
+            Pattern.endsWith(0, 0, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
     try util.testing.runProgramFindPatterns(Program, .{
@@ -1116,12 +1166,12 @@ test {
             "--party-size-max=5",  "--seed=0",
         },
         .patterns = &[_]Pattern{
-            Pattern.glob(0, 0, ".trainers[*].party_size=1"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=2"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=3"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=4"),
-            Pattern.glob(0, 813, ".trainers[*].party_size=5"),
-            Pattern.glob(0, 0, ".trainers[*].party_size=6"),
+            Pattern.endsWith(0, 0, "].party_size=1"),
+            Pattern.endsWith(0, 813, "].party_size=2"),
+            Pattern.endsWith(0, 813, "].party_size=3"),
+            Pattern.endsWith(0, 813, "].party_size=4"),
+            Pattern.endsWith(0, 813, "].party_size=5"),
+            Pattern.endsWith(0, 0, "].party_size=6"),
         },
     });
 

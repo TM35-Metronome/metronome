@@ -338,7 +338,7 @@ fn collectMachines(in: [:0]const u8) !CollectedMachines {
     return res;
 }
 
-test {
+test "tm35-rand-machines" {
     const number_of_seeds = 40;
     const test_case = try util.testing.filter(util.testing.test_case, &.{
         ".hms[*]=*",
