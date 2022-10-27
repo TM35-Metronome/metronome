@@ -802,7 +802,7 @@ fn randomize(program: *Program) !void {
     });
     const script_file_name = util.path.join(&[_][]const u8{
         program_cache_dir.constSlice(),
-        "tmp_scipt",
+        "tmp_script",
     });
     std.log.info("{s}", .{script_file_name.constSlice()});
 
