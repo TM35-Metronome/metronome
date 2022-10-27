@@ -28,6 +28,9 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
+
       - if: matrix.os == 'ubuntu-latest' && matrix.step == 'install'
         run: sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
-      - run: zig build ${{ matrix.step }} -D${{ matrix.release }}
+
+      - name: zig build ${{ matrix.step }} -D${{ matrix.release }}
+        run: zig build ${{ matrix.step }} -D${{ matrix.release }}

@@ -57,10 +57,15 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      - run: |
-          sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
+
+      - if: matrix.target == 'native'
+        run: sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
+
+      - name: zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
+        run: |
           zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
           ./make-zip.sh metronome-${{ matrix.name }} ${{ matrix.name }}
+
       - uses: actions/upload-artifact@v3
         with:
           name: metronome-${{ matrix.name }}
