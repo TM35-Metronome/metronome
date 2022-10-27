@@ -207,11 +207,8 @@ pub const Rom = struct {
 
         const section_index = for (sections) |s, i| {
             const slice = s.toSlice(data.items);
-            if (slice.start.value() == old_start and
-                slice.len.value() == old_len)
-            {
+            if (slice.start.value() == old_start and slice.len.value() == old_len)
                 break i;
-            }
         } else unreachable;
 
         const is_last_section = section_index == sections.len - 1;
@@ -222,7 +219,7 @@ pub const Rom = struct {
 
         const potential_new_end = old_start + new_size;
         const can_perform_in_place_resize = potential_new_end <= following_section_start;
-        if (can_perform_in_place_resize) {
+        if (can_perform_in_place_resize and !is_last_section) {
             // If there is room, we can beform the resize of the section inline in memory.
             // This only requires modifying the section offset in the rom. No copy required.
             const section = sections[section_index];
@@ -236,6 +233,7 @@ pub const Rom = struct {
 
         const arm9_section = rom.arm9();
         const can_move_to_end_of_file = old.ptr != arm9_section.ptr;
+        var end: u32 = undefined;
         const new_start = if (can_move_to_end_of_file) blk: {
             // Most sections can be moved to the end of the rom. This is more efficient
             // than making room for the section where it is currently located. It will
@@ -243,7 +241,12 @@ pub const Rom = struct {
             // using this method.
             const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
+
             const new_start = mem.alignForward(last_section_end, 128);
+            const section = sections[section_index];
+            section.set(data.items, Slice.init(new_start, new_size));
+            end = section.toSlice(data.items).end();
+
             if (new_start + new_size > data.items.len)
                 try data.resize(data.items.len * 2);
 
@@ -253,8 +256,6 @@ pub const Rom = struct {
                 data.items[old_start..][0..old.len],
             );
 
-            const section = sections[section_index];
-            section.set(data.items, Slice.init(new_start, new_size));
             break :blk new_start;
         } else blk: {
             // Some sections (arm9) are not allowed to be moved, so we have to make room
@@ -275,8 +276,8 @@ pub const Rom = struct {
             const section = sections[section_index];
             section.set(data.items, Slice.init(old_start, new_size));
 
-            const new_rom_end = sections[sections.len - 1].toSlice(data.items).end();
-            if (new_rom_end > data.items.len)
+            end = sections[sections.len - 1].toSlice(data.items).end();
+            if (end > data.items.len)
                 try data.resize(data.items.len * 2);
 
             mem.copyBackwards(
@@ -286,9 +287,6 @@ pub const Rom = struct {
             );
             break :blk old_start;
         };
-
-        const last_section = sections[sections.len - 1];
-        const end = last_section.toSlice(data.items).end();
 
         // Update header after resize
         const h = rom.header();
@@ -361,6 +359,7 @@ pub const Rom = struct {
             const other_index = @ptrToInt(other) - @ptrToInt(data.ptr);
             debug.assert(start_index + @sizeOf(lu32) <= data_end);
             debug.assert(other_index + @sizeOf(lu32) <= data_end);
+            debug.assert(kind == .slice or start.value() <= other.value());
             return .{
                 .start_index = @intCast(u32, start_index),
                 .other_index = @intCast(u32, other_index),
