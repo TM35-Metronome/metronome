@@ -35,11 +35,11 @@ jobs:
         include:
             - name: linux
               target: native
-              strip: strip=true
+              strip: strip=false
               release: release=true
             - name: windows
               target: x86_64-windows-gnu
-              strip: strip=true
+              strip: strip=false
               release: release=true
             - name: linux-debug
               target: native
