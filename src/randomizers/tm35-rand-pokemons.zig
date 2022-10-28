@@ -141,8 +141,8 @@ pub fn run(
     for (program.pokemons.keys()) |species|
         program.first_evos.putAssumeCapacity(species, {});
     for (program.pokemons.values()) |pokemon| {
-        for (pokemon.evos.values()) |species|
-            _ = program.first_evos.swapRemove(species);
+        for (pokemon.evos.values()) |evo|
+            _ = program.first_evos.swapRemove(evo.target);
     }
 
     try program.randomize();
@@ -156,33 +156,10 @@ fn output(program: *Program, writer: anytype) !void {
             .types = pokemon.types,
             .abilities = pokemon.abilities,
             .items = pokemon.items,
+            .evos = pokemon.evos,
+            .stats = pokemon.stats,
         }) });
 
-        var stat_it = pokemon.stats.iterator();
-        while (stat_it.next()) |entry| {
-            try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .stats = ston.field(@tagName(entry.key), entry.value.*),
-            }) });
-        }
-
-        for (pokemon.evos.keys()) |evo_id, j| {
-            const evo = pokemon.evos.values()[j];
-            try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .evos = ston.index(evo_id, .{ .target = evo }),
-            }) });
-        }
-        for (pokemon.evo_params.keys()) |evo_id, j| {
-            const param = pokemon.evo_params.values()[j];
-            try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .evos = ston.index(evo_id, .{ .param = param }),
-            }) });
-        }
-        for (pokemon.evo_methods.keys()) |evo_id, j| {
-            const method = pokemon.evo_methods.values()[j];
-            try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .evos = ston.index(evo_id, .{ .method = method }),
-            }) });
-        }
         var j: usize = 0;
         while (j < pokemon.tms_learned.len) : (j += 1) {
             if (!pokemon.tms_occupied.get(j))
@@ -229,18 +206,15 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     abilities.index,
                     abilities.value,
                 ),
-                .evos => |evos| switch (evos.value) {
-                    .target => |target| _ = try pokemon.evos.put(allocator, evos.index, target),
-                    .param => |param| _ = try pokemon.evo_params.put(
-                        allocator,
-                        evos.index,
-                        param,
-                    ),
-                    .method => |method| _ = try pokemon.evo_methods.put(
-                        allocator,
-                        evos.index,
-                        method,
-                    ),
+                .evos => |evos| {
+                    switch (evos.value) {
+                        .target => |target| try pokemon.evos.put(
+                            allocator,
+                            evos.index,
+                            .{ .target = target },
+                        ),
+                        .param, .method => return error.DidNotConsumeData,
+                    }
                 },
                 .catch_rate,
                 .base_exp_yield,
@@ -422,11 +396,11 @@ fn copyFieldsToEvolutions(
     pokemon: Pokemon,
     comptime fields: []const []const u8,
 ) void {
-    for (pokemon.evos.values()) |evo_species| {
-        const evo = program.pokemons.getPtr(evo_species).?;
+    for (pokemon.evos.values()) |evo| {
+        const evo_pokemon = program.pokemons.getPtr(evo.target).?;
         inline for (fields) |field|
-            @field(evo, field) = @field(pokemon, field);
-        program.copyFieldsToEvolutions(evo.*, fields);
+            @field(evo_pokemon, field) = @field(pokemon, field);
+        program.copyFieldsToEvolutions(evo_pokemon.*, fields);
     }
 }
 
@@ -460,9 +434,9 @@ fn randomizeStatsEx(
     pokemon.statsFromSlice(stats.slice());
 
     if (program.options.stats == .random_follow_evos) {
-        for (pokemon.evos.values()) |species| {
-            const evo = program.pokemons.getPtr(species).?;
-            program.randomizeStatsEx(random, evo, stats);
+        for (pokemon.evos.values()) |evo| {
+            const evo_pokemon = program.pokemons.getPtr(evo.target).?;
+            program.randomizeStatsEx(random, evo_pokemon, stats);
         }
     }
 }
@@ -499,9 +473,7 @@ fn foldf32(a: f64, b: f32) f64 {
     return a + b;
 }
 
-const EvoMethods = std.AutoArrayHashMapUnmanaged(u8, format.Evolution.Method);
-const EvoParams = std.AutoArrayHashMapUnmanaged(u8, u16);
-const Evos = std.AutoArrayHashMapUnmanaged(u8, u16);
+const Evos = std.AutoArrayHashMapUnmanaged(u8, Evo);
 const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Map = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
@@ -521,8 +493,6 @@ const Pokemon = struct {
     hms_learned: MachinesLearned = mem.zeroes(MachinesLearned),
     hms_occupied: MachinesLearned = mem.zeroes(MachinesLearned),
     evos: Evos = Evos{},
-    evo_params: EvoParams = EvoParams{},
-    evo_methods: EvoMethods = EvoMethods{},
 
     fn statsToArray(pokemon: *Pokemon) std.BoundedArray(u8, Stats.len) {
         var res = std.BoundedArray(u8, Stats.len){ .buffer = undefined };
@@ -539,6 +509,10 @@ const Pokemon = struct {
         while (stats_it.next()) |stat| : (i += 1)
             stat.value.* = stats[i];
     }
+};
+
+const Evo = struct {
+    target: u16,
 };
 
 const Move = struct {
@@ -585,9 +559,9 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
         var pokemon_total: usize = 0;
         for (pokemon_stats.slice()) |item| pokemon_total += item;
 
-        for (pokemon.evos.values()) |species| {
-            const evo = program.pokemons.getPtr(species).?;
-            const evo_stats = evo.statsToArray();
+        for (pokemon.evos.values()) |evo| {
+            const evo_pokemon = program.pokemons.getPtr(evo.target).?;
+            const evo_stats = evo_pokemon.statsToArray();
 
             var evo_total: usize = 0;
             for (evo_stats.slice()) |item| evo_total += item;
@@ -609,9 +583,9 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
 fn expectPokemonMapFieldFollowEvo(program: Program, comptime field: []const u8) !void {
     const pokemons = program.pokemons.values();
     for (pokemons) |*pokemon| {
-        for (pokemon.evos.values()) |species| {
-            const evo = program.pokemons.getPtr(species).?;
-            try util.set.expectEqual(@field(pokemon, field), @field(evo, field));
+        for (pokemon.evos.values()) |evo| {
+            const evo_pokemon = program.pokemons.getPtr(evo.target).?;
+            try util.set.expectEqual(@field(pokemon, field), @field(evo_pokemon, field));
         }
     }
 }
