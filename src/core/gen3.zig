@@ -720,9 +720,9 @@ pub const Game = struct {
             const scripts = try map_header.map_scripts.toSliceEnd(gba_rom);
 
             for (scripts) |*s| {
-                if (s.@"type" == 0)
+                if (s.type == 0)
                     break;
-                if (s.@"type" == 2 or s.@"type" == 4)
+                if (s.type == 2 or s.type == 4)
                     continue;
 
                 const script_bytes = try s.addr().other.toSliceEnd(gba_rom);

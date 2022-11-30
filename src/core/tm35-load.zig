@@ -170,7 +170,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
             .effect = move.effect,
             .power = move.power,
-            .type = move.@"type",
+            .type = move.type,
             .accuracy = move.accuracy,
             .pp = move.pp,
             .target = move.target,

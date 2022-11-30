@@ -106,9 +106,9 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
         const scripts = try map_header.map_scripts.toSliceEnd(game.data);
 
         for (scripts) |*s, script_id| {
-            if (s.@"type" == 0)
+            if (s.type == 0)
                 break;
-            if (s.@"type" == 2 or s.@"type" == 4)
+            if (s.type == 2 or s.type == 4)
                 continue;
 
             const script_data = try s.addr().other.toSliceEnd(game.data);

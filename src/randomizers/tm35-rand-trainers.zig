@@ -729,29 +729,22 @@ fn randomizePartyMember(
             member.ability = entry.key_ptr.*;
     };
 
-    switch (program.options.stats) {
-        .follow_level => {
-            member.species = try randomSpeciesWithSimularTotalStats(
-                program,
-                pick_from,
-                levelScaling(program.stats.min, program.stats.max, level),
-            );
-            return;
-        },
-        .simular => if (program.pokemons.get(species)) |pokemon| {
-            member.species = try randomSpeciesWithSimularTotalStats(
+    member.species = switch (program.options.stats) {
+        .follow_level => try randomSpeciesWithSimularTotalStats(
+            program,
+            pick_from,
+            levelScaling(program.stats.min, program.stats.max, level),
+        ),
+        .simular => if (program.pokemons.get(species)) |pokemon|
+            try randomSpeciesWithSimularTotalStats(
                 program,
                 pick_from,
                 pokemon.total_stats,
-            );
-            return;
-        } else {},
-        .random => {},
-    }
-
-    // If the above switch didn't return, the best we can do is just pick a
-    // random Pokémon from the pick_from set
-    member.species = util.random.item(program.random, pick_from.keys()).?.*;
+            )
+        else
+            util.random.item(program.random, pick_from.keys()).?.*,
+        .random => util.random.item(program.random, pick_from.keys()).?.*,
+    };
 }
 
 fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_stats: u16) !u16 {
