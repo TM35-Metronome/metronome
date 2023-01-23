@@ -20,6 +20,10 @@ const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 
+test {
+    testing.refAllDecls(@This());
+}
+
 pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]u8,
@@ -196,7 +200,7 @@ pub const Move = extern struct {
     stats_affected_chance2: u8,
     stats_affected_chance3: u8,
 
-    // TODO: Figure out if this is actually how the last fields are layed out.
+    // TODO: Figure out if this is actually how the last fields are laid out.
     padding1: [2]u8,
     flags: lu16,
     padding2: [2]u8,
@@ -1476,9 +1480,9 @@ pub const Game = struct {
         }
 
         return ScriptCommands{
-            .static_pokemons = static_pokemons.toOwnedSlice(),
-            .given_pokemons = given_pokemons.toOwnedSlice(),
-            .pokeball_items = pokeball_items.toOwnedSlice(),
+            .static_pokemons = try static_pokemons.toOwnedSlice(),
+            .given_pokemons = try given_pokemons.toOwnedSlice(),
+            .pokeball_items = try pokeball_items.toOwnedSlice(),
         };
     }
 

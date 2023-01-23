@@ -24,24 +24,22 @@ pub const bu16 = Int(u16, .Big);
 pub const bu32 = Int(u32, .Big);
 pub const bu64 = Int(u64, .Big);
 
-/// A data structure representing an integer of a specific endianess
+/// A data structure representing an integer of a specific endianness
 pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
-    comptime debug.assert(@typeInfo(_Inner) == .Int);
-
-    return packed struct {
-        inner: Inner,
+    return enum(_Inner) {
+        _,
 
         pub const Inner = _Inner;
         pub const endian = _endian;
 
         pub fn init(v: Inner) @This() {
             @setEvalBranchQuota(100000000);
-            return .{ .inner = swap(v) };
+            return @intToEnum(@This(), swap(v));
         }
 
-        /// Converts the integer to native endianess and returns it.
+        /// Converts the integer to native endianness and returns it.
         pub fn value(int: @This()) Inner {
-            return swap(int.inner);
+            return swap(@enumToInt(int));
         }
 
         pub fn format(
@@ -69,12 +67,12 @@ test "Int" {
     try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, @ptrCast(*const [4]u8, &numBig));
     switch (native_endian) {
         .Big => {
-            try testing.expectEqual(@as(u32, 0x78563412), numLittle.inner);
-            try testing.expectEqual(value, numBig.inner);
+            try testing.expectEqual(@as(u32, 0x78563412), @enumToInt(numLittle));
+            try testing.expectEqual(value, @enumToInt(numBig));
         },
         .Little => {
-            try testing.expectEqual(@as(u32, 0x78563412), numBig.inner);
-            try testing.expectEqual(value, numLittle.inner);
+            try testing.expectEqual(@as(u32, 0x78563412), @enumToInt(numBig));
+            try testing.expectEqual(value, @enumToInt(numLittle));
         },
     }
 }

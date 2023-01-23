@@ -7,10 +7,6 @@ pub const encodings = @import("gen4/encodings.zig");
 pub const offsets = @import("gen4/offsets.zig");
 pub const script = @import("gen4/script.zig");
 
-comptime {
-    _ = encodings;
-}
-
 const debug = std.debug;
 const io = std.io;
 const math = std.math;
@@ -21,6 +17,10 @@ const nds = rom.nds;
 const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
+
+test {
+    std.testing.refAllDecls(@This());
+}
 
 pub const BasePokemon = extern struct {
     stats: common.Stats,
@@ -84,7 +84,7 @@ pub const MoveTutor = extern struct {
     tutor: u8,
 
     comptime {
-        std.debug.assert(@sizeOf(@This()) == 8);
+        std.debug.assert(@sizeOf(@This()) == 4);
     }
 };
 
@@ -481,13 +481,13 @@ fn decryptAndDecode(data: []align(1) const lu16, key: u16, out: anytype) !void {
                 const char = @intCast(u16, container & 0x1FF);
                 if (char == 0x1Ff)
                     return;
-                try encodings.decode2(&@bitCast([2]u8, lu16.init(char)), out);
+                try encodings.decode2(&@bitCast([2]u8, @enumToInt(lu16.init(char))), out);
                 container >>= 9;
             }
         } else {
             if (decoded == 0xffff)
                 return;
-            try encodings.decode2(&@bitCast([2]u8, lu16.init(decoded)), out);
+            try encodings.decode2(&@bitCast([2]u8, @enumToInt(lu16.init(decoded))), out);
         }
     }
 }
@@ -1140,9 +1140,9 @@ pub const Game = struct {
         }
 
         return ScriptCommands{
-            .static_pokemons = static_pokemons.toOwnedSlice(),
-            .given_pokemons = given_pokemons.toOwnedSlice(),
-            .pokeball_items = pokeball_items.toOwnedSlice(),
+            .static_pokemons = try static_pokemons.toOwnedSlice(),
+            .given_pokemons = try given_pokemons.toOwnedSlice(),
+            .pokeball_items = try pokeball_items.toOwnedSlice(),
         };
     }
 

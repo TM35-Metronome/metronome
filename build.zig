@@ -113,8 +113,9 @@ fn buildAndLinkWebview(exe: *LibExeObjStep, target: std.zig.CrossTarget) void {
     switch (target.getOsTag()) {
         .windows => {
             exe.addIncludePath("lib/webview-c/ms.webview2/include");
-            exe.addObjectFile("lib/webview-c/ms.webview2/x64/WebView2Loader.dll");
+            exe.linkSystemLibrary("advapi32");
             exe.linkSystemLibrary("shlwapi");
+            exe.linkSystemLibrary("version");
         },
         .linux => {
             exe.linkSystemLibrary("webkit2gtk-4.0");
@@ -162,7 +163,7 @@ fn buildProgram(
     src: []const u8,
     opt: BuildProgramOptions,
 ) *LibExeObjStep {
-    const step = b.step(name, "");
+    const step = b.step(name, b.fmt("Build and install {s}", .{name}));
     const exe = b.addExecutable(name, src);
     for (pkgs) |pkg|
         exe.addPackage(pkg);

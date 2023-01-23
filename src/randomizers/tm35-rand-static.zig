@@ -321,7 +321,7 @@ fn randomize(program: *Program) !void {
                                 // If this Pokémon has no type (for some reason), then we
                                 // cannot pick a pokemon of the same type. The only thing
                                 // we can assume is that the Pokémon is the same type
-                                // as it self, and therefor just use that as the simular
+                                // as it self, and therefore just use that as the simular
                                 // Pokémon.
                                 const type_max = prev_pokemon.types.count();
                                 if (type_max == 0) {
@@ -348,7 +348,7 @@ fn randomize(program: *Program) !void {
             },
             .@"legendary-with-legendary" => {
                 // There is no way to specify in game that a Pokemon is a legendary.
-                // There are therefor two methods we can use to pick legendaries
+                // There are therefore two methods we can use to pick legendaries
                 // 1. Have a table of Pokemons which are legendaries.
                 //    - This does not work with roms that have been hacked
                 //      in a way that changes which Pokemons should be considered

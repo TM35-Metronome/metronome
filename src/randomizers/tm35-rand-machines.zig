@@ -80,7 +80,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
             .hms = args.args.hms,
-            .excluded_moves = excluded_moves.toOwnedSlice(),
+            .excluded_moves = try excluded_moves.toOwnedSlice(),
         },
     };
 }
@@ -199,7 +199,7 @@ fn randomize(program: *Program) !void {
     }
 
     // HACK: The games does not used mono fonts, so actually, using the
-    //       max_line_len to destribute newlines will not actually be totally
+    //       max_line_len to distribute newlines will not actually be totally
     //       correct. The best I can do here is to just reduce the max_line_len
     //       by some amount and hope it is enough for all strings.
     max_line_len -|= 5;

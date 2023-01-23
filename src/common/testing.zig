@@ -80,8 +80,8 @@ pub const Pattern = struct {
     min: usize,
     max: usize,
     ctx: Context,
-    matches: std.meta.FnPtr(fn (Context, []const u8) bool),
-    deinit: std.meta.FnPtr(fn (Context, mem.Allocator) void),
+    matches: *const fn (Context, []const u8) bool,
+    deinit: *const fn (Context, mem.Allocator) void,
 
     pub fn string(min: usize, max: usize, str: []const u8) Pattern {
         return .{

@@ -210,16 +210,16 @@ fn randomize(program: *Program) !void {
             var node = (try pairs.getOrPutValue(allocator, start_of_string, .{})).value_ptr;
             var it = view.iterator();
             while (it.nextCodepointSlice()) |code| {
-                const occurance = (try node.codepoints.getOrPutValue(allocator, code, 0))
+                const occurrence = (try node.codepoints.getOrPutValue(allocator, code, 0))
                     .value_ptr;
-                occurance.* += 1;
+                occurrence.* += 1;
                 node.total += 1;
                 node = (try pairs.getOrPutValue(allocator, code, .{})).value_ptr;
             }
 
-            const occurance = (try node.codepoints.getOrPutValue(allocator, end_of_string, 0))
+            const occurrence = (try node.codepoints.getOrPutValue(allocator, end_of_string, 0))
                 .value_ptr;
-            occurance.* += 1;
+            occurrence.* += 1;
             node.total += 1;
             max = math.max(max, item.name.value.len);
         }
@@ -248,7 +248,7 @@ fn randomize(program: *Program) !void {
                 node = pairs.get(pick).?;
             }
 
-            str.name.value = new_name.toOwnedSlice();
+            str.name.value = try new_name.toOwnedSlice();
         }
     }
 }
@@ -256,14 +256,14 @@ fn randomize(program: *Program) !void {
 const end_of_string = "\x00";
 const start_of_string = "\x01";
 
-const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurences);
+const CodepointPairs = std.StringArrayHashMapUnmanaged(Occurrences);
 const NameSet = std.AutoArrayHashMapUnmanaged(u16, Name);
 
 const Name = struct {
     name: ston.String([]const u8),
 };
 
-const Occurences = struct {
+const Occurrences = struct {
     total: usize = 0,
     codepoints: std.StringArrayHashMapUnmanaged(usize) = std.StringArrayHashMapUnmanaged(usize){},
 };

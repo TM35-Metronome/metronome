@@ -150,21 +150,21 @@ pub const Rom = struct {
     }
 
     /// Returns the arm9 section of the rom. Note here that this section could
-    /// be encoded and therefor not very useful.
+    /// be encoded and therefore not very useful.
     pub fn arm9(rom: Rom) []u8 {
         const h = rom.header();
         const offset = h.arm9.offset.value();
         return rom.data.items[offset..][0..h.arm9.size.value()];
     }
 
-    pub fn nitroFooter(rom: Rom) []u8 {
-        const h = rom.header();
-        const offset = h.arm9.offset.value() + h.arm9.size.value();
-        const footer = rom.data.items[offset..][0..12];
-        if (@bitCast(lu32, footer[0..4].*).value() != 0xDEC00621)
-            return footer[0..0];
-        return footer;
-    }
+    // pub fn nitroFooter(rom: Rom) []u8 {
+    //     const h = rom.header();
+    //     const offset = h.arm9.offset.value() + h.arm9.size.value();
+    //     const footer = rom.data.items[offset..][0..12];
+    //     if (@bitCast(lu32, footer[0..4].*).value() != 0xDEC00621)
+    //         return footer[0..0];
+    //     return footer;
+    // }
 
     pub fn arm7(rom: Rom) []u8 {
         const h = rom.header();
@@ -437,9 +437,8 @@ pub const Rom = struct {
         const size = try file.getEndPos();
         try file.seekTo(0);
 
-        // FIXME: Compiler crashes if we test agains the actual size of `Header`
-        // if (size < @sizeOf(Header))
-        //     return error.InvalidRom;
+        if (size < @sizeOf(Header))
+            return error.InvalidRom;
         if (size < 4096)
             return error.InvalidRom;
 

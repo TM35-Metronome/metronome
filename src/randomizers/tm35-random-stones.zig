@@ -230,7 +230,7 @@ fn randomize(program: *Program) !void {
     }
 
     // HACK: The games does not used mono fonts, so actually, using the
-    //       max_line_len to destribute newlines will not actually be totally
+    //       max_line_len to distribute newlines will not actually be totally
     //       correct. The best I can do here is to just reduce the max_line_len
     //       by some amount and hope it is enough for all strings.
     max_line_len = math.sub(usize, max_line_len, 5) catch max_line_len;
@@ -243,7 +243,7 @@ fn randomize(program: *Program) !void {
     const pokemons_by_egg_group = try filterBy(allocator, species, program.pokemons, eggGroupFilter);
     const pokemons_by_growth_rate = try filterBy(allocator, species, program.pokemons, growthRateFilter);
 
-    // Make sure these indexs line up with the array below
+    // Make sure these indices line up with the array below
     const chance_stone = 0;
     const stat_stone = 1;
     const growth_stone = 2;
@@ -482,7 +482,7 @@ fn randomize(program: *Program) !void {
         const item = program.items.getPtr(item_id).?;
 
         // We have no idea as to how long the name/desc can be in the game we
-        // are working on. Our best guess will therefor be to use the current
+        // are working on. Our best guess will therefore be to use the current
         // items name/desc as the limits and pick something that fits.
         item.* = Item{
             .name = pickString(item.name.len, strs.names),
@@ -608,7 +608,7 @@ fn filterBy(
     allocator: mem.Allocator,
     species: Set,
     pokemons: Pokemons,
-    filter: std.meta.FnPtr(fn (Pokemon, []u16) []const u16),
+    filter: *const fn (Pokemon, []u16) []const u16,
 ) !PokemonBy {
     var buf: [16]u16 = undefined;
     var pokemons_by = PokemonBy{};

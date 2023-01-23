@@ -142,7 +142,7 @@ pub const Fs = struct {
         return fnt_mains[0..len];
     }
 
-    /// Get a file system from a narc file. This function can faile if the
+    /// Get a file system from a narc file. This function can failed if the
     /// bytes are not a valid narc.
     pub fn fromNarc(data: []u8) !Fs {
         var fbs = io.fixedBufferStream(data);
@@ -487,9 +487,9 @@ pub const Builder = struct {
         const fnt_main_bytes = mem.sliceAsBytes(builder.fnt_main.items);
         try builder.fnt_sub.insertSlice(0, fnt_main_bytes);
         return Fs{
-            .fnt_main = builder.fnt_main.toOwnedSlice(),
-            .fnt = builder.fnt_sub.toOwnedSlice(),
-            .fat = builder.fat.toOwnedSlice(),
+            .fnt_main = try builder.fnt_main.toOwnedSlice(),
+            .fnt = try builder.fnt_sub.toOwnedSlice(),
+            .fat = try builder.fat.toOwnedSlice(),
             .data = &[_]u8{},
         };
     }

@@ -551,7 +551,7 @@ const ScriptData = struct {
 
     // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
     // was last set to by the script. This variables are used by callstd
-    // to give and optain items.
+    // to give and obtain items.
     VAR_0x8000: ?*align(1) lu16 = null,
     VAR_0x8001: ?*align(1) lu16 = null,
     static_pokemons: std.ArrayList(StaticPokemon),
@@ -799,10 +799,10 @@ pub const Game = struct {
             .move_names = info.move_names.slice(gba_rom),
             .type_names = info.type_names.slice(gba_rom),
             .map_headers = map_headers,
-            .static_pokemons = script_data.static_pokemons.toOwnedSlice(),
-            .given_pokemons = script_data.given_pokemons.toOwnedSlice(),
-            .pokeball_items = script_data.pokeball_items.toOwnedSlice(),
-            .text = script_data.text.toOwnedSlice(),
+            .static_pokemons = try script_data.static_pokemons.toOwnedSlice(),
+            .given_pokemons = try script_data.given_pokemons.toOwnedSlice(),
+            .pokeball_items = try script_data.pokeball_items.toOwnedSlice(),
+            .text = try script_data.text.toOwnedSlice(),
         };
     }
 

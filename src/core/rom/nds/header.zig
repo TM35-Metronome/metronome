@@ -16,7 +16,13 @@ const lu64 = int.lu64;
 
 pub const crc_modbus = blk: {
     @setEvalBranchQuota(crc.crcspec_init_backward_cycles);
-    break :blk crc.CrcSpec(u16).init(0x8005, 0xFFFF, 0x0000, true, true);
+    break :blk crc.Spec(u16).init(.{
+        .polynomial = 0x8005,
+        .initial_value = 0xFFFF,
+        .xor_value = 0x0000,
+        .reflect_data = true,
+        .reflect_remainder = true,
+    });
 };
 
 test "nds.crc_modbus" {
@@ -97,7 +103,7 @@ pub const Header = extern struct {
     reserved6: [3]u8,
 
     // 1BFh 1    Flags? (usually 01h) (DSiware Browser: 0Bh)
-    //         bit2: Custom Icon  (0=No/Normal, 1=Use banner.sav)
+    //         bit2: Custom Icon  (0=No/Normal, 1=Use banner.save)
     unknown_flags: u8,
 
     arm9i_rom_offset: lu32,

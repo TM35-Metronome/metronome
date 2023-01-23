@@ -221,7 +221,7 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
         pak += 4;
     }
 
-    return allocator.shrink(pak_buffer, pak);
+    return allocator.realloc(pak_buffer, pak);
 }
 
 fn search(_p: usize, raw_buffer: []const u8, raw: usize, raw_end: usize) []const u8 {

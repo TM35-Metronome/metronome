@@ -137,7 +137,7 @@ pub const params = clap.parseParamsComptime(
     \\        The method used to picking moves. (default: none)
     \\
     \\-p, --party-pokemons <unchanged|randomize>
-    \\        Wether the trainers pokemons should be randomized. (default: unchanged)
+    \\        Whether the trainers pokemons should be randomized. (default: unchanged)
     \\
     \\-m, --party-size-min <INT>
     \\        The minimum size each trainers party is allowed to be. (default: 1)
@@ -1205,7 +1205,7 @@ test "tm35-rand-trainers" {
 
 // TODO: Test these parameters
 //     "-p, --party-pokemons <unchanged|randomize> " ++
-//         "Wether the trainers pokemons should be randomized. (default: unchanged)",
+//         "Whether the trainers pokemons should be randomized. (default: unchanged)",
 //     "-S, --stats <random|simular|follow_level> " ++
 //         "The total stats the picked pokemon should have if pokemons are randomized. " ++
 //         "(default: random)",

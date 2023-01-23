@@ -61,7 +61,7 @@ pub fn run(
 
     try stdio.out.context.flush();
 
-    // We are now completly done with stdout, so we close it. This gives programs further down the
+    // We are now completely done with stdout, so we close it. This gives programs further down the
     // pipeline the ability to finish up what they need to do while we generate the site.
     stdio.out.context.unbuffered_writer.context.close();
 
@@ -590,7 +590,7 @@ pub fn printSimpleFields(writer: anytype, value: anytype, comptime blacklist: []
             if (mem.eql(u8, field.name, blacklist_item))
                 break :outer;
         };
-        switch (@typeInfo(field.field_type)) {
+        switch (@typeInfo(field.type)) {
             .Int => {
                 try writer.print(
                     "<tr><td>{}:</td><td>{}</td></tr>\n",

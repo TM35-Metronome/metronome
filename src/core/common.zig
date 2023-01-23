@@ -9,8 +9,8 @@ pub const Patch = struct {
     replacement: []const u8,
 };
 
-pub fn patch(memory: []u8, patchs: []const Patch) void {
-    for (patchs) |p|
+pub fn patch(memory: []u8, patches: []const Patch) void {
+    for (patches) |p|
         mem.copy(u8, memory[p.offset..], p.replacement);
 }
 

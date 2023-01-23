@@ -6,6 +6,8 @@ const util = @import("util");
 const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
+const json = std.json;
+const math = std.math;
 const mem = std.mem;
 const process = std.process;
 
@@ -63,20 +65,21 @@ const extension = switch (builtin.target.os.tag) {
     .windows => ".exe",
     else => @compileError("Unsupported os"),
 };
-const command_file_name = "commands";
-const default_commands =
-    "tm35-rand-machines" ++ extension ++ "\n" ++
-    "tm35-rand-pokemons" ++ extension ++ "\n" ++
-    "tm35-rand-pokeball-items" ++ extension ++ "\n" ++
-    "tm35-rand-trainers" ++ extension ++ "\n" ++
-    "tm35-rand-starters" ++ extension ++ "\n" ++
-    "tm35-rand-static" ++ extension ++ "\n" ++
-    "tm35-rand-wild" ++ extension ++ "\n" ++
-    "tm35-random-stones" ++ extension ++ "\n" ++
-    "tm35-rand-names" ++ extension ++ "\n" ++
-    "tm35-no-trade-evolutions" ++ extension ++ "\n" ++
-    "tm35-misc" ++ extension ++ "\n" ++
-    "tm35-generate-site" ++ extension ++ "\n";
+const command_file_name = "commands.json";
+const default_commands = [_][]const u8{
+    "tm35-rand-machines" ++ extension,
+    "tm35-rand-pokemons" ++ extension,
+    "tm35-rand-pokeball-items" ++ extension,
+    "tm35-rand-trainers" ++ extension,
+    "tm35-rand-starters" ++ extension,
+    "tm35-rand-static" ++ extension,
+    "tm35-rand-wild" ++ extension,
+    "tm35-random-stones" ++ extension,
+    "tm35-rand-names" ++ extension,
+    "tm35-no-trade-evolutions" ++ extension,
+    "tm35-misc" ++ extension,
+    "tm35-generate-site" ++ extension,
+};
 
 pub fn deinit(exes: Executables) void {
     exes.arena.deinit();
@@ -95,6 +98,9 @@ pub fn find(allocator: mem.Allocator) !Executables {
     var arena = heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
+    var tmp_arena = heap.ArenaAllocator.init(allocator);
+    defer tmp_arena.deinit();
+
     var res = Executables{
         .arena = undefined,
         .load = findCore("tm35-load" ++ extension) catch
@@ -103,7 +109,7 @@ pub fn find(allocator: mem.Allocator) !Executables {
             return error.ApplyToolNotFound,
         .identify = findCore("tm35-identify" ++ extension) catch
             return error.IdentifyToolNotFound,
-        .commands = try findCommands(&arena),
+        .commands = try findCommands(&arena, &tmp_arena),
     };
     res.arena = arena;
     return res;
@@ -146,18 +152,27 @@ fn joinAccess(paths: []const []const u8) !util.Path {
     return res;
 }
 
-fn findCommands(arena: *heap.ArenaAllocator) ![]Command {
+fn findCommands(arena: *heap.ArenaAllocator, tmp_arena: *heap.ArenaAllocator) ![]Command {
     const command_file = try openCommandFile();
     defer command_file.close();
 
+    const content = try command_file.readToEndAlloc(tmp_arena.allocator(), math.maxInt(usize));
+
+    var stream = json.TokenStream.init(content);
+    const strings = json.parse([]const []const u8, &stream, .{
+        .allocator = tmp_arena.allocator(),
+    }) catch |err| switch (err) {
+        error.AllocatorRequired => unreachable,
+        else => |e| return e,
+    };
+
     var res = std.ArrayList(Command).init(arena.allocator());
-    var fifo = util.io.Fifo(.{ .Static = mem.page_size }).init();
-    while (try util.io.readLine(command_file.reader(), &fifo)) |line| {
-        if (fs.path.isAbsolute(line)) {
-            const command = pathToCommand(arena, line) catch continue;
+    for (strings) |string| {
+        if (fs.path.isAbsolute(string)) {
+            const command = pathToCommand(arena, string) catch continue;
             try res.append(command);
         } else {
-            const command_path = findCommand(line) catch continue;
+            const command_path = findCommand(string) catch continue;
             const command = pathToCommand(arena, command_path.constSlice()) catch continue;
             try res.append(command);
         }
@@ -191,14 +206,23 @@ fn openCommandFile() !fs.File {
         command_file_name,
     }).slice();
 
-    // TODO: When we want to enable plugin support, readd this
+    // TODO: When we want to enable plugin support, re-add this
     //if (cwd.openFile(command_path, .{})) |file| {
     //    return file;
     //} else |_|
     {
         const dirname = fs.path.dirname(command_path) orelse ".";
         try cwd.makePath(dirname);
-        try cwd.writeFile(command_path, default_commands);
+
+        {
+            const file = try cwd.createFile(command_path, .{});
+            defer file.close();
+
+            var buffered = std.io.bufferedWriter(file.writer());
+            try std.json.stringify(&default_commands, .{ .whitespace = .{} }, buffered.writer());
+            try buffered.flush();
+        }
+
         return cwd.openFile(command_path, .{});
     }
 }
@@ -268,7 +292,7 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
 
                 try enums.append(.{
                     .i = i,
-                    .options = options.toOwnedSlice(),
+                    .options = try options.toOwnedSlice(),
                     .default = default,
                 });
             },
@@ -288,12 +312,12 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
     return Command{
         .path = try arena.allocator().dupe(u8, command_path),
         .help = help,
-        .flags = flags.toOwnedSlice(),
-        .ints = ints.toOwnedSlice(),
-        .floats = floats.toOwnedSlice(),
-        .enums = enums.toOwnedSlice(),
-        .multi_strings = multi_strings.toOwnedSlice(),
-        .params = params.toOwnedSlice(),
+        .flags = try flags.toOwnedSlice(),
+        .ints = try ints.toOwnedSlice(),
+        .floats = try floats.toOwnedSlice(),
+        .enums = try enums.toOwnedSlice(),
+        .multi_strings = try multi_strings.toOwnedSlice(),
+        .params = try params.toOwnedSlice(),
     };
 }
 

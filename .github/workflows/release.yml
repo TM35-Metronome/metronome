@@ -64,7 +64,7 @@ jobs:
       - name: zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
         run: |
           zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
-          ./make-zip.sh metronome-${{ matrix.name }} ${{ matrix.name }}
+          ./make-zip.sh metronome-${{ matrix.name }}
 
       - uses: actions/upload-artifact@v3
         with:

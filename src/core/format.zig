@@ -132,7 +132,7 @@ pub fn io(
         if (num == 0 and in.items.len != 0) {
             // If we get here, then the input did not have a terminating newline. In that case
             // the above parsing logic will never succeed. Let's append a newline here so that
-            // we can handle that egde case.
+            // we can handle that edge case.
             in.appendAssumeCapacity('\n');
         }
 

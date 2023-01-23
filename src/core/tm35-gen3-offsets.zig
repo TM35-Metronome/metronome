@@ -485,7 +485,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
                 if (comptime !shouldIgnore(ignored_fields, field.name)) {
                     const field_a = @field(a, field.name);
                     const field_b = @field(b, field.name);
-                    if (!matches(field.field_type, next_ignored, field_a, field_b))
+                    if (!matches(field.type, next_ignored, field_a, field_b))
                         return false;
                 }
             }
@@ -497,14 +497,14 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
             comptime {
                 // Only allow comparing unions that have all fields of the same
                 // size.
-                const size = @sizeOf(first_field.field_type);
+                const size = @sizeOf(first_field.type);
                 for (union_info.fields) |f|
-                    debug.assert(@sizeOf(f.field_type) == size);
+                    debug.assert(@sizeOf(f.type) == size);
             }
 
             const field_a = @field(a, first_field.name);
             const field_b = @field(b, first_field.name);
-            return matches(first_field.field_type, ignored_fields, field_a, field_b);
+            return matches(first_field.type, ignored_fields, field_a, field_b);
         },
         else => return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b)),
     }

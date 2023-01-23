@@ -187,7 +187,7 @@ fn randomize(program: *Program) !void {
 
                 if (program.options.simular_total_stats) blk: {
                     // If we don't know what the old Pokemon was, then we can't do simular_total_stats.
-                    // We therefor just pick a random pokemon and continue.
+                    // We therefore just pick a random pokemon and continue.
                     const pokemon = program.pokemons.get(old_species) orelse {
                         wild_pokemon.species = util.random.item(random, species.keys()).?.*;
                         break :blk;

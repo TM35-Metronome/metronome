@@ -16,7 +16,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
         .Void => return 0,
         .Int => |i| {
             if (i.bits % 8 != 0)
-                @compileError("Does not support none power of two intergers");
+                @compileError("Does not support none power of two integers");
             return @as(usize, i.bits / 8);
         },
         .Enum => return packedLength(@enumToInt(value)) catch unreachable,
@@ -39,7 +39,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
             if (u.tag_type != null)
                 @compileError(@typeName(T) ++ " cannot have a tag.");
 
-            // Find the field most likly to be this unions tag.
+            // Find the field most likely to be this unions tag.
             const tag_field = u.fields[0];
             const tag = @field(value, tag_field.name);
             const TagEnum = @TypeOf(tag);
@@ -143,7 +143,6 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
 pub fn isPacked(comptime T: type) bool {
     switch (@typeInfo(T)) {
         .AnyFrame,
-        .BoundFn,
         .ComptimeFloat,
         .ComptimeInt,
         .EnumLiteral,
@@ -171,8 +170,8 @@ pub fn isPacked(comptime T: type) bool {
             => {
                 var expected_size: usize = 0;
                 inline for (info.fields) |field| {
-                    expected_size += @sizeOf(field.field_type);
-                    if (!isPacked(field.field_type))
+                    expected_size += @sizeOf(field.type);
+                    if (!isPacked(field.type))
                         return false;
                 }
 
@@ -196,7 +195,7 @@ pub fn isPacked(comptime T: type) bool {
             .Extern,
             => {
                 inline for (info.fields) |field| {
-                    if (!isPacked(field.field_type))
+                    if (!isPacked(field.type))
                         return false;
                 }
 

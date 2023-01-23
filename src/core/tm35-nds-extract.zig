@@ -102,7 +102,7 @@ pub fn run(
     } else |_| {}
 
     try out_dir.writeFile("arm7", nds_rom.arm7());
-    try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
+    // try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
     if (nds_rom.banner()) |banner|
         try out_dir.writeFile("banner", mem.asBytes(banner));
 

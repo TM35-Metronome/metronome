@@ -131,7 +131,7 @@ pub const path = struct {
         var res: Path = undefined;
 
         // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
-        // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
+        // of MAX_PATH_BYTES is allocated, and that only one allocation occurs. This
         // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
@@ -145,7 +145,7 @@ pub const path = struct {
         var res: Path = undefined;
 
         // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
-        // of MAX_PATH_BYTES is allocated, and that only one allocation occures. This
+        // of MAX_PATH_BYTES is allocated, and that only one allocation occurs. This
         // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = debug.FailingAllocator.init(&fba.allocator, 1);

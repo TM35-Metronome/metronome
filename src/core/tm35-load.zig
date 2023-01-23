@@ -358,38 +358,28 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
 
     for (game.wild_pokemon_headers) |header, i| {
         if (header.land.toPtr(game.data)) |land| {
-            const wilds = try land.wild_pokemons.toPtr(game.data);
-            // Wonna see a bug with result locations in the compiler? Try lining this variable
-            // into `ston.serialize` :)
-            const area = .{
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .grass_0 = .{
                 .encounter_rate = land.encounter_rate,
-                .pokemons = wilds,
-            };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .grass_0 = area }) });
+                .pokemons = try land.wild_pokemons.toPtr(game.data),
+            } }) });
         } else |_| {}
         if (header.surf.toPtr(game.data)) |surf| {
-            const wilds = try surf.wild_pokemons.toPtr(game.data);
-            const area = .{
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .surf_0 = .{
                 .encounter_rate = surf.encounter_rate,
-                .pokemons = wilds,
-            };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .surf_0 = area }) });
+                .pokemons = try surf.wild_pokemons.toPtr(game.data),
+            } }) });
         } else |_| {}
         if (header.rock_smash.toPtr(game.data)) |rock| {
-            const wilds = try rock.wild_pokemons.toPtr(game.data);
-            const area = .{
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .rock_smash = .{
                 .encounter_rate = rock.encounter_rate,
-                .pokemons = wilds,
-            };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .rock_smash = area }) });
+                .pokemons = try rock.wild_pokemons.toPtr(game.data),
+            } }) });
         } else |_| {}
         if (header.fishing.toPtr(game.data)) |fish| {
-            const wilds = try fish.wild_pokemons.toPtr(game.data);
-            const area = .{
+            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .fishing_0 = .{
                 .encounter_rate = fish.encounter_rate,
-                .pokemons = wilds,
-            };
-            try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .fishing_0 = area }) });
+                .pokemons = try fish.wild_pokemons.toPtr(game.data),
+            } }) });
         } else |_| {}
     }
 
@@ -468,11 +458,8 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.pokemons) |*pokemon, i| {
-        // Wonna crash the compiler? Follow this one simple trick!!!
-        // Remove these variables and do the initialization directly in `ston.serialize`
-        const stats = pokemon.stats;
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-            .stats = stats,
+            .stats = pokemon.stats,
             .catch_rate = pokemon.catch_rate,
             .base_exp_yield = pokemon.base_exp_yield,
             .gender_ratio = pokemon.gender_ratio,
@@ -560,18 +547,16 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         .pearl,
         .platinum,
         => for (game.ptrs.wild_pokemons.dppt) |wild_mons, i| {
-            const rate = .{ .encounter_rate = wild_mons.grass_rate }; // Result location crash alert
             try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
-                .grass_0 = rate,
+                .grass_0 = .{ .encounter_rate = wild_mons.grass_rate },
             }) });
             for (wild_mons.grass) |grass, j| {
-                const pokemon = .{ .pokemons = ston.index(j, .{
-                    .min_level = grass.level,
-                    .max_level = grass.level,
-                    .species = grass.species,
-                }) }; // Result location crash alert
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
-                    .grass_0 = pokemon,
+                    .grass_0 = .{ .pokemons = ston.index(j, .{
+                        .min_level = grass.level,
+                        .max_level = grass.level,
+                        .species = grass.species,
+                    }) },
                 }) });
             }
 

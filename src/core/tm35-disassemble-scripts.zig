@@ -267,7 +267,18 @@ fn printCommand(writer: anytype, command: anytype, decoder: anytype) !void {
 fn printCommandHelper(writer: anytype, value: anytype) !void {
     const T = @TypeOf(value);
 
-    // Infered error sets enforce us to have to return an error somewhere. This
+    // lu16 and lu16 are seen as enums, but really they should be treated
+    // the same as int values.
+    if (T == lu16)
+        return printCommandHelper(writer, value.value());
+    if (T == lu32)
+        return printCommandHelper(writer, value.value());
+    if (T == li16)
+        return printCommandHelper(writer, value.value());
+    if (T == li32)
+        return printCommandHelper(writer, value.value());
+
+    // Inferred error sets enforce us to have to return an error somewhere. This
     // messes up with the below comptime branch selection, where some branches
     // does not return any errors.
     try writer.writeAll("");
@@ -279,17 +290,6 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
             try printCommandHelper(writer, v);
         },
         .Struct => |s| {
-            // lu16 and lu16 are seen as structs, but really they should be treated
-            // the same as int values.
-            if (T == lu16)
-                return printCommandHelper(writer, value.value());
-            if (T == lu32)
-                return printCommandHelper(writer, value.value());
-            if (T == li16)
-                return printCommandHelper(writer, value.value());
-            if (T == li32)
-                return printCommandHelper(writer, value.value());
-
             inline for (s.fields) |struct_field, i| {
                 try printCommandHelper(writer, @field(value, struct_field.name));
                 if (i + 1 != s.fields.len)

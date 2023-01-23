@@ -97,7 +97,7 @@ pub const Info = struct {
     text_delays: TextDelaySection,
     starters: [3]StarterOffset,
 
-    // In some games, the starters are repeated in multible places.
+    // In some games, the starters are repeated in multiple places.
     // For games where this isn't true, we just repeat the same offsets
     // twice
     starters_repeat: [3]StarterOffset,

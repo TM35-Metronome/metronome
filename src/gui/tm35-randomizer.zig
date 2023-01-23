@@ -475,7 +475,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
             \\<td><label for='{[name]s}' title='{[description]s}'>{[pretty_name]s}</label></td>
             \\<td><input id='{[name]s}' title='{[description]s}' value='{[value]s}'
             \\    placeholder='{[default]d}'
-            \\    onkeypress='return {[constaint]s}'
+            \\    onkeypress='return {[constraint]s}'
             \\    onchange='tm35SetInt({[index]}, this.value || "{[default]d}")'/></td>
             \\</tr>
             \\
@@ -487,7 +487,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
                 .value = html.escapeFmt(arg),
                 .default = int.default,
                 .index = i,
-                .constaint = is_num_constaint,
+                .constraint = is_num_constaint,
             },
         );
     }
@@ -1007,16 +1007,16 @@ fn wrap(
 
             const tree = parsed.root;
             const info = @typeInfo(@TypeOf(func)).Fn;
-            switch (info.args.len) {
+            switch (info.params.len) {
                 1 => try func(program),
                 2 => try func(
                     program,
-                    try parseArg(info.args[1].arg_type.?, tree, 0),
+                    try parseArg(info.params[1].type.?, tree, 0),
                 ),
                 3 => try func(
                     program,
-                    try parseArg(info.args[1].arg_type.?, tree, 0),
-                    try parseArg(info.args[2].arg_type.?, tree, 1),
+                    try parseArg(info.params[1].type.?, tree, 0),
+                    try parseArg(info.params[2].type.?, tree, 1),
                 ),
                 else => comptime unreachable,
             }
