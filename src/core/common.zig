@@ -259,7 +259,7 @@ pub const EvYield = packed struct {
     }
 };
 
-pub const TypeEffectiveness = packed struct {
+pub const TypeEffectiveness = extern struct {
     attacker: u8,
     defender: u8,
     multiplier: u8,

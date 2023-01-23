@@ -303,8 +303,8 @@ pub const RSFrLgPokedexEntry = extern struct {
 };
 
 pub const Pokedex = union {
-    emerald: []align(1) EmeraldPokedexEntry,
-    rsfrlg: []align(1) RSFrLgPokedexEntry,
+    emerald: []EmeraldPokedexEntry,
+    rsfrlg: []RSFrLgPokedexEntry,
 };
 
 pub const WildPokemon = extern struct {
@@ -612,7 +612,7 @@ pub const Game = struct {
     version: common.Version,
 
     free_offset: usize,
-    data: []u8,
+    data: []align(4) u8,
 
     // These fields are owned by the game and will be applied to
     // the rom oppon calling `apply`.
@@ -624,19 +624,19 @@ pub const Game = struct {
     starters: [3]*align(1) lu16,
     starters_repeat: [3]*align(1) lu16,
     text_delays: []u8,
-    trainers: []align(1) Trainer,
+    trainers: []Trainer,
     moves: []Move,
-    machine_learnsets: []align(1) lu64,
-    pokemons: []align(1) BasePokemon,
-    evolutions: []align(1) [5]Evolution,
-    level_up_learnset_pointers: []align(1) Ptr([*]LevelUpMove),
-    hms: []align(1) lu16,
-    tms: []align(1) lu16,
-    items: []align(1) Item,
+    machine_learnsets: []align(4) lu64,
+    pokemons: []BasePokemon,
+    evolutions: [][5]Evolution,
+    level_up_learnset_pointers: []Ptr([*]LevelUpMove),
+    hms: []lu16,
+    tms: []lu16,
+    items: []Item,
     pokedex: Pokedex,
-    species_to_national_dex: []align(1) lu16,
-    wild_pokemon_headers: []align(1) WildPokemonHeader,
-    map_headers: []align(1) MapHeader,
+    species_to_national_dex: []lu16,
+    wild_pokemon_headers: []WildPokemonHeader,
+    map_headers: []MapHeader,
     pokemon_names: [][11]u8,
     ability_names: [][13]u8,
     move_names: [][13]u8,
@@ -671,7 +671,7 @@ pub const Game = struct {
         if (size % 0x1000000 != 0 or size > 1024 * 1024 * 32)
             return error.InvalidRomSize;
 
-        const gba_rom = try allocator.alloc(u8, 1024 * 1024 * 32);
+        const gba_rom = try allocator.allocWithOptions(u8, 1024 * 1024 * 32, 4, null);
         errdefer allocator.free(gba_rom);
 
         const free_offset = try reader.readAll(gba_rom);

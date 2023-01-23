@@ -62,7 +62,14 @@ pub fn run(
 ) anyerror!void {
     const allocator = program.allocator;
     for (program.files) |file_name, i| {
-        const data = try fs.cwd().readFileAlloc(allocator, file_name, math.maxInt(usize));
+        const data = try fs.cwd().readFileAllocOptions(
+            allocator,
+            file_name,
+            math.maxInt(usize),
+            null,
+            4,
+            null,
+        );
         defer allocator.free(data);
         if (data.len < @sizeOf(gba.Header))
             return error.FileToSmall;
@@ -152,57 +159,59 @@ fn getVersion(gamecode: []const u8) !common.Version {
 }
 
 fn getOffsets(
-    data: []u8,
+    data: []align(4) u8,
     game_version: common.Version,
     gamecode: [4]u8,
     game_title: util.TerminatedArray(12, u8, 0),
     software_version: u8,
 ) !gen3.offsets.Info {
     // TODO: A way to find starter pokemons
-    const Trainers = Searcher(gen3.Trainer, &[_][]const []const u8{
+    const Trainers = Searcher(gen3.Trainer, @alignOf(gen3.Trainer), &[_][]const []const u8{
         &[_][]const u8{"encounter_music"},
         &[_][]const u8{"party"},
         &[_][]const u8{"name"},
     });
-    const Moves = Searcher(gen3.Move, &[_][]const []const u8{});
-    const Machines = Searcher(lu64, &[_][]const []const u8{});
-    const Pokemons = Searcher(gen3.BasePokemon, &[_][]const []const u8{
+    const Moves = Searcher(gen3.Move, @alignOf(gen3.Move), &[_][]const []const u8{});
+    const Machines = Searcher(lu64, 4, &[_][]const []const u8{});
+    const Pokemons = Searcher(gen3.BasePokemon, @alignOf(gen3.BasePokemon), &[_][]const []const u8{
         &[_][]const u8{"padding"},
         &[_][]const u8{"ev_yield"},
         &[_][]const u8{"egg_group1_pad"},
         &[_][]const u8{"egg_group2_pad"},
     });
-    const Evos = Searcher([5]gen3.Evolution, &[_][]const []const u8{&[_][]const u8{"padding"}});
-    const LvlUpMoves = Searcher(u8, &[_][]const []const u8{});
-    const HmTms = Searcher(lu16, &[_][]const []const u8{});
+    const Evos = Searcher([5]gen3.Evolution, @alignOf(gen3.Evolution), &[_][]const []const u8{
+        &[_][]const u8{"padding"},
+    });
+    const LvlUpMoves = Searcher(u8, 1, &[_][]const []const u8{});
+    const HmTms = Searcher(lu16, @alignOf(lu16), &[_][]const []const u8{});
     const SpeciesToNationalDex = HmTms;
-    const Items = Searcher(gen3.Item, &[_][]const []const u8{
+    const Items = Searcher(gen3.Item, @alignOf(gen3.Item), &[_][]const []const u8{
         &[_][]const u8{"name"},
         &[_][]const u8{"description"},
         &[_][]const u8{"field_use_func"},
         &[_][]const u8{"battle_use_func"},
     });
-    const EmeraldPokedex = Searcher(gen3.EmeraldPokedexEntry, &[_][]const []const u8{
+    const EmeraldPokedex = Searcher(gen3.EmeraldPokedexEntry, @alignOf(gen3.EmeraldPokedexEntry), &[_][]const []const u8{
         &[_][]const u8{"category_name"},
         &[_][]const u8{"description"},
         &[_][]const u8{"unused"},
         &[_][]const u8{"padding"},
     });
-    const RSFrLgPokedex = Searcher(gen3.RSFrLgPokedexEntry, &[_][]const []const u8{
+    const RSFrLgPokedex = Searcher(gen3.RSFrLgPokedexEntry, @alignOf(gen3.RSFrLgPokedexEntry), &[_][]const []const u8{
         &[_][]const u8{"category_name"},
         &[_][]const u8{"description"},
         &[_][]const u8{"unused_description"},
         &[_][]const u8{"unused"},
         &[_][]const u8{"padding"},
     });
-    const WildPokemonHeaders = Searcher(gen3.WildPokemonHeader, &[_][]const []const u8{
+    const WildPokemonHeaders = Searcher(gen3.WildPokemonHeader, @alignOf(gen3.WildPokemonHeader), &[_][]const []const u8{
         &[_][]const u8{"pad"},
         &[_][]const u8{"land"},
         &[_][]const u8{"surf"},
         &[_][]const u8{"rock_smash"},
         &[_][]const u8{"fishing"},
     });
-    const MapHeaders = Searcher(gen3.MapHeader, &[_][]const []const u8{
+    const MapHeaders = Searcher(gen3.MapHeader, @alignOf(gen3.MapHeader), &[_][]const []const u8{
         &[_][]const u8{"map_layout"},
         &[_][]const u8{"map_events"},
         &[_][]const u8{"map_scripts"},
@@ -210,12 +219,12 @@ fn getOffsets(
         &[_][]const u8{"pad"},
     });
     const LvlUpRef = gen3.Ptr([*]gen3.LevelUpMove);
-    const LvlUpRefs = Searcher(LvlUpRef, &[_][]const []const u8{});
-    const PokemonNames = Searcher([11]u8, &[_][]const []const u8{});
-    const AbilityNames = Searcher([13]u8, &[_][]const []const u8{});
-    const MoveNames = Searcher([13]u8, &[_][]const []const u8{});
-    const TypeNames = Searcher([7]u8, &[_][]const []const u8{});
-    const Strings = Searcher(u8, &[_][]const []const u8{});
+    const LvlUpRefs = Searcher(LvlUpRef, @alignOf(LvlUpRef), &[_][]const []const u8{});
+    const PokemonNames = Searcher([11]u8, 1, &[_][]const []const u8{});
+    const AbilityNames = Searcher([13]u8, 1, &[_][]const []const u8{});
+    const MoveNames = Searcher([13]u8, 1, &[_][]const []const u8{});
+    const TypeNames = Searcher([7]u8, 1, &[_][]const []const u8{});
+    const Strings = Searcher(u8, 1, &[_][]const []const u8{});
 
     const text_delay = switch (game_version) {
         .emerald,
@@ -342,58 +351,62 @@ fn getOffsets(
 
         .starters = undefined,
         .starters_repeat = undefined,
-        .text_delays = offsets.TextDelaySection.init(data, text_delay),
-        .trainers = offsets.TrainerSection.init(data, trainers),
-        .moves = offsets.MoveSection.init(data, moves),
-        .machine_learnsets = offsets.MachineLearnsetSection.init(data, machine_learnset),
-        .pokemons = offsets.BaseStatsSection.init(data, pokemons),
-        .evolutions = offsets.EvolutionSection.init(data, evolution_table),
-        .level_up_learnset_pointers = offsets.LevelUpLearnsetPointerSection.init(data, level_up_learnset_pointers),
+        .text_delays = offsets.TextDelays.fromSlice(data, text_delay),
+        .trainers = offsets.Trainers.fromSlice(data, trainers),
+        .moves = offsets.Moves.fromSlice(data, moves),
+        .machine_learnsets = offsets.MachineLearnsets.fromSlice(data, machine_learnset),
+        .pokemons = offsets.BaseStatss.fromSlice(data, pokemons),
+        .evolutions = offsets.Evolutions.fromSlice(data, evolution_table),
+        .level_up_learnset_pointers = offsets.LevelUpLearnsetPointers.fromSlice(data, level_up_learnset_pointers),
         .type_effectiveness = undefined,
-        .hms = offsets.HmSection.init(data, hms_slice),
-        .tms = offsets.TmSection.init(data, tms_slice),
+        .hms = offsets.Hms.fromSlice(data, hms_slice),
+        .tms = offsets.Tms.fromSlice(data, tms_slice),
         .pokedex = switch (game_version) {
             .emerald => .{
-                .emerald = offsets.EmeraldPokedexSection.init(data, pokedex.emerald),
+                .emerald = offsets.EmeraldPokedexs.fromSlice(data, pokedex.emerald),
             },
             .ruby,
             .sapphire,
             .fire_red,
             .leaf_green,
             => .{
-                .rsfrlg = offsets.RSFrLgPokedexSection.init(data, pokedex.rsfrlg),
+                .rsfrlg = offsets.RSFrLgPokedexs.fromSlice(data, pokedex.rsfrlg),
             },
             else => unreachable,
         },
-        .species_to_national_dex = offsets.SpeciesToNationalDexSection.init(data, species_to_national_dex),
-        .items = offsets.ItemSection.init(data, items),
-        .wild_pokemon_headers = offsets.WildPokemonHeaderSection.init(data, wild_pokemon_headers),
-        .map_headers = offsets.MapHeaderSection.init(data, map_headers),
-        .pokemon_names = offsets.PokemonNameSection.init(data, pokemon_names),
-        .ability_names = offsets.AbilityNameSection.init(data, ability_names),
-        .move_names = offsets.MoveNameSection.init(data, move_names),
-        .type_names = offsets.TypeNameSection.init(data, type_names_slice),
+        .species_to_national_dex = offsets.SpeciesToNationalDexs.fromSlice(data, species_to_national_dex),
+        .items = offsets.Items.fromSlice(data, items),
+        .wild_pokemon_headers = offsets.WildPokemonHeaders.fromSlice(data, wild_pokemon_headers),
+        .map_headers = offsets.MapHeaders.fromSlice(data, map_headers),
+        .pokemon_names = offsets.PokemonNames.fromSlice(data, pokemon_names),
+        .ability_names = offsets.AbilityNames.fromSlice(data, ability_names),
+        .move_names = offsets.MoveNames.fromSlice(data, move_names),
+        .type_names = offsets.TypeNames.fromSlice(data, type_names_slice),
     };
 }
 
 // A type for searching binary data for instances of ::T. It also allows ignoring of certain
 // fields and nested fields.
-pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []const u8) type {
+pub fn Searcher(
+    comptime T: type,
+    comptime alignment: u29,
+    comptime ignored_fields: []const []const []const u8,
+) type {
     return struct {
-        pub fn find1(data: []u8, item: T) !*align(1) T {
+        pub fn find1(data: []u8, item: T) !*align(alignment) T {
             const slice = try find2(data, &[_]T{item});
             return &slice[0];
         }
 
-        pub fn find2(data: []u8, items: []const T) ![]align(1) T {
+        pub fn find2(data: []u8, items: []const T) ![]align(alignment) T {
             return find4(data, items, &[_]T{});
         }
 
-        pub fn find3(data: []u8, start: T, end: T) ![]align(1) T {
+        pub fn find3(data: []u8, start: T, end: T) ![]align(alignment) T {
             return find4(data, &[_]T{start}, &[_]T{end});
         }
 
-        pub fn find4(data: []u8, start: []const T, end: []const T) ![]align(1) T {
+        pub fn find4(data: []u8, start: []const T, end: []const T) ![]align(alignment) T {
             const found_start = try findSliceHelper(data, 0, 1, start);
             const start_offset = @ptrToInt(found_start.ptr);
             const next_offset = (start_offset - @ptrToInt(data.ptr)) + start.len * @sizeOf(T);
@@ -402,7 +415,7 @@ pub fn Searcher(comptime T: type, comptime ignored_fields: []const []const []con
             const end_offset = @ptrToInt(found_end.ptr) + found_end.len * @sizeOf(T);
             const len = @divExact(end_offset - start_offset, @sizeOf(T));
 
-            return found_start.ptr[0..len];
+            return @alignCast(alignment, found_start.ptr[0..len]);
         }
 
         fn findSliceHelper(data: []u8, offset: usize, skip: usize, items: []const T) ![]align(1) T {
