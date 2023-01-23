@@ -138,6 +138,8 @@ pub const Fs = struct {
         const fnt_mains = mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
         const len = fnt_mains[0].parent_id.value();
 
+        // TODO: We have no control over if roms we load are structured correctly, so this should
+        //       not be an assert but an error.
         debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
         return fnt_mains[0..len];
     }

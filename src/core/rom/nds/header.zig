@@ -261,7 +261,14 @@ pub const Header = extern struct {
         if (header.arm7.size.value() > 0x3BFE00)
             return error.InvalidArm7Size;
 
+        if (header.arm9_overlay.start.value() % @alignOf(nds.Overlay) != 0)
+            return error.InvalidArm9OverlayOffset;
+        if (header.arm7_overlay.start.value() % @alignOf(nds.Overlay) != 0)
+            return error.InvalidArm7OverlayOffset;
+
         if (header.banner_offset.value() != 0 and header.banner_offset.value() < 0x8000)
+            return error.InvalidIconTitleOffset;
+        if (header.banner_offset.value() % @alignOf(nds.Banner) != 0)
             return error.InvalidIconTitleOffset;
 
         if (header.secure_area_delay.value() != 0x051E and header.secure_area_delay.value() != 0x0D7E)

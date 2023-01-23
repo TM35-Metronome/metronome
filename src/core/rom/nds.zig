@@ -35,7 +35,7 @@ pub const Range = extern struct {
         return r.end.value() - r.start.value();
     }
 
-    pub fn slice(r: Range, s: anytype) mem.Span(@TypeOf(s)) {
+    pub fn slice(r: Range, s: []u8) []u8 {
         return s[r.start.value()..r.end.value()];
     }
 
@@ -64,7 +64,7 @@ pub const Slice = extern struct {
         return s.start.value() + s.len.value();
     }
 
-    pub fn slice(sl: Slice, s: anytype) mem.Span(@TypeOf(s)) {
+    pub fn slice(sl: Slice, s: []u8) []u8 {
         return s[sl.start.value()..sl.end()];
     }
 
@@ -89,60 +89,87 @@ pub const Overlay = extern struct {
 };
 
 pub const Rom = struct {
-    data: std.ArrayList(u8),
+    data: std.ArrayListAligned(u8, 8),
 
-    pub fn new(allocator: mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
-        arm9_size: u32 = 0,
-        arm7_size: u32 = 0,
-        files: u32 = 0,
-    }) !Rom {
-        var res = Rom{ .data = std.ArrayList(u8).init(allocator) };
-        var writer = res.data.writer();
-        errdefer res.deinit();
+    // pub fn new(allocator: mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
+    //     arm9_size: u32 = 0,
+    //     arm7_size: u32 = 0,
+    //     files: u32 = 0,
+    // }) !Rom {
+    //     var res = Rom{ .data = std.ArrayList(u8).init(allocator) };
+    //     var writer = res.data.writer();
+    //     errdefer res.deinit();
 
-        var h = mem.zeroes(Header);
-        mem.copy(u8, &h.game_title, game_title);
-        mem.copy(u8, &h.gamecode, gamecode);
-        h.secure_area_delay = lu16.init(0x051E);
-        h.rom_header_size = lu32.init(0x4000);
-        h.digest_ntr_region_offset = lu32.init(0x4000);
-        h.title_id_rest = "\x00\x03\x00".*;
+    //     var h = mem.zeroes(Header);
+    //     mem.copy(u8, &h.game_title, game_title);
+    //     mem.copy(u8, &h.gamecode, gamecode);
+    //     h.secure_area_delay = lu16.init(0x051E);
+    //     h.rom_header_size = lu32.init(0x4000);
+    //     h.digest_ntr_region_offset = lu32.init(0x4000);
+    //     h.title_id_rest = "\x00\x03\x00".*;
 
-        try writer.writeAll(mem.asBytes(&h));
-        try writer.writeAll("\x00" ** (0x4000 - @sizeOf(Header)));
+    //     try writer.writeAll(mem.asBytes(&h));
+    //     try writer.writeAll("\x00" ** (0x4000 - @sizeOf(Header)));
 
-        h.arm9.entry_address = lu32.init(0x2000000);
-        h.arm9.ram_address = lu32.init(0x2000000);
-        h.arm9.offset = lu32.init(@intCast(u32, res.data.len));
-        h.arm9.size = lu32.init(opts.arm9_size);
-        try writer.writeByteNTimes(0, h.arm9.size.value());
-        try writer.writeByteNTimes(0, 0x8000 -| res.data.len);
+    //     h.arm9.entry_address = lu32.init(0x2000000);
+    //     h.arm9.ram_address = lu32.init(0x2000000);
+    //     h.arm9.offset = lu32.init(@intCast(u32, res.data.len));
+    //     h.arm9.size = lu32.init(opts.arm9_size);
+    //     try writer.writeByteNTimes(0, h.arm9.size.value());
+    //     try writer.writeByteNTimes(0, 0x8000 -| res.data.len);
 
-        h.arm7.ram_address = lu32.init(0x2000000);
-        h.arm7.entry_address = lu32.init(0x2000000);
-        h.arm7.offset = lu32.init(@intCast(u32, res.data.len));
-        h.arm7.size = lu32.init(opts.arm7_size);
-        try writer.writeByteNTimes(0, h.arm7.size.value());
+    //     h.arm7.ram_address = lu32.init(0x2000000);
+    //     h.arm7.entry_address = lu32.init(0x2000000);
+    //     h.arm7.offset = lu32.init(@intCast(u32, res.data.len));
+    //     h.arm7.size = lu32.init(opts.arm7_size);
+    //     try writer.writeByteNTimes(0, h.arm7.size.value());
 
-        h.fat.start = lu32.init(@intCast(u32, res.data.len));
-        h.fat.len = lu32.init(opts.files * @sizeOf(Range));
-        try writer.writeByteNTimes(0, h.fat.len.value());
+    //     h.fat.start = lu32.init(@intCast(u32, res.data.len));
+    //     h.fat.len = lu32.init(opts.files * @sizeOf(Range));
+    //     try writer.writeByteNTimes(0, h.fat.len.value());
 
+    //     return res;
+    // }
+
+    pub fn fromFile(file: std.fs.File, allocator: mem.Allocator) !Rom {
+        const reader = file.reader();
+        const size = try file.getEndPos();
+        try file.seekTo(0);
+
+        if (size < @sizeOf(Header))
+            return error.InvalidRom;
+        if (size < 4096)
+            return error.InvalidRom;
+
+        var data = std.ArrayListAligned(u8, 8).init(allocator);
+        errdefer data.deinit();
+
+        try data.resize(size);
+        try reader.readNoEof(data.items);
+
+        const res = Rom{ .data = data };
+        try res.header().validate();
+
+        // TODO: we should validate that all the offsets and sizes are not
+        //       out of bounds of the rom.data.items.
         return res;
     }
 
-    pub fn header(rom: Rom) *align(1) Header {
-        return mem.bytesAsValue(Header, rom.data.items[0..@sizeOf(Header)]);
+    pub fn header(rom: Rom) *Header {
+        return @ptrCast(*Header, rom.data.items[0..@sizeOf(Header)].ptr);
     }
 
-    pub fn banner(rom: Rom) ?*align(1) Banner {
+    pub fn banner(rom: Rom) ?*Banner {
         const h = rom.header();
         const offset = h.banner_offset.value();
         if (offset == 0)
             return null;
 
         const bytes = rom.data.items[offset..][0..@sizeOf(Banner)];
-        return mem.bytesAsValue(Banner, bytes);
+        const result = mem.bytesAsValue(Banner, bytes);
+
+        // This is safe because we check that the `banner_offset` is aligned in `Header.validate`
+        return @alignCast(@alignOf(Banner), result);
     }
 
     /// Returns the arm9 section of the rom. Note here that this section could
@@ -168,16 +195,22 @@ pub const Rom = struct {
         return rom.data.items[offset..][0..h.arm7.size.value()];
     }
 
-    pub fn arm9OverlayTable(rom: Rom) []align(1) Overlay {
+    pub fn arm9OverlayTable(rom: Rom) []Overlay {
         const h = rom.header();
         const bytes = h.arm9_overlay.slice(rom.data.items);
-        return mem.bytesAsSlice(Overlay, bytes);
+        const result = mem.bytesAsSlice(Overlay, bytes);
+
+        // This is safe because we check that the `arm9_overlay` is aligned in `Header.validate`
+        return @alignCast(@alignOf(Overlay), result);
     }
 
     pub fn arm7OverlayTable(rom: Rom) []align(1) Overlay {
         const h = rom.header();
         const bytes = h.arm7_overlay.slice(rom.data.items);
-        return mem.bytesAsSlice(Overlay, bytes);
+        const result = mem.bytesAsSlice(Overlay, bytes);
+
+        // This is safe because we check that the `arm7_overlay` is aligned in `Header.validate`
+        return @alignCast(@alignOf(Overlay), result);
     }
 
     pub fn fileSystem(rom: Rom) fs.Fs {
@@ -426,30 +459,6 @@ pub const Rom = struct {
         // Sort sections by where they appear in the rom.
         std.sort.sort(Section, sections.items, data.items, Section.before);
         return sections.toOwnedSlice();
-    }
-
-    pub fn fromFile(file: std.fs.File, allocator: mem.Allocator) !Rom {
-        const reader = file.reader();
-        const size = try file.getEndPos();
-        try file.seekTo(0);
-
-        if (size < @sizeOf(Header))
-            return error.InvalidRom;
-        if (size < 4096)
-            return error.InvalidRom;
-
-        var data = std.ArrayList(u8).init(allocator);
-        errdefer data.deinit();
-
-        try data.resize(size);
-        try reader.readNoEof(data.items);
-
-        const res = Rom{ .data = data };
-        try res.header().validate();
-
-        // TODO: we should validate that all the offsets and sizes are not
-        //       out of bounds of the rom.data.items.
-        return res;
     }
 
     pub fn write(rom: Rom, writer: anytype) !void {
