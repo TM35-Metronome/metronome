@@ -542,10 +542,10 @@ test "searcher.Searcher.find" {
         S{ .a = 2, .b = 3 },
     };
     const data = mem.sliceAsBytes(s_array[0..]);
-    const S1 = Searcher(S, &[_][]const []const u8{
+    const S1 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"a"},
     });
-    const S2 = Searcher(S, &[_][]const []const u8{
+    const S2 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"b"},
     });
 
@@ -565,10 +565,10 @@ test "searcher.Searcher.find2" {
         S{ .a = 4, .b = 1 },
     };
     const data = mem.sliceAsBytes(s_array[0..]);
-    const S1 = Searcher(S, &[_][]const []const u8{
+    const S1 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"a"},
     });
-    const S2 = Searcher(S, &[_][]const []const u8{
+    const S2 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"b"},
     });
 
@@ -600,10 +600,10 @@ test "searcher.Searcher.find3" {
         S{ .a = 0, .b = 3 },
     };
     const data = mem.sliceAsBytes(s_array[0..]);
-    const S1 = Searcher(S, &[_][]const []const u8{
+    const S1 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"a"},
     });
-    const S2 = Searcher(S, &[_][]const []const u8{
+    const S2 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"b"},
     });
 
@@ -635,10 +635,10 @@ test "searcher.Searcher.find4" {
         S{ .a = 0, .b = 3 },
     };
     const data = mem.sliceAsBytes(s_array[0..]);
-    const S1 = Searcher(S, &[_][]const []const u8{
+    const S1 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"a"},
     });
-    const S2 = Searcher(S, &[_][]const []const u8{
+    const S2 = Searcher(S, 1, &[_][]const []const u8{
         &[_][]const u8{"b"},
     });
 

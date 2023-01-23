@@ -156,7 +156,7 @@ pub const Rom = struct {
     }
 
     pub fn header(rom: Rom) *Header {
-        return @ptrCast(*Header, rom.data.items[0..@sizeOf(Header)].ptr);
+        return @ptrCast(*Header, rom.data.items[0..@sizeOf(Header)]);
     }
 
     pub fn banner(rom: Rom) ?*Banner {
