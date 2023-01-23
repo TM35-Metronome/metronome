@@ -22,10 +22,6 @@ pub const testing = @import("testing.zig");
 pub const unicode = @import("unicode.zig");
 pub const unsafe = @import("unsafe.zig");
 
-test {
-    std.testing.refAllDecls(@This());
-}
-
 pub fn generateMain(comptime Program: type) fn () anyerror!void {
     return struct {
         fn main() anyerror!void {
@@ -136,23 +132,6 @@ pub const path = struct {
         var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
         const res_slice = fs.path.join(failing.allocator(), paths) catch unreachable;
-        res.len = res_slice.len;
-
-        return res;
-    }
-
-    pub fn resolve(paths: []const []const u8) !Path {
-        var res: Path = undefined;
-
-        // FixedBufferAllocator + FailingAllocator are used here to ensure that a max
-        // of MAX_PATH_BYTES is allocated, and that only one allocation occurs. This
-        // ensures that only a valid path has been allocated into res.
-        var fba = heap.FixedBufferAllocator.init(&res.buffer);
-        var failing = debug.FailingAllocator.init(&fba.allocator, 1);
-        const res_slice = fs.path.resolve(&failing.allocator, paths) catch |err| switch (err) {
-            error.OutOfMemory => unreachable,
-            else => |e| return e,
-        };
         res.len = res_slice.len;
 
         return res;

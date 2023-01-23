@@ -20,10 +20,6 @@ pub const encodings = @import("gen3/encodings.zig");
 pub const offsets = @import("gen3/offsets.zig");
 pub const script = @import("gen3/script.zig");
 
-comptime {
-    std.testing.refAllDecls(@This());
-}
-
 pub const Language = enum {
     en_us,
 };

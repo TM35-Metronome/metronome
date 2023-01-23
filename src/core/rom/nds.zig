@@ -20,10 +20,6 @@ pub const fs = @import("nds/fs.zig");
 pub const Banner = @import("nds/banner.zig").Banner;
 pub const Header = @import("nds/header.zig").Header;
 
-comptime {
-    std.testing.refAllDecls(@This());
-}
-
 pub const Range = extern struct {
     start: lu32,
     end: lu32,

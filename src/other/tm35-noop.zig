@@ -82,7 +82,6 @@ fn useGame(_: anytype, _: format.Game) anyerror!void {
 
 fn useGameSerialize(ctx: anytype, game: format.Game) anyerror!void {
     try ston.serialize(ctx.out, game);
-    try ctx.out.context.flush();
 }
 
 test "tm35-noop" {

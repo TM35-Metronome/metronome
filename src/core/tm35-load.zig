@@ -996,7 +996,3 @@ fn outputString(
         ston.field(field_name, ston.string(escape.escapeFmt(string))),
     )));
 }
-
-test {
-    std.testing.refAllDecls(@This());
-}

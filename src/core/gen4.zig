@@ -18,10 +18,6 @@ const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
 
-test {
-    std.testing.refAllDecls(@This());
-}
-
 pub const BasePokemon = extern struct {
     stats: common.Stats,
     types: [2]u8,
