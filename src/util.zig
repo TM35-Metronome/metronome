@@ -12,15 +12,15 @@ const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
-pub const bit = @import("bit.zig");
-pub const escape = @import("escape.zig");
-pub const glob = @import("glob.zig");
-pub const io = @import("io.zig");
-pub const random = @import("random.zig");
-pub const set = @import("set.zig");
-pub const testing = @import("testing.zig");
-pub const unicode = @import("unicode.zig");
-pub const unsafe = @import("unsafe.zig");
+pub const bit = @import("util/bit.zig");
+pub const escape = @import("util/escape.zig");
+pub const glob = @import("util/glob.zig");
+pub const io = @import("util/io.zig");
+pub const random = @import("util/random.zig");
+pub const set = @import("util/set.zig");
+pub const testing = @import("util/testing.zig");
+pub const unicode = @import("util/unicode.zig");
+pub const unsafe = @import("util/unsafe.zig");
 
 pub fn generateMain(comptime Program: type) fn () anyerror!void {
     return struct {

@@ -48,21 +48,24 @@ const ston_pkg = Pkg{ .name = "ston", .source = .{ .path = "lib/ston/ston.zig" }
 
 const util_pkg = Pkg{
     .name = "util",
-    .source = .{ .path = "src/common/util.zig" },
+    .source = .{ .path = "src/util.zig" },
     .dependencies = &[_]Pkg{ clap_pkg, folders_pkg },
 };
 
-const format_pkg = Pkg{
-    .name = "format",
-    .source = .{ .path = "src/core/format.zig" },
-    .dependencies = &[_]Pkg{ ston_pkg, util_pkg },
+const core_pkg = Pkg{
+    .name = "core",
+    .source = .{ .path = "src/core.zig" },
+    .dependencies = &[_]Pkg{
+        ston_pkg,
+        util_pkg,
+        crc_pkg,
+    },
 };
 
 const pkgs = [_]Pkg{
     clap_pkg,
-    crc_pkg,
     folders_pkg,
-    format_pkg,
+    core_pkg,
     ston_pkg,
     util_pkg,
 };

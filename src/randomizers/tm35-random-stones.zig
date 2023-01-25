@@ -1,5 +1,5 @@
 const clap = @import("clap");
-const format = @import("format");
+const core = @import("core");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -16,8 +16,9 @@ const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
-const escape = util.escape.default;
+const format = core.format;
 
+const escape = util.escape.default;
 const Utf8 = util.unicode.Utf8View;
 
 const Program = @This();

@@ -1,11 +1,8 @@
 const builtin = @import("builtin");
 const clap = @import("clap");
+const core = @import("core");
 const std = @import("std");
 const util = @import("util");
-
-const common = @import("common.zig");
-const gen3 = @import("gen3.zig");
-const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -14,6 +11,10 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const testing = std.testing;
+
+const common = core.common;
+const gen3 = core.gen3;
+const rom = core.rom;
 
 const gba = rom.gba;
 const offsets = gen3.offsets;

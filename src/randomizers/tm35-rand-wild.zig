@@ -1,5 +1,5 @@
 const clap = @import("clap");
-const format = @import("format");
+const core = @import("core");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
@@ -15,6 +15,8 @@ const meta = std.meta;
 const os = std.os;
 const rand = std.rand;
 const testing = std.testing;
+
+const format = core.format;
 
 const Program = @This();
 

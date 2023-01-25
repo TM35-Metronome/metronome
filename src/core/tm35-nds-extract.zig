@@ -1,8 +1,7 @@
 const clap = @import("clap");
+const core = @import("core");
 const std = @import("std");
 const util = @import("util");
-
-const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fmt = std.fmt;
@@ -11,6 +10,8 @@ const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 const os = std.os;
+
+const rom = core.rom;
 
 const path = fs.path;
 

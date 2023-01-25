@@ -1,6 +1,7 @@
 const clap = @import("clap");
 const std = @import("std");
-const util = @import("util.zig");
+
+const util = @import("../util.zig");
 
 const debug = std.debug;
 const fmt = std.fmt;

@@ -1,12 +1,7 @@
 const clap = @import("clap");
+const core = @import("core");
 const std = @import("std");
 const util = @import("util");
-
-const gen3 = @import("gen3.zig");
-const gen4 = @import("gen4.zig");
-const gen5 = @import("gen5.zig");
-const rom = @import("rom.zig");
-const script = @import("script.zig");
 
 const fs = std.fs;
 const heap = std.heap;
@@ -14,6 +9,12 @@ const io = std.io;
 const log = std.log;
 const math = std.math;
 const mem = std.mem;
+
+const gen3 = core.gen3;
+const gen4 = core.gen4;
+const gen5 = core.gen5;
+const rom = core.rom;
+const script = core.script;
 
 const li16 = rom.int.li16;
 const li32 = rom.int.li32;

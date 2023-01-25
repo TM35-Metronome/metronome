@@ -1,14 +1,8 @@
 const clap = @import("clap");
+const core = @import("core");
 const std = @import("std");
 const ston = @import("ston");
 const util = @import("util");
-
-const common = @import("common.zig");
-const format = @import("format.zig");
-const gen3 = @import("gen3.zig");
-const gen4 = @import("gen4.zig");
-const gen5 = @import("gen5.zig");
-const rom = @import("rom.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -18,6 +12,13 @@ const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const unicode = std.unicode;
+
+const common = core.common;
+const format = core.format;
+const gen3 = core.gen3;
+const gen4 = core.gen4;
+const gen5 = core.gen5;
+const rom = core.rom;
 
 const gba = rom.gba;
 const nds = rom.nds;
