@@ -43,11 +43,7 @@ pub const BasePokemon = extern struct {
 
     // Memory layout
     // TMS 01-92, HMS 01-08
-    machine_learnset: [16]u8,
-
-    pub fn machineLearnset(mon: *align(1) BasePokemon) *align(1) lu128 {
-        return @ptrCast(*align(1) lu128, &mon.machine_learnset);
-    }
+    machine_learnset: lu128 align(4),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);

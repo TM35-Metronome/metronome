@@ -899,7 +899,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                         return error.Error;
 
                     const index = ms.index + game.ptrs.tms.len * @boolToInt(!is_tms);
-                    const learnset = pokemon.machineLearnset();
+                    const learnset = &pokemon.machine_learnset;
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
                 .moves => |moves| {
@@ -1312,7 +1312,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                         return error.Error;
 
                     const index = if (is_tms) ms.index else ms.index + game.ptrs.tms1.len + game.ptrs.tms2.len;
-                    const learnset = pokemon.machineLearnset();
+                    const learnset = &pokemon.machine_learnset;
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },
                 .moves => |moves| {

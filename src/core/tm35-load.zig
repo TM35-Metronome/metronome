@@ -473,16 +473,18 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             .abilities = pokemon.abilities,
         }) });
 
-        const machine_learnset = pokemon.machineLearnset();
+        const machine_learnset = pokemon.machine_learnset;
         var j: u7 = 0;
         while (j < game.ptrs.tms.len) : (j += 1) {
+            const is_set = bit.isSet(u128, machine_learnset.value(), j);
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .tms = ston.index(j, bit.isSet(u128, machine_learnset.value(), j)),
+                .tms = ston.index(j, is_set),
             }) });
         }
         while (j < game.ptrs.tms.len + game.ptrs.hms.len) : (j += 1) {
+            const is_set = bit.isSet(u128, machine_learnset.value(), j);
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .hms = ston.index(j - game.ptrs.tms.len, bit.isSet(u128, machine_learnset.value(), j)),
+                .hms = ston.index(j - game.ptrs.tms.len, is_set),
             }) });
         }
     }
@@ -839,16 +841,18 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             }
         }
 
-        const machine_learnset = pokemon.machineLearnset();
+        const machine_learnset = pokemon.machine_learnset;
         var j: u7 = 0;
         while (j < game.ptrs.tms1.len + game.ptrs.tms2.len) : (j += 1) {
+            const is_set = bit.isSet(u128, machine_learnset.value(), j);
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .tms = ston.index(j, bit.isSet(u128, machine_learnset.value(), j)),
+                .tms = ston.index(j, is_set),
             }) });
         }
         while (j < game.ptrs.tms1.len + game.ptrs.tms2.len + game.ptrs.hms.len) : (j += 1) {
+            const is_set = bit.isSet(u128, machine_learnset.value(), j);
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .hms = ston.index(j - (game.ptrs.tms1.len + game.ptrs.tms2.len), bit.isSet(u128, machine_learnset.value(), j)),
+                .hms = ston.index(j - (game.ptrs.tms1.len + game.ptrs.tms2.len), is_set),
             }) });
         }
     }
