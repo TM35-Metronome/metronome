@@ -810,7 +810,6 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }) });
     }
 
-    const number_of_pokemons = 649;
     for (game.ptrs.pokemons.fat) |_, i| {
         const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.BasePokemon);
 
@@ -828,17 +827,10 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             .abilities = pokemon.abilities,
         }) });
 
-        // HACK: For some reason, a release build segfaults here for Pokémons
-        //       with id above 'number_of_pokemons'. You would think this is
-        //       because of an index out of bounds during @tagName, but
-        //       common.EggGroup is a u4 enum and has a tag for all possible
-        //       values, so it really should not.
-        if (i < number_of_pokemons) {
-            for (pokemon.egg_groups) |group, j| {
-                try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                    .egg_groups = ston.index(j, group),
-                }) });
-            }
+        for (pokemon.egg_groups) |group, j| {
+            try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
+                .egg_groups = ston.index(j, group),
+            }) });
         }
 
         const machine_learnset = pokemon.machine_learnset;
