@@ -477,13 +477,13 @@ fn decryptAndDecode(data: []align(1) const lu16, key: u16, out: anytype) !void {
                 const char = @intCast(u16, container & 0x1FF);
                 if (char == 0x1Ff)
                     return;
-                try encodings.decode2(&@bitCast([2]u8, @enumToInt(lu16.init(char))), out);
+                try encodings.decodeBytes(&@bitCast([2]u8, @enumToInt(lu16.init(char))), out);
                 container >>= 9;
             }
         } else {
             if (decoded == 0xffff)
                 return;
-            try encodings.decode2(&@bitCast([2]u8, @enumToInt(lu16.init(decoded))), out);
+            try encodings.decodeBytes(&@bitCast([2]u8, @enumToInt(lu16.init(decoded))), out);
         }
     }
 }

@@ -1169,7 +1169,7 @@ pub fn decode(reader: anytype, writer: anytype) !void {
     try rom.encoding.encodeEx(&all, 1, reader, writer);
 }
 
-pub fn decode2(in: []const u8, writer: anytype) !void {
+pub fn decodeBytes(in: []const u8, writer: anytype) !void {
     var fbs = io.fixedBufferStream(in);
     try decode(fbs.reader(), writer);
 }
