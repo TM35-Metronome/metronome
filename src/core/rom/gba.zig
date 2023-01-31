@@ -29,7 +29,7 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        for (header.game_title.span()) |item| {
+        for (header.game_title.slice()) |item| {
             if (ascii.isLower(item))
                 return error.InvalidGameTitle;
         }

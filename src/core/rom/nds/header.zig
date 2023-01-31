@@ -216,7 +216,7 @@ pub const Header = extern struct {
         if (header.header_checksum.value() != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
-        for (header.game_title.span()) |item| {
+        for (header.game_title.slice()) |item| {
             if (ascii.isLower(item))
                 return error.InvalidGameTitle;
         }

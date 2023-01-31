@@ -113,9 +113,16 @@ pub fn TerminatedArray(comptime n: usize, comptime T: type, comptime sentinel: T
     return extern struct {
         data: [n]T,
 
-        pub fn span(array: anytype) mem.Span(@TypeOf(&array.data)) {
+        pub fn slice(array: anytype) Slice(@TypeOf(array)) {
             const i = mem.indexOfScalar(T, &array.data, sentinel) orelse return &array.data;
             return array.data[0..i];
+        }
+
+        fn Slice(comptime Ptr: type) type {
+            var info = @typeInfo(Ptr);
+            info.Pointer.size = .Slice;
+            info.Pointer.child = T;
+            return @Type(info);
         }
     };
 }

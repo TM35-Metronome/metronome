@@ -273,7 +273,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 return error.VersionDontMatch;
         },
         .game_title => |title| {
-            if (!mem.eql(u8, title, game.header.game_title.span()))
+            if (!mem.eql(u8, title, game.header.game_title.slice()))
                 return error.GameTitleDontMatch;
         },
         .gamecode => |code| {
@@ -721,7 +721,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 return error.VersionDontMatch;
         },
         .game_title => |game_title| {
-            if (!mem.eql(u8, game_title, header.game_title.span()))
+            if (!mem.eql(u8, game_title, header.game_title.slice()))
                 return error.GameTitleDontMatch;
         },
         .gamecode => |gamecode| {
@@ -1215,7 +1215,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 return error.VersionDontMatch;
         },
         .game_title => |game_title| {
-            if (!mem.eql(u8, game_title, header.game_title.span()))
+            if (!mem.eql(u8, game_title, header.game_title.slice()))
                 return error.GameTitleDontMatch;
         },
         .gamecode => |gamecode| {

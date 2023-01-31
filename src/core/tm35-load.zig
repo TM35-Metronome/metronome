@@ -117,7 +117,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
 
     try ston.serialize(writer, .{
         .version = game.version,
-        .game_title = ston.string(escape.escapeFmt(game.header.game_title.span())),
+        .game_title = ston.string(escape.escapeFmt(game.header.game_title.slice())),
         .gamecode = ston.string(escape.escapeFmt(&game.header.gamecode)),
         .starters = game.starters,
         .text_delays = game.text_delays,
@@ -400,7 +400,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
     const header = game.rom.header();
     try ston.serialize(writer, .{
         .version = game.info.version,
-        .game_title = ston.string(escape.escapeFmt(header.game_title.span())),
+        .game_title = ston.string(escape.escapeFmt(header.game_title.slice())),
         .gamecode = ston.string(escape.escapeFmt(&header.gamecode)),
         .instant_text = false,
         .starters = game.ptrs.starters,
@@ -736,7 +736,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     const header = game.rom.header();
     try ston.serialize(writer, .{
         .version = game.info.version,
-        .game_title = ston.string(escape.escapeFmt(header.game_title.span())),
+        .game_title = ston.string(escape.escapeFmt(header.game_title.slice())),
         .gamecode = ston.string(escape.escapeFmt(&header.gamecode)),
         .instant_text = false,
         .hms = game.ptrs.hms,
