@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        release: [release=true, release=false]
+        optimize: [Debug, ReleaseSafe, ReleaseFast, ReleaseSmall]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -27,7 +27,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: master
-      - run: zig build test -D${{ matrix.release }}
+      - run: zig build test -Doptimize=${{ matrix.optimize }}
 
   build:
     strategy:
@@ -36,19 +36,19 @@ jobs:
             - name: linux
               target: native
               strip: strip=false
-              release: release=true
+              release: optimize=ReleaseFast
             - name: windows
               target: x86_64-windows-gnu
               strip: strip=false
-              release: release=true
+              release: optimize=ReleaseFast
             - name: linux-debug
               target: native
               strip: strip=false
-              release: release=false
+              release: optimize=Debug
             - name: windows-debug
               target: x86_64-windows-gnu
               strip: strip=false
-              release: release=false
+              release: optimize=Debug
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -61,9 +61,9 @@ jobs:
       - if: matrix.target == 'native'
         run: sudo apt-get update && sudo apt-get install libwebkit2gtk-4.0-dev -y
 
-      - name: zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
+      - name: zig build -D${{ matrix.strip }} -D${{ matrix.optimize }} -Dtarget=${{ matrix.target }}
         run: |
-          zig build -D${{ matrix.strip }} -D${{ matrix.release }} -Dtarget=${{ matrix.target }}
+          zig build -D${{ matrix.strip }} -D${{ matrix.optimize }} -Dtarget=${{ matrix.target }}
           ./make-zip.sh metronome-${{ matrix.name }}
 
       - uses: actions/upload-artifact@v3
