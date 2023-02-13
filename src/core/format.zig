@@ -147,7 +147,6 @@ pub fn io(
 /// field types must be able to coirse to the struct fields type.
 pub fn setField(struct_ptr: anytype, union_val: anytype) void {
     const Union = @TypeOf(union_val);
-
     inline for (@typeInfo(Union).Union.fields) |field| {
         if (union_val == @field(meta.Tag(Union), field.name)) {
             @field(struct_ptr, field.name) = @field(union_val, field.name);

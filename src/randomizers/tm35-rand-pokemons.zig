@@ -158,8 +158,8 @@ fn output(program: *Program, writer: anytype) !void {
             .types = pokemon.types,
             .abilities = pokemon.abilities,
             .items = pokemon.items,
-            .evos = pokemon.evos,
             .stats = pokemon.stats,
+            .evos = pokemon.evos,
         }) });
 
         var j: usize = 0;
@@ -594,17 +594,14 @@ fn expectPokemonMapFieldFollowEvo(program: Program, comptime field: []const u8) 
 
 fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
     const old_keys = old_prog.pokemons.keys();
-    const new_keys = new_prog.pokemons.keys();
     const old_pokemons = old_prog.pokemons.values();
-    const new_pokemons = new_prog.pokemons.values();
 
-    try testing.expectEqual(old_pokemons.len, new_pokemons.len);
+    try testing.expectEqual(old_pokemons.len, new_prog.pokemons.values().len);
     for (old_pokemons) |*old, i| {
-        const new = &new_pokemons[i];
+        const new = new_prog.pokemons.getPtr(old_keys[i]).?;
         const old_stats = old.statsToArray();
         const new_stats = new.statsToArray();
 
-        try testing.expectEqual(old_keys[i], new_keys[i]);
         try testing.expectEqual(old_stats.len, new_stats.len);
 
         var old_total: usize = 0;
