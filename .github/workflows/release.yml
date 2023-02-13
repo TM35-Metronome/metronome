@@ -36,19 +36,19 @@ jobs:
             - name: linux
               target: native
               strip: strip=false
-              release: optimize=ReleaseFast
+              optimize: optimize=ReleaseFast
             - name: windows
               target: x86_64-windows-gnu
               strip: strip=false
-              release: optimize=ReleaseFast
+              optimize: optimize=ReleaseFast
             - name: linux-debug
               target: native
               strip: strip=false
-              release: optimize=Debug
+              optimize: optimize=Debug
             - name: windows-debug
               target: x86_64-windows-gnu
               strip: strip=false
-              release: optimize=Debug
+              optimize: optimize=Debug
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
