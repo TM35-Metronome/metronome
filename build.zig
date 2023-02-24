@@ -98,16 +98,23 @@ pub fn build(b: *std.Build) void {
     }
 
     const test_step = b.step("test", "Run all tests");
-    const the_test = b.addTest(.{
+    const test_util = b.addTest(.{
+        .name = "test",
+        .root_source_file = .{ .path = "src/util.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    const test_exes = b.addTest(.{
         .name = "test",
         .root_source_file = .{ .path = "src/test.zig" },
         .optimize = optimize,
         .target = target,
     });
     for (modules) |module|
-        the_test.addModule(module.name, module.module);
+        test_exes.addModule(module.name, module.module);
 
-    test_step.dependOn(&the_test.step);
+    test_step.dependOn(&test_util.step);
+    test_step.dependOn(&test_exes.step);
 }
 
 fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {

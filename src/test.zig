@@ -2,7 +2,7 @@ const std = @import("std");
 
 test {
     @setEvalBranchQuota(100000000);
-    std.testing.refAllDeclsRecursive(@import("util.zig"));
+    // std.testing.refAllDeclsRecursive(@import("util.zig"));
 
     std.testing.refAllDeclsRecursive(@import("core/tm35-apply.zig"));
     std.testing.refAllDeclsRecursive(@import("core/tm35-disassemble-scripts.zig"));
