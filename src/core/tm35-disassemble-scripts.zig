@@ -103,10 +103,10 @@ pub fn run(
 
 fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
     @setEvalBranchQuota(100000);
-    for (game.map_headers) |map_header, map_id| {
+    for (game.map_headers, 0..) |map_header, map_id| {
         const scripts = try map_header.map_scripts.toSliceEnd(game.data);
 
-        for (scripts) |*s, script_id| {
+        for (scripts, 0..) |*s, script_id| {
             if (s.type == 0)
                 break;
             if (s.type == 2 or s.type == 4)
@@ -122,7 +122,7 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
         }
 
         const events = try map_header.map_events.toPtr(game.data);
-        for (try events.obj_events.toSlice(game.data, events.obj_events_len)) |obj_event, script_id| {
+        for (try events.obj_events.toSlice(game.data, events.obj_events_len), 0..) |obj_event, script_id| {
             const script_data = obj_event.script.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try writer.print("map_header[{}].obj_events[{}]:\n", .{ map_id, script_id });
@@ -132,7 +132,7 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
             try writer.writeAll("\n");
         }
 
-        for (try events.coord_events.toSlice(game.data, events.coord_events_len)) |coord_event, script_id| {
+        for (try events.coord_events.toSlice(game.data, events.coord_events_len), 0..) |coord_event, script_id| {
             const script_data = coord_event.scripts.toSliceEnd(game.data) catch continue;
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try writer.print("map_header[{}].coord_event[{}]:\n", .{ map_id, script_id });
@@ -146,12 +146,12 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
 
 fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
-    for (game.ptrs.scripts.fat) |_, script_i| {
+    for (game.ptrs.scripts.fat, 0..) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();
 
-        for (gen4.script.getScriptOffsets(script_data)) |relative_offset, i| {
+        for (gen4.script.getScriptOffsets(script_data), 0..) |relative_offset, i| {
             const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
             if (@intCast(isize, script_data.len) < offset)
                 continue;
@@ -205,13 +205,13 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
 
 fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
-    for (game.ptrs.scripts.fat) |_, script_i| {
+    for (game.ptrs.scripts.fat, 0..) |_, script_i| {
         const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
 
         var offsets = std.ArrayList(usize).init(allocator);
         defer offsets.deinit();
 
-        for (gen5.script.getScriptOffsets(script_data)) |relative, i| {
+        for (gen5.script.getScriptOffsets(script_data), 0..) |relative, i| {
             const position = @intCast(isize, i + 1) * @sizeOf(lu32);
             const offset = math.cast(usize, relative.value() + position) orelse continue;
             if (script_data.len < offset)
@@ -291,7 +291,7 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
             try printCommandHelper(writer, v);
         },
         .Struct => |s| {
-            inline for (s.fields) |struct_field, i| {
+            inline for (s.fields, 0..) |struct_field, i| {
                 try printCommandHelper(writer, @field(value, struct_field.name));
                 if (i + 1 != s.fields.len)
                     try writer.writeAll(" ");

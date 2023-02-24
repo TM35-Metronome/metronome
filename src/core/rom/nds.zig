@@ -234,7 +234,7 @@ pub const Rom = struct {
         const old_start = old_slice.start.value();
         const old_len = old_slice.len.value();
 
-        const section_index = for (sections) |s, i| {
+        const section_index = for (sections, 0..) |s, i| {
             const slice = s.toSlice(data.items);
             if (slice.start.value() == old_start and slice.len.value() == old_len)
                 break i;

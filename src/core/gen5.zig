@@ -629,7 +629,7 @@ fn decrypt(data: []align(1) const lu16, out: anytype) !u16 {
 
     var bits: u5 = 0;
     var container: u32 = 0;
-    for (data[start..]) |c, i| {
+    for (data[start..], 0..) |c, i| {
         const decoded = c.value() ^ table.get(data.len, i + start);
         if (compressed) {
             container |= @as(u32, decoded) << bits;
@@ -702,7 +702,7 @@ const KeyTable = struct {
     pub fn init(_key: u16) KeyTable {
         var table: [table_size]u16 = undefined;
         var key = _key;
-        for (table) |*entry, i| {
+        for (&table, 0..) |*entry, i| {
             entry.* = key;
             key = (key >> 3) | (key << 13);
             if (key == _key)
@@ -841,7 +841,7 @@ pub const Game = struct {
 
         pub fn asArray(text: Text) Array {
             var res: Array = undefined;
-            inline for (std.meta.fields(Text)) |field, i|
+            inline for (std.meta.fields(Text), 0..) |field, i|
                 res[i] = @field(text, field.name);
 
             return res;
@@ -860,7 +860,7 @@ pub const Game = struct {
 
         pub fn asArray(story: Story) Array {
             var res: Array = undefined;
-            inline for (std.meta.fields(Story)) |field, i|
+            inline for (std.meta.fields(Story), 0..) |field, i|
                 res[i] = @field(story, field.name);
 
             return res;
@@ -927,7 +927,7 @@ pub const Game = struct {
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
         errdefer allocator.free(trainer_parties);
 
-        for (trainer_parties) |*party, i| {
+        for (trainer_parties, 0..) |*party, i| {
             const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
             const party_size = if (i != 0 and i - 1 < trainers.len) trainers[i - 1].party_size else 0;
 
@@ -1044,11 +1044,11 @@ pub const Game = struct {
                     errdefer for (res[0..filled]) |item|
                         allocator.free(item);
 
-                    for (info.starters) |offs, i| {
+                    for (info.starters, 0..) |offs, i| {
                         res[i] = try allocator.alloc(*lu16, offs.len);
                         filled += 1;
 
-                        for (offs) |offset, j| {
+                        for (offs, 0..) |offset, j| {
                             const fat = scripts.fat[offset.file];
                             const file_data = scripts.data[fat.start.value()..fat.end.value()];
                             res[i][j] = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
@@ -1095,7 +1095,7 @@ pub const Game = struct {
     }
 
     fn updateStarterDialog(game: Game) void {
-        for (game.ptrs.starters) |starter_ptrs, i| {
+        for (game.ptrs.starters, 0..) |starter_ptrs, i| {
             const starter = starter_ptrs[0].value();
             const index = game.info.starter_choice_indexs[i];
             const text = game.owned.story.starter_choice.get(index);
@@ -1156,21 +1156,21 @@ pub const Game = struct {
         // party for all trainers. By doing this, all future applies can always
         // be done inline, and allocations can be avoided. This also makes patches
         // generated simpler.
-        for (builder.fat()) |*f, i|
+        for (builder.fat(), 0..) |*f, i|
             f.* = nds.Range.init(full_party_size * i, full_party_size * (i + 1));
 
-        for (trainer_parties) |party, i| {
+        for (trainer_parties, 0..) |party, i| {
             const party_type = if (i != 0 and i - 1 < trainers.len) trainers[i - 1].party_type else .none;
             const rest = buf[builder.stream.pos + i * full_party_size ..];
             switch (party_type) {
                 .none => {
-                    for (mem.bytesAsSlice(PNone, rest[0..@sizeOf([6]PNone)])) |*m, j| {
+                    for (mem.bytesAsSlice(PNone, rest[0..@sizeOf([6]PNone)]), 0..) |*m, j| {
                         m.* = PartyMemberNone{ .base = party[j].base };
                     }
                     mem.set(u8, rest[@sizeOf([6]PNone)..full_party_size], 0);
                 },
                 .item => {
-                    for (mem.bytesAsSlice(PItem, rest[0..@sizeOf([6]PItem)])) |*m, j| {
+                    for (mem.bytesAsSlice(PItem, rest[0..@sizeOf([6]PItem)]), 0..) |*m, j| {
                         m.* = PartyMemberItem{
                             .base = party[j].base,
                             .item = party[j].item,
@@ -1179,7 +1179,7 @@ pub const Game = struct {
                     mem.set(u8, rest[@sizeOf([6]PItem)..full_party_size], 0);
                 },
                 .moves => {
-                    for (mem.bytesAsSlice(PMoves, rest[0..@sizeOf([6]PMoves)])) |*m, j| {
+                    for (mem.bytesAsSlice(PMoves, rest[0..@sizeOf([6]PMoves)]), 0..) |*m, j| {
                         m.* = PartyMemberMoves{
                             .base = party[j].base,
                             .moves = party[j].moves,
@@ -1279,7 +1279,7 @@ pub const Game = struct {
             }
 
             const entries = mem.bytesAsSlice(Entry, bytes[start_of_entry_table..writer.context.pos]);
-            for (entries) |*entry, j| {
+            for (entries, 0..) |*entry, j| {
                 const start_of_str = writer.context.pos;
                 const str = table.getSpan(j);
                 try encode(str, writer);
@@ -1338,7 +1338,7 @@ pub const Game = struct {
             defer set_var_offsets.shrinkRetainingCapacity(0);
             defer given_pokemons_to_resolve.shrinkRetainingCapacity(0);
 
-            for (script.getScriptOffsets(script_data)) |relative, i| {
+            for (script.getScriptOffsets(script_data), 0..) |relative, i| {
                 const position = @intCast(isize, i + 1) * @sizeOf(lu32);
                 const offset = math.cast(usize, relative.value() + position) orelse continue;
                 if (script_data.len < offset)
@@ -1492,7 +1492,7 @@ pub const Game = struct {
         errdefer res.destroy(allocator);
 
         mem.set(u8, res.buf, 0);
-        for (res.keys) |*key, i| {
+        for (res.keys, 0..) |*key, i| {
             const buf = res.get(i);
 
             var fbs = io.fixedBufferStream(buf);

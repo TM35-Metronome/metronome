@@ -254,7 +254,7 @@ fn generate(writer: anytype, game: Game) !void {
         \\
     );
 
-    for ([_]void{{}} ** 101) |_, i| {
+    for ([_]void{{}} ** 101, 0..) |_, i| {
         try writer.print(".pokemon_stat_p{} {{width: {}%;}}\n", .{ i, i });
     }
 
@@ -285,12 +285,12 @@ fn generate(writer: anytype, game: Game) !void {
         \\<table>
         \\
     );
-    for (game.tms.keys()) |tm_id, i| {
+    for (game.tms.keys(), 0..) |tm_id, i| {
         const tm_move = game.tms.values()[i];
         const move_name = humanize(if (game.moves.get(tm_move)) |m| m.name else unknown);
         try writer.print("<tr><td>TM{} - <a href=\"#move_{}\">{s}</a></td></tr>\n", .{ tm_id + 1, tm_move, move_name });
     }
-    for (game.hms.keys()) |hm_id, i| {
+    for (game.hms.keys(), 0..) |hm_id, i| {
         const hm_move = game.hms.values()[i];
         const move_name = humanize(if (game.moves.get(hm_move)) |m| m.name else unknown);
         try writer.print("<tr><td>HM{} - <a href=\"#move_{}\">{s}</a></td></tr>\n", .{ hm_id + 1, hm_move, move_name });
@@ -303,7 +303,7 @@ fn generate(writer: anytype, game: Game) !void {
         \\
     );
     for (game.pokedex.keys()) |dex| {
-        const pokemon = for (game.pokemons.values()) |pokemon, i| {
+        const pokemon = for (game.pokemons.values(), 0..) |pokemon, i| {
             if (pokemon.pokedex_entry == dex)
                 break .{ .name = pokemon.name, .species = game.pokemons.keys()[i] };
         } else continue;
@@ -316,7 +316,7 @@ fn generate(writer: anytype, game: Game) !void {
         \\<h1>Pokemons</h1>
         \\
     );
-    for (game.pokemons.values()) |pokemon, i| {
+    for (game.pokemons.values(), 0..) |pokemon, i| {
         const species = game.pokemons.keys()[i];
         try writer.print("<h2 id=\"pokemon_{}\">#{} {s}</h2>\n", .{ species, species, pokemon.name });
 
@@ -325,7 +325,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Type:</td><td>
             \\
         );
-        for (pokemon.types.keys()) |t, j| {
+        for (pokemon.types.keys(), 0..) |t, j| {
             const type_name = humanize(if (game.types.get(t)) |ty| ty.name else unknown);
             if (j != 0)
                 try writer.writeAll(" ");
@@ -342,7 +342,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Abilities:</td><td>
             \\
         );
-        for (pokemon.abilities.values()) |a, j| {
+        for (pokemon.abilities.values(), 0..) |a, j| {
             if (a == 0)
                 continue;
             if (j != 0)
@@ -357,7 +357,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Items:</td><td>
             \\
         );
-        for (pokemon.items.values()) |item, j| {
+        for (pokemon.items.values(), 0..) |item, j| {
             if (j != 0)
                 try writer.writeAll(", ");
 
@@ -370,7 +370,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\<tr><td>Egg Groups:</td><td>
             \\
         );
-        for (pokemon.egg_groups.keys()) |egg_group, j| {
+        for (pokemon.egg_groups.keys(), 0..) |egg_group, j| {
             if (j != 0)
                 try writer.writeAll(", ");
 
@@ -497,13 +497,13 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.writeAll("<h1>Trainers</h1>\n");
-    for (game.trainers.values()) |trainer, i| {
+    for (game.trainers.values(), 0..) |trainer, i| {
         const trainer_id = game.trainers.keys()[i];
         try writer.print("<h2 id=\"trainer_{}\">{}</h2>\n", .{ trainer_id, humanize(trainer.name) });
 
         try writer.writeAll("<table>\n");
         try writer.writeAll("<tr><td>Items:</td><td>");
-        for (trainer.items.values()) |item, j| {
+        for (trainer.items.values(), 0..) |item, j| {
             if (j != 0)
                 try writer.writeAll(", ");
 
@@ -551,7 +551,7 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.writeAll("<h1>Moves</h1>\n");
-    for (game.moves.values()) |move, i| {
+    for (game.moves.values(), 0..) |move, i| {
         const move_id = game.moves.keys()[i];
         const move_name = humanize(move.name);
         try writer.print("<h2 id=\"move_{}\">{}</h2>\n", .{ move_id, move_name });
@@ -568,7 +568,7 @@ fn generate(writer: anytype, game: Game) !void {
     }
 
     try writer.writeAll("<h1>Items</h1>\n");
-    for (game.items.values()) |item, i| {
+    for (game.items.values(), 0..) |item, i| {
         const item_id = game.items.keys()[i];
         const item_name = humanize(item.name);
         try writer.print("<h2 id=\"item_{}\">{}</h2>\n", .{ item_id, item_name });

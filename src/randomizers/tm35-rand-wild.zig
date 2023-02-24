@@ -78,9 +78,9 @@ pub fn run(
 }
 
 fn output(program: *Program, writer: anytype) !void {
-    for (program.wild_pokemons.values()) |zone, i| {
+    for (program.wild_pokemons.values(), 0..) |zone, i| {
         const zone_id = program.wild_pokemons.keys()[i];
-        for (zone.wild_areas) |area, j| {
+        for (zone.wild_areas, 0..) |area, j| {
             const aid = @intToEnum(meta.Tag(format.WildPokemons), @intCast(u5, j));
             try ston.serialize(writer, .{
                 .wild_pokemons = ston.index(zone_id, ston.field(@tagName(aid), .{
@@ -238,7 +238,7 @@ fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values(), 0..) |pokemon, i| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)

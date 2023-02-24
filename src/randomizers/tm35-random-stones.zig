@@ -96,13 +96,13 @@ pub fn run(
 }
 
 fn output(program: *Program, writer: anytype) !void {
-    for (program.pokemons.values()) |pokemon, i| {
+    for (program.pokemons.values(), 0..) |pokemon, i| {
         const species = program.pokemons.keys()[i];
         try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
             .evos = pokemon.evos,
         }) });
     }
-    for (program.items.values()) |item, i| {
+    for (program.items.values(), 0..) |item, i| {
         const item_id = program.items.keys()[i];
         try ston.serialize(writer, .{ .items = ston.index(item_id, .{
             .name = ston.string(escape.escapeFmt(item.name)),
@@ -475,7 +475,7 @@ fn randomize(program: *Program) !void {
             },
         },
     };
-    for (stone_strings) |strs, stone| {
+    for (stone_strings, 0..) |strs, stone| {
         if (program.max_evolutions <= stone or stones.count() <= stone)
             break;
 
@@ -495,7 +495,7 @@ fn randomize(program: *Program) !void {
     for (species.keys()) |pokemon_id| {
         const pokemon = program.pokemons.getPtr(pokemon_id).?;
 
-        for (stone_strings) |_, stone| {
+        for (stone_strings, 0..) |_, stone| {
             if (program.max_evolutions <= stone or stones.count() <= stone)
                 break;
 
@@ -653,7 +653,7 @@ fn eggGroupFilter(pokemon: Pokemon, buf: []u16) []const u16 {
 
 fn setFilter(comptime field: []const u8, pokemon: Pokemon, buf: []u16) []const u16 {
     const keys = @field(pokemon, field).keys();
-    for (keys) |item, i|
+    for (keys, 0..) |item, i|
         buf[i] = item;
 
     return buf[0..keys.len];
@@ -674,7 +674,7 @@ fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values(), 0..) |pokemon, i| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)

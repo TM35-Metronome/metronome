@@ -450,7 +450,7 @@ pub const Builder = struct {
         try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
-        for (b.fnt_main.items) |*entry, i| {
+        for (b.fnt_main.items, 0..) |*entry, i| {
             const old_offset = entry.offset_to_subtable.value();
             const new_offset = old_offset + written.len;
             if (old_offset > parent_offset)

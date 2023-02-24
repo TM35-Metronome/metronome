@@ -186,22 +186,22 @@ pub const params = clap.parseParamsComptime(
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_pokemons_arg = args.args.@"exclude-pokemon";
     const excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
-    for (excluded_pokemons) |_, i|
+    for (excluded_pokemons, 0..) |_, i|
         excluded_pokemons[i] = try ascii.allocLowerString(allocator, excluded_pokemons_arg[i]);
 
     const excluded_trainers_arg = args.args.@"exclude-trainer";
     const excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
-    for (excluded_trainers) |_, i|
+    for (excluded_trainers, 0..) |_, i|
         excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
 
     const included_pokemons_arg = args.args.@"include-pokemon";
     const included_pokemons = try allocator.alloc([]const u8, included_pokemons_arg.len);
-    for (included_pokemons) |_, i|
+    for (included_pokemons, 0..) |_, i|
         included_pokemons[i] = try ascii.allocLowerString(allocator, included_pokemons_arg[i]);
 
     const included_trainers_arg = args.args.@"include-trainer";
     const included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
-    for (included_trainers) |_, i|
+    for (included_trainers, 0..) |_, i|
         included_trainers[i] = try ascii.allocLowerString(allocator, included_trainers_arg[i]);
 
     const options = Options{
@@ -409,7 +409,7 @@ fn randomize(program: *Program) !void {
         return;
     }
 
-    for (program.trainers.values()) |*trainer, i| {
+    for (program.trainers.values(), 0..) |*trainer, i| {
         // Trainers with 0 party members are considered "invalid" trainers
         // and will not be randomized.
         if (trainer.party_size == 0)
@@ -602,7 +602,7 @@ fn fillWithBestMovesForLevel(
 
 fn fillWithRandomMoves(random: rand.Random, all_moves: Moves, moves: *MemberMoves) void {
     const has_null_move = all_moves.get(0) != null;
-    for (moves.values()) |*move, i| {
+    for (moves.values(), 0..) |*move, i| {
         // We need to have more moves in the game than the party member can have,
         // otherwise, we cannot pick only unique moves. Also, move `0` is the
         // `null` move, so we don't count that as a move we can pick from.
@@ -626,7 +626,7 @@ fn fillWithRandomLevelUpMoves(
     lvl_up_moves: LvlUpMoves,
     moves: *MemberMoves,
 ) void {
-    for (moves.values()) |*move, i| {
+    for (moves.values(), 0..) |*move, i| {
         // We need to have more moves in the learnset than the party member can have,
         // otherwise, we cannot pick only unique moves.
         // TODO: This code does no take into account that `lvl_up_moves` can contain
@@ -828,7 +828,7 @@ fn pokedexPokemons(
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values(), 0..) |pokemon, i| {
         const species = pokemons.keys()[i];
         if (pokemon.catch_rate == 0)
             continue;

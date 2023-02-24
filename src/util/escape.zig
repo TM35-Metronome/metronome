@@ -168,7 +168,7 @@ pub const Replacement = struct {
 };
 
 fn startsWith(comptime replacements: []const Replacement, buf: []const u8) ?usize {
-    inline for (replacements) |rep, i| {
+    inline for (replacements, 0..) |rep, i| {
         if (mem.startsWith(u8, buf, rep.find))
             return i;
     }
@@ -183,13 +183,13 @@ const State = struct {
 
 /// replacements must be sorted.
 fn transion(replacements: []const Replacement, byte: u8, state: State) ?State {
-    const start = for (replacements[state.start..state.end]) |rep, i| {
+    const start = for (replacements[state.start..state.end], 0..) |rep, i| {
         const rest = rep.find[state.index..];
         if (rest.len != 0 and rest[0] == byte)
             break state.start + i;
     } else return null;
 
-    const end = for (replacements[start..state.end]) |rep, i| {
+    const end = for (replacements[start..state.end], 0..) |rep, i| {
         const rest = rep.find[state.index..];
         if (rest.len == 0 or rest[0] != byte)
             break start + i;

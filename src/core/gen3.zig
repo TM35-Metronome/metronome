@@ -681,7 +681,7 @@ pub const Game = struct {
         const trainer_parties = try allocator.alloc(TrainerParty, trainers.len);
         mem.set(TrainerParty, trainer_parties, TrainerParty{});
 
-        for (trainer_parties) |*party, i| {
+        for (trainer_parties, 0..) |*party, i| {
             party.size = trainers[i].partyLen();
 
             var j: usize = 0;
@@ -810,7 +810,7 @@ pub const Game = struct {
         const trainer_parties = game.trainer_parties;
         const trainers = game.trainers;
 
-        for (trainer_parties) |party, i| {
+        for (trainer_parties, 0..) |party, i| {
             const trainer = &trainers[i];
             const party_bytes = try trainer.partyBytes(game.data);
             const party_type = trainer.party_type;

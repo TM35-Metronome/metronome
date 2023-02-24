@@ -94,7 +94,7 @@ fn randomize(program: *Program) !void {
     const pick_from = try program.getStartersToPickFrom();
 
     const starters = program.starters.values();
-    for (starters) |*starter, i| while (true) {
+    for (starters, 0..) |*starter, i| while (true) {
         starter.* = util.random.item(random, pick_from.keys()).?.*;
 
         // Prevent duplicates if possible. We cannot prevent it if we have less pokemon to pick
@@ -227,7 +227,7 @@ fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values(), 0..) |pokemon, i| {
         const species = pokemons.keys()[i];
         if (pokemon.catch_rate == 0)
             continue;

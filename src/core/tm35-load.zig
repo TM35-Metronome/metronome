@@ -110,7 +110,7 @@ pub fn run(
 fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     var buf: [mem.page_size]u8 = undefined;
 
-    for (game.starters) |starter, index| {
+    for (game.starters, 0..) |starter, index| {
         if (starter.value() != game.starters_repeat[index].value())
             log.warn("repeated starters don't match.", .{});
     }
@@ -128,7 +128,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         .pokeball_items = game.pokeball_items,
     });
 
-    for (game.trainers) |trainer, i| {
+    for (game.trainers, 0..) |trainer, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &trainer.name, fbs.writer());
         const decoded_name = fbs.getWritten();
@@ -143,7 +143,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             .party_size = trainer.partyLen(),
         }) });
 
-        for (party.members[0..party.size]) |member, j| {
+        for (party.members[0..party.size], 0..) |member, j| {
             try ston.serialize(writer, .{ .trainers = ston.index(i, .{
                 .party = ston.index(j, .{
                     .level = member.base.level,
@@ -158,7 +158,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             }
 
             if (trainer.party_type == .moves or trainer.party_type == .both) {
-                for (member.moves) |move, k| {
+                for (member.moves, 0..) |move, k| {
                     try ston.serialize(writer, .{ .trainers = ston.index(i, .{ .party = ston.index(j, .{
                         .moves = ston.index(k, move),
                     }) }) });
@@ -167,7 +167,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }
     }
 
-    for (game.moves) |move, i| {
+    for (game.moves, 0..) |move, i| {
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
             .effect = move.effect,
             .power = move.power,
@@ -180,7 +180,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.pokemons) |pokemon, i| {
+    for (game.pokemons, 0..) |pokemon, i| {
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .stats = pokemon.stats,
             .catch_rate = pokemon.catch_rate,
@@ -196,14 +196,14 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.species_to_national_dex) |dex_entry, i| {
+    for (game.species_to_national_dex, 0..) |dex_entry, i| {
         try ston.serialize(writer, .{ .pokemons = ston.index(i + 1, .{
             .pokedex_entry = dex_entry,
         }) });
     }
 
-    for (game.evolutions) |evos, i| {
-        for (evos) |evo, j| {
+    for (game.evolutions, 0..) |evos, i| {
+        for (evos, 0..) |evo, j| {
             if (evo.method == .unused)
                 continue;
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -216,9 +216,9 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }
     }
 
-    for (game.level_up_learnset_pointers) |lvl_up_learnset, i| {
+    for (game.level_up_learnset_pointers, 0..) |lvl_up_learnset, i| {
         const learnset = try lvl_up_learnset.toSliceEnd(game.data);
-        for (learnset) |l, j| {
+        for (learnset, 0..) |l, j| {
             if (std.meta.eql(l, gen3.LevelUpMove.term))
                 break;
 
@@ -231,7 +231,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }
     }
 
-    for (game.machine_learnsets) |machine_learnset, i| {
+    for (game.machine_learnsets, 0..) |machine_learnset, i| {
         var j: u6 = 0;
         while (j < game.tms.len) : (j += 1) {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -245,7 +245,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }
     }
 
-    for (game.pokemon_names) |str, i| {
+    for (game.pokemon_names, 0..) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
@@ -255,7 +255,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ability_names) |str, i| {
+    for (game.ability_names, 0..) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
@@ -265,7 +265,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.move_names) |str, i| {
+    for (game.move_names, 0..) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
@@ -275,7 +275,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.type_names) |str, i| {
+    for (game.type_names, 0..) |str, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &str, fbs.writer());
         const decoded_name = fbs.getWritten();
@@ -285,7 +285,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.items) |item, i| {
+    for (game.items, 0..) |item, i| {
         try ston.serialize(writer, .{ .items = ston.index(i, .{
             .price = item.price,
             .battle_effect = item.battle_effect,
@@ -323,7 +323,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     }
 
     switch (game.version) {
-        .emerald => for (game.pokedex.emerald) |entry, i| {
+        .emerald => for (game.pokedex.emerald, 0..) |entry, i| {
             try ston.serialize(writer, .{ .pokedex = ston.index(i, .{
                 .height = entry.height,
                 .weight = entry.weight,
@@ -333,7 +333,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         .sapphire,
         .fire_red,
         .leaf_green,
-        => for (game.pokedex.rsfrlg) |entry, i| {
+        => for (game.pokedex.rsfrlg, 0..) |entry, i| {
             try ston.serialize(writer, .{ .pokedex = ston.index(i, .{
                 .height = entry.height,
                 .weight = entry.weight,
@@ -342,7 +342,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         else => unreachable,
     }
 
-    for (game.map_headers) |header, i| {
+    for (game.map_headers, 0..) |header, i| {
         try ston.serialize(writer, .{ .maps = ston.index(i, .{
             .music = header.music,
             .cave = header.cave,
@@ -357,7 +357,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.wild_pokemon_headers) |header, i| {
+    for (game.wild_pokemon_headers, 0..) |header, i| {
         if (header.land.toPtr(game.data)) |land| {
             try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{ .grass_0 = .{
                 .encounter_rate = land.encounter_rate,
@@ -384,7 +384,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         } else |_| {}
     }
 
-    for (game.text) |text_ptr, i| {
+    for (game.text, 0..) |text_ptr, i| {
         const text = try text_ptr.toSliceZ(game.data);
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, text, fbs.writer());
@@ -411,7 +411,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         .pokeball_items = game.ptrs.pokeball_items,
     });
 
-    for (game.ptrs.trainers) |trainer, i| {
+    for (game.ptrs.trainers, 0..) |trainer, i| {
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .party_size = trainer.party_size,
             .party_type = trainer.party_type,
@@ -423,7 +423,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         if (parties.len <= i)
             continue;
 
-        for (parties[i][0..trainer.party_size]) |member, j| {
+        for (parties[i][0..trainer.party_size], 0..) |member, j| {
             try ston.serialize(writer, .{ .trainers = ston.index(i, .{
                 .party = ston.index(j, .{
                     .ability = member.base.gender_ability.ability,
@@ -439,7 +439,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             }
 
             if (trainer.party_type == .moves or trainer.party_type == .both) {
-                for (member.moves) |move, k| {
+                for (member.moves, 0..) |move, k| {
                     try ston.serialize(writer, .{ .trainers = ston.index(i, .{ .party = ston.index(j, .{
                         .moves = ston.index(k, move),
                     }) }) });
@@ -448,7 +448,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.moves) |move, i| {
+    for (game.ptrs.moves, 0..) |move, i| {
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
             .category = move.category,
             .power = move.power,
@@ -458,7 +458,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ptrs.pokemons) |*pokemon, i| {
+    for (game.ptrs.pokemons, 0..) |*pokemon, i| {
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .stats = pokemon.stats,
             .catch_rate = pokemon.catch_rate,
@@ -489,14 +489,14 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.species_to_national_dex) |dex_entry, i| {
+    for (game.ptrs.species_to_national_dex, 0..) |dex_entry, i| {
         try ston.serialize(writer, .{ .pokemons = ston.index(i + 1, .{
             .pokedex_entry = dex_entry,
         }) });
     }
 
-    for (game.ptrs.evolutions) |evos, i| {
-        for (evos.items) |evo, j| {
+    for (game.ptrs.evolutions, 0..) |evos, i| {
+        for (evos.items, 0..) |evo, j| {
             if (evo.method == .unused)
                 continue;
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -509,11 +509,11 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.level_up_moves.fat) |_, i| {
+    for (game.ptrs.level_up_moves.fat, 0..) |_, i| {
         const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
         const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
 
-        for (level_up_moves) |move, j| {
+        for (level_up_moves, 0..) |move, j| {
             if (std.meta.eql(move, gen4.LevelUpMove.term))
                 break;
 
@@ -526,18 +526,18 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.pokedex_heights) |height, i| {
+    for (game.ptrs.pokedex_heights, 0..) |height, i| {
         try ston.serialize(writer, .{ .pokedex = ston.index(i, .{
             .height = height,
         }) });
     }
-    for (game.ptrs.pokedex_weights) |weight, i| {
+    for (game.ptrs.pokedex_weights, 0..) |weight, i| {
         try ston.serialize(writer, .{ .pokedex = ston.index(i, .{
             .weight = weight,
         }) });
     }
 
-    for (game.ptrs.items) |*item, i| {
+    for (game.ptrs.items, 0..) |*item, i| {
         try ston.serialize(writer, .{ .items = ston.index(i, .{
             .price = item.price,
             .battle_effect = item.battle_effect,
@@ -549,11 +549,11 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         .diamond,
         .pearl,
         .platinum,
-        => for (game.ptrs.wild_pokemons.dppt) |wild_mons, i| {
+        => for (game.ptrs.wild_pokemons.dppt, 0..) |wild_mons, i| {
             try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
                 .grass_0 = .{ .encounter_rate = wild_mons.grass_rate },
             }) });
-            for (wild_mons.grass) |grass, j| {
+            for (wild_mons.grass, 0..) |grass, j| {
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(i, .{
                     .grass_0 = .{ .pokemons = ston.index(j, .{
                         .min_level = grass.level,
@@ -570,8 +570,8 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                 "radar_replace",
                 "unknown_replace",
                 "gba_replace",
-            }) |area_name, area_i| {
-                for (@field(wild_mons, area_name)) |replacement, j| {
+            }, 0..) |area_name, area_i| {
+                for (@field(wild_mons, area_name), 0..) |replacement, j| {
                     const out_name = std.fmt.comptimePrint("grass_{}", .{area_i + 1});
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
@@ -585,7 +585,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             inline for ([_][]const u8{
                 "surf",
                 "sea_unknown",
-            }) |area_name, area_i| {
+            }, 0..) |area_name, area_i| {
                 const out_name = std.fmt.comptimePrint("surf_{}", .{area_i});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
@@ -593,7 +593,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                         .encounter_rate = @field(wild_mons, area_name).rate,
                     }),
                 ) });
-                for (@field(wild_mons, area_name).mons) |mon, j| {
+                for (@field(wild_mons, area_name).mons, 0..) |mon, j| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(j, .{
@@ -609,7 +609,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                 "old_rod",
                 "good_rod",
                 "super_rod",
-            }) |area_name, area_i| {
+            }, 0..) |area_name, area_i| {
                 const out_name = std.fmt.comptimePrint("fishing_{}", .{area_i});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
@@ -617,7 +617,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                         .encounter_rate = @field(wild_mons, area_name).rate,
                     }),
                 ) });
-                for (@field(wild_mons, area_name).mons) |mon, j| {
+                for (@field(wild_mons, area_name).mons, 0..) |mon, j| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(j, .{
@@ -632,13 +632,13 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
 
         .heart_gold,
         .soul_silver,
-        => for (game.ptrs.wild_pokemons.hgss) |wild_mons, i| {
+        => for (game.ptrs.wild_pokemons.hgss, 0..) |wild_mons, i| {
             // TODO: Get rid of inline for in favor of a function to call
             inline for ([_][]const u8{
                 "grass_morning",
                 "grass_day",
                 "grass_night",
-            }) |area_name, area_i| {
+            }, 0..) |area_name, area_i| {
                 const out_name = std.fmt.comptimePrint("grass_{}", .{area_i});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
@@ -646,7 +646,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                         .encounter_rate = wild_mons.grass_rate,
                     }),
                 ) });
-                for (@field(wild_mons, area_name)) |species, j| {
+                for (@field(wild_mons, area_name), 0..) |species, j| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(j, .{
@@ -662,7 +662,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             inline for ([_][]const u8{
                 "surf",
                 "sea_unknown",
-            }) |area_name, j| {
+            }, 0..) |area_name, j| {
                 const out_name = std.fmt.comptimePrint("surf_{}", .{j});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
@@ -670,7 +670,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                         .encounter_rate = wild_mons.sea_rates[j],
                     }),
                 ) });
-                for (@field(wild_mons, area_name)) |sea, k| {
+                for (@field(wild_mons, area_name), 0..) |sea, k| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(k, .{
@@ -686,7 +686,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                 "old_rod",
                 "good_rod",
                 "super_rod",
-            }) |area_name, j| {
+            }, 0..) |area_name, j| {
                 const out_name = std.fmt.comptimePrint("fishing_{}", .{j});
                 try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                     i,
@@ -694,7 +694,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
                         .encounter_rate = wild_mons.sea_rates[j + 2],
                     }),
                 ) });
-                for (@field(wild_mons, area_name)) |sea, k| {
+                for (@field(wild_mons, area_name), 0..) |sea, k| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(k, .{
@@ -745,12 +745,12 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         .pokeball_items = game.ptrs.pokeball_items,
     });
 
-    for (game.ptrs.tms1) |tm, i|
+    for (game.ptrs.tms1, 0..) |tm, i|
         try ston.serialize(writer, .{ .tms = ston.index(i, tm) });
-    for (game.ptrs.tms2) |tm, i|
+    for (game.ptrs.tms2, 0..) |tm, i|
         try ston.serialize(writer, .{ .tms = ston.index(i + game.ptrs.tms1.len, tm) });
 
-    for (game.ptrs.starters) |starter_ptrs, i| {
+    for (game.ptrs.starters, 0..) |starter_ptrs, i| {
         const first = starter_ptrs[0];
         for (starter_ptrs[1..]) |starter| {
             if (first.value() != starter.value())
@@ -760,7 +760,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         try ston.serialize(writer, .{ .starters = ston.index(i, first) });
     }
 
-    for (game.ptrs.trainers) |trainer, index| {
+    for (game.ptrs.trainers, 0..) |trainer, index| {
         const i = index + 1;
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .party_size = trainer.party_size,
@@ -773,7 +773,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         if (parties.len <= i)
             continue;
 
-        for (parties[i][0..trainer.party_size]) |member, j| {
+        for (parties[i][0..trainer.party_size], 0..) |member, j| {
             try ston.serialize(writer, .{ .trainers = ston.index(i, .{
                 .party = ston.index(j, .{
                     .ability = member.base.gender_ability.ability,
@@ -789,7 +789,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             }
 
             if (trainer.party_type == .moves or trainer.party_type == .both) {
-                for (member.moves) |move, k| {
+                for (member.moves, 0..) |move, k| {
                     try ston.serialize(writer, .{ .trainers = ston.index(i, .{ .party = ston.index(j, .{
                         .moves = ston.index(k, move),
                     }) }) });
@@ -798,7 +798,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.moves) |move, i| {
+    for (game.ptrs.moves, 0..) |move, i| {
         try ston.serialize(writer, .{ .moves = ston.index(i, .{
             .type = move.type,
             .category = move.category,
@@ -810,7 +810,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ptrs.pokemons.fat) |_, i| {
+    for (game.ptrs.pokemons.fat, 0..) |_, i| {
         const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.BasePokemon);
 
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -827,7 +827,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             .abilities = pokemon.abilities,
         }) });
 
-        for (pokemon.egg_groups) |group, j| {
+        for (pokemon.egg_groups, 0..) |group, j| {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .egg_groups = ston.index(j, group),
             }) });
@@ -849,8 +849,8 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.evolutions) |evos, i| {
-        for (evos.items) |evo, j| {
+    for (game.ptrs.evolutions, 0..) |evos, i| {
+        for (evos.items, 0..) |evo, j| {
             if (evo.method == .unused)
                 continue;
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
@@ -863,10 +863,10 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.level_up_moves.fat) |_, i| {
+    for (game.ptrs.level_up_moves.fat, 0..) |_, i| {
         const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
         const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
-        for (level_up_moves) |move, j| {
+        for (level_up_moves, 0..) |move, j| {
             if (std.meta.eql(move, gen5.LevelUpMove.term))
                 break;
 
@@ -879,7 +879,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }
     }
 
-    for (game.ptrs.items) |*item, i| {
+    for (game.ptrs.items, 0..) |*item, i| {
         // Price in gen5 is actually price * 10. I imagine they where trying to avoid
         // having price be more than a u16
         try ston.serialize(writer, .{ .items = ston.index(i, .{
@@ -889,20 +889,20 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         }) });
     }
 
-    for (game.ptrs.map_headers) |map_header, i| {
+    for (game.ptrs.map_headers, 0..) |map_header, i| {
         try ston.serialize(writer, .{ .maps = ston.index(i, .{
             .music = map_header.music,
             .battle_scene = map_header.battle_scene,
         }) });
     }
 
-    for (game.ptrs.wild_pokemons.fat) |_, i| {
+    for (game.ptrs.wild_pokemons.fat, 0..) |_, i| {
         const file = nds.fs.File{ .i = @intCast(u32, i) };
         const wilds: []align(1) gen5.WildPokemons =
             game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
             try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
 
-        for (wilds) |wild_mons, wild_i| {
+        for (wilds, 0..) |wild_mons, wild_i| {
             inline for ([_][]const u8{
                 "grass",
                 "dark_grass",
@@ -911,7 +911,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
                 "ripple_surf",
                 "fishing",
                 "ripple_fishing",
-            }) |area_name, j| {
+            }, 0..) |area_name, j| {
                 var buf: [20]u8 = undefined;
                 const out_name = std.fmt.bufPrint(&buf, "{s}_{}", .{ area_name, wild_i }) catch
                     unreachable;
@@ -921,7 +921,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
                         .encounter_rate = wild_mons.rates[j],
                     }),
                 ) });
-                for (@field(wild_mons, area_name)) |mon, k| {
+                for (@field(wild_mons, area_name), 0..) |mon, k| {
                     try ston.serialize(writer, .{ .wild_pokemons = ston.index(
                         i,
                         ston.field(out_name, .{ .pokemons = ston.index(k, .{
@@ -937,9 +937,9 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
 
     if (game.ptrs.hidden_hollows) |hidden_hollows| {
         // The nesting is real :)
-        for (hidden_hollows) |hollow, i| {
-            for (hollow.pokemons) |group, j| {
-                for (group.species) |s, k| {
+        for (hidden_hollows, 0..) |hollow, i| {
+            for (hollow.pokemons, 0..) |group, j| {
+                for (group.species, 0..) |s, k| {
                     try ston.serialize(writer, .{
                         .hidden_hollows = ston.index(i, .{
                             .groups = ston.index(j, .{
@@ -977,7 +977,7 @@ fn outputGen5StringTable(
     field_name: []const u8,
     table: gen5.StringTable,
 ) !void {
-    for (table.keys[start..]) |_, i|
+    for (table.keys[start..], 0..) |_, i|
         try outputString(writer, array_name, i + start, field_name, table.getSpan(i + start));
 }
 

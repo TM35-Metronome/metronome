@@ -92,7 +92,7 @@ pub fn match(glob: []const u8, str: []const u8) bool {
 }
 
 pub fn matchesOneOf(str: []const u8, globs: []const []const u8) ?usize {
-    for (globs) |glob, i| {
+    for (globs, 0..) |glob, i| {
         if (match(glob, str))
             return i;
     }
@@ -101,7 +101,7 @@ pub fn matchesOneOf(str: []const u8, globs: []const []const u8) ?usize {
 }
 
 pub fn matchesOneOfSplit(str: []const u8, globs: []const []const []const u8) ?usize {
-    for (globs) |glob, i| {
+    for (globs, 0..) |glob, i| {
         if (matchSplit(glob, str))
             return i;
     }

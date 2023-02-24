@@ -103,7 +103,7 @@ fn output(program: *Program, writer: anytype) !void {
         .tms = program.tms,
         .hms = program.hms,
     });
-    for (program.items.values()) |item, i| {
+    for (program.items.values(), 0..) |item, i| {
         try ston.serialize(writer, .{ .items = ston.index(program.items.keys()[i], .{
             .description = ston.string(escape.escapeFmt(item.description)),
         }) });
@@ -232,7 +232,7 @@ fn randomizeMachines(
     pick_from: []const u16,
     machines: []u16,
 ) void {
-    for (machines) |*machine, i| while (true) {
+    for (machines, 0..) |*machine, i| while (true) {
         machine.* = util.random.item(random, pick_from).?.*;
 
         // Prevent duplicates if possible. We cannot prevent it if we have less moves to pick
@@ -246,7 +246,7 @@ fn randomizeMachines(
 
 fn getMoves(program: Program) !Set {
     var res = Set{};
-    for (program.moves.keys()) |move_id, i| {
+    for (program.moves.keys(), 0..) |move_id, i| {
         const move = program.moves.values()[i];
         if (move.pp == 0)
             continue;

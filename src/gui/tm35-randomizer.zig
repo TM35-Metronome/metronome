@@ -244,7 +244,7 @@ fn renderSettingsList(program: Program, writer: anytype) !void {
         \\
     );
 
-    for (program.settings.items) |setting, i| {
+    for (program.settings.items, 0..) |setting, i| {
         const is_selected = program.selected_settings == i;
         const selected = if (is_selected) " selected=true" else "";
         try writer.writeAll("        ");
@@ -371,7 +371,7 @@ fn renderCommandList(program: Program, writer: anytype) !void {
     );
 
     const settings = program.selectedSettings().?;
-    for (settings.commands.items) |command, i| {
+    for (settings.commands.items, 0..) |command, i| {
         const is_selected = program.selected_setting_command == i;
         const selected = if (is_selected) " selected=true" else "";
         try writer.writeAll("            ");
@@ -388,7 +388,7 @@ fn renderCommandList(program: Program, writer: anytype) !void {
         \\
     );
 
-    for (program.exes.commands) |command, i| {
+    for (program.exes.commands, 0..) |command, i| {
         const is_selected = program.selected_exe_command == i;
         const selected = if (is_selected) " selected=true" else "";
         try writer.writeAll("        ");
@@ -442,7 +442,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
     , .{html_pretty_command.escapeFmt(settings.name.items)});
 
     const command = program.exes.findByName(settings.name.items).?;
-    for (command.flags) |flag, i| {
+    for (command.flags, 0..) |flag, i| {
         const param = command.params[flag.i];
         const name = param.names.longest().name;
         const arg = if (settings.get(param)) |arg| arg.value.items else "";
@@ -465,7 +465,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
     }
 
     const is_num_constaint = "(event.charCode >= 48 && event.charCode <= 57)";
-    for (command.ints) |int, i| {
+    for (command.ints, 0..) |int, i| {
         const param = command.params[int.i];
         const name = param.names.longest().name;
         const arg = if (settings.get(param)) |arg| arg.value.items else "";
@@ -494,7 +494,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
 
     const only_has_one_dot_constaint =
         "(event.charCode == 46 && !this.value.includes(\".\"))";
-    for (command.floats) |float, i| {
+    for (command.floats, 0..) |float, i| {
         const param = command.params[float.i];
         const name = param.names.longest().name;
         const arg = if (settings.get(param)) |arg| arg.value.items else "";
@@ -520,7 +520,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
         });
     }
 
-    for (command.enums) |enumeration, i| {
+    for (command.enums, 0..) |enumeration, i| {
         const param = command.params[enumeration.i];
         const name = param.names.longest().name;
         const default = enumeration.options[enumeration.default];
@@ -564,7 +564,7 @@ fn renderCommandSettings(program: Program, writer: anytype) !void {
         \\
     );
 
-    for (command.multi_strings) |string, i| {
+    for (command.multi_strings, 0..) |string, i| {
         const param = command.params[string.i];
         const name = param.names.longest().name;
         const arg = if (settings.get(param)) |arg| arg.value.items else "";

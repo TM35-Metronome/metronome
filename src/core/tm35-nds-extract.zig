@@ -138,7 +138,7 @@ fn writeOverlays(
 ) !void {
     var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
 
-    for (overlays) |*overlay, i| {
+    for (overlays, 0..) |*overlay, i| {
         try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
 
         const data = file_system.fileData(.{ .i = overlay.file_id.value() });

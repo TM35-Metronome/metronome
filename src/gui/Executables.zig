@@ -283,7 +283,7 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
                     try options.append(option);
 
                 const default = if (findDefaultValue(param.id.description())) |v| blk: {
-                    for (options.items) |option, option_i| {
+                    for (options.items, 0..) |option, option_i| {
                         if (mem.eql(u8, option, v))
                             break :blk option_i;
                     }

@@ -105,13 +105,13 @@ fn output(program: *Program, writer: anytype) !void {
         .given_pokemons = program.given_mons,
     });
 
-    for (program.hidden_hollows.values()) |hollow, i| {
+    for (program.hidden_hollows.values(), 0..) |hollow, i| {
         const hollow_key = program.hidden_hollows.keys()[i];
 
-        for (hollow.values()) |group, j| {
+        for (hollow.values(), 0..) |group, j| {
             const group_key = hollow.keys()[j];
 
-            for (group.values()) |pokemon, g| {
+            for (group.values(), 0..) |pokemon, g| {
                 const pokemon_key = group.keys()[g];
                 const si = pokemon.species_index orelse continue;
 
@@ -404,7 +404,7 @@ fn randomize(program: *Program) !void {
 
                 var legendaries = Set{};
                 var rest = Set{};
-                for (ratings.values()) |rating, i| {
+                for (ratings.values(), 0..) |rating, i| {
                     const rating_key = ratings.keys()[i];
                     if (rating >= rating_to_be_legendary) {
                         _ = try legendaries.put(allocator, rating_key, {});
@@ -462,7 +462,7 @@ fn getPokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values()) |pokemon, i| {
+    for (pokemons.values(), 0..) |pokemon, i| {
         const species = pokemons.keys()[i];
         if (pokemon.catch_rate == 0)
             continue;

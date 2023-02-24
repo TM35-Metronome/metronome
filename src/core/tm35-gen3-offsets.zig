@@ -62,7 +62,7 @@ pub fn run(
     stdio: util.CustomStdIoStreams(Reader, Writer),
 ) anyerror!void {
     const allocator = program.allocator;
-    for (program.files) |file_name, i| {
+    for (program.files, 0..) |file_name, i| {
         const data = try fs.cwd().readFileAllocOptions(
             allocator,
             file_name,
@@ -255,13 +255,13 @@ fn getOffsets(
 
     const level_up_learnset_pointers = blk: {
         var first_pointers: [first_levelup_learnsets.len]LvlUpRef = undefined;
-        for (first_levelup_learnsets) |learnset, i| {
+        for (first_levelup_learnsets, 0..) |learnset, i| {
             const p = try LvlUpMoves.find2(data, learnset);
             first_pointers[i] = try LvlUpRef.init(p.ptr, data);
         }
 
         var last_pointers: [last_levelup_learnsets.len]LvlUpRef = undefined;
-        for (last_levelup_learnsets) |learnset, i| {
+        for (last_levelup_learnsets, 0..) |learnset, i| {
             const p = try LvlUpMoves.find2(data, learnset);
             last_pointers[i] = try LvlUpRef.init(p.ptr, data);
         }
@@ -429,7 +429,7 @@ pub fn Searcher(
             next: while (i <= end) : (i += skip) {
                 const data_slice = data[i .. i + bytes];
                 const data_items = mem.bytesAsSlice(T, data_slice);
-                for (items) |item_a, j| {
+                for (items, 0..) |item_a, j| {
                     const item_b = data_items[j];
                     if (!matches(T, ignored_fields, item_a, item_b))
                         continue :next;
@@ -457,7 +457,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
             if (a.len != b.len)
                 return false;
 
-            for (a) |_, i| {
+            for (a, 0..) |_, i| {
                 if (!matches(array.child, ignored_fields, a[i], b[i]))
                     return false;
             }

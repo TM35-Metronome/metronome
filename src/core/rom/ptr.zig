@@ -105,7 +105,7 @@ pub fn RelativePointer(
         /// the sentinel.
         pub fn toSliceZ(ptr: @This(), data: Data) Error!Slice {
             const res = try ptr.toSliceEnd(data);
-            for (res) |item, len| {
+            for (res, 0..) |item, len| {
                 if (std.meta.eql(item, ptr_sentinel))
                     return res[0..len :ptr_sentinel];
             }
@@ -118,7 +118,7 @@ pub fn RelativePointer(
         /// the sentinel.
         pub fn toSliceZ2(ptr: @This(), data: Data, sentinel: ptr_info.child) Error!SliceNoSentinel {
             const res = try ptr.toSliceEnd(data);
-            for (res) |item, len| {
+            for (res, 0..) |item, len| {
                 if (std.meta.eql(item, sentinel))
                     return res[0..len];
             }
@@ -169,7 +169,7 @@ test "RelativePointer" {
             const p = try RPtr.init(null, bytes);
             try std.testing.expectEqual(@as(Ptr, null), try p.toPtr(bytes));
         }
-        for (data[0..4]) |_, i| {
+        for (0..4) |i| {
             const expect = data[i..i+1];
             const p = try RPtr2.init(expect.ptr, bytes);
             const actual = try p.toSlice(bytes, 1);
@@ -272,7 +272,7 @@ test "RelativeSlice" {
         );
         var data = [_]Child{2, 4, 6, 8, 10};
         const bytes = if (Child != u8) std.mem.sliceAsBytes(&data) else &data;
-        for (data[0..4]) |_, i| {
+        for (0..4) |i| {
             const expect = data[i..i+1];
             const slice1 = try (try Slice1.init(expect, bytes)).toSlice(bytes);
             const slice2 = try (try Slice2.init(expect, bytes)).toSlice(bytes);

@@ -102,7 +102,7 @@ pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {
 
 test "indexOfPtr" {
     const arr = "abcde";
-    for (arr) |*item, i| {
+    for (arr, 0..) |*item, i| {
         try std.testing.expectEqual(i, indexOfPtr(u8, arr, item));
     }
 }

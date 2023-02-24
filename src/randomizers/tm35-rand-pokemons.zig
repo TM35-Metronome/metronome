@@ -152,7 +152,7 @@ pub fn run(
 }
 
 fn output(program: *Program, writer: anytype) !void {
-    for (program.pokemons.values()) |*pokemon, i| {
+    for (program.pokemons.values(), 0..) |*pokemon, i| {
         const species = program.pokemons.keys()[i];
         try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
             .types = pokemon.types,
@@ -569,7 +569,7 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
             for (evo_stats.slice()) |item| evo_total += item;
 
             try testing.expectEqual(pokemon_stats.len, evo_stats.len);
-            for (pokemon_stats.constSlice()) |poke_stat, i| {
+            for (pokemon_stats.constSlice(), 0..) |poke_stat, i| {
                 const evo_stat = evo_stats.constSlice()[i];
 
                 const evo_has_more_stats = pokemon_total <= evo_total;
@@ -597,7 +597,7 @@ fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
     const old_pokemons = old_prog.pokemons.values();
 
     try testing.expectEqual(old_pokemons.len, new_prog.pokemons.values().len);
-    for (old_pokemons) |*old, i| {
+    for (old_pokemons, 0..) |*old, i| {
         const new = new_prog.pokemons.getPtr(old_keys[i]).?;
         const old_stats = old.statsToArray();
         const new_stats = new.statsToArray();
