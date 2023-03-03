@@ -1400,9 +1400,10 @@ pub const Game = struct {
                         .set_var_eq_val,
                         .set_var_2a,
                         => try set_var_offsets.append(command_offset),
-                        .jump, .@"if", .call_routine => {
+                        .jump, .when, .@"if", .call_routine => {
                             const off = switch (command.kind) {
                                 .jump => command.jump.offset.value(),
+                                .when => command.when.offset.value(),
                                 .@"if" => command.@"if".offset.value(),
                                 .call_routine => command.call_routine.offset.value(),
                                 else => unreachable,
