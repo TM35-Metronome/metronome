@@ -175,10 +175,17 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
             };
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
-                try writer.print("\tUnknown(0x{x})\t@0x{x}\n", .{
-                    std.fmt.fmtSliceHexLower(rest[0..math.min(rest.len, 2)]),
-                    decoder.i,
-                });
+                switch (rest.len) {
+                    0 => try writer.print("\tEnd\t@0x{x}\n", .{decoder.i}),
+                    1 => try writer.print("\tUnknown(0x{x:0>2})\t@0x{x}\n", .{
+                        rest[0],
+                        decoder.i,
+                    }),
+                    else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
+                        @intToEnum(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        decoder.i,
+                    }),
+                }
                 continue;
             }) |command| {
                 try printCommand(writer, command.*, decoder);
@@ -230,10 +237,17 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
             };
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
-                try writer.print("\tUnknown(0x{x})\t@0x{x}\n", .{
-                    std.fmt.fmtSliceHexLower(rest[0..math.min(rest.len, 2)]),
-                    decoder.i,
-                });
+                switch (rest.len) {
+                    0 => try writer.print("\tEnd\t@0x{x}\n", .{decoder.i}),
+                    1 => try writer.print("\tUnknown(0x{x:0>2})\t@0x{x}\n", .{
+                        rest[0],
+                        decoder.i,
+                    }),
+                    else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
+                        @intToEnum(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        decoder.i,
+                    }),
+                }
                 continue;
             }) |command| {
                 try printCommand(writer, command.*, decoder);
