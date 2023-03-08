@@ -152,8 +152,7 @@ pub fn run(
 }
 
 fn output(program: *Program, writer: anytype) !void {
-    for (program.pokemons.values(), 0..) |*pokemon, i| {
-        const species = program.pokemons.keys()[i];
+    for (program.pokemons.keys(), program.pokemons.values()) |species, *pokemon| {
         try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
             .types = pokemon.types,
             .abilities = pokemon.abilities,
@@ -162,20 +161,18 @@ fn output(program: *Program, writer: anytype) !void {
             .evos = pokemon.evos,
         }) });
 
-        var j: usize = 0;
-        while (j < pokemon.tms_learned.len) : (j += 1) {
-            if (!pokemon.tms_occupied.get(j))
+        for (0..pokemon.tms_learned.len) |i| {
+            if (!pokemon.tms_occupied.get(i))
                 continue;
             try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .tms = ston.index(j, pokemon.tms_learned.get(j)),
+                .tms = ston.index(i, pokemon.tms_learned.get(i)),
             }) });
         }
-        j = 0;
-        while (j < pokemon.hms_learned.len) : (j += 1) {
-            if (!pokemon.hms_occupied.get(j))
+        for (0..pokemon.hms_learned.len) |i| {
+            if (!pokemon.hms_occupied.get(i))
                 continue;
             try ston.serialize(writer, .{ .pokemons = ston.index(species, .{
-                .hms = ston.index(j, pokemon.hms_learned.get(j)),
+                .hms = ston.index(i, pokemon.hms_learned.get(i)),
             }) });
         }
     }
@@ -569,9 +566,7 @@ fn expectStatsFollowEvos(program: Program, allow_evo_with_lower_stats: bool) !vo
             for (evo_stats.slice()) |item| evo_total += item;
 
             try testing.expectEqual(pokemon_stats.len, evo_stats.len);
-            for (pokemon_stats.constSlice(), 0..) |poke_stat, i| {
-                const evo_stat = evo_stats.constSlice()[i];
-
+            for (evo_stats.slice(), pokemon_stats.slice()) |evo_stat, poke_stat| {
                 const evo_has_more_stats = pokemon_total <= evo_total;
                 if (!allow_evo_with_lower_stats)
                     try testing.expect(evo_has_more_stats);
@@ -597,8 +592,8 @@ fn expectSameTotalStats(old_prog: Program, new_prog: Program) !void {
     const old_pokemons = old_prog.pokemons.values();
 
     try testing.expectEqual(old_pokemons.len, new_prog.pokemons.values().len);
-    for (old_pokemons, 0..) |*old, i| {
-        const new = new_prog.pokemons.getPtr(old_keys[i]).?;
+    for (old_keys, old_pokemons) |old_key, *old| {
+        const new = new_prog.pokemons.getPtr(old_key).?;
         const old_stats = old.statsToArray();
         const new_stats = new.statsToArray();
 

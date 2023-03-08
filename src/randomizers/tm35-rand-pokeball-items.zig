@@ -76,13 +76,13 @@ pub const params = clap.parseParamsComptime(
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_items_arg = args.args.exclude;
     const excluded_items = try allocator.alloc([]const u8, excluded_items_arg.len);
-    for (excluded_items, 0..) |_, i|
-        excluded_items[i] = try ascii.allocLowerString(allocator, excluded_items_arg[i]);
+    for (excluded_items, excluded_items_arg) |*excluded, arg|
+        excluded.* = try ascii.allocLowerString(allocator, arg);
 
     const included_items_arg = args.args.include;
     const included_items = try allocator.alloc([]const u8, included_items_arg.len);
-    for (included_items, 0..) |_, i|
-        included_items[i] = try ascii.allocLowerString(allocator, included_items_arg[i]);
+    for (included_items, included_items_arg) |*included, arg|
+        included.* = try ascii.allocLowerString(allocator, arg);
 
     return Program{
         .allocator = allocator,
@@ -186,8 +186,7 @@ fn randomize(program: *Program) !void {
         program.options.included_items,
     );
 
-    outer: for (program.pokeballs.values(), 0..) |*ball, i| {
-        const ball_key = program.pokeballs.keys()[i];
+    outer: for (program.pokeballs.keys(), program.pokeballs.values()) |ball_key, *ball| {
         const item = program.items.get(ball_key) orelse continue;
         for (excluded_pockets.items) |excluded_pocket| {
             if (item.pocket == excluded_pocket)
@@ -212,8 +211,7 @@ fn getItems(
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    outer: for (items.values(), 0..) |item, i| {
-        const item_key = items.keys()[i];
+    outer: for (items.keys(), items.values()) |item_key, item| {
         // Assume that items in the 'items' pocket with price 0 are useless or invalid items.
         if (item.price == 0 and item.pocket == .items)
             continue;

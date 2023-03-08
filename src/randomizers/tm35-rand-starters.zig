@@ -227,8 +227,7 @@ fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values(), 0..) |pokemon, i| {
-        const species = pokemons.keys()[i];
+    for (pokemons.keys(), pokemons.values()) |species, pokemon| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)

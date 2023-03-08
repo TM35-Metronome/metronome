@@ -103,8 +103,8 @@ fn output(program: *Program, writer: anytype) !void {
         .tms = program.tms,
         .hms = program.hms,
     });
-    for (program.items.values(), 0..) |item, i| {
-        try ston.serialize(writer, .{ .items = ston.index(program.items.keys()[i], .{
+    for (program.items.keys(), program.items.values()) |item_id, item| {
+        try ston.serialize(writer, .{ .items = ston.index(item_id, .{
             .description = ston.string(escape.escapeFmt(item.description)),
         }) });
     }
@@ -184,7 +184,7 @@ fn randomize(program: *Program) !void {
     var default_random = rand.DefaultPrng.init(program.options.seed);
     const random = default_random.random();
 
-    const pick_from = try program.getMoves();
+    const pick_from = try program.getValidMoves();
     randomizeMachines(random, pick_from.keys(), program.tms.values());
     randomizeMachines(random, pick_from.keys(), program.hms.values());
 
@@ -244,10 +244,9 @@ fn randomizeMachines(
     };
 }
 
-fn getMoves(program: Program) !Set {
+fn getValidMoves(program: Program) !Set {
     var res = Set{};
-    for (program.moves.keys(), 0..) |move_id, i| {
-        const move = program.moves.values()[i];
+    for (program.moves.keys(), program.moves.values()) |move_id, move| {
         if (move.pp == 0)
             continue;
         if (util.glob.matchesOneOf(move.name, program.options.excluded_moves)) |_|

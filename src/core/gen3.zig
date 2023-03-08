@@ -681,22 +681,20 @@ pub const Game = struct {
         const trainer_parties = try allocator.alloc(TrainerParty, trainers.len);
         mem.set(TrainerParty, trainer_parties, TrainerParty{});
 
-        for (trainer_parties, 0..) |*party, i| {
-            party.size = trainers[i].partyLen();
+        for (trainer_parties, trainers) |*party, trainer| {
+            party.size = trainer.partyLen();
 
-            var j: usize = 0;
-            while (j < party.size) : (j += 1) {
-                const base = try trainers[i].partyAt(j, gba_rom);
-                party.members[j].base = base.*;
+            for (party.members[0..party.size], 0..) |*member, i| {
+                const base = try trainer.partyAt(i, gba_rom);
+                member.base = base.*;
 
-                switch (trainers[i].party_type) {
+                switch (trainer.party_type) {
                     .none => {},
-                    .item => party.members[j].item = base.toParent(PartyMemberItem).item,
-                    .moves => party.members[j].moves = base.toParent(PartyMemberMoves).moves,
+                    .item => member.item = base.toParent(PartyMemberItem).item,
+                    .moves => member.moves = base.toParent(PartyMemberMoves).moves,
                     .both => {
-                        const member = base.toParent(PartyMemberBoth);
-                        party.members[j].item = member.item;
-                        party.members[j].moves = member.moves;
+                        member.item = base.toParent(PartyMemberBoth).item;
+                        member.moves = base.toParent(PartyMemberBoth).moves;
                     },
                 }
             }
@@ -810,8 +808,7 @@ pub const Game = struct {
         const trainer_parties = game.trainer_parties;
         const trainers = game.trainers;
 
-        for (trainer_parties, 0..) |party, i| {
-            const trainer = &trainers[i];
+        for (trainer_parties, trainers) |party, *trainer| {
             const party_bytes = try trainer.partyBytes(game.data);
             const party_type = trainer.party_type;
             const party_size = party.size * Party.memberSize(party_type);

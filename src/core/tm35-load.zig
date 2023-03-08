@@ -110,8 +110,8 @@ pub fn run(
 fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     var buf: [mem.page_size]u8 = undefined;
 
-    for (game.starters, 0..) |starter, index| {
-        if (starter.value() != game.starters_repeat[index].value())
+    for (game.starters, game.starters_repeat) |starter, starter2| {
+        if (starter.value() != starter2.value())
             log.warn("repeated starters don't match.", .{});
     }
 
@@ -128,12 +128,11 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         .pokeball_items = game.pokeball_items,
     });
 
-    for (game.trainers, 0..) |trainer, i| {
+    for (game.trainers, game.trainer_parties, 0..) |trainer, party, i| {
         var fbs = io.fixedBufferStream(&buf);
         try gen3.encodings.decode(.en_us, &trainer.name, fbs.writer());
         const decoded_name = fbs.getWritten();
 
-        const party = game.trainer_parties[i];
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .class = trainer.class,
             .trainer_picture = trainer.trainer_picture,
@@ -232,15 +231,17 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     }
 
     for (game.machine_learnsets, 0..) |machine_learnset, i| {
-        var j: u6 = 0;
-        while (j < game.tms.len) : (j += 1) {
+        for (0..game.tms.len) |j| {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .tms = ston.index(j, bit.isSet(u64, machine_learnset.value(), j)),
+                .tms = ston.index(j, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j))),
             }) });
         }
-        while (j < game.tms.len + game.hms.len) : (j += 1) {
+        for (game.tms.len..game.tms.len + game.hms.len) |j| {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .hms = ston.index(j - game.tms.len, bit.isSet(u64, machine_learnset.value(), j)),
+                .hms = ston.index(
+                    j - game.tms.len,
+                    bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)),
+                ),
             }) });
         }
     }
@@ -474,23 +475,22 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
         }) });
 
         const machine_learnset = pokemon.machine_learnset;
-        var j: u7 = 0;
-        while (j < game.ptrs.tms.len) : (j += 1) {
-            const is_set = bit.isSet(u128, machine_learnset.value(), j);
+        for (0..game.ptrs.tms.len) |j| {
+            const is_set = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j));
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .tms = ston.index(j, is_set),
             }) });
         }
-        while (j < game.ptrs.tms.len + game.ptrs.hms.len) : (j += 1) {
-            const is_set = bit.isSet(u128, machine_learnset.value(), j);
+        for (game.ptrs.tms.len..game.ptrs.tms.len + game.ptrs.hms.len) |j| {
+            const is_set = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j));
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .hms = ston.index(j - game.ptrs.tms.len, is_set),
             }) });
         }
     }
 
-    for (game.ptrs.species_to_national_dex, 0..) |dex_entry, i| {
-        try ston.serialize(writer, .{ .pokemons = ston.index(i + 1, .{
+    for (game.ptrs.species_to_national_dex, 1..) |dex_entry, i| {
+        try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .pokedex_entry = dex_entry,
         }) });
     }

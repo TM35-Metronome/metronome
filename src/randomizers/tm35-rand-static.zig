@@ -105,14 +105,9 @@ fn output(program: *Program, writer: anytype) !void {
         .given_pokemons = program.given_mons,
     });
 
-    for (program.hidden_hollows.values(), 0..) |hollow, i| {
-        const hollow_key = program.hidden_hollows.keys()[i];
-
-        for (hollow.values(), 0..) |group, j| {
-            const group_key = hollow.keys()[j];
-
-            for (group.values(), 0..) |pokemon, g| {
-                const pokemon_key = group.keys()[g];
+    for (program.hidden_hollows.keys(), program.hidden_hollows.values()) |hollow_key, hollow| {
+        for (hollow.keys(), hollow.values()) |group_key, group| {
+            for (group.keys(), group.values()) |pokemon_key, pokemon| {
                 const si = pokemon.species_index orelse continue;
 
                 try ston.serialize(writer, .{
@@ -404,13 +399,9 @@ fn randomize(program: *Program) !void {
 
                 var legendaries = Set{};
                 var rest = Set{};
-                for (ratings.values(), 0..) |rating, i| {
-                    const rating_key = ratings.keys()[i];
-                    if (rating >= rating_to_be_legendary) {
-                        _ = try legendaries.put(allocator, rating_key, {});
-                    } else {
-                        _ = try rest.put(allocator, rating_key, {});
-                    }
+                for (ratings.keys(), ratings.values()) |rating_key, rating| {
+                    const table = if (rating >= rating_to_be_legendary) &legendaries else &rest;
+                    _ = try table.put(allocator, rating_key, {});
                 }
 
                 const legendaries_by_type = switch (program.options.type) {
@@ -462,8 +453,7 @@ fn getPokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values(), 0..) |pokemon, i| {
-        const species = pokemons.keys()[i];
+    for (pokemons.keys(), pokemons.values()) |species, pokemon| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)

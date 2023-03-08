@@ -186,23 +186,23 @@ pub const params = clap.parseParamsComptime(
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const excluded_pokemons_arg = args.args.@"exclude-pokemon";
     const excluded_pokemons = try allocator.alloc([]const u8, excluded_pokemons_arg.len);
-    for (excluded_pokemons, 0..) |_, i|
-        excluded_pokemons[i] = try ascii.allocLowerString(allocator, excluded_pokemons_arg[i]);
+    for (excluded_pokemons, excluded_pokemons_arg) |*excluded, arg|
+        excluded.* = try ascii.allocLowerString(allocator, arg);
 
     const excluded_trainers_arg = args.args.@"exclude-trainer";
     const excluded_trainers = try allocator.alloc([]const u8, excluded_trainers_arg.len);
-    for (excluded_trainers, 0..) |_, i|
-        excluded_trainers[i] = try ascii.allocLowerString(allocator, excluded_trainers_arg[i]);
+    for (excluded_trainers, excluded_trainers_arg) |*excluded, arg|
+        excluded.* = try ascii.allocLowerString(allocator, arg);
 
     const included_pokemons_arg = args.args.@"include-pokemon";
     const included_pokemons = try allocator.alloc([]const u8, included_pokemons_arg.len);
-    for (included_pokemons, 0..) |_, i|
-        included_pokemons[i] = try ascii.allocLowerString(allocator, included_pokemons_arg[i]);
+    for (included_pokemons, included_pokemons_arg) |*included, arg|
+        included.* = try ascii.allocLowerString(allocator, arg);
 
     const included_trainers_arg = args.args.@"include-trainer";
     const included_trainers = try allocator.alloc([]const u8, included_trainers_arg.len);
-    for (included_trainers, 0..) |_, i|
-        included_trainers[i] = try ascii.allocLowerString(allocator, included_trainers_arg[i]);
+    for (included_trainers, included_trainers_arg) |*included, arg|
+        included.* = try ascii.allocLowerString(allocator, arg);
 
     const options = Options{
         .seed = args.args.seed orelse std.crypto.random.int(u64),
@@ -409,14 +409,13 @@ fn randomize(program: *Program) !void {
         return;
     }
 
-    for (program.trainers.values(), 0..) |*trainer, i| {
+    for (program.trainers.keys(), program.trainers.values()) |trainer_id, *trainer| {
         // Trainers with 0 party members are considered "invalid" trainers
         // and will not be randomized.
         if (trainer.party_size == 0)
             continue;
 
-        const key = program.trainers.keys()[i];
-        if (program.trainer_names.get(key)) |name| {
+        if (program.trainer_names.get(trainer_id)) |name| {
             if (util.glob.matchesOneOf(name, program.options.included_trainers) == null and
                 util.glob.matchesOneOf(name, program.options.excluded_trainers) != null)
                 continue;
@@ -547,14 +546,22 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
                     program.moves,
                     pokemon,
                     level,
-                    &member.moves,
+                    member.moves.values(),
                 );
             },
             .random_learnable => if (member.species) |species| {
                 const pokemon = program.pokemons.get(species).?;
-                fillWithRandomLevelUpMoves(program.random, pokemon.lvl_up_moves, &member.moves);
+                fillWithRandomLevelUpMoves(
+                    program.random,
+                    pokemon.lvl_up_moves.values(),
+                    member.moves.values(),
+                );
             },
-            .random => fillWithRandomMoves(program.random, program.moves, &member.moves),
+            .random => fillWithRandomMoves(
+                program.random,
+                program.moves.keys(),
+                member.moves.values(),
+            ),
         }
     }
 }
@@ -563,10 +570,10 @@ fn fillWithBestMovesForLevel(
     all_moves: Moves,
     pokemon: Pokemon,
     level: u8,
-    moves: *MemberMoves,
+    moves: []u16,
 ) void {
     // Before pick best moves, we make sure the Pokémon has no moves.
-    mem.set(u16, moves.values(), 0);
+    mem.set(u16, moves, 0);
 
     // Go over all level up moves, and replace the current moves with better moves
     // as we find them
@@ -576,13 +583,13 @@ fn fillWithBestMovesForLevel(
         if (level < lvl_up_move.level)
             continue;
         // Pokémon already have this move. We don't wonna have the same move twice
-        if (hasMove(moves.values(), lvl_up_move.id))
+        if (mem.indexOfScalar(u16, moves, lvl_up_move.id)) |_|
             continue;
 
         const this_move = all_moves.get(lvl_up_move.id) orelse continue;
         const this_move_r = RelativeMove.from(pokemon, this_move);
 
-        for (moves.values()) |*move| {
+        for (moves) |*move| {
             const prev_move = all_moves.get(move.*) orelse {
                 // Could not find info about this move. Assume it's and invalid or bad
                 // move and replace it.
@@ -600,13 +607,13 @@ fn fillWithBestMovesForLevel(
     }
 }
 
-fn fillWithRandomMoves(random: rand.Random, all_moves: Moves, moves: *MemberMoves) void {
-    const has_null_move = all_moves.get(0) != null;
-    for (moves.values(), 0..) |*move, i| {
+fn fillWithRandomMoves(random: rand.Random, all_moves: []const u16, moves: []u16) void {
+    const has_null_move = mem.indexOfScalar(u16, all_moves, 0) != null;
+    for (moves, 0..) |*move, i| {
         // We need to have more moves in the game than the party member can have,
         // otherwise, we cannot pick only unique moves. Also, move `0` is the
         // `null` move, so we don't count that as a move we can pick from.
-        if (all_moves.count() - @boolToInt(has_null_move) <= i) {
+        if (all_moves.len - @boolToInt(has_null_move) <= i) {
             move.* = 0;
             continue;
         }
@@ -614,8 +621,8 @@ fn fillWithRandomMoves(random: rand.Random, all_moves: Moves, moves: *MemberMove
         // Loop until we have picked a move that the party member does not already
         // have.
         move.* = while (true) {
-            const pick = util.random.item(random, all_moves.keys()).?.*;
-            if (pick != 0 and !hasMove(moves.values()[0..i], pick))
+            const pick = util.random.item(random, all_moves).?.*;
+            if (pick != 0 and mem.indexOfScalar(u16, moves[0..i], pick) == null)
                 break pick;
         } else unreachable;
     }
@@ -623,17 +630,17 @@ fn fillWithRandomMoves(random: rand.Random, all_moves: Moves, moves: *MemberMove
 
 fn fillWithRandomLevelUpMoves(
     random: rand.Random,
-    lvl_up_moves: LvlUpMoves,
-    moves: *MemberMoves,
+    lvl_up_moves: []const LvlUpMove,
+    moves: []u16,
 ) void {
-    for (moves.values(), 0..) |*move, i| {
+    for (moves, 0..) |*move, i| {
         // We need to have more moves in the learnset than the party member can have,
         // otherwise, we cannot pick only unique moves.
         // TODO: This code does no take into account that `lvl_up_moves` can contain
         //       duplicates or moves with `id == null`. We need to do a count of
         //       "valid moves" from the learnset and do this check against that
         //       instead.
-        if (lvl_up_moves.count() <= i) {
+        if (lvl_up_moves.len <= i) {
             move.* = 0;
             continue;
         }
@@ -641,8 +648,8 @@ fn fillWithRandomLevelUpMoves(
         // Loop until we have picked a move that the party member does not already
         // have.
         move.* = while (true) {
-            const pick = util.random.item(random, lvl_up_moves.values()).?.id;
-            if (pick != 0 and !hasMove(moves.values()[0..i], pick))
+            const pick = util.random.item(random, lvl_up_moves).?.id;
+            if (pick != 0 and mem.indexOfScalar(u16, moves[0..i], pick) == null)
                 break pick;
         } else unreachable;
     }
@@ -786,13 +793,6 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
     return @floatToInt(u16, res);
 }
 
-fn hasMove(moves: []const u16, id: u16) bool {
-    for (moves) |move| {
-        if (move == id) return true;
-    }
-    return false;
-}
-
 fn findAbility(_abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
     var abilities = _abilities;
     while (abilities.next()) |entry| {
@@ -828,8 +828,7 @@ fn pokedexPokemons(
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values(), 0..) |pokemon, i| {
-        const species = pokemons.keys()[i];
+    for (pokemons.keys(), pokemons.values()) |species, pokemon| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)

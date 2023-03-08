@@ -463,8 +463,8 @@ fn decryptAndDecode(data: []align(1) const lu16, key: u16, out: anytype) !void {
 
     var bits: u5 = 0;
     var container: u32 = 0;
-    for (data[start..], 0..) |c, i| {
-        const decoded = decryptChar(key, @intCast(u32, i + start), c.value());
+    for (data[start..], start..) |c, i| {
+        const decoded = decryptChar(key, @intCast(u32, i), c.value());
         if (compressed) {
             container |= @as(u32, decoded) << bits;
             bits += 16;
@@ -585,8 +585,8 @@ pub const Game = struct {
 
         pub fn asArray(text: Text) Array {
             var res: Array = undefined;
-            inline for (std.meta.fields(Text), 0..) |field, i|
-                res[i] = @field(text, field.name);
+            inline for (std.meta.fields(Text), &res) |field, *r|
+                r.* = @field(text, field.name);
 
             return res;
         }
@@ -662,19 +662,17 @@ pub const Game = struct {
             const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
             const party_size = if (i < trainers.len) trainers[i].party_size else 0;
 
-            var j: usize = 0;
-            while (j < party_size) : (j += 1) {
+            for (party[0..party_size], 0..party_size) |*member, j| {
                 const base = trainers[i].partyMember(info.version, party_data, j) orelse break;
-                party[j].base = base.*;
+                member.base = base.*;
 
                 switch (trainers[i].party_type) {
                     .none => {},
-                    .item => party[j].item = base.toParent(PartyMemberItem).item,
-                    .moves => party[j].moves = base.toParent(PartyMemberMoves).moves,
+                    .item => member.item = base.toParent(PartyMemberItem).item,
+                    .moves => member.moves = base.toParent(PartyMemberMoves).moves,
                     .both => {
-                        const member = base.toParent(PartyMemberBoth);
-                        party[j].item = member.item;
-                        party[j].moves = member.moves;
+                        member.item = base.toParent(PartyMemberBoth).item;
+                        member.moves = base.toParent(PartyMemberBoth).moves;
                     },
                 }
             }
@@ -985,15 +983,15 @@ pub const Game = struct {
             }
 
             const entries = mem.bytesAsSlice(nds.Slice, bytes[start_of_entry_table..writer.context.pos]);
-            for (entries, 0..) |*entry, j| {
+            for (entries, 0..) |*entry, i| {
                 const start_of_str = writer.context.pos;
-                const str = table.getSpan(j);
+                const str = table.getSpan(i);
                 encodings.encode(str, writer) catch unreachable;
                 try writer.writeAll("\xff\xff");
 
                 const end_of_str = writer.context.pos;
                 const encoded_str = mem.bytesAsSlice(lu16, bytes[start_of_str..end_of_str]);
-                encrypt(encoded_str, getKey(@intCast(u32, j)));
+                encrypt(encoded_str, getKey(@intCast(u32, i)));
 
                 const length_of_str = @intCast(u32, (end_of_str - start_of_str) / 2);
                 entry.start = lu32.init(@intCast(u32, start_of_str));
@@ -1046,8 +1044,8 @@ pub const Game = struct {
             const script_data = scripts.data[fat.start.value()..fat.end.value()];
             defer script_offsets.shrinkRetainingCapacity(0);
 
-            for (script.getScriptOffsets(script_data), 0..) |relative_offset, i| {
-                const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
+            for (script.getScriptOffsets(script_data), 1..) |relative_offset, i| {
+                const offset = relative_offset.value() + @intCast(isize, i) * @sizeOf(lu32);
                 if (@intCast(isize, script_data.len) < offset)
                     continue;
                 if (offset < 0)

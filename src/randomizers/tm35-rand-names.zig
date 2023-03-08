@@ -234,9 +234,9 @@ fn randomize(program: *Program) !void {
 
             while (new_name.items.len < max) {
                 var i = random.intRangeLessThan(usize, 0, node.total);
-                const pick = for (node.codepoints.values(), 0..) |item, j| {
+                const pick = for (node.codepoints.keys(), node.codepoints.values()) |key, item| {
                     if (i < item)
-                        break node.codepoints.keys()[j];
+                        break key;
                     i -= item;
                 } else unreachable;
 

@@ -78,12 +78,11 @@ pub fn run(
 }
 
 fn output(program: *Program, writer: anytype) !void {
-    for (program.wild_pokemons.values(), 0..) |zone, i| {
-        const zone_id = program.wild_pokemons.keys()[i];
-        for (zone.wild_areas, 0..) |area, j| {
-            const aid = @intToEnum(meta.Tag(format.WildPokemons), @intCast(u5, j));
+    for (program.wild_pokemons.keys(), program.wild_pokemons.values()) |zone_id, zone| {
+        for (zone.wild_areas, 0..) |area, i| {
+            const area_id = @intToEnum(meta.Tag(format.WildPokemons), @intCast(u5, i));
             try ston.serialize(writer, .{
-                .wild_pokemons = ston.index(zone_id, ston.field(@tagName(aid), .{
+                .wild_pokemons = ston.index(zone_id, ston.field(@tagName(area_id), .{
                     .pokemons = area.pokemons,
                 })),
             });
@@ -238,13 +237,13 @@ fn pokedexPokemons(allocator: mem.Allocator, pokemons: Pokemons, pokedex: Set) !
     var res = Set{};
     errdefer res.deinit(allocator);
 
-    for (pokemons.values(), 0..) |pokemon, i| {
+    for (pokemons.keys(), pokemons.values()) |species, pokemon| {
         if (pokemon.catch_rate == 0)
             continue;
         if (pokedex.get(pokemon.pokedex_entry) == null)
             continue;
 
-        _ = try res.put(allocator, pokemons.keys()[i], {});
+        _ = try res.put(allocator, species, {});
     }
 
     return res;

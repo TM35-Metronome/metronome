@@ -161,17 +161,17 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
 
     var it = mem.split(u8, str, "\n");
     while (it.next()) |line| {
-        for (opt.patterns, 0..) |pattern, i|
-            matches[i] += @boolToInt(pattern.matches(pattern.ctx, line));
+        for (opt.patterns, matches) |pattern, *match|
+            match.* += @boolToInt(pattern.matches(pattern.ctx, line));
     }
 
     var fail = false;
-    for (opt.patterns, 0..) |pattern, i| {
-        if (matches[i] < pattern.min or pattern.max < matches[i]) {
+    for (opt.patterns, matches) |pattern, match| {
+        if (match < pattern.min or pattern.max < match) {
             std.debug.print("\nexpected between {} and {} matches, found {}", .{
                 pattern.min,
                 pattern.max,
-                matches[i],
+                match,
             });
             fail = true;
         }

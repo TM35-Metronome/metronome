@@ -629,8 +629,8 @@ fn decrypt(data: []align(1) const lu16, out: anytype) !u16 {
 
     var bits: u5 = 0;
     var container: u32 = 0;
-    for (data[start..], 0..) |c, i| {
-        const decoded = c.value() ^ table.get(data.len, i + start);
+    for (data[start..], start..) |c, i| {
+        const decoded = c.value() ^ table.get(data.len, i);
         if (compressed) {
             container |= @as(u32, decoded) << bits;
             bits += 16;
@@ -702,11 +702,11 @@ const KeyTable = struct {
     pub fn init(_key: u16) KeyTable {
         var table: [table_size]u16 = undefined;
         var key = _key;
-        for (&table, 0..) |*entry, i| {
+        for (&table, 1..) |*entry, i| {
             entry.* = key;
             key = (key >> 3) | (key << 13);
             if (key == _key)
-                return .{ .table = table, .len = i + 1 };
+                return .{ .table = table, .len = i };
         }
 
         unreachable;
@@ -722,7 +722,7 @@ fn keyForI(key: u16, len: usize, i: usize) u16 {
     const it = len - (i + 1);
     var res: u16 = key;
 
-    for (@as([*]void, undefined)[0..it]) |_|
+    for (0..it) |_|
         res = (res >> 3) | (res << 13);
 
     return res;
@@ -1044,14 +1044,14 @@ pub const Game = struct {
                     errdefer for (res[0..filled]) |item|
                         allocator.free(item);
 
-                    for (info.starters, 0..) |offs, i| {
-                        res[i] = try allocator.alloc(*lu16, offs.len);
+                    for (info.starters, &res) |offs, *res_offs| {
+                        res_offs.* = try allocator.alloc(*lu16, offs.len);
                         filled += 1;
 
-                        for (offs, 0..) |offset, j| {
+                        for (offs, res_offs.*) |offset, *res_offset| {
                             const fat = scripts.fat[offset.file];
                             const file_data = scripts.data[fat.start.value()..fat.end.value()];
-                            res[i][j] = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
+                            res_offset.* = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
                         }
                     }
 
@@ -1095,9 +1095,8 @@ pub const Game = struct {
     }
 
     fn updateStarterDialog(game: Game) void {
-        for (game.ptrs.starters, 0..) |starter_ptrs, i| {
+        for (game.ptrs.starters, game.info.starter_choice_indexs) |starter_ptrs, index| {
             const starter = starter_ptrs[0].value();
-            const index = game.info.starter_choice_indexs[i];
             const text = game.owned.story.starter_choice.get(index);
             mem.set(u8, text, 0);
 
@@ -1164,25 +1163,25 @@ pub const Game = struct {
             const rest = buf[builder.stream.pos + i * full_party_size ..];
             switch (party_type) {
                 .none => {
-                    for (mem.bytesAsSlice(PNone, rest[0..@sizeOf([6]PNone)]), 0..) |*m, j| {
-                        m.* = PartyMemberNone{ .base = party[j].base };
+                    for (mem.bytesAsSlice(PNone, rest[0..@sizeOf([6]PNone)]), party) |*m, p| {
+                        m.* = PartyMemberNone{ .base = p.base };
                     }
                     mem.set(u8, rest[@sizeOf([6]PNone)..full_party_size], 0);
                 },
                 .item => {
-                    for (mem.bytesAsSlice(PItem, rest[0..@sizeOf([6]PItem)]), 0..) |*m, j| {
+                    for (mem.bytesAsSlice(PItem, rest[0..@sizeOf([6]PItem)]), party) |*m, p| {
                         m.* = PartyMemberItem{
-                            .base = party[j].base,
-                            .item = party[j].item,
+                            .base = p.base,
+                            .item = p.item,
                         };
                     }
                     mem.set(u8, rest[@sizeOf([6]PItem)..full_party_size], 0);
                 },
                 .moves => {
-                    for (mem.bytesAsSlice(PMoves, rest[0..@sizeOf([6]PMoves)]), 0..) |*m, j| {
+                    for (mem.bytesAsSlice(PMoves, rest[0..@sizeOf([6]PMoves)]), party) |*m, p| {
                         m.* = PartyMemberMoves{
-                            .base = party[j].base,
-                            .moves = party[j].moves,
+                            .base = p.base,
+                            .moves = p.moves,
                         };
                     }
                     mem.set(u8, rest[@sizeOf([6]PMoves)..full_party_size], 0);
@@ -1270,7 +1269,7 @@ pub const Game = struct {
                 (@sizeOf(Entry) + bytes_per_entry))) catch unreachable;
 
             const start_of_entry_table = writer.context.pos;
-            for (@as([*]void, undefined)[0..number_of_entries]) |_| {
+            for (0..number_of_entries) |_| {
                 writer.writeAll(&mem.toBytes(Entry{
                     .offset = lu32.init(0),
                     .count = lu16.init(0),
@@ -1338,8 +1337,8 @@ pub const Game = struct {
             defer set_var_offsets.shrinkRetainingCapacity(0);
             defer given_pokemons_to_resolve.shrinkRetainingCapacity(0);
 
-            for (script.getScriptOffsets(script_data), 0..) |relative, i| {
-                const position = @intCast(isize, i + 1) * @sizeOf(lu32);
+            for (script.getScriptOffsets(script_data), 1..) |relative, i| {
+                const position = @intCast(isize, i) * @sizeOf(lu32);
                 const offset = math.cast(usize, relative.value() + position) orelse continue;
                 if (script_data.len < offset)
                     continue;
