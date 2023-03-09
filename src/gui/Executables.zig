@@ -14,9 +14,9 @@ const process = std.process;
 const Executables = @This();
 
 arena: heap.ArenaAllocator,
-load: util.Path = util.Path{ .buffer = undefined },
-apply: util.Path = util.Path{ .buffer = undefined },
-identify: util.Path = util.Path{ .buffer = undefined },
+load: util.Path = util.Path{},
+apply: util.Path = util.Path{},
+identify: util.Path = util.Path{},
 commands: []const Command = &[_]Command{},
 
 pub const Command = struct {
@@ -67,18 +67,19 @@ const extension = switch (builtin.target.os.tag) {
 };
 const command_file_name = "commands.json";
 const default_commands = [_][]const u8{
+    "tm35-balance-pokemons" ++ extension,
+    "tm35-generate-site" ++ extension,
+    "tm35-misc" ++ extension,
+    "tm35-no-trade-evolutions" ++ extension,
     "tm35-rand-machines" ++ extension,
-    "tm35-rand-pokemons" ++ extension,
+    "tm35-rand-names" ++ extension,
+    "tm35-random-stones" ++ extension,
     "tm35-rand-pokeball-items" ++ extension,
-    "tm35-rand-trainers" ++ extension,
+    "tm35-rand-pokemons" ++ extension,
     "tm35-rand-starters" ++ extension,
     "tm35-rand-static" ++ extension,
+    "tm35-rand-trainers" ++ extension,
     "tm35-rand-wild" ++ extension,
-    "tm35-random-stones" ++ extension,
-    "tm35-rand-names" ++ extension,
-    "tm35-no-trade-evolutions" ++ extension,
-    "tm35-misc" ++ extension,
-    "tm35-generate-site" ++ extension,
 };
 
 pub fn deinit(exes: Executables) void {

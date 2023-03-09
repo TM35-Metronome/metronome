@@ -464,14 +464,6 @@ fn randomUntilSum(
     }
 }
 
-fn foldu8(a: usize, b: u8) usize {
-    return a + b;
-}
-
-fn foldf32(a: f64, b: f32) f64 {
-    return a + b;
-}
-
 const Evos = std.AutoArrayHashMapUnmanaged(u8, Evo);
 const Machines = std.AutoArrayHashMapUnmanaged(u8, u16);
 const Map = std.AutoArrayHashMapUnmanaged(u8, u16);
@@ -494,7 +486,7 @@ const Pokemon = struct {
     evos: Evos = Evos{},
 
     fn statsToArray(pokemon: *Pokemon) std.BoundedArray(u8, Stats.len) {
-        var res = std.BoundedArray(u8, Stats.len){ .buffer = undefined };
+        var res = std.BoundedArray(u8, Stats.len){};
         var stats_it = pokemon.stats.iterator();
         while (stats_it.next()) |stat|
             res.appendAssumeCapacity(stat.value.*);

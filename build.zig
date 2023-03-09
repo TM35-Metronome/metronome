@@ -18,6 +18,9 @@ pub fn build(b: *std.Build) void {
     const ston_module = b.createModule(.{
         .source_file = .{ .path = "lib/ston/ston.zig" },
     });
+    const ziter_module = b.createModule(.{
+        .source_file = .{ .path = "lib/ziter/ziter.zig" },
+    });
     const util_module = b.createModule(.{
         .source_file = .{ .path = "src/util.zig" },
         .dependencies = &.{
@@ -36,9 +39,12 @@ pub fn build(b: *std.Build) void {
 
     const modules = [_]std.Build.ModuleDependency{
         .{ .name = "clap", .module = clap_module },
-        .{ .name = "core", .module = core_module },
         .{ .name = "folders", .module = folders_module },
         .{ .name = "ston", .module = ston_module },
+        .{ .name = "ziter", .module = ziter_module },
+
+        .{ .name = "core", .module = core_module },
+
         .{ .name = "util", .module = util_module },
     };
 
@@ -60,6 +66,7 @@ pub fn build(b: *std.Build) void {
         "src/randomizers/tm35-rand-trainers.zig",
         "src/randomizers/tm35-rand-wild.zig",
 
+        "src/other/tm35-balance-pokemons.zig",
         "src/other/tm35-generate-site.zig",
         "src/other/tm35-misc.zig",
         "src/other/tm35-noop.zig",

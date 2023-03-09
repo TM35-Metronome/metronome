@@ -35,9 +35,9 @@ hidden_hollows: HiddenHollows = HiddenHollows{},
 
 const Method = enum {
     random,
-    @"same-stats",
-    @"simular-stats",
-    @"legendary-with-legendary",
+    same_stats,
+    simular_stats,
+    legendary_with_legendary,
 };
 
 const Type = enum {
@@ -54,7 +54,7 @@ pub const description =
 
 pub const parsers = .{
     .INT = clap.parsers.int(u64, 0),
-    .@"random|same-stats|simular-stats|legendary-with-legendary" = clap.parsers.enumeration(Method),
+    .@"random|same_stats|simular_stats|legendary_with_legendary" = clap.parsers.enumeration(Method),
     .@"random|same" = clap.parsers.enumeration(Type),
 };
 
@@ -66,7 +66,7 @@ pub const params = clap.parseParamsComptime(
     \\        The seed to use for random numbers. A random seed will be picked if this is not
     \\        specified.
     \\
-    \\-m, --method <random|same-stats|simular-stats|legendary-with-legendary>
+    \\-m, --method <random|same_stats|simular_stats|legendary_with_legendary>
     \\        The method used to pick the new static Pokémon. (default: random)
     \\
     \\-t, --types <random|same>
@@ -271,7 +271,7 @@ fn randomize(program: *Program) !void {
                     }
                 },
             },
-            .@"same-stats", .@"simular-stats" => {
+            .same_stats, .simular_stats => {
                 const by_type = switch (program.options.type) {
                     // When we do random, we should never actually touch the 'by_type'
                     // table, so let's just avoid doing the work of constructing it :)
@@ -296,7 +296,7 @@ fn randomize(program: *Program) !void {
 
                     // For same-stats, we can just make this loop run once, which will
                     // make the simular list only contain pokemons with the same stats.
-                    const condition = if (program.options.method == .@"simular-stats")
+                    const condition = if (program.options.method == .simular_stats)
                         @as(usize, 25)
                     else
                         @as(usize, 1);
@@ -343,7 +343,7 @@ fn randomize(program: *Program) !void {
                     static.species = util.random.item(random, simular.items).?.*;
                 }
             },
-            .@"legendary-with-legendary" => {
+            .legendary_with_legendary => {
                 // There is no way to specify in game that a Pokemon is a legendary.
                 // There are therefore two methods we can use to pick legendaries
                 // 1. Have a table of Pokemons which are legendaries.
@@ -593,42 +593,42 @@ fn testIt(comptime prefix: []const u8) !void {
         prefix ++ "[3].species=3\n" ++
         prefix ++ "[4].species=4\n" ++
         prefix ++ "[5].species=13\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same_stats" }, test_string, result_prefix ++
         prefix ++ "[0].species=12\n" ++
         prefix ++ "[1].species=11\n" ++
         prefix ++ "[2].species=0\n" ++
         prefix ++ "[3].species=11\n" ++
         prefix ++ "[4].species=5\n" ++
         prefix ++ "[5].species=19\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same-stats", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=1", "--method=same_stats", "--types=same" }, test_string, result_prefix ++
         prefix ++ "[0].species=11\n" ++
         prefix ++ "[1].species=2\n" ++
         prefix ++ "[2].species=2\n" ++
         prefix ++ "[3].species=3\n" ++
         prefix ++ "[4].species=4\n" ++
         prefix ++ "[5].species=18\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular_stats" }, test_string, result_prefix ++
         prefix ++ "[0].species=10\n" ++
         prefix ++ "[1].species=0\n" ++
         prefix ++ "[2].species=4\n" ++
         prefix ++ "[3].species=1\n" ++
         prefix ++ "[4].species=3\n" ++
         prefix ++ "[5].species=15\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular-stats", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=2", "--method=simular_stats", "--types=same" }, test_string, result_prefix ++
         prefix ++ "[0].species=15\n" ++
         prefix ++ "[1].species=3\n" ++
         prefix ++ "[2].species=1\n" ++
         prefix ++ "[3].species=3\n" ++
         prefix ++ "[4].species=4\n" ++
         prefix ++ "[5].species=14\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=3", "--method=legendary-with-legendary" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=3", "--method=legendary_with_legendary" }, test_string, result_prefix ++
         prefix ++ "[0].species=0\n" ++
         prefix ++ "[1].species=6\n" ++
         prefix ++ "[2].species=8\n" ++
         prefix ++ "[3].species=8\n" ++
         prefix ++ "[4].species=6\n" ++
         prefix ++ "[5].species=11\n");
-    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=4", "--method=legendary-with-legendary", "--types=same" }, test_string, result_prefix ++
+    try util.testing.testProgram(Program, &[_][]const u8{ "--seed=4", "--method=legendary_with_legendary", "--types=same" }, test_string, result_prefix ++
         prefix ++ "[0].species=1\n" ++
         prefix ++ "[1].species=3\n" ++
         prefix ++ "[2].species=2\n" ++
