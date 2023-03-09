@@ -22,3 +22,6 @@
 [submodule "lib/webview-c"]
 	path = lib/webview-c
 	url = ../../javalikescript/webview-c.git
+[submodule "lib/ziter"]
+	path = lib/ziter
+	url = git@github.com:Hejsil/ziter.git

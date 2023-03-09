@@ -11,6 +11,7 @@ test {
     std.testing.refAllDeclsRecursive(@import("core/tm35-load.zig"));
     std.testing.refAllDeclsRecursive(@import("core/tm35-nds-extract.zig"));
 
+    std.testing.refAllDeclsRecursive(@import("other/tm35-balance-pokemons.zig"));
     std.testing.refAllDeclsRecursive(@import("other/tm35-generate-site.zig"));
     std.testing.refAllDeclsRecursive(@import("other/tm35-misc.zig"));
     std.testing.refAllDeclsRecursive(@import("other/tm35-noop.zig"));

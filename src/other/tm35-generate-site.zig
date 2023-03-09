@@ -242,7 +242,7 @@ fn generate(writer: anytype, game: Game) !void {
         \\.type_Steel {background-color: #8e8e9f;}
         \\.type_Water {background-color: #0c67c2;}
         \\
-        \\.pokemon_stat {width:100%;}
+        \\.pokemon_stat {width:100%; border-style: solid; border-width: 1px; border-color: black;}
         \\.pokemon_stat_table {width:50%;}
         \\.pokemon_stat_hp {background-color: #6ab04c;}
         \\.pokemon_stat_attack {background-color: #eb4d4b;}
@@ -364,18 +364,18 @@ fn generate(writer: anytype, game: Game) !void {
             try writer.print("<a href=\"#item_{}\">{}</a>", .{ item, humanize(item_name) });
         }
 
-        try writer.writeAll(
-            \\</td>
-            \\<tr><td>Egg Groups:</td><td>
-            \\
-        );
-        for (pokemon.egg_groups.keys(), 0..) |egg_group, i| {
-            if (i != 0)
-                try writer.writeAll(", ");
+        // try writer.writeAll(
+        //     \\</td>
+        //     \\<tr><td>Egg Groups:</td><td>
+        //     \\
+        // );
+        // for (pokemon.egg_groups.keys(), 0..) |egg_group, i| {
+        //     if (i != 0)
+        //         try writer.writeAll(", ");
 
-            try writer.print("{}", .{humanize(@tagName(egg_group))});
-        }
-        try writer.writeAll("</td>\n");
+        //     try writer.print("{}", .{humanize(@tagName(egg_group))});
+        // }
+        // try writer.writeAll("</td>\n");
         try printSimpleFields(writer, pokemon, &[_][]const u8{});
         try writer.writeAll("</table>\n");
 
@@ -446,7 +446,7 @@ fn generate(writer: anytype, game: Game) !void {
         }
 
         const percent = @floatToInt(usize, (@intToFloat(f64, total_stats) / 1000) * 100);
-        try writer.print("<tr><td>Total:</td><td><div class=\"pokemon_stat pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
+        try writer.print("<tr><td>Total:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
         try writer.writeAll(
             \\</table></details>
             \\<details><summary><b>Ev Yield</b></summary>

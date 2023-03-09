@@ -149,6 +149,15 @@
             ]
         },
         {
+            "name": "tm35-rand-static",
+            "args": [
+                {
+                    "name": "method",
+                    "value": "legendary_with_legendary"
+                }
+            ]
+        },
+        {
             "name": "tm35-no-trade-evolutions",
             "args": []
         },
