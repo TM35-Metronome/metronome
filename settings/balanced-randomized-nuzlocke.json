@@ -1,5 +1,5 @@
 {
-    "name": "Nuzlocke",
+    "name": "Balanced Randomized Nuzlocke",
     "description": "",
     "commands": [
         {
@@ -154,6 +154,15 @@
                 {
                     "name": "method",
                     "value": "legendary_with_legendary"
+                }
+            ]
+        },
+        {
+            "name": "tm35-balance-pokemons",
+            "args": [
+                {
+                    "name": "stats",
+                    "value": "buff_weak"
                 }
             ]
         },
