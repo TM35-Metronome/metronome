@@ -150,6 +150,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .abilities,
                 .hms,
                 .tms,
+                .ev_yield,
                 => return error.DidNotConsumeData,
             }
             return;

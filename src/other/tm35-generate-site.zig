@@ -126,6 +126,7 @@ fn useGame(game: *Game, parsed: format.Game) !void {
             switch (pokemons.value) {
                 .name => |str| pokemon.name = try escape.unescapeAlloc(allocator, str),
                 .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev_yield, ev_yield),
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = base_exp_yield,
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
@@ -699,6 +700,7 @@ pub fn Stats(comptime T: type) type {
 const Pokemon = struct {
     name: []const u8 = "",
     stats: Stats(u8) = Stats(u8){},
+    ev_yield: Stats(u2) = Stats(u2){},
     catch_rate: u8 = 0,
     base_exp_yield: u16 = 0,
     gender_ratio: u8 = 0,

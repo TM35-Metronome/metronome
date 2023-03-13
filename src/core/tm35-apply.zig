@@ -354,6 +354,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             const pokemon = &game.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev.yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -865,6 +866,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const pokemon = &game.ptrs.pokemons[pokemons.index];
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev.yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
@@ -1278,6 +1280,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
+                .ev_yield => |ev_yield| format.setField(&pokemon.ev.yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;

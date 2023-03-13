@@ -101,6 +101,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .hms,
                 .name,
                 .pokedex_entry,
+                .ev_yield,
                 => return error.DidNotConsumeData,
             }
         },

@@ -262,6 +262,7 @@ pub const Pokemon = union(enum) {
     abilities: ston.Index(u2, u8),
     hms: ston.Index(u7, bool),
     tms: ston.Index(u7, bool),
+    ev_yield: Stats(u2),
     items: ston.Index(u8, u16),
     evos: ston.Index(u8, Evolution),
     moves: ston.Index(u8, LevelUpMove),

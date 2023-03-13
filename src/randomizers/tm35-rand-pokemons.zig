@@ -225,6 +225,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .moves,
                 .name,
                 .pokedex_entry,
+                .ev_yield,
                 => return error.DidNotConsumeData,
             }
             return;

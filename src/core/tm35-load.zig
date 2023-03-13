@@ -189,6 +189,7 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
             .base_friendship = pokemon.base_friendship,
             .growth_rate = pokemon.growth_rate,
             .types = pokemon.types,
+            .ev_yield = pokemon.ev.yield,
             .items = pokemon.items,
             .egg_groups = pokemon.egg_groups,
             .abilities = pokemon.abilities,
@@ -469,6 +470,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
             .base_friendship = pokemon.base_friendship,
             .growth_rate = pokemon.growth_rate,
             .types = pokemon.types,
+            .ev_yield = pokemon.ev.yield,
             .items = pokemon.items,
             .egg_groups = pokemon.egg_groups,
             .abilities = pokemon.abilities,
@@ -823,6 +825,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
             .base_friendship = pokemon.base_friendship,
             .growth_rate = pokemon.growth_rate,
             .types = pokemon.types,
+            .ev_yield = pokemon.ev.yield,
             .items = pokemon.items,
             .abilities = pokemon.abilities,
         }) });

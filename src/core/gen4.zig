@@ -25,8 +25,7 @@ pub const BasePokemon = extern struct {
     catch_rate: u8,
     base_exp_yield: u8,
 
-    // ev_yield: common.EvYield,
-    ev_yield: lu16,
+    ev: common.PaddedEvYield,
     items: [2]lu16,
 
     gender_ratio: u8,

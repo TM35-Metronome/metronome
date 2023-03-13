@@ -259,6 +259,15 @@ pub const EvYield = packed struct {
     }
 };
 
+pub const PaddedEvYield = packed struct {
+    yield: EvYield,
+    pad: u4,
+
+    comptime {
+        std.debug.assert(@sizeOf(PaddedEvYield) == 2);
+    }
+};
+
 pub const TypeEffectiveness = extern struct {
     attacker: u8,
     defender: u8,
