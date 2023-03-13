@@ -23,6 +23,7 @@ allocator: mem.Allocator,
 options: struct {
     easy_hms: bool,
     fast_text: bool,
+    no_ev_yield: bool,
     biking: Allow,
     running: Allow,
     exp_scale: f64,
@@ -62,6 +63,10 @@ pub const params = clap.parseParamsComptime(
     \\    --fast-text
     \\        Change text speed to fastest possible for the game.
     \\
+    \\    --no-ev-yield
+    \\        Remove the ev yield from all Pokémons. This will make the game harder, as you cannot
+    \\        get evs from defeating Pokémons.
+    \\
     \\    --exp-yield-scaling <FLOAT>
     \\        Scale The amount of exp Pokémons give. (default: 1.0).
     \\
@@ -88,6 +93,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .options = .{
             .easy_hms = args.args.@"easy-hms",
             .fast_text = args.args.@"fast-text",
+            .no_ev_yield = args.args.@"no-ev-yield",
             .biking = args.args.@"allow-biking" orelse .unchanged,
             .running = args.args.@"allow-running" orelse .unchanged,
             .exp_scale = args.args.@"exp-yield-scaling" orelse 1.0,
@@ -148,6 +154,14 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                 hm.index,
                 hm.value or program.options.easy_hms,
             }),
+            .ev_yield => |ev_yield| {
+                const new_yield = if (program.options.no_ev_yield) 0 else ev_yield.value();
+                return out.print(".pokemons[{}].ev_yield.{s}={}\n", .{
+                    pokemons.index,
+                    @tagName(ev_yield),
+                    new_yield,
+                });
+            },
             .stats,
             .types,
             .catch_rate,
@@ -281,6 +295,7 @@ test "tm35-misc" {
         ".wild_pokemons[*].*.pokemons[*].*_level=*",
         ".pokemons[*].base_exp_yield=*",
         ".pokemons[*].hms[*]=*",
+        ".pokemons[*].ev_yield.*=*",
     });
     defer testing.allocator.free(test_input);
 
@@ -347,7 +362,7 @@ test "tm35-misc" {
         .args = &[_][]const u8{"--static-level-scaling=1.0"},
         .patterns = &[_]Pattern{
             Pattern.glob(4, 4, ".static_pokemons[*].level=70"),
-            Pattern.glob(3, 3, ".static_pokemons[*].level=68"),
+            Pattern.glob(4, 4, ".static_pokemons[*].level=68"),
             Pattern.glob(10, 10, ".static_pokemons[*].level=65"),
         },
     });
@@ -356,7 +371,7 @@ test "tm35-misc" {
         .args = &[_][]const u8{"--static-level-scaling=0.5"},
         .patterns = &[_]Pattern{
             Pattern.glob(4, 4, ".static_pokemons[*].level=35"),
-            Pattern.glob(3, 3, ".static_pokemons[*].level=34"),
+            Pattern.glob(4, 4, ".static_pokemons[*].level=34"),
             Pattern.glob(10, 10, ".static_pokemons[*].level=32"),
         },
     });
@@ -417,6 +432,26 @@ test "tm35-misc" {
         .args = &[_][]const u8{"--easy-hms"},
         .patterns = &[_]Pattern{
             Pattern.glob(0, 0, ".pokemons[*].hms[*]=false"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{},
+        .patterns = &[_]Pattern{
+            Pattern.glob(3492, 3492, ".pokemons[*].ev_yield.*=0"),
+            Pattern.glob(392, 392, ".pokemons[*].ev_yield.*=1"),
+            Pattern.glob(255, 255, ".pokemons[*].ev_yield.*=2"),
+            Pattern.glob(121, 121, ".pokemons[*].ev_yield.*=3"),
+        },
+    });
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_input,
+        .args = &[_][]const u8{"--no-ev-yield"},
+        .patterns = &[_]Pattern{
+            Pattern.glob(4260, 4260, ".pokemons[*].ev_yield.*=0"),
+            Pattern.glob(0, 0, ".pokemons[*].ev_yield.*=1"),
+            Pattern.glob(0, 0, ".pokemons[*].ev_yield.*=2"),
+            Pattern.glob(0, 0, ".pokemons[*].ev_yield.*=3"),
         },
     });
 }

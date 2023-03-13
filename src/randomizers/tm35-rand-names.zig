@@ -109,6 +109,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             .tms,
             .hms,
             .pokedex_entry,
+            .ev_yield,
             => return error.DidNotConsumeData,
         },
         .trainers => |trainers| switch (trainers.value) {

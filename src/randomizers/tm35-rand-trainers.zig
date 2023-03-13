@@ -311,6 +311,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .evos,
                 .tms,
                 .hms,
+                .ev_yield,
                 => return error.DidNotConsumeData,
             }
             return error.DidNotConsumeData;

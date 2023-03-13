@@ -176,7 +176,7 @@ fn getOffsets(
     const Machines = Searcher(lu64, 4, &[_][]const []const u8{});
     const Pokemons = Searcher(gen3.BasePokemon, @alignOf(gen3.BasePokemon), &[_][]const []const u8{
         &[_][]const u8{"padding"},
-        &[_][]const u8{"ev_yield"},
+        &[_][]const u8{"ev"},
         &[_][]const u8{"egg_group1_pad"},
         &[_][]const u8{"egg_group2_pad"},
     });
@@ -885,7 +885,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .types = [_]u8{ 0, 0 },
         .catch_rate = 0,
         .base_exp_yield = 0,
-        .ev_yield = undefined,
+        .ev = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
         .gender_ratio = 0,
         .egg_cycles = 0,
@@ -910,7 +910,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .types = [_]u8{ 12, 3 },
         .catch_rate = 45,
         .base_exp_yield = 64,
-        .ev_yield = undefined,
+        .ev = undefined,
         .items = [_]lu16{ lu16.init(0), lu16.init(0) },
         .gender_ratio = percentFemale(12.5),
         .egg_cycles = 20,
@@ -941,7 +941,7 @@ gen3.BasePokemon{
     .catch_rate = 45,
     .base_exp_yield = 147,
 
-    .ev_yield = undefined,
+    .ev = undefined,
 
     .items = [_]lu16{ lu16.init(0), lu16.init(0) },
 
