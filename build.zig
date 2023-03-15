@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
 
     const strip = b.option(bool, "strip", "") orelse false;
+    const test_filter = b.option([]const u8, "test-filter", "");
 
     const clap_module = b.createModule(.{
         .source_file = .{ .path = "lib/zig-clap/clap.zig" },
@@ -120,6 +121,8 @@ pub fn build(b: *std.Build) void {
     for (modules) |module|
         test_exes.addModule(module.name, module.module);
 
+    test_util.setFilter(test_filter);
+    test_exes.setFilter(test_filter);
     test_step.dependOn(&test_util.step);
     test_step.dependOn(&test_exes.step);
 }
