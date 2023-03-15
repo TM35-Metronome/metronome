@@ -5,7 +5,6 @@ const ston = @import("ston");
 const util = @import("util");
 
 const ascii = std.ascii;
-const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
 const heap = std.heap;
@@ -46,10 +45,12 @@ stats: MinMax(u16) = undefined,
 // their preallocated capacity is worth the hassel.
 simular: std.ArrayListUnmanaged(u16) = std.ArrayListUnmanaged(u16){},
 intersection: Set = Set{},
+pick_from_excluded: Set = Set{},
 
 const Options = struct {
     seed: u64,
     abilities: AbilityThemeOption,
+    avoid_same: bool,
     held_items: HeldItemOption,
     moves: MoveOption,
     party_size_max: u8,
@@ -132,6 +133,9 @@ pub const params = clap.parseParamsComptime(
     \\-h, --help
     \\        Display this help text and exit.
     \\
+    \\--avoid-same
+    \\        If possible, avoid having multiple party members of the same species in a party.
+    \\
     \\--held-items <none|unchanged|random>
     \\        The method used to picking held items. (default: unchanged)
     \\
@@ -206,6 +210,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
 
     const options = Options{
         .seed = args.args.seed orelse std.crypto.random.int(u64),
+        .avoid_same = args.args.@"avoid-same",
         .party_size_min = math.cast(u8, args.args.@"party-size-min" orelse 1) orelse return error.ArgumentToBig,
         .party_size_max = math.cast(u8, args.args.@"party-size-max" orelse 6) orelse return error.ArgumentToBig,
         .party_size = args.args.@"party-size" orelse .unchanged,
@@ -492,9 +497,8 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
     // with a party size of 0.
     const party_member_max = trainer.party.count();
     var party_member: u8 = 0;
-    var i: u8 = 0;
-    while (i < trainer.party_size) : (i += 1) {
-        const result = try trainer.party.getOrPut(allocator, i);
+    for (0..trainer.party_size) |i| {
+        const result = try trainer.party.getOrPut(allocator, @intCast(u8, i));
         if (!result.found_existing) {
             const member = trainer.party.values()[party_member];
             result.value_ptr.* = .{
@@ -508,9 +512,17 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
         }
     }
 
-    for (trainer.party.values()[0..trainer.party_size]) |*member| {
+    const average_level = trainer.partyAverageLevel();
+    const trainer_party = trainer.party.values()[0..trainer.party_size];
+    for (trainer_party, 0..) |*member, member_i| {
         switch (program.options.party_pokemons) {
-            .randomize => try randomizePartyMember(program, themes, trainer.*, member),
+            .randomize => try randomizePartyMember(
+                program,
+                themes,
+                trainer_party[0..member_i],
+                average_level,
+                member,
+            ),
             .unchanged => {},
         }
 
@@ -664,12 +676,13 @@ const Themes = struct {
 fn randomizePartyMember(
     program: *Program,
     themes: Themes,
-    trainer: Trainer,
+    other_party_members: []const PartyMember,
+    average_level: u8,
     member: *PartyMember,
 ) !void {
     const allocator = program.allocator;
     const species = member.species orelse return;
-    const level = member.level orelse trainer.partyAverageLevel();
+    const level = member.level orelse average_level;
     const ability_index = member.ability orelse 0;
     const type_set = switch (program.options.types) {
         .same => blk: {
@@ -683,7 +696,7 @@ fn randomizePartyMember(
         },
         .themed => program.species_by_type.get(themes.types[0]).?,
         .dual_themed => program.species_by_dual_type.get(themes.types).?,
-        .random => program.species,
+        .random => Set{},
     };
 
     var new_ability: ?u16 = null;
@@ -702,7 +715,7 @@ fn randomizePartyMember(
             new_ability = themes.ability;
             break :blk program.species_by_ability.get(themes.ability).?;
         },
-        .random => program.species,
+        .random => Set{},
     };
 
     if (program.options.abilities != .random and program.options.types != .random) {
@@ -716,14 +729,31 @@ fn randomizePartyMember(
     }
 
     // Pick the first set that has items in it.
-    const pick_from = if (program.intersection.count() != 0)
+    var pick_from = if (program.intersection.count() != 0)
         program.intersection
-    else if (program.options.abilities != .random and ability_set.count() != 0)
+    else if (ability_set.count() != 0)
         ability_set
-    else if (program.options.types != .random and type_set.count() != 0)
+    else if (type_set.count() != 0)
         type_set
     else
         program.species;
+
+    if (program.options.avoid_same) {
+        // Now, we have to exclude party members already in the party. To do this we construct a
+        // new set from `pick_from` with `other_party_members` excluded.
+        program.pick_from_excluded.clearRetainingCapacity();
+        try program.pick_from_excluded.ensureTotalCapacity(program.allocator, pick_from.count());
+
+        for (pick_from.keys()) |picked|
+            program.pick_from_excluded.putAssumeCapacity(picked, {});
+        for (other_party_members) |other_member|
+            _ = program.pick_from_excluded.swapRemove(other_member.species.?);
+
+        // If we end up with 0 things to pick from, then we cannot avoid same. So only use our
+        // newly created set, if it actually has things to pick from.
+        if (program.pick_from_excluded.count() != 0)
+            pick_from = program.pick_from_excluded;
+    }
 
     // When we have picked a new species for our Pokémon we also need
     // to fix the ability the Pokémon have, if we're picking Pokémons
@@ -1172,8 +1202,7 @@ test "tm35-rand-trainers" {
 
     // Test excluding system by running 100 seeds and checking that none of them pick the
     // excluded pokemons
-    var seed: u8 = 0;
-    while (seed < number_of_seeds) : (seed += 1) {
+    for (0..number_of_seeds) |seed| {
         try util.testing.runProgramFindPatterns(Program, .{
             .in = test_case,
             .args = &[_][]const u8{
@@ -1203,11 +1232,41 @@ test "tm35-rand-trainers" {
             Pattern.glob(1808, 1808, ".trainers[*].party[*].species=13"),
         },
     });
+
+    try util.testing.runProgramFindPatterns(Program, .{
+        .in = test_case,
+        .args = &[_][]const u8{
+            "--avoid-same",
+            "--party-pokemons=randomize",
+
+            // To test "avoid-same" we specify 2 Pokémons only and set the party size to 2.
+            // Every trainer should therefor have exactly these two Pokémons and no duplicate.
+            // We should therefor see exactly <number-of-trainers> Bulbasaurs and Ivysaurs
+            // between party slot 0 and 1 and no more.
+            // This test does not actually test for the exact behavior of `avoid-same` but
+            // hopefully it is good enough to catch regressions.
+            "--exclude-pokemon=*",
+            "--include-pokemon=Bulbasaur",
+            "--include-pokemon=Ivysaur",
+            "--party-size=minimum",
+            "--party-size-min=2",
+            "--party-size-max=2",
+
+            "--seed=0",
+        },
+        .patterns = &[_]Pattern{
+            Pattern.glob(813, 813, ".trainers[*].party_size=2"),
+            Pattern.glob(813, 813, ".trainers[*].party[0].species=*"),
+            Pattern.glob(813, 813, ".trainers[*].party[1].species=*"),
+            Pattern.glob(400, 400, ".trainers[*].party[0].species=1"),
+            Pattern.glob(413, 413, ".trainers[*].party[1].species=1"),
+            Pattern.glob(413, 413, ".trainers[*].party[0].species=2"),
+            Pattern.glob(400, 400, ".trainers[*].party[1].species=2"),
+        },
+    });
 }
 
 // TODO: Test these parameters
-//     "-p, --party-pokemons <unchanged|randomize> " ++
-//         "Whether the trainers pokemons should be randomized. (default: unchanged)",
 //     "-S, --stats <random|simular|follow_level> " ++
 //         "The total stats the picked pokemon should have if pokemons are randomized. " ++
 //         "(default: random)",
