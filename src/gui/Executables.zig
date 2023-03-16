@@ -71,15 +71,15 @@ const default_commands = [_][]const u8{
     "tm35-generate-site" ++ extension,
     "tm35-misc" ++ extension,
     "tm35-no-trade-evolutions" ++ extension,
-    "tm35-rand-machines" ++ extension,
-    "tm35-rand-names" ++ extension,
+    "tm35-randomize-field-items" ++ extension,
+    "tm35-randomize-machines" ++ extension,
+    "tm35-randomize-names" ++ extension,
+    "tm35-randomize-pokemons" ++ extension,
+    "tm35-randomize-starters" ++ extension,
+    "tm35-randomize-static-encounters" ++ extension,
+    "tm35-randomize-trainers" ++ extension,
+    "tm35-randomize-wild-encounters" ++ extension,
     "tm35-random-stones" ++ extension,
-    "tm35-rand-pokeball-items" ++ extension,
-    "tm35-rand-pokemons" ++ extension,
-    "tm35-rand-starters" ++ extension,
-    "tm35-rand-static" ++ extension,
-    "tm35-rand-trainers" ++ extension,
-    "tm35-rand-wild" ++ extension,
 };
 
 pub fn deinit(exes: Executables) void {

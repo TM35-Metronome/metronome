@@ -944,7 +944,6 @@ const html_pretty_command = escape.generate(&.{
     .{ .escaped = "&gt;", .unescaped = ">" },
     .{ .escaped = "&lt;", .unescaped = "<" },
     .{ .escaped = "&quot;", .unescaped = "\"" },
-    .{ .escaped = "random", .unescaped = "rand" },
     .{ .escaped = " ", .unescaped = "-" },
     .{ .escaped = " ", .unescaped = "_" },
     .{ .escaped = "", .unescaped = "tm35-" },

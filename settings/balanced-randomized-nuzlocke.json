@@ -3,7 +3,16 @@
     "description": "",
     "commands": [
         {
-            "name": "tm35-rand-machines",
+            "name": "tm35-balance-pokemons",
+            "args": [
+                {
+                    "name": "stats",
+                    "value": "buff_weak"
+                }
+            ]
+        },
+        {
+            "name": "tm35-randomize-machines",
             "args": [
                 {
                     "name": "hms",
@@ -16,7 +25,7 @@
             ]
         },
         {
-            "name": "tm35-rand-pokemons",
+            "name": "tm35-randomize-pokemons",
             "args": [
                 {
                     "name": "same-total-stats",
@@ -57,7 +66,7 @@
             ]
         },
         {
-            "name": "tm35-rand-pokeball-items",
+            "name": "tm35-randomize-field-items",
             "args": [
                 {
                     "name": "include-key-items",
@@ -74,7 +83,7 @@
             ]
         },
         {
-            "name": "tm35-rand-trainers",
+            "name": "tm35-randomize-trainers",
             "args": [
                 {
                     "name": "party-size-max",
@@ -106,7 +115,7 @@
                 },
                 {
                     "name": "stats",
-                    "value": "simular"
+                    "value": "follow_level"
                 },
                 {
                     "name": "types",
@@ -127,7 +136,7 @@
             ]
         },
         {
-            "name": "tm35-rand-starters",
+            "name": "tm35-randomize-starters",
             "args": [
                 {
                     "name": "pick-lowest-evolution",
@@ -140,7 +149,7 @@
             ]
         },
         {
-            "name": "tm35-rand-wild",
+            "name": "tm35-randomize-wild-encounters",
             "args": [
                 {
                     "name": "simular-total-stats",
@@ -149,20 +158,11 @@
             ]
         },
         {
-            "name": "tm35-rand-static",
+            "name": "tm35-randomize-static-encounters",
             "args": [
                 {
                     "name": "method",
                     "value": "legendary_with_legendary"
-                }
-            ]
-        },
-        {
-            "name": "tm35-balance-pokemons",
-            "args": [
-                {
-                    "name": "stats",
-                    "value": "buff_weak"
                 }
             ]
         },
