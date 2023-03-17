@@ -17,13 +17,13 @@ test {
     std.testing.refAllDeclsRecursive(@import("other/tm35-noop.zig"));
     std.testing.refAllDeclsRecursive(@import("other/tm35-no-trade-evolutions.zig"));
 
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-pokemons.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-machines.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-names.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-trainers.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-pokeball-items.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-starters.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-static.zig"));
-    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-rand-wild.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-pokemons.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-machines.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-names.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-trainers.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-field-items.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-starters.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-static-encounters.zig"));
+    std.testing.refAllDeclsRecursive(@import("randomizers/tm35-randomize-wild-encounters.zig"));
     std.testing.refAllDeclsRecursive(@import("randomizers/tm35-random-stones.zig"));
 }
