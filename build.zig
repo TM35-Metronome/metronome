@@ -107,23 +107,34 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run all tests");
     const test_util = b.addTest(.{
-        .name = "test",
+        .name = "test-util",
         .root_source_file = .{ .path = "src/util.zig" },
         .optimize = optimize,
         .target = target,
     });
+    const test_core = b.addTest(.{
+        .name = "test-core",
+        .root_source_file = .{ .path = "src/core.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
     const test_exes = b.addTest(.{
-        .name = "test",
+        .name = "test-exes",
         .root_source_file = .{ .path = "src/test.zig" },
         .optimize = optimize,
         .target = target,
     });
-    for (modules) |module|
+    for (modules) |module| {
+        test_util.addModule(module.name, module.module);
+        test_core.addModule(module.name, module.module);
         test_exes.addModule(module.name, module.module);
+    }
 
     test_util.setFilter(test_filter);
+    test_core.setFilter(test_filter);
     test_exes.setFilter(test_filter);
     test_step.dependOn(&test_util.step);
+    test_step.dependOn(&test_core.step);
     test_step.dependOn(&test_exes.step);
 }
 
