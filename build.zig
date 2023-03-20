@@ -75,25 +75,35 @@ pub fn build(b: *std.Build) void {
 
         "src/gui/tm35-randomizer.zig",
     };
+
+    const test_step = b.step("test", "Run all tests");
     for (exes) |path| {
         const basename = std.fs.path.basename(path);
         const name = basename[0 .. basename.len - 4]; // Remove `.zig`
+        const test_name = b.fmt("test-{s}", .{name});
 
         const step = b.step(name, b.fmt("Build and install {s}", .{name}));
+        const exe_test_step = b.step(test_name, b.fmt("Test {s}", .{name}));
         const exe = b.addExecutable(.{
             .name = name,
             .root_source_file = .{ .path = path },
             .optimize = optimize,
             .target = target,
         });
-        exe.strip = strip;
+        const test_exe = b.addTest(.{
+            .name = test_name,
+            .root_source_file = .{ .path = path },
+            .optimize = optimize,
+            .target = target,
+        });
 
-        for (modules) |module|
-            exe.addModule(module.name, module.module);
+        test_exe.setFilter(test_filter);
 
         step.dependOn(&b.addInstallArtifact(exe).step);
         step.dependOn(&exe.step);
         b.default_step.dependOn(step);
+        exe_test_step.dependOn(&test_exe.run().step);
+        test_step.dependOn(exe_test_step);
 
         if (std.mem.startsWith(u8, path, "src/gui/")) {
             buildAndLinkMd4c(exe);
@@ -103,9 +113,14 @@ pub fn build(b: *std.Build) void {
             exe.linkLibCpp();
             exe.linkSystemLibrary("m");
         }
+
+        for ([_]*std.Build.CompileStep{ exe, test_exe }) |comp| {
+            comp.strip = strip;
+            for (modules) |module|
+                comp.addModule(module.name, module.module);
+        }
     }
 
-    const test_step = b.step("test", "Run all tests");
     const test_util = b.addTest(.{
         .name = "test-util",
         .root_source_file = .{ .path = "src/util.zig" },
@@ -118,24 +133,15 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
     });
-    const test_exes = b.addTest(.{
-        .name = "test-exes",
-        .root_source_file = .{ .path = "src/test.zig" },
-        .optimize = optimize,
-        .target = target,
-    });
     for (modules) |module| {
         test_util.addModule(module.name, module.module);
         test_core.addModule(module.name, module.module);
-        test_exes.addModule(module.name, module.module);
     }
 
     test_util.setFilter(test_filter);
     test_core.setFilter(test_filter);
-    test_exes.setFilter(test_filter);
-    test_step.dependOn(&test_util.step);
-    test_step.dependOn(&test_core.step);
-    test_step.dependOn(&test_exes.step);
+    test_step.dependOn(&test_util.run().step);
+    test_step.dependOn(&test_core.run().step);
 }
 
 fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
