@@ -93,24 +93,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 } });
                 return;
             },
-            .stats,
-            .types,
-            .catch_rate,
-            .base_exp_yield,
-            .items,
-            .gender_ratio,
-            .egg_cycles,
-            .base_friendship,
-            .growth_rate,
-            .egg_groups,
-            .abilities,
-            .evos,
-            .moves,
-            .tms,
-            .hms,
-            .pokedex_entry,
-            .ev_yield,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .trainers => |trainers| switch (trainers.value) {
             .name => |str| {
@@ -119,13 +102,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 } });
                 return;
             },
-            .class,
-            .trainer_picture,
-            .items,
-            .party_type,
-            .party_size,
-            .party,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .moves => |moves| switch (moves.value) {
             .name => |str| {
@@ -134,16 +111,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 } });
                 return;
             },
-            .description,
-            .effect,
-            .power,
-            .type,
-            .accuracy,
-            .pp,
-            .target,
-            .priority,
-            .category,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .abilities => |abilities| switch (abilities.value) {
             .name => |str| {
@@ -160,30 +128,9 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 } });
                 return;
             },
-            .battle_effect,
-            .description,
-            .price,
-            .pocket,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
-        .version,
-        .game_title,
-        .gamecode,
-        .instant_text,
-        .starters,
-        .text_delays,
-        .types,
-        .tms,
-        .hms,
-        .pokedex,
-        .maps,
-        .wild_pokemons,
-        .static_pokemons,
-        .given_pokemons,
-        .pokeball_items,
-        .hidden_hollows,
-        .text,
-        => return error.DidNotConsumeData,
+        else => return error.DidNotConsumeData,
     }
     unreachable;
 }
