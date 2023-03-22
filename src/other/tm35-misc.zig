@@ -162,22 +162,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                     new_yield,
                 });
             },
-            .stats,
-            .types,
-            .catch_rate,
-            .items,
-            .gender_ratio,
-            .egg_cycles,
-            .base_friendship,
-            .growth_rate,
-            .egg_groups,
-            .abilities,
-            .evos,
-            .moves,
-            .tms,
-            .name,
-            .pokedex_entry,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .maps => |maps| {
             switch (maps.value) {
@@ -192,15 +177,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                         allow == .everywhere,
                     });
                 },
-                .music,
-                .cave,
-                .weather,
-                .type,
-                .escape_rope,
-                .battle_scene,
-                .allow_escaping,
-                .show_map_name,
-                => return error.DidNotConsumeData,
+                else => return error.DidNotConsumeData,
             }
         },
         .trainers => |trainers| switch (trainers.value) {
@@ -216,19 +193,9 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                 } else {
                     return error.DidNotConsumeData;
                 },
-                .ability,
-                .species,
-                .item,
-                .moves,
-                => return error.DidNotConsumeData,
+                else => return error.DidNotConsumeData,
             },
-            .class,
-            .trainer_picture,
-            .name,
-            .items,
-            .party_type,
-            .party_size,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .wild_pokemons => |wild_areas| {
             const wild_area = wild_areas.value.value();
@@ -264,22 +231,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             },
             .species => return error.DidNotConsumeData,
         },
-        .version,
-        .game_title,
-        .gamecode,
-        .starters,
-        .moves,
-        .abilities,
-        .types,
-        .tms,
-        .hms,
-        .items,
-        .pokedex,
-        .given_pokemons,
-        .pokeball_items,
-        .hidden_hollows,
-        .text,
-        => return error.DidNotConsumeData,
+        else => return error.DidNotConsumeData,
     }
     unreachable;
 }

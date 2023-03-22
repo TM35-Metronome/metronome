@@ -136,6 +136,8 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
             .class = trainer.class,
             .trainer_picture = trainer.trainer_picture,
+            .ai = trainer.ai,
+            .battle_type = trainer.battle_type,
             .name = ston.string(escape.escapeFmt(decoded_name)),
             .items = trainer.items,
             .party_type = trainer.party_type,
@@ -415,6 +417,8 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
 
     for (game.ptrs.trainers, 0..) |trainer, i| {
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
+            .ai = trainer.ai,
+            .battle_type = trainer.battle_type,
             .party_size = trainer.party_size,
             .party_type = trainer.party_type,
             .class = trainer.class,
@@ -765,6 +769,8 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     for (game.ptrs.trainers, 0..) |trainer, index| {
         const i = index + 1;
         try ston.serialize(writer, .{ .trainers = ston.index(i, .{
+            .ai = trainer.ai,
+            .battle_type = trainer.battle_type,
             .party_size = trainer.party_size,
             .party_type = trainer.party_type,
             .class = trainer.class,

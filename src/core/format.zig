@@ -203,6 +203,8 @@ pub const Trainer = union(enum) {
     class: u8,
     trainer_picture: u8,
     name: []const u8,
+    battle_type: u32,
+    ai: u32,
     items: ston.Index(u8, u16),
     party_type: PartyType,
     party_size: u8,

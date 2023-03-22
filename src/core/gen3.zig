@@ -77,7 +77,7 @@ pub const Trainer = extern struct {
     trainer_picture: u8,
     name: [12]u8,
     items: [4]lu16,
-    is_double: lu32,
+    battle_type: lu32,
     ai: lu32,
     party: Party,
 

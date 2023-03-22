@@ -306,18 +306,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     )).value_ptr;
                     format.setField(move, moves.value);
                 },
-                .base_exp_yield,
-                .items,
-                .gender_ratio,
-                .egg_cycles,
-                .base_friendship,
-                .growth_rate,
-                .egg_groups,
-                .evos,
-                .tms,
-                .hms,
-                .ev_yield,
-                => return error.DidNotConsumeData,
+                else => return error.DidNotConsumeData,
             }
             return error.DidNotConsumeData;
         },
@@ -350,10 +339,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     _ = try program.trainer_names.getOrPutValue(allocator, trainers.index, name);
                     return error.DidNotConsumeData;
                 },
-                .class,
-                .trainer_picture,
-                .items,
-                => return error.DidNotConsumeData,
+                else => return error.DidNotConsumeData,
             }
             return;
         },
@@ -363,11 +349,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                     _ = try program.held_items.put(allocator, items.index, {});
                 return error.DidNotConsumeData;
             },
-            .name,
-            .description,
-            .price,
-            .pocket,
-            => return error.DidNotConsumeData,
+            else => return error.DidNotConsumeData,
         },
         .moves => |moves| {
             const move = (try program.moves.getOrPutValue(allocator, moves.index, .{}))
@@ -377,34 +359,11 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .type => |_type| move.type = _type,
                 .pp => |pp| move.pp = pp,
                 .accuracy => |accuracy| move.accuracy = accuracy,
-                .name,
-                .description,
-                .effect,
-                .target,
-                .priority,
-                .category,
-                => {},
+                else => {},
             }
             return error.DidNotConsumeData;
         },
-        .version,
-        .game_title,
-        .gamecode,
-        .instant_text,
-        .starters,
-        .text_delays,
-        .abilities,
-        .types,
-        .tms,
-        .hms,
-        .maps,
-        .wild_pokemons,
-        .static_pokemons,
-        .given_pokemons,
-        .pokeball_items,
-        .hidden_hollows,
-        .text,
-        => return error.DidNotConsumeData,
+        else => return error.DidNotConsumeData,
     }
     unreachable;
 }

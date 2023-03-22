@@ -300,6 +300,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
+                .ai => |ai| trainer.ai = lu32.init(ai),
+                .battle_type => |battle_type| trainer.battle_type = lu32.init(battle_type),
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
                 .name => |str| try applyGen3String(&trainer.name, str),
@@ -745,6 +747,9 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const trainer = &game.ptrs.trainers[trainers.index];
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
+                .ai => |ai| trainer.ai = lu32.init(ai),
+                .battle_type => |battle_type| trainer.battle_type = math.cast(u8, battle_type) orelse
+                    return error.Error,
                 .party_size => |party_size| trainer.party_size = party_size,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .items => |items| {
@@ -1248,6 +1253,9 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                         return error.IndexOutOfBound;
                     trainer.items[items.index] = lu16.init(items.value);
                 },
+                .ai => |ai| trainer.ai = lu32.init(ai),
+                .battle_type => |battle_type| trainer.battle_type = math.cast(u8, battle_type) orelse
+                    return error.Error,
                 .party_size => |party_size| trainer.party_size = party_size,
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party => |party| {
