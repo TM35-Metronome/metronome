@@ -1023,7 +1023,28 @@ pub const Game = struct {
 
         const map_file = try file_system.openNarc(nds.fs.root, info.map_file);
         const scripts = try file_system.openNarc(nds.fs.root, info.scripts);
-        const commands = try findScriptCommands(scripts, allocator);
+
+        const starters = blk: {
+            var res: [3][]*align(1) lu16 = undefined;
+            var filled: usize = 0;
+            errdefer for (res[0..filled]) |item|
+                allocator.free(item);
+
+            for (info.starters, &res) |offs, *res_offs| {
+                res_offs.* = try allocator.alloc(*lu16, offs.len);
+                filled += 1;
+
+                for (offs, res_offs.*) |offset, *res_offset| {
+                    const fat = scripts.fat[offset.file];
+                    const file_data = scripts.data[fat.start.value()..fat.end.value()];
+                    res_offset.* = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
+                }
+            }
+
+            break :blk res;
+        };
+
+        const commands = try findScriptCommands(scripts, allocator, starters);
         errdefer {
             allocator.free(commands.static_pokemons);
             allocator.free(commands.given_pokemons);
@@ -1037,25 +1058,7 @@ pub const Game = struct {
             .rom = nds_rom,
             .owned = owned,
             .ptrs = .{
-                .starters = blk: {
-                    var res: [3][]*align(1) lu16 = undefined;
-                    var filled: usize = 0;
-                    errdefer for (res[0..filled]) |item|
-                        allocator.free(item);
-
-                    for (info.starters, &res) |offs, *res_offs| {
-                        res_offs.* = try allocator.alloc(*lu16, offs.len);
-                        filled += 1;
-
-                        for (offs, res_offs.*) |offset, *res_offset| {
-                            const fat = scripts.fat[offset.file];
-                            const file_data = scripts.data[fat.start.value()..fat.end.value()];
-                            res_offset.* = mem.bytesAsValue(lu16, file_data[offset.offset..][0..2]);
-                        }
-                    }
-
-                    break :blk res;
-                },
+                .starters = starters,
                 .moves = try (try file_system.openNarc(nds.fs.root, info.moves)).toSlice(0, Move),
                 .trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(1, Trainer),
                 .items = try (try file_system.openNarc(nds.fs.root, info.itemdata)).toSlice(0, Item),
@@ -1313,7 +1316,11 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(scripts: nds.fs.Fs, allocator: mem.Allocator) !ScriptCommands {
+    fn findScriptCommands(
+        scripts: nds.fs.Fs,
+        allocator: mem.Allocator,
+        starters: [3][]*align(1) lu16,
+    ) !ScriptCommands {
         var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
         var given_pokemons = std.ArrayList(StaticPokemon).init(allocator);
@@ -1468,6 +1475,22 @@ pub const Game = struct {
                     else => {},
                 }
             }
+        }
+
+        // Remove starters from given Pokémons
+        var i: usize = 0;
+        while (i < given_pokemons.items.len) {
+            const given_pokemon = given_pokemons.items[i];
+            for (starters) |starters_inner| {
+                for (starters_inner) |starter| {
+                    if (starter == given_pokemon.species) {
+                        _ = given_pokemons.swapRemove(i);
+                        continue;
+                    }
+                }
+            }
+
+            i += 1;
         }
 
         return ScriptCommands{
