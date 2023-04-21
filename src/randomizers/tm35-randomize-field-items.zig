@@ -88,8 +88,8 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .allocator = allocator,
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
-            .include_tms_hms = args.args.@"include-tms-hms",
-            .include_key_items = args.args.@"include-key-items",
+            .include_tms_hms = args.args.@"include-tms-hms" != 0,
+            .include_key_items = args.args.@"include-key-items" != 0,
             .excluded_items = excluded_items,
             .included_items = included_items,
         },

@@ -79,7 +79,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .allocator = allocator,
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
-            .replace_cheap = args.args.@"replace-cheap-items",
+            .replace_cheap = args.args.@"replace-cheap-items" != 0,
         },
     };
 }

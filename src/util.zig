@@ -41,14 +41,14 @@ pub fn generateMain(comptime Program: type) fn () anyerror!void {
                 return error.InvalidArgument;
             };
 
-            if (arguments.args.help) {
+            if (arguments.args.help != 0) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try usage(stdout.writer());
                 try stdout.flush();
                 return;
             }
 
-            if (arguments.args.version) {
+            if (arguments.args.version != 0) {
                 var stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
                 try stdout.writer().writeAll(Program.version);
                 try stdout.writer().writeAll("\n");

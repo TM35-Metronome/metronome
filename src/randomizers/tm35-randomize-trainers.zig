@@ -210,7 +210,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
 
     const options = Options{
         .seed = args.args.seed orelse std.crypto.random.int(u64),
-        .avoid_same = args.args.@"avoid-same",
+        .avoid_same = args.args.@"avoid-same" != 0,
         .party_size_min = math.cast(u8, args.args.@"party-size-min" orelse 1) orelse return error.ArgumentToBig,
         .party_size_max = math.cast(u8, args.args.@"party-size-max" orelse 6) orelse return error.ArgumentToBig,
         .party_size = args.args.@"party-size" orelse .unchanged,

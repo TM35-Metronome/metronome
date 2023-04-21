@@ -67,7 +67,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .allocator = allocator,
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
-            .pick_lowest = args.args.@"pick-lowest-evolution",
+            .pick_lowest = args.args.@"pick-lowest-evolution" != 0,
             .evolutions = math.cast(usize, args.args.evolutions orelse 0) orelse return error.ArgumentToBig,
         },
     };

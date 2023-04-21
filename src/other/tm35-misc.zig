@@ -91,9 +91,9 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
         .options = .{
-            .easy_hms = args.args.@"easy-hms",
-            .fast_text = args.args.@"fast-text",
-            .no_ev_yield = args.args.@"no-ev-yield",
+            .easy_hms = args.args.@"easy-hms" != 0,
+            .fast_text = args.args.@"fast-text" != 0,
+            .no_ev_yield = args.args.@"no-ev-yield" != 0,
             .biking = args.args.@"allow-biking" orelse .unchanged,
             .running = args.args.@"allow-running" orelse .unchanged,
             .exp_scale = args.args.@"exp-yield-scaling" orelse 1.0,

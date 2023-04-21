@@ -81,7 +81,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .allocator = allocator,
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
-            .hms = args.args.hms,
+            .hms = args.args.hms != 0,
             .excluded_moves = try excluded_moves.toOwnedSlice(),
         },
     };

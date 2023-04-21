@@ -5,8 +5,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
 
     const strip = b.option(bool, "strip", "") orelse false;
-    const test_filter = b.option([]const u8, "test-filter", "");
-
     const clap_module = b.createModule(.{
         .source_file = .{ .path = "lib/zig-clap/clap.zig" },
     });
@@ -96,13 +94,12 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .target = target,
         });
-
-        test_exe.setFilter(test_filter);
+        const run_test = b.addRunArtifact(test_exe);
 
         step.dependOn(&b.addInstallArtifact(exe).step);
         step.dependOn(&exe.step);
         b.default_step.dependOn(step);
-        exe_test_step.dependOn(&test_exe.run().step);
+        exe_test_step.dependOn(&run_test.step);
         test_step.dependOn(exe_test_step);
 
         if (std.mem.startsWith(u8, path, "src/gui/")) {
@@ -137,11 +134,11 @@ pub fn build(b: *std.Build) void {
         test_util.addModule(module.name, module.module);
         test_core.addModule(module.name, module.module);
     }
+    const run_test_util = b.addRunArtifact(test_util);
+    const run_test_core = b.addRunArtifact(test_core);
 
-    test_util.setFilter(test_filter);
-    test_core.setFilter(test_filter);
-    test_step.dependOn(&test_util.run().step);
-    test_step.dependOn(&test_core.run().step);
+    test_step.dependOn(&run_test_util.step);
+    test_step.dependOn(&run_test_core.step);
 }
 
 fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {

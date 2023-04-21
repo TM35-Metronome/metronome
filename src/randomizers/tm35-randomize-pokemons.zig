@@ -115,8 +115,8 @@ pub const params = clap.parseParamsComptime(
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     const options = Options{
         .seed = args.args.seed orelse std.crypto.random.int(u64),
-        .same_total_stats = args.args.@"same-total-stats",
-        .status_moves_are_stab = args.args.@"status-moves-are-stab",
+        .same_total_stats = args.args.@"same-total-stats" != 0,
+        .status_moves_are_stab = args.args.@"status-moves-are-stab" != 0,
         .abilities = args.args.abilities orelse .unchanged,
         .types = args.args.types orelse .unchanged,
         .items = args.args.items orelse .unchanged,

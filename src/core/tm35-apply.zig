@@ -141,9 +141,9 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
 
     return Program{
         .allocator = allocator,
-        .no_output = args.args.@"no-output",
-        .replace = args.args.replace,
-        .abort_on_first_warning = args.args.@"abort-on-first-warning",
+        .no_output = args.args.@"no-output" != 0,
+        .replace = args.args.replace != 0,
+        .abort_on_first_warning = args.args.@"abort-on-first-warning" != 0,
         .out = args.args.output orelse
             try fmt.allocPrint(allocator, "{s}.modified", .{path.basename(file_name)}),
         .patch = patch,

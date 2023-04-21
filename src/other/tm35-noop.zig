@@ -48,7 +48,7 @@ pub const params = clap.parseParamsComptime(
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
     return Program{
         .allocator = allocator,
-        .serialize = args.args.serialize,
+        .serialize = args.args.serialize != 0,
     };
 }
 

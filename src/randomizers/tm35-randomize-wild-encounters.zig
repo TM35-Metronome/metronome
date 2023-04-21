@@ -61,7 +61,7 @@ pub fn init(allocator: mem.Allocator, args: anytype) !Program {
         .allocator = allocator,
         .options = .{
             .seed = args.args.seed orelse std.crypto.random.int(u64),
-            .simular_total_stats = args.args.@"simular-total-stats",
+            .simular_total_stats = args.args.@"simular-total-stats" != 0,
         },
     };
 }
