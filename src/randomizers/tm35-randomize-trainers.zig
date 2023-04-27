@@ -1234,4 +1234,3 @@ test "tm35-rand-trainers" {
 //         "(default: random)",
 //     "-a, --abilities <random|same|themed> " ++
 //         "Which ability each party member should have. (default: random)",
-
