@@ -545,7 +545,7 @@ fn fillWithBestMovesForLevel(
     moves: []u16,
 ) void {
     // Before pick best moves, we make sure the Pokémon has no moves.
-    mem.set(u16, moves, 0);
+    @memset(moves, 0);
 
     // Go over all level up moves, and replace the current moves with better moves
     // as we find them

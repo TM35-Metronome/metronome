@@ -955,7 +955,7 @@ pub const Game = struct {
                     },
                 }
             }
-            mem.set(PartyMemberBoth, party[party_size..], PartyMemberBoth{});
+            @memset(party[party_size..], PartyMemberBoth{});
         }
 
         const type_names = try decryptStringTable(allocator, 8, text, info.type_names);
@@ -1100,7 +1100,7 @@ pub const Game = struct {
         for (game.ptrs.starters, game.info.starter_choice_indexs) |starter_ptrs, index| {
             const starter = starter_ptrs[0].value();
             const text = game.owned.story.starter_choice.get(index);
-            mem.set(u8, text, 0);
+            @memset(text, 0);
 
             const starter_name = game.owned.text.pokemon_names.getSpan(starter);
             mem.copy(u8, text, starter_name);
@@ -1168,7 +1168,7 @@ pub const Game = struct {
                     for (mem.bytesAsSlice(PNone, rest[0..@sizeOf([6]PNone)]), party) |*m, p| {
                         m.* = PartyMemberNone{ .base = p.base };
                     }
-                    mem.set(u8, rest[@sizeOf([6]PNone)..full_party_size], 0);
+                    @memset(rest[@sizeOf([6]PNone)..full_party_size], 0);
                 },
                 .item => {
                     for (mem.bytesAsSlice(PItem, rest[0..@sizeOf([6]PItem)]), party) |*m, p| {
@@ -1177,7 +1177,7 @@ pub const Game = struct {
                             .item = p.item,
                         };
                     }
-                    mem.set(u8, rest[@sizeOf([6]PItem)..full_party_size], 0);
+                    @memset(rest[@sizeOf([6]PItem)..full_party_size], 0);
                 },
                 .moves => {
                     for (mem.bytesAsSlice(PMoves, rest[0..@sizeOf([6]PMoves)]), party) |*m, p| {
@@ -1186,7 +1186,7 @@ pub const Game = struct {
                             .moves = p.moves,
                         };
                     }
-                    mem.set(u8, rest[@sizeOf([6]PMoves)..full_party_size], 0);
+                    @memset(rest[@sizeOf([6]PMoves)..full_party_size], 0);
                 },
                 .both => mem.bytesAsValue(FullParty, rest[0..full_party_size]).* = party,
             }
@@ -1513,7 +1513,7 @@ pub const Game = struct {
         );
         errdefer res.destroy(allocator);
 
-        mem.set(u8, res.buf, 0);
+        @memset(res.buf, 0);
         for (res.keys, 0..) |*key, i| {
             const buf = res.get(i);
 

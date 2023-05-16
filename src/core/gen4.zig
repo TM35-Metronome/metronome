@@ -655,7 +655,7 @@ pub const Game = struct {
         const trainers = try (try file_system.openNarc(nds.fs.root, info.trainers)).toSlice(0, Trainer);
         const trainer_parties_narc = try file_system.openNarc(nds.fs.root, info.parties);
         const trainer_parties = try allocator.alloc([6]PartyMemberBoth, trainer_parties_narc.fat.len);
-        mem.set([6]PartyMemberBoth, trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
+        @memset(trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
 
         for (trainer_parties, 0..) |*party, i| {
             const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
@@ -1150,7 +1150,7 @@ pub const Game = struct {
         );
         errdefer res.destroy(allocator);
 
-        mem.set(u8, res.buf, 0);
+        @memset(res.buf, 0);
 
         var i: usize = 0;
         while (i < res.number_of_strings) : (i += 1) {

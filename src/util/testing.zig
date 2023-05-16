@@ -154,7 +154,7 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
 
     const matches = try testing.allocator.alloc(usize, opt.patterns.len);
     defer testing.allocator.free(matches);
-    mem.set(usize, matches, 0);
+    @memset(matches, 0);
 
     defer for (opt.patterns) |pattern|
         pattern.deinit(pattern.ctx, testing.allocator);

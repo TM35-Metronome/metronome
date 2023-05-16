@@ -673,11 +673,11 @@ pub const Game = struct {
         errdefer allocator.free(gba_rom);
 
         const free_offset = try reader.readAll(gba_rom);
-        mem.set(u8, gba_rom[free_offset..], 0xff);
+        @memset(gba_rom[free_offset..], 0xff);
 
         const trainers = info.trainers.slice(gba_rom);
         const trainer_parties = try allocator.alloc(TrainerParty, trainers.len);
-        mem.set(TrainerParty, trainer_parties, TrainerParty{});
+        @memset(trainer_parties, TrainerParty{});
 
         for (trainer_parties, trainers) |*party, trainer| {
             party.size = trainer.partyLen();

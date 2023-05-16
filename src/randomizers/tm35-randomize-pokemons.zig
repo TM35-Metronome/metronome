@@ -406,7 +406,7 @@ fn copyFieldsToEvolutions(
 
 fn randomizeStats(program: *Program, random: rand.Random, pokemon: *Pokemon) void {
     var stats = pokemon.statsToArray();
-    mem.set(u8, stats.slice(), 0);
+    @memset(stats.slice(), 0);
     program.randomizeStatsEx(random, pokemon, stats);
 }
 
