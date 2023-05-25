@@ -457,7 +457,7 @@ pub const Rom = struct {
             sections.appendAssumeCapacity(Section.fromRange(data.items, f));
 
         // Sort sections by where they appear in the rom.
-        std.sort.sort(Section, sections.items, data.items, Section.before);
+        mem.sort(Section, sections.items, data.items, Section.before);
         return sections.toOwnedSlice();
     }
 

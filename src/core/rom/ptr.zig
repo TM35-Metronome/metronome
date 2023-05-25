@@ -41,6 +41,7 @@ pub fn RelativePointer(
             else => Ptr,
         };
         const ptr_info = @typeInfo(NonOptionalPtr).Pointer;
+        const child_size: usize = @sizeOf(ptr_info.child);
         const Data = if (ptr_info.is_const) []const u8 else []u8;
         const is_optional = @typeInfo(Ptr) == .Optional;
         const ptr_sentinel = @ptrCast(*const ptr_info.child, ptr_info.sentinel.?).*;
@@ -54,7 +55,7 @@ pub fn RelativePointer(
                 return @This(){ .inner = Inner.init(null_ptr) };
 
             const i = @intCast(Int, @ptrToInt(ptr) - @ptrToInt(data.ptr));
-            if (data.len < i + @sizeOf(ptr_info.child))
+            if (data.len < i + child_size)
                 return error.InvalidPointer;
 
             const res = std.math.add(Int, i, offset) //
@@ -68,7 +69,7 @@ pub fn RelativePointer(
                 return null;
 
             const i = try ptr.toInt();
-            if (data.len < i + @sizeOf(ptr_info.child) * @boolToInt(ptr_info.size == .One))
+            if (data.len < i + child_size * @boolToInt(ptr_info.size == .One))
                 return error.InvalidPointer;
 
             return @ptrCast(Ptr, @alignCast(ptr_info.alignment, &data[i]));
@@ -84,7 +85,7 @@ pub fn RelativePointer(
 
             const p = try ptr.toPtr(data);
             const start = @ptrToInt(p) - @ptrToInt(data.ptr);
-            const end = start + len * @sizeOf(ptr_info.child);
+            const end = start + len * child_size;
             if (data.len < end)
                 return error.InvalidPointer;
 
@@ -97,7 +98,7 @@ pub fn RelativePointer(
         pub fn toSliceEnd(ptr: @This(), data: Data) Error!SliceNoSentinel {
             const rest = std.math.sub(usize, data.len, try ptr.toInt()) catch
                 return error.InvalidPointer;
-            return ptr.toSlice(data, rest / @sizeOf(ptr_info.child));
+            return ptr.toSlice(data, rest / child_size);
         }
 
         /// Converts a `RelativePointer` to an unknown number of

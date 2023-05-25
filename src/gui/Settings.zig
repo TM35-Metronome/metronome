@@ -181,7 +181,7 @@ pub fn saveTo(settings: Settings, raw_writer: anytype) !void {
     var writer = json.writeStream(raw_writer, 16);
     writer.whitespace = .{
         .indent_level = 0,
-        .indent = .{ .Space = 4 },
+        .indent = .{ .space = 4 },
     };
 
     try writer.beginObject();
@@ -223,14 +223,7 @@ pub fn parse(allocator: mem.Allocator, path: []const u8, str: []const u8) !Setti
     var tmp_arena = heap.ArenaAllocator.init(allocator);
     defer tmp_arena.deinit();
 
-    var stream = json.TokenStream.init(str);
-    const res = json.parse(SettingsJson, &stream, .{
-        .allocator = tmp_arena.allocator(),
-    }) catch |err| switch (err) {
-        error.AllocatorRequired => unreachable,
-        else => |e| return e,
-    };
-
+    const res = try json.parseFromSlice(SettingsJson, tmp_arena.allocator(), str, .{});
     var commands = Commands{};
     errdefer {
         for (commands.items) |*command| command.deinit(allocator);
@@ -312,31 +305,16 @@ pub fn loadAllFrom(allocator: mem.Allocator, path: []const u8) !std.ArrayListUnm
                 res.appendAssumeCapacity(settings);
             } else |err| switch (err) {
                 // Ignore all json parsing errors
-                error.DuplicateJSONField,
-                error.UnexpectedEndOfJson,
-                error.UnexpectedToken,
-                error.UnexpectedValue,
-                error.UnknownField,
-                error.MissingField,
-                error.UnexpectedJsonDepth,
-                error.InvalidTopLevel,
-                error.TooManyNestedItems,
-                error.TooManyClosingItems,
-                error.InvalidValueBegin,
-                error.InvalidValueEnd,
-                error.UnbalancedBrackets,
-                error.UnbalancedBraces,
-                error.UnexpectedClosingBracket,
-                error.UnexpectedClosingBrace,
-                error.InvalidNumber,
-                error.InvalidSeparator,
-                error.InvalidLiteral,
-                error.InvalidEscapeCharacter,
-                error.InvalidUnicodeHexSymbol,
-                error.InvalidUtf8Byte,
-                error.InvalidTopLevelTrailing,
-                error.InvalidControlCharacter,
+                error.BufferUnderrun,
+                error.DuplicateField,
                 error.InvalidCharacter,
+                error.InvalidNumber,
+                error.MissingField,
+                error.SyntaxError,
+                error.UnexpectedEndOfInput,
+                error.UnexpectedToken,
+                error.UnknownField,
+                error.ValueTooLong,
                 => {},
 
                 error.AccessDenied,

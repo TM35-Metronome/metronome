@@ -217,7 +217,7 @@ test "transion" {
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
     @setEvalBranchQuota(1000000);
     comptime var replacements_sorted = replacements[0..replacements.len].*;
-    std.sort.sort(Replacement, &replacements_sorted, @as(u8, 0), Replacement.lessThan);
+    mem.sort(Replacement, &replacements_sorted, @as(u8, 0), Replacement.lessThan);
 
     return struct {
         child_writer: ChildWriter,

@@ -998,7 +998,7 @@ fn wrap(
         }
 
         fn call(program: *Program, req: []const u8) !void {
-            var parser = std.json.Parser.init(program.allocator, false);
+            var parser = std.json.Parser.init(program.allocator, .alloc_if_needed);
             defer parser.deinit();
 
             var parsed = try parser.parse(req);
@@ -1028,17 +1028,17 @@ fn wrap(
 }
 
 fn parseArg(comptime T: type, tree: std.json.Value, arg: usize) !T {
-    if (tree != .Array)
+    if (tree != .array)
         return error.InvalidArgument;
 
-    const arg_values = tree.Array.items;
+    const arg_values = tree.array.items;
     if (arg_values.len <= arg)
         return error.TooFewArguments;
 
     const arg_value = arg_values[arg];
     switch (T) {
         []const u8 => switch (arg_value) {
-            .String => |s| return s,
+            .string => |s| return s,
             else => return error.InvalidArgument,
         },
         else => {},
@@ -1046,17 +1046,17 @@ fn parseArg(comptime T: type, tree: std.json.Value, arg: usize) !T {
 
     switch (@typeInfo(T)) {
         .Int => switch (arg_value) {
-            .Integer => |i| return std.math.cast(T, i) orelse return error.IntArgDoesNotFit,
-            .String => |s| return try fmt.parseInt(T, s, 0),
+            .integer => |i| return std.math.cast(T, i) orelse return error.IntArgDoesNotFit,
+            .string => |s| return try fmt.parseInt(T, s, 0),
             else => return error.InvalidArgument,
         },
         .Float => switch (arg_value) {
-            .Float => |f| return @floatCast(T, f),
-            .String => |s| return try fmt.parseFloat(T, s),
+            .float => |f| return @floatCast(T, f),
+            .string => |s| return try fmt.parseFloat(T, s),
             else => return error.InvalidArgument,
         },
         .Bool => switch (arg_value) {
-            .Bool => |b| return b,
+            .bool => |b| return b,
             else => return error.InvalidArgument,
         },
         else => @compileError("Cannot parse '" ++ @typeName(T) ++ "'"),

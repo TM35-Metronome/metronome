@@ -159,14 +159,7 @@ fn findCommands(arena: *heap.ArenaAllocator, tmp_arena: *heap.ArenaAllocator) ![
 
     const content = try command_file.readToEndAlloc(tmp_arena.allocator(), math.maxInt(usize));
 
-    var stream = json.TokenStream.init(content);
-    const strings = json.parse([]const []const u8, &stream, .{
-        .allocator = tmp_arena.allocator(),
-    }) catch |err| switch (err) {
-        error.AllocatorRequired => unreachable,
-        else => |e| return e,
-    };
-
+    const strings = try json.parseFromSlice([]const []const u8, tmp_arena.allocator(), content, .{});
     var res = std.ArrayList(Command).init(arena.allocator());
     for (strings) |string| {
         if (fs.path.isAbsolute(string)) {
@@ -307,7 +300,7 @@ fn pathToCommand(arena: *heap.ArenaAllocator, command_path: []const u8) !Command
     comptime var i = 0;
     inline while (i < lists.len) : (i += 1) {
         const Item = @TypeOf(lists[i].items[0]);
-        std.sort.sort(Item, lists[i].items, params.items, comptime lessThanByName(Item));
+        mem.sort(Item, lists[i].items, params.items, comptime lessThanByName(Item));
     }
 
     return Command{
