@@ -290,7 +290,7 @@ pub fn loadAllFrom(allocator: mem.Allocator, path: []const u8) !std.ArrayListUnm
 
     var it = dir.iterate();
     while (try it.next()) |entry| switch (entry.kind) {
-        .File => {
+        .file => {
             try res.ensureUnusedCapacity(allocator, 1);
 
             const file = try dir.dir.openFile(entry.name, .{});
