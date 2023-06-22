@@ -278,7 +278,7 @@ pub fn ReplacingReader(comptime replacements: []const Replacement, comptime Chil
         const longest_find = blk: {
             var res: usize = 0;
             for (replacements) |r|
-                res = math.max(r.find.len, res);
+                res = @max(r.find.len, res);
             break :blk res;
         };
 

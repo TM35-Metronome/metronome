@@ -19,7 +19,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
                 @compileError("Does not support none power of two integers");
             return @as(usize, i.bits / 8);
         },
-        .Enum => return packedLength(@enumToInt(value)) catch unreachable,
+        .Enum => return packedLength(@intFromEnum(value)) catch unreachable,
         .Array => {
             var res: usize = 0;
             for (value) |item|
@@ -115,7 +115,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
                 return null;
 
             var buf = [_]u8{0} ** @sizeOf(Command);
-            const len = math.min(bytes.len, buf.len);
+            const len = @min(bytes.len, buf.len);
 
             // Copy the bytes to a buffer of size @sizeOf(Command).
             // The reason this is done is that s.len might be smaller

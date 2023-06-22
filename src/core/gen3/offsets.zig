@@ -28,8 +28,8 @@ pub fn Offset(comptime _T: type, comptime _alignment: u29) type {
             data_slice: []align(alignment) const u8,
             p: *align(alignment) const T,
         ) @This() {
-            const data_ptr = @ptrToInt(data_slice.ptr);
-            const item_ptr = @ptrToInt(p);
+            const data_ptr = @intFromPtr(data_slice.ptr);
+            const item_ptr = @intFromPtr(p);
             debug.assert(data_ptr <= item_ptr);
             debug.assert(item_ptr + @sizeOf(T) <= data_ptr + data_slice.len);
 
@@ -63,8 +63,8 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
             data_slice: []align(alignment) const u8,
             items: []align(alignment) const Item,
         ) @This() {
-            const data_ptr = @ptrToInt(data_slice.ptr);
-            const item_ptr = @ptrToInt(items.ptr);
+            const data_ptr = @intFromPtr(data_slice.ptr);
+            const item_ptr = @intFromPtr(items.ptr);
             debug.assert(data_ptr <= item_ptr);
             debug.assert(item_ptr + items.len * @sizeOf(Item) <= data_ptr + data_slice.len);
 

@@ -80,7 +80,7 @@ pub fn run(
 fn output(program: *Program, writer: anytype) !void {
     for (program.wild_pokemons.keys(), program.wild_pokemons.values()) |zone_id, zone| {
         for (zone.wild_areas, 0..) |area, i| {
-            const area_id = @intToEnum(meta.Tag(format.WildPokemons), @intCast(u5, i));
+            const area_id = @enumFromInt(meta.Tag(format.WildPokemons), @intCast(u5, i));
             try ston.serialize(writer, .{
                 .wild_pokemons = ston.index(zone_id, ston.field(@tagName(area_id), .{
                     .pokemons = area.pokemons,
@@ -103,7 +103,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             switch (pokemons.value) {
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
-                .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .stats => |stats| pokemon.stats[@intFromEnum(stats)] = stats.value(),
                 .types,
                 .base_exp_yield,
                 .items,
@@ -129,7 +129,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 wild_areas.index,
                 .{},
             )).value_ptr;
-            const area = &zone.wild_areas[@enumToInt(wild_areas.value)];
+            const area = &zone.wild_areas[@intFromEnum(wild_areas.value)];
             const wild_area = wild_areas.value.value();
 
             switch (wild_area) {

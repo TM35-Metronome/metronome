@@ -125,12 +125,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                 .pokedex_entry => |pokedex_entry| pokemon.pokedex_entry = pokedex_entry,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
-                .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .stats => |stats| pokemon.stats[@intFromEnum(stats)] = stats.value(),
                 .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
                 .abilities => |abilities| _ = try pokemon.abilities.put(allocator, abilities.value, {}),
-                .egg_groups => |egg_groups| _ = try pokemon.egg_groups.put(allocator, @enumToInt(egg_groups.value), {}),
+                .egg_groups => |egg_groups| _ = try pokemon.egg_groups.put(allocator, @intFromEnum(egg_groups.value), {}),
                 .evos => |evos| {
-                    program.max_evolutions = math.max(program.max_evolutions, evos.index + 1);
+                    program.max_evolutions = @max(program.max_evolutions, evos.index + 1);
                     const evo = (try pokemon.evos.getOrPutValue(allocator, evos.index, .{})).value_ptr;
                     format.setField(evo, evos.value);
                     return;
@@ -223,10 +223,10 @@ fn randomize(program: *Program) !void {
         var desc = item.desc;
         while (mem.indexOf(u8, desc.bytes, "\n")) |index| {
             const line = Utf8.init(desc.bytes[0..index]) catch unreachable;
-            max_line_len = math.max(line.len, max_line_len);
+            max_line_len = @max(line.len, max_line_len);
             desc = Utf8.init(desc.bytes[index + 1 ..]) catch unreachable;
         }
-        max_line_len = math.max(desc.len, max_line_len);
+        max_line_len = @max(desc.len, max_line_len);
     }
 
     // HACK: The games does not used mono fonts, so actually, using the
@@ -557,7 +557,7 @@ fn randomize(program: *Program) !void {
                             for (pokemon.stats) |item| res += item;
                             break :blk2 res;
                         },
-                        growth_stone => @enumToInt(pokemon.growth_rate),
+                        growth_stone => @intFromEnum(pokemon.growth_rate),
                         buddy_stone => pokemon.base_friendship,
                         else => unreachable,
                     };
@@ -634,7 +634,7 @@ fn friendshipFilter(pokemon: Pokemon, buf: []u16) []const u16 {
 }
 
 fn growthRateFilter(pokemon: Pokemon, buf: []u16) []const u16 {
-    buf[0] = @enumToInt(pokemon.growth_rate);
+    buf[0] = @intFromEnum(pokemon.growth_rate);
     return buf[0..1];
 }
 

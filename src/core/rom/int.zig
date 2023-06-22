@@ -34,12 +34,12 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
 
         pub fn init(v: Inner) @This() {
             @setEvalBranchQuota(100000000);
-            return @intToEnum(@This(), swap(v));
+            return @enumFromInt(@This(), swap(v));
         }
 
         /// Converts the integer to native endianness and returns it.
         pub fn value(int: @This()) Inner {
-            return swap(@enumToInt(int));
+            return swap(@intFromEnum(int));
         }
 
         pub fn format(
@@ -67,12 +67,12 @@ test "Int" {
     try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, @ptrCast(*const [4]u8, &numBig));
     switch (native_endian) {
         .Big => {
-            try testing.expectEqual(@as(u32, 0x78563412), @enumToInt(numLittle));
-            try testing.expectEqual(value, @enumToInt(numBig));
+            try testing.expectEqual(@as(u32, 0x78563412), @intFromEnum(numLittle));
+            try testing.expectEqual(value, @intFromEnum(numBig));
         },
         .Little => {
-            try testing.expectEqual(@as(u32, 0x78563412), @enumToInt(numBig));
-            try testing.expectEqual(value, @enumToInt(numLittle));
+            try testing.expectEqual(@as(u32, 0x78563412), @intFromEnum(numBig));
+            try testing.expectEqual(value, @intFromEnum(numLittle));
         },
     }
 }

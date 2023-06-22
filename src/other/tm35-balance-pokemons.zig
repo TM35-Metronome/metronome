@@ -174,8 +174,8 @@ fn balance(program: *Program) !void {
                 const pokemon = program.pokemons.getPtr(species).?;
                 const stats = pokemon.statsToArray();
                 const total_stats = ziter.deref(stats.slice()).sum(u16);
-                max_total_stats = math.max(max_total_stats, total_stats);
-                min_total_stats = math.min(min_total_stats, total_stats);
+                max_total_stats = @max(max_total_stats, total_stats);
+                min_total_stats = @min(min_total_stats, total_stats);
             }
 
             for (species_set.keys()) |species| {
@@ -222,7 +222,7 @@ fn countEvolutions(program: Program, species: u16) u8 {
     var res: u8 = 0;
     for (pokemon.evos.values()) |evo| {
         const evos = program.countEvolutions(evo.target);
-        res = math.max(res, evos + 1);
+        res = @max(res, evos + 1);
     }
 
     return res;
@@ -254,10 +254,10 @@ fn statBuff(min_total_stats: u16, max_total_stats: u16, total_stats: u16) u16 {
 
     const total_min_diff = total_stats - min_total_stats;
     const min_max_diff = max_total_stats - min_total_stats;
-    const fmin_max_diff = @intToFloat(f64, min_max_diff);
-    const x = @intToFloat(f64, min_max_diff - total_min_diff);
+    const fmin_max_diff = @floatFromInt(f64, min_max_diff);
+    const x = @floatFromInt(f64, min_max_diff - total_min_diff);
     const @"x^2" = math.pow(f64, x, 2);
-    return @floatToInt(u16, math.max(0, @"x^2" / (fmin_max_diff * 1.4) - (3 * x) / 14));
+    return @intFromFloat(u16, @max(0, @"x^2" / (fmin_max_diff * 1.4) - (3 * x) / 14));
 }
 
 fn statBuffNewTotal(min_total_stats: u16, max_total_stats: u16, total_stats: u16) u16 {

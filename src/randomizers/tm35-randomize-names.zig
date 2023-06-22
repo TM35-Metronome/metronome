@@ -170,7 +170,7 @@ fn randomize(program: *Program) !void {
                 .value_ptr;
             occurrence.* += 1;
             node.total += 1;
-            max = math.max(max, item.name.value.len);
+            max = @max(max, item.name.value.len);
         }
 
         // Generate our random names from our pair map. This is done by picking a C2

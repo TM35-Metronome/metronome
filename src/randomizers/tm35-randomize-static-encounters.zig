@@ -135,7 +135,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
             const pokemon_kv = try program.pokemons.getOrPutValue(allocator, pokemons.index, .{});
             const pokemon = pokemon_kv.value_ptr;
             switch (pokemons.value) {
-                .stats => |stats| pokemon.stats[@enumToInt(stats)] = stats.value(),
+                .stats => |stats| pokemon.stats[@intFromEnum(stats)] = stats.value(),
                 .types => |types| _ = try pokemon.types.put(allocator, types.value, {}),
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
@@ -366,18 +366,18 @@ fn randomize(program: *Program) !void {
 
                     // Legendaries are generally in the "slow" to "medium_slow"
                     // growth rating
-                    rating.* += @as(isize, @boolToInt(pokemon.growth_rate == .slow or
+                    rating.* += @as(isize, @intFromBool(pokemon.growth_rate == .slow or
                         pokemon.growth_rate == .medium_slow));
 
                     // They generally have a catch rate of 45 or less
-                    rating.* += @as(isize, @boolToInt(pokemon.catch_rate <= 45));
+                    rating.* += @as(isize, @intFromBool(pokemon.catch_rate <= 45));
 
                     // They tend to not have a gender (255 in gender_ratio means
                     // genderless).
-                    rating.* += @as(isize, @boolToInt(pokemon.gender_ratio == 255));
+                    rating.* += @as(isize, @intFromBool(pokemon.gender_ratio == 255));
 
                     // Most are part of the "undiscovered" egg group
-                    rating.* += @as(isize, @boolToInt(pokemon.egg_group == .undiscovered));
+                    rating.* += @as(isize, @intFromBool(pokemon.egg_group == .undiscovered));
 
                     // And they don't evolve from anything. Subtract
                     // score from this Pokemons evolutions.
@@ -391,7 +391,7 @@ fn randomize(program: *Program) !void {
                 const rating_to_be_legendary = blk: {
                     var res: isize = 0;
                     for (ratings.values()) |rating|
-                        res = math.max(res, rating);
+                        res = @max(res, rating);
 
                     // Not all legendaries match all criteria. Let's
                     // allow for legendaries that miss on criteria.

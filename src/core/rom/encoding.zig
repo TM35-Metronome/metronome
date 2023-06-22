@@ -16,8 +16,8 @@ pub const CharMap = []const Char;
 /// into entries in `map`. `writer` will always be the opposite encoding
 /// of `reader`.
 pub fn encodeEx(map: CharMap, curr: u1, reader: anytype, writer: anytype) !void {
-    const in: usize = @boolToInt(curr == 1);
-    const out: usize = @boolToInt(curr != 1);
+    const in: usize = @intFromBool(curr == 1);
+    const out: usize = @intFromBool(curr != 1);
     var buf: [16]u8 = undefined;
     var len: usize = 0;
 

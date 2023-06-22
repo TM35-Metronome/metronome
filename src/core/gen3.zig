@@ -859,7 +859,7 @@ pub const Game = struct {
             .{ .start = game.free_offset, .end = game.data.len },
             .{ .start = 0, .end = game.free_offset },
         }) |range| {
-            var i = mem.alignForward(range.start, 4);
+            var i = mem.alignForward(usize, range.start, 4);
             outer: while (i + size <= range.end) : (i += 4) {
                 // We ensure that the byte before our start byte is
                 // also 0xff. This is because we want to ensure that

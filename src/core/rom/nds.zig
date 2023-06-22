@@ -49,7 +49,7 @@ pub const Slice = extern struct {
     len: lu32,
 
     pub fn fromSlice(data: []const u8, s: []const u8) Slice {
-        const start = @ptrToInt(s.ptr) - @ptrToInt(data.ptr);
+        const start = @intFromPtr(s.ptr) - @intFromPtr(data.ptr);
         return init(start, s.len);
     }
 
@@ -271,7 +271,7 @@ pub const Rom = struct {
             const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
 
-            const new_start = mem.alignForward(last_section_end, 128);
+            const new_start = mem.alignForward(usize, last_section_end, 128);
             const section = sections[section_index];
             section.set(data.items, Slice.init(new_start, new_size));
             end = section.toSlice(data.items).end();
@@ -383,9 +383,9 @@ pub const Rom = struct {
             start: *align(1) const lu32,
             other: *align(1) const lu32,
         ) Section {
-            const data_end = @ptrToInt(data.ptr) + data.len;
-            const start_index = @ptrToInt(start) - @ptrToInt(data.ptr);
-            const other_index = @ptrToInt(other) - @ptrToInt(data.ptr);
+            const data_end = @intFromPtr(data.ptr) + data.len;
+            const start_index = @intFromPtr(start) - @intFromPtr(data.ptr);
+            const other_index = @intFromPtr(other) - @intFromPtr(data.ptr);
             debug.assert(start_index + @sizeOf(lu32) <= data_end);
             debug.assert(other_index + @sizeOf(lu32) <= data_end);
             debug.assert(kind == .slice or start.value() <= other.value());
@@ -401,10 +401,10 @@ pub const Rom = struct {
             // is safe, as `getPtr` only needs a mutable pointer so that
             // it can return one. We don't modify the pointee, so there
             // is nothing unsafe about this discard.
-            const const_discarded = @intToPtr([*]u8, @ptrToInt(data.ptr))[0..data.len];
+            const const_discarded = @ptrFromInt([*]u8, @intFromPtr(data.ptr))[0..data.len];
             const start = section.getPtr(const_discarded, .start).value();
             const other = section.getPtr(const_discarded, .other).value();
-            const len = other - start * @boolToInt(section.kind == .range);
+            const len = other - start * @intFromBool(section.kind == .range);
             return Slice.init(start, len);
         }
 

@@ -12,8 +12,8 @@ pub fn castAwayConst(ptr: anytype) ToNonConstPointer(@TypeOf(ptr)) {
         .Many,
         .C,
         => {
-            const addr = @ptrToInt(ptr);
-            return @intToPtr(ToNonConstPointer(T), addr);
+            const addr = @intFromPtr(ptr);
+            return @ptrFromInt(ToNonConstPointer(T), addr);
         },
         .Slice => return castAwayConst(ptr.ptr)[0..ptr.len],
     }

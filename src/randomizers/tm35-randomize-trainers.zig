@@ -284,7 +284,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                         c.* = ascii.toLower(c.*);
                 },
                 .stats => |stats| {
-                    const stat = @enumToInt(stats);
+                    const stat = @intFromEnum(stats);
                     if (pokemon.stats[stat] > stats.value()) {
                         pokemon.total_stats -= pokemon.stats[stat] - stats.value();
                     } else {
@@ -585,7 +585,7 @@ fn fillWithRandomMoves(random: rand.Random, all_moves: []const u16, moves: []u16
         // We need to have more moves in the game than the party member can have,
         // otherwise, we cannot pick only unique moves. Also, move `0` is the
         // `null` move, so we don't count that as a move we can pick from.
-        if (all_moves.len - @boolToInt(has_null_move) <= i) {
+        if (all_moves.len - @intFromBool(has_null_move) <= i) {
             move.* = 0;
             continue;
         }
@@ -768,10 +768,10 @@ fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_s
 }
 
 fn levelScaling(min: u16, max: u16, level: u16) u16 {
-    const fmin = @intToFloat(f64, min);
-    const fmax = @intToFloat(f64, max);
+    const fmin = @floatFromInt(f64, min);
+    const fmax = @floatFromInt(f64, max);
     const diff = fmax - fmin;
-    const x = @intToFloat(f64, level);
+    const x = @floatFromInt(f64, level);
 
     // Function adapted from -0.0001 * x^2 + 0.02 * x
     // This functions grows fast at the start, getting 75%
@@ -780,7 +780,7 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
     const b = 0.02 * diff;
     const xp2 = math.pow(f64, x, 2);
     const res = a * xp2 + b * x + fmin;
-    return @floatToInt(u16, res);
+    return @intFromFloat(u16, res);
 }
 
 fn findAbility(_abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
@@ -840,8 +840,8 @@ fn minMaxStats(pokemons: Pokemons, species: Set) MinMax(u16) {
     };
     for (species.keys()) |s| {
         const pokemon = pokemons.get(s).?;
-        res.min = math.min(res.min, pokemon.total_stats);
-        res.max = math.max(res.max, pokemon.total_stats);
+        res.min = @min(res.min, pokemon.total_stats);
+        res.max = @max(res.max, pokemon.total_stats);
     }
     return res;
 }
@@ -884,8 +884,8 @@ fn speciesByDualType(
             0 => continue,
             1 => [2]u16{ p_types[0], p_types[0] },
             else => [2]u16{
-                math.min(p_types[0], p_types[1]),
-                math.max(p_types[0], p_types[1]),
+                @min(p_types[0], p_types[1]),
+                @max(p_types[0], p_types[1]),
             },
         };
 
@@ -927,7 +927,7 @@ const Trainer = struct {
         var sum: u16 = 0;
         for (trainer.party.values()) |member| {
             sum += member.level orelse 0;
-            count += @boolToInt(member.level != null);
+            count += @intFromBool(member.level != null);
         }
         if (count == 0)
             return 2;
@@ -964,7 +964,7 @@ const RelativeMove = struct {
     fn from(p: Pokemon, m: Move) RelativeMove {
         const is_stab = p.types.get(m.type) != null;
         return RelativeMove{
-            .power = @as(u16, m.power) + (m.power / 2) * @boolToInt(is_stab),
+            .power = @as(u16, m.power) + (m.power / 2) * @intFromBool(is_stab),
             .accuracy = m.accuracy,
             .pp = m.pp,
         };

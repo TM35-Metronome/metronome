@@ -230,7 +230,7 @@ pub fn parse(allocator: mem.Allocator, path: []const u8, str: []const u8) !Setti
         commands.deinit(allocator);
     }
 
-    for (res.commands) |command| {
+    for (res.value.commands) |command| {
         var cmd = try Command.init(allocator, command.name);
         errdefer cmd.deinit(allocator);
 
@@ -247,10 +247,10 @@ pub fn parse(allocator: mem.Allocator, path: []const u8, str: []const u8) !Setti
     var path_list = try toArrayList(u8, allocator, path);
     errdefer path_list.deinit(allocator);
 
-    var name = try toArrayList(u8, allocator, res.name);
+    var name = try toArrayList(u8, allocator, res.value.name);
     errdefer name.deinit(allocator);
 
-    var description = try toArrayList(u8, allocator, res.description);
+    var description = try toArrayList(u8, allocator, res.value.description);
     errdefer description.deinit(allocator);
 
     return Settings{
@@ -315,6 +315,8 @@ pub fn loadAllFrom(allocator: mem.Allocator, path: []const u8) !std.ArrayListUnm
                 error.UnexpectedToken,
                 error.UnknownField,
                 error.ValueTooLong,
+                error.InvalidEnumTag,
+                error.LengthMismatch,
                 => {},
 
                 error.AccessDenied,

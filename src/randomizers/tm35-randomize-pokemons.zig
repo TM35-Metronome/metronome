@@ -426,7 +426,7 @@ fn randomizeStatsEx(
         for (stats_to_start_from.slice()) |item| min_total += item;
 
         const max_total = stats_to_start_from.len * math.maxInt(u8);
-        break :blk random.intRangeAtMost(usize, math.min(min_total, max_total), max_total);
+        break :blk random.intRangeAtMost(usize, @min(min_total, max_total), max_total);
     };
 
     var stats = stats_to_start_from;
@@ -450,7 +450,7 @@ fn randomUntilSum(
     var curr: usize = 0;
     for (buf) |item| curr += item;
 
-    const max = math.min(sum, buf.len * math.maxInt(T));
+    const max = @min(sum, buf.len * math.maxInt(T));
     while (curr < max) {
         const item = util.random.item(random, buf).?;
         const old = item.*;

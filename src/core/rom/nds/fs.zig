@@ -393,7 +393,7 @@ pub const Builder = struct {
         var buf: [1024]u8 = undefined;
         var fbs = io.fixedBufferStream(&buf);
         const len = @intCast(u7, dir_name.len);
-        const kind = @as(u8, @boolToInt(true)) << 7;
+        const kind = @as(u8, @intFromBool(true)) << 7;
         const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(dir_name);
@@ -442,7 +442,7 @@ pub const Builder = struct {
         var buf: [1024]u8 = undefined;
         var fbs = io.fixedBufferStream(&buf);
         const len = @intCast(u7, file_name.len);
-        const kind = @as(u8, @boolToInt(false)) << 7;
+        const kind = @as(u8, @intFromBool(false)) << 7;
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(file_name);
 

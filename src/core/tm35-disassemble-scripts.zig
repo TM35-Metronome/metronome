@@ -182,7 +182,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @intToEnum(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        @enumFromInt(lu16, @bitCast(u16, rest[0..2].*)).value(),
                         decoder.i,
                     }),
                 }
@@ -244,7 +244,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @intToEnum(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        @enumFromInt(lu16, @bitCast(u16, rest[0..2].*)).value(),
                         decoder.i,
                     }),
                 }

@@ -409,11 +409,11 @@ pub fn Searcher(
 
         pub fn find4(data: []u8, start: []const T, end: []const T) ![]align(alignment) T {
             const found_start = try findSliceHelper(data, 0, 1, start);
-            const start_offset = @ptrToInt(found_start.ptr);
-            const next_offset = (start_offset - @ptrToInt(data.ptr)) + start.len * @sizeOf(T);
+            const start_offset = @intFromPtr(found_start.ptr);
+            const next_offset = (start_offset - @intFromPtr(data.ptr)) + start.len * @sizeOf(T);
 
             const found_end = try findSliceHelper(data, next_offset, @sizeOf(T), end);
-            const end_offset = @ptrToInt(found_end.ptr) + found_end.len * @sizeOf(T);
+            const end_offset = @intFromPtr(found_end.ptr) + found_end.len * @sizeOf(T);
             const len = @divExact(end_offset - start_offset, @sizeOf(T));
 
             return @alignCast(alignment, found_start.ptr[0..len]);
@@ -1338,7 +1338,7 @@ pub const rs_pokedex_end = [_]gen3.RSFrLgPokedexEntry{
 };
 
 fn percentFemale(percent: f64) u8 {
-    return @floatToInt(u8, math.min(@as(f64, 254), (percent * 255) / 100));
+    return @intFromFloat(u8, @min(@as(f64, 254), (percent * 255) / 100));
 }
 
 const unused_evo = gen3.Evolution{

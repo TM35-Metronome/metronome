@@ -161,7 +161,7 @@ fn findCommands(arena: *heap.ArenaAllocator, tmp_arena: *heap.ArenaAllocator) ![
 
     const strings = try json.parseFromSlice([]const []const u8, tmp_arena.allocator(), content, .{});
     var res = std.ArrayList(Command).init(arena.allocator());
-    for (strings) |string| {
+    for (strings.value) |string| {
         if (fs.path.isAbsolute(string)) {
             const command = pathToCommand(arena, string) catch continue;
             try res.append(command);

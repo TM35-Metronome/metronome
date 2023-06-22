@@ -162,7 +162,7 @@ pub fn runProgramFindPatterns(comptime Program: type, opt: FindMatchesOptions) !
     var it = mem.split(u8, str, "\n");
     while (it.next()) |line| {
         for (opt.patterns, matches) |pattern, *match|
-            match.* += @boolToInt(pattern.matches(pattern.ctx, line));
+            match.* += @intFromBool(pattern.matches(pattern.ctx, line));
     }
 
     var fail = false;

@@ -359,7 +359,7 @@ fn discardConst(ptr: anytype) DiscardConst(@TypeOf(ptr)) {
             const res = discardConst(ptr.ptr);
             return res[0..ptr.len];
         },
-        else => return @intToPtr(Res, @ptrToInt(ptr)),
+        else => return @ptrFromInt(Res, @intFromPtr(ptr)),
     }
 }
 
@@ -998,13 +998,10 @@ fn wrap(
         }
 
         fn call(program: *Program, req: []const u8) !void {
-            var parser = std.json.Parser.init(program.allocator, .alloc_if_needed);
-            defer parser.deinit();
-
-            var parsed = try parser.parse(req);
+            var parsed = try std.json.parseFromSlice(std.json.Value, program.allocator, req, .{});
             defer parsed.deinit();
 
-            const tree = parsed.root;
+            const tree = parsed.value;
             const info = @typeInfo(@TypeOf(func)).Fn;
             switch (info.params.len) {
                 1 => try func(program),

@@ -139,7 +139,7 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
         }
 
         const match = search(pos_best, raw_buffer, raw, raw_end);
-        pos_best = @ptrToInt(match.ptr) - @ptrToInt(raw_buffer.ptr);
+        pos_best = @intFromPtr(match.ptr) - @intFromPtr(raw_buffer.ptr);
 
         pak_buffer[flg] = (pak_buffer[flg] << 1);
         if (match.len > threshold) {
@@ -231,7 +231,7 @@ fn search(_p: usize, raw_buffer: []const u8, raw: usize, raw_end: usize) []const
     // in any way, as this compression method does not care about the window size when decoding.
     // const blz_n = 0x1002;
     const blz_n = 0x128;
-    const max = math.min(raw, blz_n);
+    const max = @min(raw, blz_n);
 
     var p = _p;
     var l: usize = threshold;

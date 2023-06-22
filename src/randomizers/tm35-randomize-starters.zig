@@ -213,7 +213,7 @@ fn countEvos(evolves_to: Evolutions, pokemon: u16) usize {
     // TODO: We don't handle cycles here.
     for (evolutions.keys()) |evo| {
         const evos = countEvos(evolves_to, evo) + 1;
-        res = math.max(res, evos);
+        res = @max(res, evos);
     }
 
     return res;

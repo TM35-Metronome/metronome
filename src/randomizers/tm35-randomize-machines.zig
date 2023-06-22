@@ -194,10 +194,10 @@ fn randomize(program: *Program) !void {
         var desc = item.description;
         while (mem.indexOf(u8, desc.bytes, "\n")) |index| {
             const line = Utf8.init(desc.bytes[0..index]) catch unreachable;
-            max_line_len = math.max(line.len, max_line_len);
+            max_line_len = @max(line.len, max_line_len);
             desc = Utf8.init(desc.bytes[index + 1 ..]) catch unreachable;
         }
-        max_line_len = math.max(description.len, max_line_len);
+        max_line_len = @max(description.len, max_line_len);
     }
 
     // HACK: The games does not used mono fonts, so actually, using the

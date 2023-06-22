@@ -256,7 +256,7 @@ fn useGame(ctx: anytype, game: format.Game) !void {
                 fmt.fmtSliceHexLower(p.replacement),
             });
 
-            try program.old_bytes.resize(program.allocator, math.max(
+            try program.old_bytes.resize(program.allocator, @max(
                 program.old_bytes.items.len,
                 p.offset + p.replacement.len,
             ));
@@ -331,7 +331,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             }
         },
         .moves => |moves| {
-            if (moves.index >= math.min(game.move_names.len, game.moves.len))
+            if (moves.index >= @min(game.move_names.len, game.moves.len))
                 return error.Error;
 
             const move = &game.moves[moves.index];
@@ -452,7 +452,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     if (ms.index >= len)
                         return error.Error;
 
-                    const index = ms.index + game.tms.len * @boolToInt(!is_tms);
+                    const index = ms.index + game.tms.len * @intFromBool(!is_tms);
                     const learnset = &game.machine_learnsets[pokemons.index];
                     learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, index), ms.value));
                 },
@@ -905,7 +905,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     if (ms.index >= len)
                         return error.Error;
 
-                    const index = ms.index + game.ptrs.tms.len * @boolToInt(!is_tms);
+                    const index = ms.index + game.ptrs.tms.len * @intFromBool(!is_tms);
                     const learnset = &pokemon.machine_learnset;
                     learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
                 },

@@ -443,12 +443,12 @@ fn generate(writer: anytype, game: Game) !void {
         var total_stats: usize = 0;
         inline for (stat_names) |stat| {
             const value = @field(pokemon.stats, stat[0]);
-            const percent = @floatToInt(usize, (@intToFloat(f64, value) / 255) * 100);
+            const percent = @intFromFloat(usize, (@floatFromInt(f64, value) / 255) * 100);
             try writer.print("<tr><td>{s}:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_{s}\">{}</div></td></tr>\n", .{ stat[1], percent, stat[0], value });
             total_stats += value;
         }
 
-        const percent = @floatToInt(usize, (@intToFloat(f64, total_stats) / 1000) * 100);
+        const percent = @intFromFloat(usize, (@floatFromInt(f64, total_stats) / 1000) * 100);
         try writer.print("<tr><td>Total:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
         try writer.writeAll(
             \\</table></details>
@@ -520,7 +520,7 @@ fn generate(writer: anytype, game: Game) !void {
             \\
         );
         const party = trainer.party.values();
-        for (party[0..math.min(party.len, trainer.party_size)]) |member| {
+        for (party[0..@min(party.len, trainer.party_size)]) |member| {
             const pokemon = game.pokemons.get(member.species);
             const pokemon_name = humanize(if (pokemon) |p| p.name else unknown);
             const ability_id = if (pokemon) |p| p.abilities.get(member.ability) else null;

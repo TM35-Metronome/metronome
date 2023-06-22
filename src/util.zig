@@ -92,8 +92,8 @@ pub fn CustomStdIoStreams(comptime _Reader: type, comptime _Writer: type) type {
 /// Given a slice and a pointer, returns the pointers index into the slice.
 /// ptr has to point into slice.
 pub fn indexOfPtr(comptime T: type, slice: []const T, ptr: *const T) usize {
-    const start = @ptrToInt(slice.ptr);
-    const item = @ptrToInt(ptr);
+    const start = @intFromPtr(slice.ptr);
+    const item = @intFromPtr(ptr);
     const dist_from_start = item - start;
     const res = @divExact(dist_from_start, @sizeOf(T));
     debug.assert(res < slice.len);

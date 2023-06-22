@@ -20,7 +20,7 @@ pub const PatchIterator = struct {
     i: usize = 0,
 
     pub fn next(it: *PatchIterator) ?Patch {
-        const end_it = math.min(it.old.len, it.new.len);
+        const end_it = @min(it.old.len, it.new.len);
 
         const chunk_size = @sizeOf(u256);
         while (it.i + chunk_size <= end_it) : (it.i += chunk_size) {

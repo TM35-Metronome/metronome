@@ -140,8 +140,8 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         },
         .pokemons => |pokemons| switch (pokemons.value) {
             .base_exp_yield => |yield| if (program.options.exp_scale != 1.0) {
-                const new_yield_float = math.floor(@intToFloat(f64, yield) * program.options.exp_scale);
-                const new_yield = @floatToInt(u16, new_yield_float);
+                const new_yield_float = math.floor(@floatFromInt(f64, yield) * program.options.exp_scale);
+                const new_yield = @intFromFloat(u16, new_yield_float);
                 return out.print(".pokemons[{}].base_exp_yield={}\n", .{
                     pokemons.index,
                     new_yield,
@@ -183,8 +183,8 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         .trainers => |trainers| switch (trainers.value) {
             .party => |party| switch (party.value) {
                 .level => |level| if (program.options.trainer_scale != 1.0) {
-                    const new_level_float = math.floor(@intToFloat(f64, level) * program.options.trainer_scale);
-                    const new_level = @floatToInt(u8, math.min(new_level_float, 100));
+                    const new_level_float = math.floor(@floatFromInt(f64, level) * program.options.trainer_scale);
+                    const new_level = @intFromFloat(u8, @min(new_level_float, 100));
                     return out.print(".trainers[{}].party[{}].level={}\n", .{
                         trainers.index,
                         party.index,
@@ -202,8 +202,8 @@ fn useGame(ctx: anytype, game: format.Game) !void {
             switch (wild_area) {
                 .pokemons => |pokemons| switch (pokemons.value) {
                     .min_level, .max_level => |level| if (program.options.wild_scale != 1.0) {
-                        const new_level_float = math.floor(@intToFloat(f64, level) * program.options.wild_scale);
-                        const new_level = @floatToInt(u8, math.min(new_level_float, 100));
+                        const new_level_float = math.floor(@floatFromInt(f64, level) * program.options.wild_scale);
+                        const new_level = @intFromFloat(u8, @min(new_level_float, 100));
                         return out.print(".wild_pokemons[{}].{s}.pokemons[{}].{s}={}\n", .{
                             wild_areas.index,
                             @tagName(wild_areas.value),
@@ -222,9 +222,9 @@ fn useGame(ctx: anytype, game: format.Game) !void {
         .static_pokemons => |pokemons| switch (pokemons.value) {
             .level => |level| if (program.options.static_scale != 1.0) {
                 const new_level_float = math.floor(
-                    @intToFloat(f64, level) * program.options.static_scale,
+                    @floatFromInt(f64, level) * program.options.static_scale,
                 );
-                const new_level = @floatToInt(u8, math.min(new_level_float, 100));
+                const new_level = @intFromFloat(u8, @min(new_level_float, 100));
                 return out.print(".static_pokemons[{}].level={}\n", .{ pokemons.index, new_level });
             } else {
                 return error.DidNotConsumeData;

@@ -346,11 +346,11 @@ pub const Item = extern struct {
     unknown: [26]u8,
 
     pub fn pocket(item: Item) Pocket {
-        return @intToEnum(Pocket, item._pocket & 0x0F);
+        return @enumFromInt(Pocket, item._pocket & 0x0F);
     }
 
     pub fn setPocket(item: *align(1) Item, p: Pocket) void {
-        item._pocket = (item._pocket & 0xf0) | @enumToInt(p);
+        item._pocket = (item._pocket & 0xf0) | @intFromEnum(p);
     }
 
     comptime {
@@ -624,7 +624,7 @@ fn decrypt(data: []align(1) const lu16, out: anytype) !u16 {
     const res = table.get(data.len, 0);
     const first = data[0].value() ^ res;
     const compressed = first == 0xF100;
-    const start = @boolToInt(compressed);
+    const start = @intFromBool(compressed);
 
     var bits: u5 = 0;
     var container: u32 = 0;
