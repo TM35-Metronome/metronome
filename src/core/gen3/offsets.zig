@@ -81,7 +81,7 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
             // This is safe because:
             // * We have asserted when initializing that the offset is aligned
             // * The data slice is also aligned
-            return @alignCast(alignment, result);
+            return @alignCast(result);
         }
     };
 }

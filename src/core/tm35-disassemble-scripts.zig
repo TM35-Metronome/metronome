@@ -112,7 +112,7 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
             if (s.type == 2 or s.type == 4)
                 continue;
 
-            const script_data = try s.addr().other.toSliceEnd(game.data);
+            const script_data = try s.addr.other.toSliceEnd(game.data);
             var decoder = gen3.script.CommandDecoder{ .bytes = script_data };
             try writer.print("map_header[{}].map_script[{}]:\n", .{ map_id, script_id });
             while (try decoder.next()) |command|
@@ -147,13 +147,13 @@ fn outputGen3GameScripts(game: gen3.Game, writer: anytype) !void {
 fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat, 0..) |_, script_i| {
-        const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
+        const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(script_i) });
         var offsets = std.ArrayList(isize).init(allocator);
         defer offsets.deinit();
 
         for (gen4.script.getScriptOffsets(script_data), 0..) |relative_offset, i| {
-            const offset = relative_offset.value() + @intCast(isize, i + 1) * @sizeOf(lu32);
-            if (@intCast(isize, script_data.len) < offset)
+            const offset = relative_offset.value() + @as(isize, @intCast(i + 1)) * @sizeOf(lu32);
+            if (@as(isize, @intCast(script_data.len)) < offset)
                 continue;
             if (offset < 0)
                 continue;
@@ -164,14 +164,14 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
         while (offset_i < offsets.items.len) : (offset_i += 1) {
             const offset = offsets.items[offset_i];
             try writer.print("script[{}]@0x{x}:\n", .{ script_i, offset });
-            if (@intCast(isize, script_data.len) < offset)
+            if (@as(isize, @intCast(script_data.len)) < offset)
                 continue;
             if (offset < 0)
                 continue;
 
             var decoder = gen4.script.CommandDecoder{
                 .bytes = script_data,
-                .i = @intCast(usize, offset),
+                .i = @intCast(offset),
             };
             while (decoder.next() catch {
                 const rest = decoder.bytes[decoder.i..];
@@ -182,7 +182,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @enumFromInt(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        @as(lu16, @enumFromInt(@as(u16, @bitCast(rest[0..2].*)))).value(),
                         decoder.i,
                     }),
                 }
@@ -199,7 +199,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
                             .compare_last_result_jump => command.compare_last_result_jump.adr.value(),
                             else => unreachable,
                         };
-                        const location = off + @intCast(isize, decoder.i);
+                        const location = off + @as(isize, @intCast(decoder.i));
                         if (mem.indexOfScalar(isize, offsets.items, location) == null)
                             try offsets.append(location);
                     },
@@ -213,13 +213,13 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
 fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anytype) anyerror!void {
     @setEvalBranchQuota(100000);
     for (game.ptrs.scripts.fat, 0..) |_, script_i| {
-        const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(u32, script_i) });
+        const script_data = game.ptrs.scripts.fileData(.{ .i = @intCast(script_i) });
 
         var offsets = std.ArrayList(usize).init(allocator);
         defer offsets.deinit();
 
         for (gen5.script.getScriptOffsets(script_data), 0..) |relative, i| {
-            const position = @intCast(isize, i + 1) * @sizeOf(lu32);
+            const position = @as(isize, @intCast(i + 1)) * @sizeOf(lu32);
             const offset = math.cast(usize, relative.value() + position) orelse continue;
             if (script_data.len < offset)
                 continue;
@@ -244,7 +244,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @enumFromInt(lu16, @bitCast(u16, rest[0..2].*)).value(),
+                        @as(lu16, @enumFromInt(@as(u16, @bitCast(rest[0..2].*)))).value(),
                         decoder.i,
                     }),
                 }
@@ -260,7 +260,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                             .call_routine => command.call_routine.offset.value(),
                             else => unreachable,
                         };
-                        if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
+                        if (math.cast(usize, off + @as(isize, @intCast(decoder.i)))) |loc| {
                             if (loc < script_data.len and
                                 mem.indexOfScalar(usize, offsets.items, loc) == null)
                                 try offsets.append(loc);

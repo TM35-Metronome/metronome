@@ -44,7 +44,7 @@ pub fn RelativePointer(
         const child_size: usize = @sizeOf(ptr_info.child);
         const Data = if (ptr_info.is_const) []const u8 else []u8;
         const is_optional = @typeInfo(Ptr) == .Optional;
-        const ptr_sentinel = @ptrCast(*const ptr_info.child, ptr_info.sentinel.?).*;
+        const ptr_sentinel = @as(*const ptr_info.child, @ptrCast(ptr_info.sentinel.?)).*;
 
         /// Given a slice of data, and a pointer that points into this
         /// data, construct a `RelativePointer`.
@@ -54,7 +54,7 @@ pub fn RelativePointer(
             if (is_optional and ptr_is_optional and ptr == null)
                 return @This(){ .inner = Inner.init(null_ptr) };
 
-            const i = @intCast(Int, @intFromPtr(ptr) - @intFromPtr(data.ptr));
+            const i: Int = @intCast(@intFromPtr(ptr) - @intFromPtr(data.ptr));
             if (data.len < i + child_size)
                 return error.InvalidPointer;
 
@@ -72,7 +72,7 @@ pub fn RelativePointer(
             if (data.len < i + child_size * @intFromBool(ptr_info.size == .One))
                 return error.InvalidPointer;
 
-            return @ptrCast(Ptr, @alignCast(ptr_info.alignment, &data[i]));
+            return @ptrCast(@alignCast(&data[i]));
         }
 
         /// Converts a `RelativePointer` to an unknown number of
@@ -235,7 +235,7 @@ pub fn RelativeSlice(
             return @This(){
                 .inner = .{
                     .ptr = try RPtr.init(slice.ptr, data),
-                    .len = RPtr.Inner.init(@intCast(Int, slice.len)),
+                    .len = RPtr.Inner.init(@intCast(slice.len)),
                 },
             };
         }

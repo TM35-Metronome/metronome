@@ -26,8 +26,8 @@ pub const Range = extern struct {
 
     pub fn init(start: usize, end: usize) Range {
         return .{
-            .start = lu32.init(@intCast(u32, start)),
-            .end = lu32.init(@intCast(u32, end)),
+            .start = lu32.init(@intCast(start)),
+            .end = lu32.init(@intCast(end)),
         };
     }
 
@@ -55,8 +55,8 @@ pub const Slice = extern struct {
 
     pub fn init(start: usize, len: usize) Slice {
         return .{
-            .start = lu32.init(@intCast(u32, start)),
-            .len = lu32.init(@intCast(u32, len)),
+            .start = lu32.init(@intCast(start)),
+            .len = lu32.init(@intCast(len)),
         };
     }
 
@@ -156,7 +156,7 @@ pub const Rom = struct {
     }
 
     pub fn header(rom: Rom) *Header {
-        return @ptrCast(*Header, rom.data.items[0..@sizeOf(Header)]);
+        return @ptrCast(rom.data.items[0..@sizeOf(Header)]);
     }
 
     pub fn banner(rom: Rom) ?*Banner {
@@ -169,7 +169,7 @@ pub const Rom = struct {
         const result = mem.bytesAsValue(Banner, bytes);
 
         // This is safe because we check that the `banner_offset` is aligned in `Header.validate`
-        return @alignCast(@alignOf(Banner), result);
+        return @alignCast(result);
     }
 
     /// Returns the arm9 section of the rom. Note here that this section could
@@ -201,7 +201,7 @@ pub const Rom = struct {
         const result = mem.bytesAsSlice(Overlay, bytes);
 
         // This is safe because we check that the `arm9_overlay` is aligned in `Header.validate`
-        return @alignCast(@alignOf(Overlay), result);
+        return @alignCast(result);
     }
 
     pub fn arm7OverlayTable(rom: Rom) []align(1) Overlay {
@@ -210,7 +210,7 @@ pub const Rom = struct {
         const result = mem.bytesAsSlice(Overlay, bytes);
 
         // This is safe because we check that the `arm7_overlay` is aligned in `Header.validate`
-        return @alignCast(@alignOf(Overlay), result);
+        return @alignCast(result);
     }
 
     pub fn fileSystem(rom: Rom) fs.Fs {
@@ -319,7 +319,7 @@ pub const Rom = struct {
 
         // Update header after resize
         const h = rom.header();
-        h.total_used_rom_size = lu32.init(@intCast(u32, end));
+        h.total_used_rom_size = lu32.init(@intCast(end));
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = data.items.len;
@@ -390,8 +390,8 @@ pub const Rom = struct {
             debug.assert(other_index + @sizeOf(lu32) <= data_end);
             debug.assert(kind == .slice or start.value() <= other.value());
             return .{
-                .start_index = @intCast(u32, start_index),
-                .other_index = @intCast(u32, other_index),
+                .start_index = @intCast(start_index),
+                .other_index = @intCast(other_index),
                 .kind = kind,
             };
         }
@@ -401,7 +401,7 @@ pub const Rom = struct {
             // is safe, as `getPtr` only needs a mutable pointer so that
             // it can return one. We don't modify the pointee, so there
             // is nothing unsafe about this discard.
-            const const_discarded = @ptrFromInt([*]u8, @intFromPtr(data.ptr))[0..data.len];
+            const const_discarded = @as([*]u8, @ptrFromInt(@intFromPtr(data.ptr)))[0..data.len];
             const start = section.getPtr(const_discarded, .start).value();
             const other = section.getPtr(const_discarded, .other).value();
             const len = other - start * @intFromBool(section.kind == .range);

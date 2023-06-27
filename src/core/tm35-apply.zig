@@ -454,7 +454,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const index = ms.index + game.tms.len * @intFromBool(!is_tms);
                     const learnset = &game.machine_learnsets[pokemons.index];
-                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @intCast(u6, index), ms.value));
+                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @as(u6, @intCast(index)), ms.value));
                 },
                 .name => |str| {
                     if (pokemons.index >= game.pokemon_names.len)
@@ -907,10 +907,10 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
                     const index = ms.index + game.ptrs.tms.len * @intFromBool(!is_tms);
                     const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
                 },
                 .moves => |moves| {
-                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, pokemons.index) });
+                    const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(pokemons.index) });
                     const rem = bytes.len % @sizeOf(gen4.LevelUpMove);
                     const lvl_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes[0 .. bytes.len - rem]);
 
@@ -1133,7 +1133,11 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
     }
 }
 
-fn applyHgssGrass(area: format.WildArea, wilds: *align(1) gen4.HgssWildPokemons, grass: *[12]lu16) !void {
+fn applyHgssGrass(
+    area: format.WildArea,
+    wilds: *align(1) gen4.HgssWildPokemons,
+    grass: *align(1) [12]lu16,
+) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| wilds.grass_rate = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
@@ -1149,7 +1153,11 @@ fn applyHgssGrass(area: format.WildArea, wilds: *align(1) gen4.HgssWildPokemons,
     }
 }
 
-fn applyHgssSea(area: format.WildArea, rate: *u8, sea: []gen4.HgssWildPokemons.Sea) !void {
+fn applyHgssSea(
+    area: format.WildArea,
+    rate: *u8,
+    sea: []align(1) gen4.HgssWildPokemons.Sea,
+) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| rate.* = math.cast(u8, encounter_rate) orelse return error.Error,
         .pokemons => |pokemons| {
@@ -1166,7 +1174,7 @@ fn applyHgssSea(area: format.WildArea, rate: *u8, sea: []gen4.HgssWildPokemons.S
     }
 }
 
-fn applyDpptReplacement(area: format.WildArea, replacements: []gen4.DpptWildPokemons.Replacement) !void {
+fn applyDpptReplacement(area: format.WildArea, replacements: []align(1) gen4.DpptWildPokemons.Replacement) !void {
     switch (area) {
         .pokemons => |pokemons| {
             if (pokemons.index >= replacements.len)
@@ -1184,7 +1192,7 @@ fn applyDpptReplacement(area: format.WildArea, replacements: []gen4.DpptWildPoke
     }
 }
 
-fn applyDpptSea(area: format.WildArea, sea: *gen4.DpptWildPokemons.Sea) !void {
+fn applyDpptSea(area: format.WildArea, sea: *align(1) gen4.DpptWildPokemons.Sea) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| sea.rate = lu32.init(encounter_rate),
         .pokemons => |pokemons| {
@@ -1324,7 +1332,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
                     const index = if (is_tms) ms.index else ms.index + game.ptrs.tms1.len + game.ptrs.tms2.len;
                     const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @intCast(u7, index), ms.value));
+                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
                 },
                 .moves => |moves| {
                     const bytes = game.ptrs.level_up_moves.fileData(.{ .i = pokemons.index });

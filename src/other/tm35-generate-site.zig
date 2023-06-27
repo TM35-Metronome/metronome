@@ -443,12 +443,12 @@ fn generate(writer: anytype, game: Game) !void {
         var total_stats: usize = 0;
         inline for (stat_names) |stat| {
             const value = @field(pokemon.stats, stat[0]);
-            const percent = @intFromFloat(usize, (@floatFromInt(f64, value) / 255) * 100);
+            const percent: u8 = @intFromFloat((@as(f64, @floatFromInt(value)) / 255) * 100);
             try writer.print("<tr><td>{s}:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_{s}\">{}</div></td></tr>\n", .{ stat[1], percent, stat[0], value });
             total_stats += value;
         }
 
-        const percent = @intFromFloat(usize, (@floatFromInt(f64, total_stats) / 1000) * 100);
+        const percent: u8 = @intFromFloat((@as(f64, @floatFromInt(total_stats)) / 1000) * 100);
         try writer.print("<tr><td>Total:</td><td class=\"pokemon_stat\"><div class=\"pokemon_stat_p{} pokemon_stat_total\">{}</div></td></tr>\n", .{ percent, total_stats });
         try writer.writeAll(
             \\</table></details>

@@ -184,7 +184,7 @@ fn balance(program: *Program) !void {
                 const total_stats = ziter.deref(stats.slice()).sum(u16);
 
                 const buff = statBuff(min_total_stats, max_total_stats, total_stats);
-                const buff_to_each_stat = @intCast(u8, buff / stats.len);
+                const buff_to_each_stat: u8 = @intCast(buff / stats.len);
                 var buff_remains = buff % stats.len;
                 for (stats.slice()) |*stat| {
                     // Only one pokemon has a stat of 1. That is Shedinja with HP 1. We don't wonna
@@ -254,10 +254,10 @@ fn statBuff(min_total_stats: u16, max_total_stats: u16, total_stats: u16) u16 {
 
     const total_min_diff = total_stats - min_total_stats;
     const min_max_diff = max_total_stats - min_total_stats;
-    const fmin_max_diff = @floatFromInt(f64, min_max_diff);
-    const x = @floatFromInt(f64, min_max_diff - total_min_diff);
+    const fmin_max_diff: f64 = @floatFromInt(min_max_diff);
+    const x: f64 = @floatFromInt(min_max_diff - total_min_diff);
     const @"x^2" = math.pow(f64, x, 2);
-    return @intFromFloat(u16, @max(0, @"x^2" / (fmin_max_diff * 1.4) - (3 * x) / 14));
+    return @intFromFloat(@max(0, @"x^2" / (fmin_max_diff * 1.4) - (3 * x) / 14));
 }
 
 fn statBuffNewTotal(min_total_stats: u16, max_total_stats: u16, total_stats: u16) u16 {

@@ -95,7 +95,7 @@ pub const PartyMemberBase = extern struct {
     };
 
     pub fn toParent(base: *align(1) PartyMemberBase, comptime Parent: type) *align(1) Parent {
-        return @ptrCast(*align(1) Parent, base);
+        return @ptrCast(base);
         // return @fieldParentPtr(Parent, "base", base);
     }
 };
@@ -359,7 +359,7 @@ pub const Item = extern struct {
     unknown: [26]u8,
 
     pub fn pocket(item: Item) Pocket {
-        return @enumFromInt(Pocket, item._pocket & 0x0F);
+        return @enumFromInt(item._pocket & 0x0F);
     }
 
     pub fn setPocket(item: *align(1) Item, p: Pocket) void {
@@ -420,7 +420,7 @@ pub const EncryptedStringTable = struct {
     }
 
     pub fn getEncryptedString(table: EncryptedStringTable, i: u32) []align(1) lu16 {
-        const key = @truncate(u16, @as(u32, table.header().key.value()) * 0x2FD);
+        const key: u16 = @truncate(@as(u32, table.header().key.value()) * 0x2FD);
         const encrypted_slice = table.slices()[i];
         const slice = decryptSlice(key, i, encrypted_slice);
         const res = table.data[slice.start.value()..][0 .. slice.len.value() * @sizeOf(lu16)];
@@ -433,7 +433,7 @@ pub const EncryptedStringTable = struct {
     };
 
     fn header(table: EncryptedStringTable) *align(1) Header {
-        return @ptrCast(*align(1) Header, table.data[0..@sizeOf(Header)]);
+        return @ptrCast(table.data[0..@sizeOf(Header)]);
     }
 
     fn slices(table: EncryptedStringTable) []align(1) nds.Slice {
@@ -456,44 +456,50 @@ pub const EncryptedStringTable = struct {
 };
 
 fn decryptAndDecode(data: []align(1) const lu16, key: u16, out: anytype) !void {
-    const first = decryptChar(key, @intCast(u32, 0), data[0].value());
+    const first = decryptChar(key, @intCast(0), data[0].value());
     const compressed = first == 0xF100;
     const start = @intFromBool(compressed);
 
     var bits: u5 = 0;
     var container: u32 = 0;
     for (data[start..], start..) |c, i| {
-        const decoded = decryptChar(key, @intCast(u32, i), c.value());
+        const decoded = decryptChar(key, @intCast(i), c.value());
         if (compressed) {
             container |= @as(u32, decoded) << bits;
             bits += 16;
 
             while (bits >= 9) : (bits -= 9) {
-                const char = @intCast(u16, container & 0x1FF);
+                const char: u16 = @intCast(container & 0x1FF);
                 if (char == 0x1Ff)
                     return;
-                try encodings.decodeBytes(&@bitCast([2]u8, @intFromEnum(lu16.init(char))), out);
+                try encodings.decodeBytes(
+                    &@as([2]u8, @bitCast(@intFromEnum(lu16.init(char)))),
+                    out,
+                );
                 container >>= 9;
             }
         } else {
             if (decoded == 0xffff)
                 return;
-            try encodings.decodeBytes(&@bitCast([2]u8, @intFromEnum(lu16.init(decoded))), out);
+            try encodings.decodeBytes(
+                &@as([2]u8, @bitCast(@intFromEnum(lu16.init(decoded)))),
+                out,
+            );
         }
     }
 }
 
 fn encrypt(data: []align(1) lu16, key: u16) void {
     for (data, 0..) |*c, i|
-        c.* = lu16.init(decryptChar(key, @intCast(u32, i), c.value()));
+        c.* = lu16.init(decryptChar(key, @intCast(i), c.value()));
 }
 
 fn decryptChar(key: u16, i: u32, char: u16) u16 {
-    return char ^ @truncate(u16, key + i * 0x493D);
+    return char ^ @as(u16, @truncate(key + i * 0x493D));
 }
 
 fn getKey(i: u32) u16 {
-    return @truncate(u16, 0x91BD3 * (i + 1));
+    return @truncate(0x91BD3 * (i + 1));
 }
 
 pub const StringTable = struct {
@@ -537,8 +543,8 @@ pub const StringTable = struct {
 
     pub fn encryptedSize(table: StringTable) u32 {
         return EncryptedStringTable.size(
-            @intCast(u32, table.number_of_strings),
-            @intCast(u32, table.maxStringLen() * table.number_of_strings),
+            @intCast(table.number_of_strings),
+            @intCast(table.maxStringLen() * table.number_of_strings),
         );
     }
 };
@@ -658,7 +664,7 @@ pub const Game = struct {
         @memset(trainer_parties, [_]PartyMemberBoth{.{}} ** 6);
 
         for (trainer_parties, 0..) |*party, i| {
-            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
+            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(i) });
             const party_size = if (i < trainers.len) trainers[i].party_size else 0;
 
             for (party[0..party_size], 0..party_size) |*member, j| {
@@ -811,12 +817,12 @@ pub const Game = struct {
             const secure_area = arm9[0..0x4000];
 
             var len_bytes: [3]u8 = undefined;
-            mem.writeIntLittle(u24, &len_bytes, @intCast(u24, game.owned.old_arm_len));
+            mem.writeIntLittle(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len)));
             if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
                 mem.writeIntLittle(
                     u24,
                     secure_area[off..][0..3],
-                    @intCast(u24, arm9.len),
+                    @as(u24, @intCast(arm9.len)),
                 );
             }
             mem.copy(
@@ -990,10 +996,10 @@ pub const Game = struct {
 
                 const end_of_str = writer.context.pos;
                 const encoded_str = mem.bytesAsSlice(lu16, bytes[start_of_str..end_of_str]);
-                encrypt(encoded_str, getKey(@intCast(u32, i)));
+                encrypt(encoded_str, getKey(@intCast(i)));
 
-                const length_of_str = @intCast(u32, (end_of_str - start_of_str) / 2);
-                entry.start = lu32.init(@intCast(u32, start_of_str));
+                const length_of_str: u32 = @intCast((end_of_str - start_of_str) / 2);
+                entry.start = lu32.init(@intCast(start_of_str));
                 entry.len = lu32.init(length_of_str);
 
                 // Pad the string, so that each entry is always entry_size
@@ -1044,8 +1050,8 @@ pub const Game = struct {
             defer script_offsets.shrinkRetainingCapacity(0);
 
             for (script.getScriptOffsets(script_data), 1..) |relative_offset, i| {
-                const offset = relative_offset.value() + @intCast(isize, i) * @sizeOf(lu32);
-                if (@intCast(isize, script_data.len) < offset)
+                const offset = relative_offset.value() + @as(isize, @intCast(i)) * @sizeOf(lu32);
+                if (@as(isize, @intCast(script_data.len)) < offset)
                     continue;
                 if (offset < 0)
                     continue;
@@ -1059,14 +1065,14 @@ pub const Game = struct {
             var offset_i: usize = 0;
             while (offset_i < script_offsets.items.len) : (offset_i += 1) {
                 const offset = script_offsets.items[offset_i];
-                if (@intCast(isize, script_data.len) < offset)
+                if (@as(isize, @intCast(script_data.len)) < offset)
                     return error.Error;
                 if (offset < 0)
                     return error.Error;
 
                 var decoder = script.CommandDecoder{
                     .bytes = script_data,
-                    .i = @intCast(usize, offset),
+                    .i = @intCast(offset),
                 };
                 while (decoder.next() catch continue) |command| {
                     // If we hit var 0x8008, the var_8008_tmp will be set and
@@ -1118,7 +1124,7 @@ pub const Game = struct {
                                 .compare_last_result_jump => command.compare_last_result_jump.adr.value(),
                                 else => unreachable,
                             };
-                            const location = off + @intCast(isize, decoder.i);
+                            const location = off + @as(isize, @intCast(decoder.i));
                             if (mem.indexOfScalar(isize, script_offsets.items, location) == null)
                                 try script_offsets.append(location);
                         },
@@ -1154,7 +1160,7 @@ pub const Game = struct {
 
         var i: usize = 0;
         while (i < res.number_of_strings) : (i += 1) {
-            const id = @intCast(u32, i);
+            const id: u32 = @intCast(i);
             const buf = res.get(i);
             var fbs = io.fixedBufferStream(buf);
             const encrypted_string = table.getEncryptedString(id);

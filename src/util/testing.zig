@@ -66,13 +66,13 @@ pub const Context = struct {
 
     pub fn fromSlice(slice: anytype) Context {
         return .{
-            .handle = @ptrCast(*const anyopaque, slice.ptr),
+            .handle = @ptrCast(slice.ptr),
             .len = slice.len,
         };
     }
 
     pub fn toSlice(ctx: Context, comptime T: type) []const T {
-        const ptr = @ptrCast([*]const T, @alignCast(@alignOf(T), ctx.handle));
+        const ptr: [*]const T = @ptrCast(@alignCast(ctx.handle));
         return ptr[0..ctx.len];
     }
 };

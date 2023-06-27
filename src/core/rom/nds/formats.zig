@@ -55,10 +55,9 @@ pub const FatChunk = extern struct {
         return .{
             .header = .{
                 .name = Chunk.names.fat.*,
-                .size = lu32.init(@intCast(
-                    u32,
-                    @sizeOf(FatChunk) + @sizeOf(nds.Range) * file_count,
-                )),
+                .size = lu32.init(
+                    @intCast(@sizeOf(FatChunk) + @sizeOf(nds.Range) * file_count),
+                ),
             },
             .file_count = lu16.init(file_count),
         };

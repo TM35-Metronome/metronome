@@ -34,7 +34,7 @@ pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {
 
         pub fn init(v: Inner) @This() {
             @setEvalBranchQuota(100000000);
-            return @enumFromInt(@This(), swap(v));
+            return @enumFromInt(swap(v));
         }
 
         /// Converts the integer to native endianness and returns it.
@@ -63,8 +63,8 @@ test "Int" {
     const numBig = Int(u32, .Big).init(value);
     try testing.expectEqual(value, numLittle.value());
     try testing.expectEqual(value, numBig.value());
-    try testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, @ptrCast(*const [4]u8, &numLittle));
-    try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, @ptrCast(*const [4]u8, &numBig));
+    try testing.expectEqualSlices(u8, &[_]u8{ 0x78, 0x56, 0x34, 0x12 }, @ptrCast(&numLittle));
+    try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x34, 0x56, 0x78 }, @ptrCast(&numBig));
     switch (native_endian) {
         .Big => {
             try testing.expectEqual(@as(u32, 0x78563412), @intFromEnum(numLittle));

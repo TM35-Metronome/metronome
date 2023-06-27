@@ -298,9 +298,9 @@ fn renderSettingsDetails(program: Program, writer: anytype) !void {
 
     _ = c.md_html(
         desc.ptr,
-        @intCast(c.MD_SIZE, desc.len),
+        @intCast(desc.len),
         generateMdRender(@TypeOf(writer)),
-        discardConst(&writer),
+        util.unsafe.castAwayConst(&writer),
         0,
         0,
     );
@@ -339,28 +339,11 @@ fn generateMdRender(
             len: c.MD_SIZE,
             userdata: ?*anyopaque,
         ) callconv(.C) void {
-            const str = @ptrCast([*]const u8, ptr)[0..len];
-            const writer = @ptrCast(*const Writer, @alignCast(@alignOf(Writer), userdata));
+            const str = @as([*]const u8, @ptrCast(ptr))[0..len];
+            const writer: *const Writer = @ptrCast(@alignCast(userdata));
             writer.writeAll(str) catch {};
         }
     }.mdRender;
-}
-
-fn DiscardConst(comptime Ptr: type) type {
-    var info = @typeInfo(Ptr);
-    info.Pointer.is_const = false;
-    return @Type(info);
-}
-
-fn discardConst(ptr: anytype) DiscardConst(@TypeOf(ptr)) {
-    const Res = DiscardConst(@TypeOf(ptr));
-    switch (@typeInfo(Res).Pointer.size) {
-        .Slice => {
-            const res = discardConst(ptr.ptr);
-            return res[0..ptr.len];
-        },
-        else => return @ptrFromInt(Res, @intFromPtr(ptr)),
-    }
 }
 
 fn renderCommandList(program: Program, writer: anytype) !void {
@@ -985,7 +968,7 @@ fn wrap(
 ) fn ([*c]const u8, [*c]const u8, ?*anyopaque) callconv(.C) void {
     return struct {
         fn wrapper(seq: [*c]const u8, req: [*c]const u8, arg: ?*anyopaque) callconv(.C) void {
-            const program = @ptrCast(*Program, @alignCast(@alignOf(Program), arg));
+            const program: *Program = @ptrCast(@alignCast(arg));
             const req_slice = mem.span(req);
 
             std.log.info("{s}", .{req_slice});
@@ -1048,7 +1031,7 @@ fn parseArg(comptime T: type, tree: std.json.Value, arg: usize) !T {
             else => return error.InvalidArgument,
         },
         .Float => switch (arg_value) {
-            .float => |f| return @floatCast(T, f),
+            .float => |f| return @floatCast(f),
             .string => |s| return try fmt.parseFloat(T, s),
             else => return error.InvalidArgument,
         },

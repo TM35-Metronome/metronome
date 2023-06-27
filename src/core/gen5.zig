@@ -84,7 +84,7 @@ pub const PartyMemberBase = extern struct {
     };
 
     pub fn toParent(base: *align(1) PartyMemberBase, comptime Parent: type) *align(1) Parent {
-        return @ptrCast(*align(1) Parent, base);
+        return @ptrCast(base);
         // return @fieldParentPtr(Parent, "base", base);
     }
 };
@@ -282,18 +282,18 @@ pub const Species = extern struct {
     }
 
     pub fn species(s: Species) u10 {
-        return @truncate(u10, s.value.value());
+        return @truncate(s.value.value());
     }
 
-    pub fn setSpecies(s: *Species, spe: u10) void {
+    pub fn setSpecies(s: *align(1) Species, spe: u10) void {
         s.value = lu16.init((@as(u16, s.form()) << @as(u4, 10)) | spe);
     }
 
     pub fn form(s: Species) u6 {
-        return @truncate(u6, s.value.value() >> 10);
+        return @truncate(s.value.value() >> 10);
     }
 
-    pub fn setForm(s: *Species, f: u10) void {
+    pub fn setForm(s: *align(1) Species, f: u10) void {
         s.value = lu16.init((@as(u16, f) << @as(u4, 10)) | s.species());
     }
 };
@@ -346,7 +346,7 @@ pub const Item = extern struct {
     unknown: [26]u8,
 
     pub fn pocket(item: Item) Pocket {
-        return @enumFromInt(Pocket, item._pocket & 0x0F);
+        return @enumFromInt(item._pocket & 0x0F);
     }
 
     pub fn setPocket(item: *align(1) Item, p: Pocket) void {
@@ -566,7 +566,7 @@ const EncryptedStringTable = struct {
     };
 
     fn header(table: EncryptedStringTable) *align(1) Header {
-        return @ptrCast(*align(1) Header, table.data[0..@sizeOf(Header)]);
+        return @ptrCast(table.data[0..@sizeOf(Header)]);
     }
 
     fn sectionOffsets(table: EncryptedStringTable) []align(1) lu32 {
@@ -635,7 +635,7 @@ fn decrypt(data: []align(1) const lu16, out: anytype) !u16 {
             bits += 16;
 
             while (bits >= 9) : (bits -= 9) {
-                const char = @intCast(u16, container & 0x1FF);
+                const char: u16 = @intCast(container & 0x1FF);
                 if (char == 0x1Ff)
                     return res;
                 if (try H.output(out, char))
@@ -678,7 +678,7 @@ fn encode(data: []const u8, out: anytype) !void {
             break;
 
         const codepoint = unicode.utf8Decode(data[n..][0..ulen]) catch unreachable;
-        try out.writeIntLittle(u16, @intCast(u16, codepoint));
+        try out.writeIntLittle(u16, @as(u16, @intCast(codepoint)));
         n += ulen;
     }
     try out.writeIntLittle(u16, 0xffff);
@@ -730,7 +730,7 @@ fn keyForI(key: u16, len: usize, i: usize) u16 {
 test "KeyTable" {
     var j: usize = 0;
     while (j <= math.maxInt(u16)) : (j += 1)
-        _ = KeyTable.init(@intCast(u16, j));
+        _ = KeyTable.init(@intCast(j));
 
     for ([_]u16{ 0xf0f0, 0x0f0f, 0xdead, 0xbeef }) |key| {
         const table = KeyTable.init(key);
@@ -788,8 +788,8 @@ pub const StringTable = struct {
     pub fn encryptedSize(table: StringTable) u32 {
         return EncryptedStringTable.size(
             1,
-            @intCast(u32, table.keys.len),
-            @intCast(u32, table.maxStringLen() * table.keys.len),
+            @intCast(table.keys.len),
+            @intCast(table.maxStringLen() * table.keys.len),
         );
     }
 };
@@ -927,7 +927,7 @@ pub const Game = struct {
         errdefer allocator.free(trainer_parties);
 
         for (trainer_parties, 0..) |*party, i| {
-            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(u32, i) });
+            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(i) });
             const party_size = if (i != 0 and i - 1 < trainers.len) trainers[i - 1].party_size else 0;
 
             var j: usize = 0;
@@ -1116,12 +1116,12 @@ pub const Game = struct {
         const secure_area = arm9[0..0x4000];
 
         var len_bytes: [3]u8 = undefined;
-        mem.writeIntLittle(u24, &len_bytes, @intCast(u24, game.owned.old_arm_len + 0x4000));
+        mem.writeIntLittle(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len + 0x4000)));
         if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
             mem.writeIntLittle(
                 u24,
                 secure_area[off..][0..3],
-                @intCast(u24, arm9.len + 0x4000),
+                @as(u24, @intCast(arm9.len + 0x4000)),
             );
         }
 
@@ -1255,7 +1255,7 @@ pub const Game = struct {
             // of the file correctly above
             var fbs = io.fixedBufferStream(bytes);
             const writer = fbs.writer();
-            const number_of_entries = @intCast(u16, table.keys.len);
+            const number_of_entries: u16 = @intCast(table.keys.len);
             writer.writeAll(&mem.toBytes(Header{
                 .sections = lu16.init(1),
                 .entries = lu16.init(number_of_entries),
@@ -1267,8 +1267,8 @@ pub const Game = struct {
             const bytes_per_entry = chars_per_entry * 2;
             const start_of_section = @sizeOf(Header) + @sizeOf(lu32);
             writer.writeIntLittle(u32, start_of_section) catch unreachable;
-            writer.writeIntLittle(u32, @intCast(u32, number_of_entries *
-                (@sizeOf(Entry) + bytes_per_entry))) catch unreachable;
+            writer.writeIntLittle(u32, @as(u32, @intCast(number_of_entries *
+                (@sizeOf(Entry) + bytes_per_entry)))) catch unreachable;
 
             const start_of_entry_table = writer.context.pos;
             for (0..number_of_entries) |_| {
@@ -1289,8 +1289,8 @@ pub const Game = struct {
                 const encoded_str = mem.bytesAsSlice(lu16, bytes[start_of_str..end_of_str]);
                 encrypt(encoded_str, table.keys[j]);
 
-                const length_of_str = @intCast(u16, (end_of_str - start_of_str) / 2);
-                entry.offset = lu32.init(@intCast(u32, start_of_str - start_of_section));
+                const length_of_str: u16 = @intCast((end_of_str - start_of_str) / 2);
+                entry.offset = lu32.init(@intCast(start_of_str - start_of_section));
                 entry.count = lu16.init(length_of_str);
 
                 // Pad the string, so that each entry is always entry_size
@@ -1344,7 +1344,7 @@ pub const Game = struct {
             defer given_pokemons_to_resolve.shrinkRetainingCapacity(0);
 
             for (script.getScriptOffsets(script_data), 1..) |relative, i| {
-                const position = @intCast(isize, i) * @sizeOf(lu32);
+                const position = @as(isize, @intCast(i)) * @sizeOf(lu32);
                 const offset = math.cast(usize, relative.value() + position) orelse continue;
                 if (script_data.len < offset)
                     continue;
@@ -1413,7 +1413,7 @@ pub const Game = struct {
                                 .call_routine => command.call_routine.offset.value(),
                                 else => unreachable,
                             };
-                            if (math.cast(usize, off + @intCast(isize, decoder.i))) |loc| {
+                            if (math.cast(usize, off + @as(isize, @intCast(decoder.i)))) |loc| {
                                 if (loc < script_data.len and
                                     mem.indexOfScalar(usize, script_offsets.items, loc) == null)
                                     try script_offsets.append(loc);
@@ -1427,7 +1427,7 @@ pub const Game = struct {
             for (set_var_offsets.items) |offset| {
                 var decoder = script.CommandDecoder{
                     .bytes = script_data,
-                    .i = @intCast(usize, offset),
+                    .i = @intCast(offset),
                 };
 
                 const first = (decoder.next() catch unreachable).?;

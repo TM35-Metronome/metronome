@@ -105,10 +105,10 @@ pub const Trainer = extern struct {
 
     pub fn partyLen(trainer: Trainer) u8 {
         return switch (trainer.party_type) {
-            .none => @intCast(u8, trainer.party.none.len()),
-            .item => @intCast(u8, trainer.party.item.len()),
-            .moves => @intCast(u8, trainer.party.moves.len()),
-            .both => @intCast(u8, trainer.party.both.len()),
+            .none => @intCast(trainer.party.none.len()),
+            .item => @intCast(trainer.party.item.len()),
+            .moves => @intCast(trainer.party.moves.len()),
+            .both => @intCast(trainer.party.both.len()),
         };
     }
 };
@@ -499,11 +499,7 @@ pub const BgEvent = extern struct {
 
 pub const MapScript = extern struct {
     type: u8,
-    _addr: [4]u8,
-
-    pub fn addr(s: *align(1) MapScript) *align(1) Addr {
-        return @ptrCast(*align(1) Addr, &s._addr);
-    }
+    addr: Addr align(1),
 
     const Addr = extern union {
         @"0": void,
@@ -717,7 +713,7 @@ pub const Game = struct {
                 if (s.type == 2 or s.type == 4)
                     continue;
 
-                const script_bytes = try s.addr().other.toSliceEnd(gba_rom);
+                const script_bytes = try s.addr.other.toSliceEnd(gba_rom);
                 var decoder = script.CommandDecoder{ .bytes = script_bytes };
                 while (try decoder.next()) |command|
                     try script_data.processCommand(gba_rom, command);
@@ -754,7 +750,7 @@ pub const Game = struct {
 
             .trainer_parties = trainer_parties,
 
-            .header = @ptrCast(*gba.Header, &gba_rom[0]),
+            .header = @ptrCast(&gba_rom[0]),
             .starters = [3]*align(1) lu16{
                 info.starters[0].ptr(gba_rom),
                 info.starters[1].ptr(gba_rom),

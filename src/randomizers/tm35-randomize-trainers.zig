@@ -457,7 +457,7 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
     const party_member_max = trainer.party.count();
     var party_member: u8 = 0;
     for (0..trainer.party_size) |i| {
-        const result = try trainer.party.getOrPut(allocator, @intCast(u8, i));
+        const result = try trainer.party.getOrPut(allocator, @intCast(i));
         if (!result.found_existing) {
             const member = trainer.party.values()[party_member];
             result.value_ptr.* = .{
@@ -467,7 +467,7 @@ fn randomizeTrainer(program: *Program, trainer: *Trainer) !void {
                 .moves = try member.moves.clone(allocator),
             };
             party_member += 1;
-            party_member %= @intCast(u8, party_member_max);
+            party_member %= @intCast(party_member_max);
         }
     }
 
@@ -748,7 +748,7 @@ fn randomizePartyMember(
 
 fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_stats: u16) !u16 {
     const allocator = program.allocator;
-    var min = @intCast(isize, total_stats);
+    var min: isize = @intCast(total_stats);
     var max = min;
 
     program.simular.shrinkRetainingCapacity(0);
@@ -758,7 +758,7 @@ fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_s
     }) {
         for (pick_from.keys()) |s| {
             const p = program.pokemons.get(s).?;
-            const total = @intCast(isize, p.total_stats);
+            const total: isize = @intCast(p.total_stats);
             if (min <= total and total <= max)
                 try program.simular.append(allocator, s);
         }
@@ -768,10 +768,10 @@ fn randomSpeciesWithSimularTotalStats(program: *Program, pick_from: Set, total_s
 }
 
 fn levelScaling(min: u16, max: u16, level: u16) u16 {
-    const fmin = @floatFromInt(f64, min);
-    const fmax = @floatFromInt(f64, max);
+    const fmin: f64 = @floatFromInt(min);
+    const fmax: f64 = @floatFromInt(max);
     const diff = fmax - fmin;
-    const x = @floatFromInt(f64, level);
+    const x: f64 = @floatFromInt(level);
 
     // Function adapted from -0.0001 * x^2 + 0.02 * x
     // This functions grows fast at the start, getting 75%
@@ -780,7 +780,7 @@ fn levelScaling(min: u16, max: u16, level: u16) u16 {
     const b = 0.02 * diff;
     const xp2 = math.pow(f64, x, 2);
     const res = a * xp2 + b * x + fmin;
-    return @intFromFloat(u16, res);
+    return @intFromFloat(res);
 }
 
 fn findAbility(_abilities: Abilities.Iterator, ability: u16) ?Abilities.Entry {
@@ -931,7 +931,7 @@ const Trainer = struct {
         }
         if (count == 0)
             return 2;
-        return @intCast(u8, sum / count);
+        return @intCast(sum / count);
     }
 };
 

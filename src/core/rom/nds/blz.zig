@@ -23,9 +23,9 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
     const lengths = if (inc_len == 0) blk: {
         break :blk Lengths{
             .enc = 0,
-            .dec = @intCast(u32, data.len),
+            .dec = @intCast(data.len),
             .pak = 0,
-            .raw = @intCast(u32, data.len),
+            .raw = @intCast(data.len),
         };
     } else blk: {
         const hdr_len = data[data.len - 5];
@@ -33,7 +33,7 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
         if (data.len <= hdr_len) return error.BadLength;
 
         const enc_len = mem.readIntLittle(u32, data[data.len - 8 ..][0..4]) & 0x00FFFFFF;
-        const dec_len = try math.sub(u32, @intCast(u32, data.len), enc_len);
+        const dec_len = try math.sub(u32, @as(u32, @intCast(data.len)), enc_len);
         const pak_len = try math.sub(u32, enc_len, hdr_len);
         const raw_len = dec_len + enc_len + inc_len;
 
@@ -145,8 +145,8 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
         if (match.len > threshold) {
             raw += match.len;
             pak_buffer[flg] |= 1;
-            pak_buffer[pak + 0] = @truncate(u8, ((match.len - (threshold + 1)) << 4) | ((pos_best - 3) >> 8));
-            pak_buffer[pak + 1] = @truncate(u8, pos_best - 3);
+            pak_buffer[pak + 0] = @as(u8, @truncate(((match.len - (threshold + 1)) << 4) | ((pos_best - 3) >> 8)));
+            pak_buffer[pak + 1] = @as(u8, @truncate(pos_best - 3));
             pak += 2;
         } else {
             pak_buffer[pak] = raw_buffer[raw];
@@ -213,11 +213,11 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
             hdr_len += 1;
         }
 
-        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @intCast(u32, enc_len + hdr_len));
+        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(enc_len + hdr_len)));
         pak += 3;
-        pak_buffer[pak] = @intCast(u8, hdr_len);
+        pak_buffer[pak] = @intCast(hdr_len);
         pak += 1;
-        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @intCast(u32, inc_len - hdr_len));
+        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(inc_len - hdr_len)));
         pak += 4;
     }
 

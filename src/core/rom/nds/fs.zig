@@ -92,7 +92,7 @@ pub const Fs = struct {
         const data = fs.fileData(file);
         if (@sizeOf(T) > data.len)
             return error.FileToSmall;
-        return @ptrCast(*align(1) T, data.ptr);
+        return @ptrCast(data.ptr);
     }
 
     pub fn fileData(fs: Fs, file: File) []u8 {
@@ -219,7 +219,7 @@ pub const Iterator = struct {
         it.fnt_sub_table = fbs.buffer[fbs.pos..];
         return Result{
             .handle = if (is_folder)
-                Handle{ .dir = .{ .i = @intCast(u16, handle) } }
+                Handle{ .dir = .{ .i = @intCast(handle) } }
             else
                 Handle{ .file = .{ .i = handle } },
             .name = name,
@@ -265,7 +265,7 @@ pub const SimpleNarcBuilder = struct {
         var fbs = io.fixedBufferStream(buf);
         const writer = fbs.writer();
         writer.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
-        writer.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(u16, file_count)))) catch unreachable;
+        writer.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(file_count)))) catch unreachable;
         writer.context.pos += file_count * @sizeOf(nds.Range);
         writer.writeAll(&mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.fnt.*,
@@ -325,8 +325,8 @@ pub const SimpleNarcBuilder = struct {
             res[off..][0..@sizeOf(formats.Chunk)],
         );
 
-        header.file_size = lu32.init(@intCast(u32, res.len));
-        file_header.size = lu32.init(@intCast(u32, res.len - off));
+        header.file_size = lu32.init(@intCast(res.len));
+        file_header.size = lu32.init(@intCast(res.len - off));
         return res;
     }
 };
@@ -388,13 +388,13 @@ pub const Builder = struct {
 
         const parent_entry = b.fnt_main.items[parent.i];
         const parent_offset = parent_entry.offset_to_subtable.value();
-        const handle = @intCast(u16, b.fnt_main.items.len);
+        const handle: u16 = @intCast(b.fnt_main.items.len);
 
         var buf: [1024]u8 = undefined;
         var fbs = io.fixedBufferStream(&buf);
-        const len = @intCast(u7, dir_name.len);
+        const len: u7 = @intCast(dir_name.len);
         const kind = @as(u8, @intFromBool(true)) << 7;
-        const id = @intCast(u16, 0xF000 | b.fnt_main.items.len);
+        const id: u16 = @intCast(0xF000 | b.fnt_main.items.len);
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(dir_name);
         try fbs.writer().writeIntLittle(u16, id);
@@ -403,14 +403,14 @@ pub const Builder = struct {
         try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len + 1);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
-        const offset = @intCast(u32, b.fnt_sub.items.len);
+        const offset: u32 = @intCast(b.fnt_sub.items.len);
         b.fnt_sub.appendAssumeCapacity(0);
 
         for (b.fnt_main.items) |*entry| {
             const old_offset = entry.offset_to_subtable.value();
             const new_offset = old_offset + written.len;
             if (old_offset > parent_offset)
-                entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
+                entry.offset_to_subtable = lu32.init(@intCast(new_offset));
         }
 
         try b.fnt_main.append(.{
@@ -441,7 +441,7 @@ pub const Builder = struct {
 
         var buf: [1024]u8 = undefined;
         var fbs = io.fixedBufferStream(&buf);
-        const len = @intCast(u7, file_name.len);
+        const len: u7 = @intCast(file_name.len);
         const kind = @as(u8, @intFromBool(false)) << 7;
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(file_name);
@@ -454,11 +454,11 @@ pub const Builder = struct {
             const old_offset = entry.offset_to_subtable.value();
             const new_offset = old_offset + written.len;
             if (old_offset > parent_offset)
-                entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
+                entry.offset_to_subtable = lu32.init(@intCast(new_offset));
             const old_file_handle = entry.first_file_handle.value();
             const new_file_handle = old_file_handle + 1;
             if (old_file_handle >= handle and parent.i != i)
-                entry.first_file_handle = lu16.init(@intCast(u16, new_file_handle));
+                entry.first_file_handle = lu16.init(@intCast(new_file_handle));
         }
 
         const start = b.file_bytes;
@@ -483,7 +483,7 @@ pub const Builder = struct {
         const sub_table_offset = builder.fnt_main.items.len * @sizeOf(FntMainEntry);
         for (builder.fnt_main.items) |*entry| {
             const new_offset = entry.offset_to_subtable.value() + sub_table_offset;
-            entry.offset_to_subtable = lu32.init(@intCast(u32, new_offset));
+            entry.offset_to_subtable = lu32.init(@intCast(new_offset));
         }
 
         const fnt_main_bytes = mem.sliceAsBytes(builder.fnt_main.items);

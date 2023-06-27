@@ -199,7 +199,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
                             )).value_ptr;
                             switch (mon.value) {
                                 .species => |species| {
-                                    const index = @intCast(u16, program.hollow_mons.count());
+                                    const index: u16 = @intCast(program.hollow_mons.count());
                                     _ = try program.hollow_mons.put(
                                         allocator,
                                         index,

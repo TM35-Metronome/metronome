@@ -416,7 +416,7 @@ pub fn Searcher(
             const end_offset = @intFromPtr(found_end.ptr) + found_end.len * @sizeOf(T);
             const len = @divExact(end_offset - start_offset, @sizeOf(T));
 
-            return @alignCast(alignment, found_start.ptr[0..len]);
+            return @alignCast(found_start.ptr[0..len]);
         }
 
         fn findSliceHelper(data: []u8, offset: usize, skip: usize, items: []const T) ![]align(1) T {
@@ -439,7 +439,7 @@ pub fn Searcher(
                 //       the length of the data passed in is 0. I need the pointer to point into
                 //       `data_slice` so I bypass `data_items` here. I feel like this is a design
                 //       mistake by the Zig `std`.
-                return @ptrCast([*]align(1) T, data_slice.ptr)[0..data_items.len];
+                return @as([*]align(1) T, @ptrCast(data_slice.ptr))[0..data_items.len];
             }
 
             return error.DataNotFound;
@@ -1338,7 +1338,7 @@ pub const rs_pokedex_end = [_]gen3.RSFrLgPokedexEntry{
 };
 
 fn percentFemale(percent: f64) u8 {
-    return @intFromFloat(u8, @min(@as(f64, 254), (percent * 255) / 100));
+    return @intFromFloat(@min(@as(f64, 254), (percent * 255) / 100));
 }
 
 const unused_evo = gen3.Evolution{

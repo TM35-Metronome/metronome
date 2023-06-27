@@ -13,7 +13,7 @@ pub fn castAwayConst(ptr: anytype) ToNonConstPointer(@TypeOf(ptr)) {
         .C,
         => {
             const addr = @intFromPtr(ptr);
-            return @ptrFromInt(ToNonConstPointer(T), addr);
+            return @ptrFromInt(addr);
         },
         .Slice => return castAwayConst(ptr.ptr)[0..ptr.len],
     }

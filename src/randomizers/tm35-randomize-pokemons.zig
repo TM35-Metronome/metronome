@@ -377,7 +377,7 @@ fn randomizeMachinesLearned(
     while (i < learned.len) : (i += 1) {
         const chance: f64 = blk: {
             const no_stab_chance = program.options.chance_to_learn_non_stab_machine;
-            const move_id = machines.get(@intCast(u8, i)) orelse break :blk no_stab_chance;
+            const move_id = machines.get(@intCast(i)) orelse break :blk no_stab_chance;
             const move = program.moves.get(move_id) orelse break :blk no_stab_chance;
             if (move.category == .status and !program.options.status_moves_are_stab)
                 break :blk no_stab_chance;

@@ -24,9 +24,9 @@ pub const PatchIterator = struct {
 
         const chunk_size = @sizeOf(u256);
         while (it.i + chunk_size <= end_it) : (it.i += chunk_size) {
-            const new_chunk = @ptrCast(*align(1) const u256, it.new[it.i..][0..chunk_size]).*;
-            const old_chunk = @ptrCast(*align(1) const u256, it.old[it.i..][0..chunk_size]).*;
-            if (new_chunk != old_chunk)
+            const new_chunk: *align(1) const u256 = @ptrCast(it.new[it.i..][0..chunk_size]);
+            const old_chunk: *align(1) const u256 = @ptrCast(it.old[it.i..][0..chunk_size]);
+            if (new_chunk.* != old_chunk.*)
                 break;
         }
 

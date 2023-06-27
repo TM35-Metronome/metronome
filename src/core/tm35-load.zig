@@ -236,14 +236,14 @@ fn outputGen3Data(game: gen3.Game, writer: anytype) !void {
     for (game.machine_learnsets, 0..) |machine_learnset, i| {
         for (0..game.tms.len) |j| {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
-                .tms = ston.index(j, bit.isSet(u64, machine_learnset.value(), @intCast(u6, j))),
+                .tms = ston.index(j, bit.isSet(u64, machine_learnset.value(), @as(u6, @intCast(j)))),
             }) });
         }
         for (game.tms.len..game.tms.len + game.hms.len) |j| {
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .hms = ston.index(
                     j - game.tms.len,
-                    bit.isSet(u64, machine_learnset.value(), @intCast(u6, j)),
+                    bit.isSet(u64, machine_learnset.value(), @as(u6, @intCast(j))),
                 ),
             }) });
         }
@@ -482,13 +482,13 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
 
         const machine_learnset = pokemon.machine_learnset;
         for (0..game.ptrs.tms.len) |j| {
-            const is_set = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j));
+            const is_set = bit.isSet(u128, machine_learnset.value(), @as(u7, @intCast(j)));
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .tms = ston.index(j, is_set),
             }) });
         }
         for (game.ptrs.tms.len..game.ptrs.tms.len + game.ptrs.hms.len) |j| {
-            const is_set = bit.isSet(u128, machine_learnset.value(), @intCast(u7, j));
+            const is_set = bit.isSet(u128, machine_learnset.value(), @as(u7, @intCast(j)));
             try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
                 .hms = ston.index(j - game.ptrs.tms.len, is_set),
             }) });
@@ -516,7 +516,7 @@ fn outputGen4Data(game: gen4.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.level_up_moves.fat, 0..) |_, i| {
-        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(i) });
         const level_up_moves = mem.bytesAsSlice(gen4.LevelUpMove, bytes);
 
         for (level_up_moves, 0..) |move, j| {
@@ -819,7 +819,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.pokemons.fat, 0..) |_, i| {
-        const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(u32, i) }, gen5.BasePokemon);
+        const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(i) }, gen5.BasePokemon);
 
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .pokedex_entry = i,
@@ -873,7 +873,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.level_up_moves.fat, 0..) |_, i| {
-        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(u32, i) });
+        const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(i) });
         const level_up_moves = mem.bytesAsSlice(gen5.LevelUpMove, bytes);
         for (level_up_moves, 0..) |move, j| {
             if (std.meta.eql(move, gen5.LevelUpMove.term))
@@ -906,7 +906,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.wild_pokemons.fat, 0..) |_, i| {
-        const file = nds.fs.File{ .i = @intCast(u32, i) };
+        const file = nds.fs.File{ .i = @intCast(i) };
         const wilds: []align(1) gen5.WildPokemons =
             game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
             try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);

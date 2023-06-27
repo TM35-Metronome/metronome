@@ -134,7 +134,7 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             if (isEnd(command))
                 decoder.bytes = decoder.bytes[0..decoder.i];
 
-            return @ptrCast(*align(1) Command, bytes.ptr);
+            return @ptrCast(bytes.ptr);
         }
     };
 }

@@ -80,7 +80,7 @@ pub fn run(
 fn output(program: *Program, writer: anytype) !void {
     for (program.wild_pokemons.keys(), program.wild_pokemons.values()) |zone_id, zone| {
         for (zone.wild_areas, 0..) |area, i| {
-            const area_id = @enumFromInt(meta.Tag(format.WildPokemons), @intCast(u5, i));
+            const area_id: meta.Tag(format.WildPokemons) = @enumFromInt(@as(u5, @intCast(i)));
             try ston.serialize(writer, .{
                 .wild_pokemons = ston.index(zone_id, ston.field(@tagName(area_id), .{
                     .pokemons = area.pokemons,

@@ -576,7 +576,7 @@ fn randomize(program: *Program) !void {
                 else => unreachable,
             };
 
-            _ = try pokemon.evos.put(allocator, @intCast(u8, stone), Evolution{
+            _ = try pokemon.evos.put(allocator, @intCast(stone), Evolution{
                 .method = .use_item,
                 .param = item_id,
                 .target = pick,
