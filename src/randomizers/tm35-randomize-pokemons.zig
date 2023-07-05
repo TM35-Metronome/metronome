@@ -425,7 +425,7 @@ fn randomizeStatsEx(
         var min_total: usize = 1;
         for (stats_to_start_from.slice()) |item| min_total += item;
 
-        const max_total = stats_to_start_from.len * math.maxInt(u8);
+        const max_total = stats_to_start_from.slice().len * math.maxInt(u8);
         break :blk random.intRangeAtMost(usize, @min(min_total, max_total), max_total);
     };
 

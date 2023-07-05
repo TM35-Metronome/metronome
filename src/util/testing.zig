@@ -212,6 +212,6 @@ pub fn boundPrint(
     args: anytype,
 ) !std.BoundedArray(u8, bound) {
     var res: std.BoundedArray(u8, bound) = undefined;
-    res.len = (try fmt.bufPrint(&res.buffer, format, args)).len;
+    res.len = @intCast((try fmt.bufPrint(&res.buffer, format, args)).len);
     return res;
 }

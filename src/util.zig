@@ -139,7 +139,7 @@ pub const path = struct {
         var fba = heap.FixedBufferAllocator.init(&res.buffer);
         var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
         const res_slice = fs.path.join(failing.allocator(), paths) catch unreachable;
-        res.len = res_slice.len;
+        res.len = @intCast(res_slice.len);
 
         return res;
     }
@@ -155,14 +155,14 @@ pub const dir = struct {
     pub fn selfExeDir() !Path {
         var res: Path = undefined;
         const res_slice = try fs.selfExeDirPath(&res.buffer);
-        res.len = res_slice.len;
+        res.len = @intCast(res_slice.len);
         return res;
     }
 
     pub fn cwd() !Path {
         var res: Path = undefined;
         const res_slice = try os.getcwd(&res.buffer);
-        res.len = res_slice.len;
+        res.len = @intCast(res_slice.len);
         return res;
     }
 
