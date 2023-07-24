@@ -178,36 +178,30 @@ pub fn save(settings: Settings) !void {
 }
 
 pub fn saveTo(settings: Settings, raw_writer: anytype) !void {
-    var writer = json.writeStream(raw_writer, 16);
-    writer.whitespace = .{
-        .indent_level = 0,
-        .indent = .{ .space = 4 },
-    };
+    var writer = json.writeStream(raw_writer, .{ .whitespace = .indent_4 });
 
     try writer.beginObject();
     try writer.objectField("name");
-    try writer.emitString(settings.name.items);
+    try writer.write(settings.name.items);
     try writer.objectField("description");
-    try writer.emitString(settings.description.items);
+    try writer.write(settings.description.items);
 
     try writer.objectField("commands");
     try writer.beginArray();
 
     for (settings.commands.items) |command| {
-        try writer.arrayElem();
         try writer.beginObject();
         try writer.objectField("name");
-        try writer.emitString(command.name.items);
+        try writer.write(command.name.items);
         try writer.objectField("args");
         try writer.beginArray();
 
         for (command.args.items) |arg| {
-            try writer.arrayElem();
             try writer.beginObject();
             try writer.objectField("name");
-            try writer.emitString(arg.name.items);
+            try writer.write(arg.name.items);
             try writer.objectField("value");
-            try writer.emitString(arg.value.items);
+            try writer.write(arg.value.items);
             try writer.endObject();
         }
 

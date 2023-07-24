@@ -213,7 +213,7 @@ fn openCommandFile() !fs.File {
             defer file.close();
 
             var buffered = std.io.bufferedWriter(file.writer());
-            try std.json.stringify(&default_commands, .{ .whitespace = .{} }, buffered.writer());
+            try std.json.stringify(&default_commands, .{ .whitespace = .indent_4 }, buffered.writer());
             try buffered.flush();
         }
 
