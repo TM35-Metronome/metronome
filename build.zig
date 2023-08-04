@@ -96,7 +96,7 @@ pub fn build(b: *std.Build) void {
         });
         const run_test = b.addRunArtifact(test_exe);
 
-        step.dependOn(&b.addInstallArtifact(exe).step);
+        step.dependOn(&b.addInstallArtifact(exe, .{}).step);
         step.dependOn(&exe.step);
         b.default_step.dependOn(step);
         exe_test_step.dependOn(&run_test.step);
@@ -142,11 +142,11 @@ pub fn build(b: *std.Build) void {
 }
 
 fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
-    exe.addIncludePath("lib/webview");
-    exe.addCSourceFile("lib/webview/webview.cc", &.{"-std=c++17"});
+    exe.addIncludePath(.{ .path = "lib/webview" });
+    exe.addCSourceFiles(&.{"lib/webview/webview.cc"}, &.{"-std=c++17"});
     switch (target.getOsTag()) {
         .windows => {
-            exe.addIncludePath("lib/webview-c/ms.webview2/include");
+            exe.addIncludePath(.{ .path = "lib/webview-c/ms.webview2/include" });
             exe.linkSystemLibrary("advapi32");
             exe.linkSystemLibrary("shlwapi");
             exe.linkSystemLibrary("version");
@@ -164,19 +164,19 @@ fn buildAndLinkMd4c(exe: *std.Build.CompileStep) void {
         "lib/md4c/src/md4c.c",
         "lib/md4c/src/md4c-html.c",
     }, &.{});
-    exe.addIncludePath("lib/md4c/src");
+    exe.addIncludePath(.{ .path = "lib/md4c/src" });
 }
 
 fn buildAndLinkNativeFileDialog(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
-    exe.addCSourceFile("lib/nativefiledialog/src/nfd_common.c", &.{});
-    exe.addIncludePath("lib/nativefiledialog/src/include");
+    exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_common.c"}, &.{});
+    exe.addIncludePath(.{ .path = "lib/nativefiledialog/src/include" });
     switch (target.getOsTag()) {
         .windows => {
-            exe.addCSourceFile("lib/nativefiledialog/src/nfd_win.cpp", &.{});
+            exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_win.cpp"}, &.{});
             exe.linkSystemLibrary("uuid");
         },
         .linux => {
-            exe.addCSourceFile("lib/nativefiledialog/src/nfd_zenity.c", &.{});
+            exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_zenity.c"}, &.{});
             exe.linkSystemLibrary("webkit2gtk-4.0");
         },
         else => unreachable, // TODO: More os support
