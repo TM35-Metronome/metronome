@@ -8,7 +8,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: master
@@ -21,7 +21,7 @@ jobs:
         optimize: [Debug, ReleaseSafe, ReleaseFast, ReleaseSmall]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: goto-bus-stop/setup-zig@v2
@@ -51,7 +51,7 @@ jobs:
               optimize: optimize=Debug
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: goto-bus-stop/setup-zig@v2
@@ -76,7 +76,7 @@ jobs:
     needs: [lint, test, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v3
       - name: Creating release
         env:
