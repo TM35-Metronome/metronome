@@ -137,7 +137,10 @@ pub const path = struct {
         // of MAX_PATH_BYTES is allocated, and that only one allocation occurs. This
         // ensures that only a valid path has been allocated into res.
         var fba = heap.FixedBufferAllocator.init(&res.buffer);
-        var failing = std.testing.FailingAllocator.init(fba.allocator(), 1);
+        var failing = std.testing.FailingAllocator.init(fba.allocator(), .{
+            .fail_index = 1,
+            .resize_fail_index = 0,
+        });
         const res_slice = fs.path.join(failing.allocator(), paths) catch unreachable;
         res.len = @intCast(res_slice.len);
 
