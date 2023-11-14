@@ -25,11 +25,11 @@ pub const Language = enum {
 };
 
 pub fn Ptr(comptime P: type) type {
-    return rom.ptr.RelativePointer(P, u32, .Little, 0x8000000, 0);
+    return rom.ptr.RelativePointer(P, u32, .little, 0x8000000, 0);
 }
 
 pub fn Slice(comptime S: type) type {
-    return rom.ptr.RelativeSlice(S, u32, .Little, .len_first, 0x8000000);
+    return rom.ptr.RelativeSlice(S, u32, .little, .len_first, 0x8000000);
 }
 
 pub const BasePokemon = extern struct {

@@ -253,7 +253,7 @@ pub fn RelativeSlice(
 // zig fmt: off
 test "RelativeSlice" {
     @setEvalBranchQuota(100000000);
-    inline for ([_]builtin.Endian{.Little,.Big}) |endian|
+    inline for ([_]builtin.Endian{.little,.big}) |endian|
     inline for ([_]usize{25,50,75}) |offset|
     inline for ([_]type{u8, u16, u32}) |Child|
     inline for ([_]type{u8, u16, u32}) |Int| {

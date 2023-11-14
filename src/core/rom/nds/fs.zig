@@ -208,7 +208,7 @@ pub const Iterator = struct {
         fbs.pos += length;
 
         const handle = if (is_folder) blk: {
-            const read_id = reader.readIntLittle(u16) catch return null;
+            const read_id = reader.readInt(u16, .little) catch return null;
             debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
             break :blk read_id & 0x0FFF;
         } else blk: {

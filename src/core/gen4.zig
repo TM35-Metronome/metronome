@@ -817,12 +817,13 @@ pub const Game = struct {
             const secure_area = arm9[0..0x4000];
 
             var len_bytes: [3]u8 = undefined;
-            mem.writeIntLittle(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len)));
+            mem.writeInt(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len)), .little);
             if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
-                mem.writeIntLittle(
+                mem.writeInt(
                     u24,
                     secure_area[off..][0..3],
                     @as(u24, @intCast(arm9.len)),
+                    .little,
                 );
             }
             mem.copy(

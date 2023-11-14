@@ -19,7 +19,7 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
     if (data.len < 8)
         return error.BadHeader;
 
-    const inc_len = mem.readIntLittle(u32, data[data.len - 4 ..][0..4]);
+    const inc_len = mem.readInt(u32, data[data.len - 4 ..][0..4], .little);
     const lengths = if (inc_len == 0) blk: {
         break :blk Lengths{
             .enc = 0,
@@ -32,7 +32,7 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
         if (hdr_len < 8 or hdr_len > 0xB) return error.BadHeaderLength;
         if (data.len <= hdr_len) return error.BadLength;
 
-        const enc_len = mem.readIntLittle(u32, data[data.len - 8 ..][0..4]) & 0x00FFFFFF;
+        const enc_len = mem.readInt(u32, data[data.len - 8 ..][0..4], .little) & 0x00FFFFFF;
         const dec_len = try math.sub(u32, @as(u32, @intCast(data.len)), enc_len);
         const pak_len = try math.sub(u32, enc_len, hdr_len);
         const raw_len = dec_len + enc_len + inc_len;
@@ -213,11 +213,11 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
             hdr_len += 1;
         }
 
-        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(enc_len + hdr_len)));
+        mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(enc_len + hdr_len)), .little);
         pak += 3;
         pak_buffer[pak] = @intCast(hdr_len);
         pak += 1;
-        mem.writeIntLittle(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(inc_len - hdr_len)));
+        mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(inc_len - hdr_len)), .little);
         pak += 4;
     }
 

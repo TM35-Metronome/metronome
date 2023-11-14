@@ -143,7 +143,10 @@ pub fn build(b: *std.Build) void {
 
 fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
     exe.addIncludePath(.{ .path = "lib/webview" });
-    exe.addCSourceFiles(&.{"lib/webview/webview.cc"}, &.{"-std=c++17"});
+    exe.addCSourceFiles(.{
+        .files = &.{"lib/webview/webview.cc"},
+        .flags = &.{ "-std=c++17", "-DWEBVIEW_STATIC" },
+    });
     switch (target.getOsTag()) {
         .windows => {
             exe.addIncludePath(.{ .path = "lib/webview-c/ms.webview2/include" });
@@ -159,24 +162,26 @@ fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget)
 }
 
 fn buildAndLinkMd4c(exe: *std.Build.CompileStep) void {
-    exe.addCSourceFiles(&.{
-        "lib/md4c/src/entity.c",
-        "lib/md4c/src/md4c.c",
-        "lib/md4c/src/md4c-html.c",
-    }, &.{});
+    exe.addCSourceFiles(.{
+        .files = &.{
+            "lib/md4c/src/entity.c",
+            "lib/md4c/src/md4c.c",
+            "lib/md4c/src/md4c-html.c",
+        },
+    });
     exe.addIncludePath(.{ .path = "lib/md4c/src" });
 }
 
 fn buildAndLinkNativeFileDialog(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
-    exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_common.c"}, &.{});
+    exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_common.c"} });
     exe.addIncludePath(.{ .path = "lib/nativefiledialog/src/include" });
     switch (target.getOsTag()) {
         .windows => {
-            exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_win.cpp"}, &.{});
+            exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_win.cpp"} });
             exe.linkSystemLibrary("uuid");
         },
         .linux => {
-            exe.addCSourceFiles(&.{"lib/nativefiledialog/src/nfd_zenity.c"}, &.{});
+            exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_zenity.c"} });
             exe.linkSystemLibrary("webkit2gtk-4.0");
         },
         else => unreachable, // TODO: More os support

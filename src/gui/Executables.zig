@@ -339,7 +339,7 @@ fn execHelp(allocator: mem.Allocator, exe: []const u8) ![]u8 {
     var buf: [1024 * 40]u8 = undefined;
     var fba = heap.FixedBufferAllocator.init(&buf);
 
-    const res = try std.ChildProcess.exec(.{
+    const res = try std.ChildProcess.run(.{
         .allocator = fba.allocator(),
         .argv = &[_][]const u8{ exe, "--help" },
     });

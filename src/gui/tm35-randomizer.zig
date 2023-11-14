@@ -747,7 +747,7 @@ fn loadRom(program: *Program) !void {
         else => unreachable,
     };
 
-    const result = try std.ChildProcess.exec(.{
+    const result = try std.ChildProcess.run(.{
         .allocator = program.allocator,
         .argv = &[_][]const u8{
             program.exes.identify.slice(),

@@ -7,22 +7,22 @@ const testing = std.testing;
 
 const native_endian = builtin.target.cpu.arch.endian();
 
-pub const li128 = Int(i128, .Little);
-pub const li16 = Int(i16, .Little);
-pub const li32 = Int(i32, .Little);
-pub const li64 = Int(i64, .Little);
-pub const lu128 = Int(u128, .Little);
-pub const lu16 = Int(u16, .Little);
-pub const lu32 = Int(u32, .Little);
-pub const lu64 = Int(u64, .Little);
+pub const li128 = Int(i128, .little);
+pub const li16 = Int(i16, .little);
+pub const li32 = Int(i32, .little);
+pub const li64 = Int(i64, .little);
+pub const lu128 = Int(u128, .little);
+pub const lu16 = Int(u16, .little);
+pub const lu32 = Int(u32, .little);
+pub const lu64 = Int(u64, .little);
 
-pub const bi128 = Int(i128, .Big);
-pub const bi16 = Int(i16, .Big);
-pub const bi32 = Int(i32, .Big);
-pub const bu128 = Int(u128, .Big);
-pub const bu16 = Int(u16, .Big);
-pub const bu32 = Int(u32, .Big);
-pub const bu64 = Int(u64, .Big);
+pub const bi128 = Int(i128, .big);
+pub const bi16 = Int(i16, .big);
+pub const bi32 = Int(i32, .big);
+pub const bu128 = Int(u128, .big);
+pub const bu16 = Int(u16, .big);
+pub const bu32 = Int(u32, .big);
+pub const bu64 = Int(u64, .big);
 
 /// A data structure representing an integer of a specific endianness
 pub fn Int(comptime _Inner: type, comptime _endian: std.builtin.Endian) type {

@@ -661,14 +661,14 @@ fn encode(data: []const u8, out: anytype) !void {
     var n: usize = 0;
     while (n < data.len) {
         if (mem.startsWith(u8, data[n..], "\n")) {
-            try out.writeIntLittle(u16, 0xfffe);
+            try out.writeInt(u16, 0xfffe, .little);
             n += 1;
             continue;
         }
         if (mem.startsWith(u8, data[n..], "\\x")) {
             const hex = data[n + 2 ..][0..4];
             const parsed = try fmt.parseUnsigned(u16, hex, 16);
-            try out.writeIntLittle(u16, parsed);
+            try out.writeInt(u16, parsed, .little);
             n += 6;
             continue;
         }
@@ -678,10 +678,10 @@ fn encode(data: []const u8, out: anytype) !void {
             break;
 
         const codepoint = unicode.utf8Decode(data[n..][0..ulen]) catch unreachable;
-        try out.writeIntLittle(u16, @as(u16, @intCast(codepoint)));
+        try out.writeInt(u16, @as(u16, @intCast(codepoint)), .little);
         n += ulen;
     }
-    try out.writeIntLittle(u16, 0xffff);
+    try out.writeInt(u16, 0xffff, .little);
 }
 
 fn encrypt(data: []align(1) lu16, _key: u16) void {
@@ -1116,12 +1116,13 @@ pub const Game = struct {
         const secure_area = arm9[0..0x4000];
 
         var len_bytes: [3]u8 = undefined;
-        mem.writeIntLittle(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len + 0x4000)));
+        mem.writeInt(u24, &len_bytes, @as(u24, @intCast(game.owned.old_arm_len + 0x4000)), .little);
         if (mem.indexOf(u8, secure_area, &len_bytes)) |off| {
-            mem.writeIntLittle(
+            mem.writeInt(
                 u24,
                 secure_area[off..][0..3],
                 @as(u24, @intCast(arm9.len + 0x4000)),
+                .little,
             );
         }
 
@@ -1266,9 +1267,9 @@ pub const Game = struct {
             const chars_per_entry = table.maxStringLen() + 1; // Always make room for a terminator
             const bytes_per_entry = chars_per_entry * 2;
             const start_of_section = @sizeOf(Header) + @sizeOf(lu32);
-            writer.writeIntLittle(u32, start_of_section) catch unreachable;
-            writer.writeIntLittle(u32, @as(u32, @intCast(number_of_entries *
-                (@sizeOf(Entry) + bytes_per_entry)))) catch unreachable;
+            writer.writeInt(u32, start_of_section, .little) catch unreachable;
+            writer.writeInt(u32, @as(u32, @intCast(number_of_entries *
+                (@sizeOf(Entry) + bytes_per_entry))), .little) catch unreachable;
 
             const start_of_entry_table = writer.context.pos;
             for (0..number_of_entries) |_| {
