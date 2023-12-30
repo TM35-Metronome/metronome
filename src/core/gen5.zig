@@ -16,6 +16,7 @@ const unicode = std.unicode;
 
 const nds = rom.nds;
 
+const li32 = rom.int.li32;
 const lu128 = rom.int.lu128;
 const lu16 = rom.int.lu16;
 const lu32 = rom.int.lu32;
@@ -1362,6 +1363,46 @@ pub const Game = struct {
                 };
                 while (decoder.next() catch continue) |command| : (command_offset = decoder.i) {
                     switch (command.kind) {
+                        .wait_button,
+                        .message,
+                        .message2,
+                        .message3,
+                        .bubble_message,
+                        .close_bubble_message,
+                        .bordered_message,
+                        .close_bordered_message,
+                        .close_message_k_p,
+                        .close_message_k_p2,
+                        .event_grey_message,
+                        .closed_event_grey_message,
+                        .multi2,
+                        .close_multi,
+                        .set_text_script_message,
+                        .angry_message,
+                        .close_angry_message,
+                        .double_message,
+                        .show_message_at,
+                        .close_show_message_at,
+                        .paper_message,
+                        .close_paper_message,
+                        .special_message,
+                        => {
+                            const bytes = mem.asBytes(command);
+                            const len = @import("script.zig").packedLength(command.*) catch
+                                unreachable;
+                            if (len % 2 == 0) {
+                                mem.set(u8, bytes[0..len], 0);
+                            } else if (len == 3) {
+                                unreachable;
+                            } else if (len == 5) {
+                                command.kind = .@"if";
+                                command.@"if".value = 0;
+                                command.@"if".offset = li32.init(0);
+                            } else {
+                                command.kind = .jump;
+                                command.jump.offset = li32.init(@intCast(i32, len) - 6);
+                            }
+                        },
                         .wild_battle => try static_pokemons.append(.{
                             .species = &command.wild_battle.species,
                             .level = &command.wild_battle.level,
