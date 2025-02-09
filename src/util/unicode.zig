@@ -1,9 +1,3 @@
-const std = @import("std");
-
-const fmt = std.fmt;
-const mem = std.mem;
-const unicode = std.unicode;
-
 /// Improved Utf8View which also keeps track of the length in codepoints
 pub const Utf8View = struct {
     bytes: []const u8,
@@ -33,8 +27,8 @@ pub const Utf8View = struct {
         };
     }
 
-    pub fn iterator(view: Utf8View) unicode.Utf8Iterator {
-        return unicode.Utf8View.initUnchecked(view.bytes).iterator();
+    pub fn iterator(view: Utf8View) std.unicode.Utf8Iterator {
+        return std.unicode.Utf8View.initUnchecked(view.bytes).iterator();
     }
 
     pub fn format(
@@ -43,24 +37,24 @@ pub const Utf8View = struct {
         options: std.fmt.FormatOptions,
         writer: anytype,
     ) @TypeOf(writer).Error!void {
-        try fmt.formatType(
+        try std.fmt.formatType(
             self.bytes,
             fmt_str,
             options,
             writer,
-            fmt.default_max_depth,
+            std.fmt.default_max_depth,
         );
     }
 };
 
 /// Given a string of words, this function will split the string into lines where
 /// a maximum of `max_line_len` characters can occur on each line.
-pub fn splitIntoLines(allocator: mem.Allocator, max_line_len: usize, string: Utf8View) !Utf8View {
+pub fn splitIntoLines(allocator: std.mem.Allocator, max_line_len: usize, string: Utf8View) !Utf8View {
     var res = std.ArrayList(u8).init(allocator);
     errdefer res.deinit();
 
     var curr_line_len: usize = 0;
-    var it = mem.tokenize(u8, string.bytes, " \n");
+    var it = std.mem.tokenize(u8, string.bytes, " \n");
     while (it.next()) |word_bytes| {
         const word = Utf8View.init(word_bytes) catch unreachable;
         const next_line_len = word.len + curr_line_len + (1 * @intFromBool(curr_line_len != 0));
@@ -83,15 +77,17 @@ fn utf8Len(s: []const u8) !usize {
     var res: usize = 0;
     var i: usize = 0;
     while (i < s.len) : (res += 1) {
-        const cp_len = try unicode.utf8ByteSequenceLength(s[i]);
+        const cp_len = try std.unicode.utf8ByteSequenceLength(s[i]);
         if (i + cp_len > s.len) {
             return error.InvalidUtf8;
         }
 
-        if (unicode.utf8Decode(s[i .. i + cp_len])) |_| {} else |_| {
+        if (std.unicode.utf8Decode(s[i .. i + cp_len])) |_| {} else |_| {
             return error.InvalidUtf8;
         }
         i += cp_len;
     }
     return res;
 }
+
+const std = @import("std");

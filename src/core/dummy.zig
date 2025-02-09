@@ -1,0 +1,1995 @@
+pub const Game = struct {
+    arena: std.heap.ArenaAllocator,
+    m: struct {
+        pokemons: []Pokemon,
+        trainers: []Trainer,
+        trainer_parties: []Party,
+    },
+
+    pub fn init(gpa: std.mem.Allocator, values: Init) !Game {
+        var arena_state = std.heap.ArenaAllocator.init(gpa);
+        const arena = arena_state.allocator();
+        errdefer arena_state.deinit();
+
+        var res = Game{
+            .arena = undefined,
+            .m = .{
+                .pokemons = try arena.dupe(Pokemon, values.pokemons),
+                .trainers = try arena.dupe(Trainer, values.trainers),
+                .trainer_parties = try arena.dupe(Party, values.trainer_parties),
+            },
+        };
+        res.arena = arena_state;
+        return res;
+    }
+
+    pub fn deinit(game: Game) void {
+        game.arena.deinit();
+    }
+
+    pub fn pokemons(game: Game) !Pokemons {
+        return .{ .slice = game.m.pokemons };
+    }
+
+    pub fn trainers(game: Game) !Trainers {
+        return .{ .slice = game.m.trainers };
+    }
+
+    pub fn trainerParties(game: Game) !Parties {
+        return .{ .slice = game.m.trainer_parties };
+    }
+
+    pub fn validSpecies(game: Game, out: *std.ArrayList(u16)) !void {
+        try out.ensureUnusedCapacity(game.m.pokemons.len);
+        for (1..game.m.pokemons.len) |species|
+            out.appendAssumeCapacity(@intCast(species));
+    }
+
+    pub fn format(
+        self: @This(),
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) @TypeOf(writer).Error!void {
+        _ = fmt;
+        _ = options;
+        return std.json.stringify(self.m, .{
+            .whitespace = .indent_2,
+            .emit_strings_as_arrays = true,
+        }, writer);
+    }
+
+    pub const Init = struct {
+        pokemons: []const Pokemon,
+        trainers: []const Trainer,
+        trainer_parties: []const Party,
+    };
+};
+
+pub const Type = enum {
+    grass,
+    poision,
+};
+
+pub const Ability = enum {
+    null,
+    overgrowth,
+    chlorophyll,
+};
+
+pub const Pokemon = struct {
+    stats: common.Stats,
+    types: [2]u8,
+    abilities: [3]u8,
+};
+
+pub const Trainer = struct {};
+
+pub const Party = struct {
+    size: u8,
+    type: common.PartyType,
+    members: [6]gen5.PartyMemberBoth,
+
+    pub fn init(t: common.PartyType, members: []const gen5.PartyMemberBoth) Party {
+        var res = Party{
+            .size = @intCast(members.len),
+            .type = t,
+            .members = @splat(.{}),
+        };
+        @memcpy(res.members[0..members.len], members);
+        return res;
+    }
+};
+
+pub const Pokemons = common.IndexableSlice(Pokemon);
+pub const Trainers = common.IndexableSlice(Trainer);
+pub const Parties = common.IndexableSlice(Party);
+
+pub const default = Game.Init{
+    .pokemons = &.{
+        .{
+            .stats = .{
+                .hp = 0,
+                .attack = 0,
+                .defense = 0,
+                .sp_attack = 0,
+                .sp_defense = 0,
+                .speed = 0,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 0, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 49,
+                .defense = 49,
+                .sp_attack = 65,
+                .sp_defense = 65,
+                .speed = 45,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 65, 0, 34 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 62,
+                .defense = 63,
+                .sp_attack = 80,
+                .sp_defense = 80,
+                .speed = 60,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 65, 0, 34 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 82,
+                .defense = 83,
+                .sp_attack = 100,
+                .sp_defense = 100,
+                .speed = 80,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 65, 0, 34 },
+        },
+        .{
+            .stats = .{
+                .hp = 39,
+                .attack = 52,
+                .defense = 43,
+                .sp_attack = 60,
+                .sp_defense = 50,
+                .speed = 65,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 66, 0, 94 },
+        },
+        .{
+            .stats = .{
+                .hp = 58,
+                .attack = 64,
+                .defense = 58,
+                .sp_attack = 80,
+                .sp_defense = 65,
+                .speed = 80,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 66, 0, 94 },
+        },
+        .{
+            .stats = .{
+                .hp = 78,
+                .attack = 84,
+                .defense = 78,
+                .sp_attack = 109,
+                .sp_defense = 85,
+                .speed = 100,
+            },
+            .types = .{ 9, 2 },
+            .abilities = .{ 66, 0, 94 },
+        },
+        .{
+            .stats = .{
+                .hp = 44,
+                .attack = 48,
+                .defense = 65,
+                .sp_attack = 50,
+                .sp_defense = 64,
+                .speed = 43,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 67, 0, 44 },
+        },
+        .{
+            .stats = .{
+                .hp = 59,
+                .attack = 63,
+                .defense = 80,
+                .sp_attack = 65,
+                .sp_defense = 80,
+                .speed = 58,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 67, 0, 44 },
+        },
+        .{
+            .stats = .{
+                .hp = 79,
+                .attack = 83,
+                .defense = 100,
+                .sp_attack = 85,
+                .sp_defense = 105,
+                .speed = 78,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 67, 0, 44 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 30,
+                .defense = 35,
+                .sp_attack = 20,
+                .sp_defense = 20,
+                .speed = 45,
+            },
+            .types = .{ 6, 6 },
+            .abilities = .{ 19, 0, 50 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 20,
+                .defense = 55,
+                .sp_attack = 25,
+                .sp_defense = 25,
+                .speed = 30,
+            },
+            .types = .{ 6, 6 },
+            .abilities = .{ 61, 0, 61 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 45,
+                .defense = 50,
+                .sp_attack = 80,
+                .sp_defense = 80,
+                .speed = 70,
+            },
+            .types = .{ 6, 2 },
+            .abilities = .{ 14, 0, 110 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 35,
+                .defense = 30,
+                .sp_attack = 20,
+                .sp_defense = 20,
+                .speed = 50,
+            },
+            .types = .{ 6, 3 },
+            .abilities = .{ 19, 0, 50 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 25,
+                .defense = 50,
+                .sp_attack = 25,
+                .sp_defense = 25,
+                .speed = 35,
+            },
+            .types = .{ 6, 3 },
+            .abilities = .{ 61, 0, 61 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 80,
+                .defense = 40,
+                .sp_attack = 45,
+                .sp_defense = 80,
+                .speed = 75,
+            },
+            .types = .{ 6, 3 },
+            .abilities = .{ 68, 0, 97 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 45,
+                .defense = 40,
+                .sp_attack = 35,
+                .sp_defense = 35,
+                .speed = 56,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 77, 145 },
+        },
+        .{
+            .stats = .{
+                .hp = 63,
+                .attack = 60,
+                .defense = 55,
+                .sp_attack = 50,
+                .sp_defense = 50,
+                .speed = 71,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 77, 145 },
+        },
+        .{
+            .stats = .{
+                .hp = 83,
+                .attack = 80,
+                .defense = 75,
+                .sp_attack = 70,
+                .sp_defense = 70,
+                .speed = 91,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 77, 145 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 56,
+                .defense = 35,
+                .sp_attack = 25,
+                .sp_defense = 35,
+                .speed = 72,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 50, 62, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 81,
+                .defense = 60,
+                .sp_attack = 50,
+                .sp_defense = 70,
+                .speed = 97,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 50, 62, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 60,
+                .defense = 30,
+                .sp_attack = 31,
+                .sp_defense = 31,
+                .speed = 70,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 0, 97 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 90,
+                .defense = 65,
+                .sp_attack = 61,
+                .sp_defense = 61,
+                .speed = 100,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 0, 97 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 60,
+                .defense = 44,
+                .sp_attack = 40,
+                .sp_defense = 54,
+                .speed = 55,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 22, 61, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 85,
+                .defense = 69,
+                .sp_attack = 65,
+                .sp_defense = 79,
+                .speed = 80,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 22, 61, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 55,
+                .defense = 30,
+                .sp_attack = 50,
+                .sp_defense = 40,
+                .speed = 90,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 9, 0, 31 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 90,
+                .defense = 55,
+                .sp_attack = 90,
+                .sp_defense = 80,
+                .speed = 100,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 9, 0, 31 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 75,
+                .defense = 85,
+                .sp_attack = 20,
+                .sp_defense = 30,
+                .speed = 40,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 8, 0, 146 },
+        },
+        .{
+            .stats = .{
+                .hp = 75,
+                .attack = 100,
+                .defense = 110,
+                .sp_attack = 45,
+                .sp_defense = 55,
+                .speed = 65,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 8, 0, 146 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 47,
+                .defense = 52,
+                .sp_attack = 40,
+                .sp_defense = 40,
+                .speed = 41,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 38, 79, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 62,
+                .defense = 67,
+                .sp_attack = 55,
+                .sp_defense = 55,
+                .speed = 56,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 38, 79, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 82,
+                .defense = 87,
+                .sp_attack = 75,
+                .sp_defense = 85,
+                .speed = 76,
+            },
+            .types = .{ 3, 4 },
+            .abilities = .{ 38, 79, 125 },
+        },
+        .{
+            .stats = .{
+                .hp = 46,
+                .attack = 57,
+                .defense = 40,
+                .sp_attack = 40,
+                .sp_defense = 40,
+                .speed = 50,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 38, 79, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 61,
+                .attack = 72,
+                .defense = 57,
+                .sp_attack = 55,
+                .sp_defense = 55,
+                .speed = 65,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 38, 79, 55 },
+        },
+        .{
+            .stats = .{
+                .hp = 81,
+                .attack = 92,
+                .defense = 77,
+                .sp_attack = 85,
+                .sp_defense = 75,
+                .speed = 85,
+            },
+            .types = .{ 3, 4 },
+            .abilities = .{ 38, 79, 125 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 45,
+                .defense = 48,
+                .sp_attack = 60,
+                .sp_defense = 65,
+                .speed = 35,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 56, 98, 132 },
+        },
+        .{
+            .stats = .{
+                .hp = 95,
+                .attack = 70,
+                .defense = 73,
+                .sp_attack = 85,
+                .sp_defense = 90,
+                .speed = 60,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 56, 98, 109 },
+        },
+        .{
+            .stats = .{
+                .hp = 38,
+                .attack = 41,
+                .defense = 40,
+                .sp_attack = 50,
+                .sp_defense = 65,
+                .speed = 65,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 18, 0, 70 },
+        },
+        .{
+            .stats = .{
+                .hp = 73,
+                .attack = 76,
+                .defense = 75,
+                .sp_attack = 81,
+                .sp_defense = 100,
+                .speed = 100,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 18, 0, 70 },
+        },
+        .{
+            .stats = .{
+                .hp = 115,
+                .attack = 45,
+                .defense = 20,
+                .sp_attack = 45,
+                .sp_defense = 25,
+                .speed = 20,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 56, 0, 132 },
+        },
+        .{
+            .stats = .{
+                .hp = 140,
+                .attack = 70,
+                .defense = 45,
+                .sp_attack = 75,
+                .sp_defense = 50,
+                .speed = 45,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 56, 0, 119 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 45,
+                .defense = 35,
+                .sp_attack = 30,
+                .sp_defense = 40,
+                .speed = 55,
+            },
+            .types = .{ 3, 2 },
+            .abilities = .{ 39, 0, 151 },
+        },
+        .{
+            .stats = .{
+                .hp = 75,
+                .attack = 80,
+                .defense = 70,
+                .sp_attack = 65,
+                .sp_defense = 75,
+                .speed = 90,
+            },
+            .types = .{ 3, 2 },
+            .abilities = .{ 39, 0, 151 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 50,
+                .defense = 55,
+                .sp_attack = 75,
+                .sp_defense = 65,
+                .speed = 30,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 50 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 65,
+                .defense = 70,
+                .sp_attack = 85,
+                .sp_defense = 75,
+                .speed = 40,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 1 },
+        },
+        .{
+            .stats = .{
+                .hp = 75,
+                .attack = 80,
+                .defense = 85,
+                .sp_attack = 100,
+                .sp_defense = 90,
+                .speed = 50,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 27 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 70,
+                .defense = 55,
+                .sp_attack = 45,
+                .sp_defense = 55,
+                .speed = 25,
+            },
+            .types = .{ 6, 11 },
+            .abilities = .{ 27, 87, 6 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 95,
+                .defense = 80,
+                .sp_attack = 60,
+                .sp_defense = 80,
+                .speed = 30,
+            },
+            .types = .{ 6, 11 },
+            .abilities = .{ 27, 87, 6 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 55,
+                .defense = 50,
+                .sp_attack = 40,
+                .sp_defense = 55,
+                .speed = 45,
+            },
+            .types = .{ 6, 3 },
+            .abilities = .{ 14, 110, 50 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 65,
+                .defense = 60,
+                .sp_attack = 90,
+                .sp_defense = 75,
+                .speed = 90,
+            },
+            .types = .{ 6, 3 },
+            .abilities = .{ 19, 110, 147 },
+        },
+        .{
+            .stats = .{
+                .hp = 10,
+                .attack = 55,
+                .defense = 25,
+                .sp_attack = 35,
+                .sp_defense = 45,
+                .speed = 95,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 8, 71, 159 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 80,
+                .defense = 50,
+                .sp_attack = 50,
+                .sp_defense = 70,
+                .speed = 120,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 8, 71, 159 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 45,
+                .defense = 35,
+                .sp_attack = 40,
+                .sp_defense = 40,
+                .speed = 90,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 53, 101, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 70,
+                .defense = 60,
+                .sp_attack = 65,
+                .sp_defense = 65,
+                .speed = 115,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 7, 101, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 52,
+                .defense = 48,
+                .sp_attack = 65,
+                .sp_defense = 50,
+                .speed = 55,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 6, 13, 33 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 82,
+                .defense = 78,
+                .sp_attack = 95,
+                .sp_defense = 80,
+                .speed = 85,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 6, 13, 33 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 80,
+                .defense = 35,
+                .sp_attack = 35,
+                .sp_defense = 45,
+                .speed = 70,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 72, 83, 128 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 105,
+                .defense = 60,
+                .sp_attack = 60,
+                .sp_defense = 70,
+                .speed = 95,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 72, 83, 128 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 70,
+                .defense = 45,
+                .sp_attack = 70,
+                .sp_defense = 50,
+                .speed = 60,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 22, 18, 154 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 110,
+                .defense = 80,
+                .sp_attack = 100,
+                .sp_defense = 80,
+                .speed = 95,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 22, 18, 154 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 50,
+                .defense = 40,
+                .sp_attack = 40,
+                .sp_defense = 40,
+                .speed = 90,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 11, 6, 33 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 65,
+                .defense = 65,
+                .sp_attack = 50,
+                .sp_defense = 50,
+                .speed = 90,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 11, 6, 33 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 85,
+                .defense = 95,
+                .sp_attack = 70,
+                .sp_defense = 90,
+                .speed = 70,
+            },
+            .types = .{ 10, 1 },
+            .abilities = .{ 11, 6, 33 },
+        },
+        .{
+            .stats = .{
+                .hp = 25,
+                .attack = 20,
+                .defense = 15,
+                .sp_attack = 105,
+                .sp_defense = 55,
+                .speed = 90,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 28, 39, 98 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 35,
+                .defense = 30,
+                .sp_attack = 120,
+                .sp_defense = 70,
+                .speed = 105,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 28, 39, 98 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 50,
+                .defense = 45,
+                .sp_attack = 135,
+                .sp_defense = 85,
+                .speed = 120,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 28, 39, 98 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 80,
+                .defense = 50,
+                .sp_attack = 35,
+                .sp_defense = 35,
+                .speed = 35,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 62, 99, 80 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 100,
+                .defense = 70,
+                .sp_attack = 50,
+                .sp_defense = 60,
+                .speed = 45,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 62, 99, 80 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 130,
+                .defense = 80,
+                .sp_attack = 65,
+                .sp_defense = 85,
+                .speed = 55,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 62, 99, 80 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 75,
+                .defense = 35,
+                .sp_attack = 70,
+                .sp_defense = 30,
+                .speed = 40,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 82 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 90,
+                .defense = 50,
+                .sp_attack = 85,
+                .sp_defense = 45,
+                .speed = 55,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 82 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 105,
+                .defense = 65,
+                .sp_attack = 100,
+                .sp_defense = 60,
+                .speed = 70,
+            },
+            .types = .{ 11, 3 },
+            .abilities = .{ 34, 0, 82 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 40,
+                .defense = 35,
+                .sp_attack = 50,
+                .sp_defense = 100,
+                .speed = 70,
+            },
+            .types = .{ 10, 3 },
+            .abilities = .{ 29, 64, 44 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 70,
+                .defense = 65,
+                .sp_attack = 80,
+                .sp_defense = 120,
+                .speed = 100,
+            },
+            .types = .{ 10, 3 },
+            .abilities = .{ 29, 64, 44 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 80,
+                .defense = 100,
+                .sp_attack = 30,
+                .sp_defense = 30,
+                .speed = 20,
+            },
+            .types = .{ 5, 4 },
+            .abilities = .{ 69, 5, 8 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 95,
+                .defense = 115,
+                .sp_attack = 45,
+                .sp_defense = 45,
+                .speed = 35,
+            },
+            .types = .{ 5, 4 },
+            .abilities = .{ 69, 5, 8 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 110,
+                .defense = 130,
+                .sp_attack = 55,
+                .sp_defense = 65,
+                .speed = 45,
+            },
+            .types = .{ 5, 4 },
+            .abilities = .{ 69, 5, 8 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 85,
+                .defense = 55,
+                .sp_attack = 65,
+                .sp_defense = 65,
+                .speed = 90,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 50, 18, 49 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 100,
+                .defense = 70,
+                .sp_attack = 80,
+                .sp_defense = 80,
+                .speed = 105,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 50, 18, 49 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 65,
+                .defense = 65,
+                .sp_attack = 40,
+                .sp_defense = 40,
+                .speed = 15,
+            },
+            .types = .{ 10, 13 },
+            .abilities = .{ 12, 20, 144 },
+        },
+        .{
+            .stats = .{
+                .hp = 95,
+                .attack = 75,
+                .defense = 110,
+                .sp_attack = 100,
+                .sp_defense = 80,
+                .speed = 30,
+            },
+            .types = .{ 10, 13 },
+            .abilities = .{ 12, 20, 144 },
+        },
+        .{
+            .stats = .{
+                .hp = 25,
+                .attack = 35,
+                .defense = 70,
+                .sp_attack = 95,
+                .sp_defense = 55,
+                .speed = 45,
+            },
+            .types = .{ 12, 8 },
+            .abilities = .{ 42, 5, 148 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 60,
+                .defense = 95,
+                .sp_attack = 120,
+                .sp_defense = 70,
+                .speed = 70,
+            },
+            .types = .{ 12, 8 },
+            .abilities = .{ 42, 5, 148 },
+        },
+        .{
+            .stats = .{
+                .hp = 52,
+                .attack = 65,
+                .defense = 55,
+                .sp_attack = 58,
+                .sp_defense = 62,
+                .speed = 60,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 51, 39, 128 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 85,
+                .defense = 45,
+                .sp_attack = 35,
+                .sp_defense = 35,
+                .speed = 75,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 50, 48, 77 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 110,
+                .defense = 70,
+                .sp_attack = 60,
+                .sp_defense = 60,
+                .speed = 100,
+            },
+            .types = .{ 0, 2 },
+            .abilities = .{ 50, 48, 77 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 45,
+                .defense = 55,
+                .sp_attack = 45,
+                .sp_defense = 70,
+                .speed = 45,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 47, 93, 115 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 70,
+                .defense = 80,
+                .sp_attack = 70,
+                .sp_defense = 95,
+                .speed = 70,
+            },
+            .types = .{ 10, 14 },
+            .abilities = .{ 47, 93, 115 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 80,
+                .defense = 50,
+                .sp_attack = 40,
+                .sp_defense = 50,
+                .speed = 25,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 1, 60, 143 },
+        },
+        .{
+            .stats = .{
+                .hp = 105,
+                .attack = 105,
+                .defense = 75,
+                .sp_attack = 65,
+                .sp_defense = 100,
+                .speed = 50,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 1, 60, 143 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 65,
+                .defense = 100,
+                .sp_attack = 45,
+                .sp_defense = 25,
+                .speed = 40,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 75, 92, 142 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 95,
+                .defense = 180,
+                .sp_attack = 85,
+                .sp_defense = 45,
+                .speed = 70,
+            },
+            .types = .{ 10, 14 },
+            .abilities = .{ 75, 92, 142 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 35,
+                .defense = 30,
+                .sp_attack = 100,
+                .sp_defense = 35,
+                .speed = 80,
+            },
+            .types = .{ 7, 3 },
+            .abilities = .{ 26, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 50,
+                .defense = 45,
+                .sp_attack = 115,
+                .sp_defense = 55,
+                .speed = 95,
+            },
+            .types = .{ 7, 3 },
+            .abilities = .{ 26, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 65,
+                .defense = 60,
+                .sp_attack = 130,
+                .sp_defense = 75,
+                .speed = 110,
+            },
+            .types = .{ 7, 3 },
+            .abilities = .{ 26, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 45,
+                .defense = 160,
+                .sp_attack = 30,
+                .sp_defense = 45,
+                .speed = 70,
+            },
+            .types = .{ 5, 4 },
+            .abilities = .{ 69, 5, 133 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 48,
+                .defense = 45,
+                .sp_attack = 43,
+                .sp_defense = 90,
+                .speed = 42,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 15, 108, 39 },
+        },
+        .{
+            .stats = .{
+                .hp = 85,
+                .attack = 73,
+                .defense = 70,
+                .sp_attack = 73,
+                .sp_defense = 115,
+                .speed = 67,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 15, 108, 39 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 105,
+                .defense = 90,
+                .sp_attack = 25,
+                .sp_defense = 25,
+                .speed = 50,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 52, 75, 125 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 130,
+                .defense = 115,
+                .sp_attack = 50,
+                .sp_defense = 50,
+                .speed = 75,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 52, 75, 125 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 30,
+                .defense = 50,
+                .sp_attack = 55,
+                .sp_defense = 55,
+                .speed = 100,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 43, 9, 106 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 50,
+                .defense = 70,
+                .sp_attack = 80,
+                .sp_defense = 80,
+                .speed = 140,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 43, 9, 106 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 40,
+                .defense = 80,
+                .sp_attack = 60,
+                .sp_defense = 45,
+                .speed = 40,
+            },
+            .types = .{ 11, 13 },
+            .abilities = .{ 34, 0, 139 },
+        },
+        .{
+            .stats = .{
+                .hp = 95,
+                .attack = 95,
+                .defense = 85,
+                .sp_attack = 125,
+                .sp_defense = 65,
+                .speed = 55,
+            },
+            .types = .{ 11, 13 },
+            .abilities = .{ 34, 0, 139 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 50,
+                .defense = 95,
+                .sp_attack = 40,
+                .sp_defense = 50,
+                .speed = 35,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 69, 31, 4 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 80,
+                .defense = 110,
+                .sp_attack = 50,
+                .sp_defense = 80,
+                .speed = 45,
+            },
+            .types = .{ 4, 4 },
+            .abilities = .{ 69, 31, 4 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 120,
+                .defense = 53,
+                .sp_attack = 35,
+                .sp_defense = 110,
+                .speed = 87,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 7, 120, 84 },
+        },
+        .{
+            .stats = .{
+                .hp = 50,
+                .attack = 105,
+                .defense = 79,
+                .sp_attack = 35,
+                .sp_defense = 110,
+                .speed = 76,
+            },
+            .types = .{ 1, 1 },
+            .abilities = .{ 51, 89, 39 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 55,
+                .defense = 75,
+                .sp_attack = 60,
+                .sp_defense = 75,
+                .speed = 30,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 20, 12, 13 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 65,
+                .defense = 95,
+                .sp_attack = 60,
+                .sp_defense = 45,
+                .speed = 35,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 26, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 90,
+                .defense = 120,
+                .sp_attack = 85,
+                .sp_defense = 70,
+                .speed = 60,
+            },
+            .types = .{ 3, 3 },
+            .abilities = .{ 26, 0, 0 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 85,
+                .defense = 95,
+                .sp_attack = 30,
+                .sp_defense = 30,
+                .speed = 25,
+            },
+            .types = .{ 4, 5 },
+            .abilities = .{ 31, 69, 120 },
+        },
+        .{
+            .stats = .{
+                .hp = 105,
+                .attack = 130,
+                .defense = 120,
+                .sp_attack = 45,
+                .sp_defense = 45,
+                .speed = 40,
+            },
+            .types = .{ 4, 5 },
+            .abilities = .{ 31, 69, 120 },
+        },
+        .{
+            .stats = .{
+                .hp = 250,
+                .attack = 5,
+                .defense = 5,
+                .sp_attack = 35,
+                .sp_defense = 105,
+                .speed = 50,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 30, 32, 131 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 55,
+                .defense = 115,
+                .sp_attack = 100,
+                .sp_defense = 40,
+                .speed = 60,
+            },
+            .types = .{ 11, 11 },
+            .abilities = .{ 34, 102, 144 },
+        },
+        .{
+            .stats = .{
+                .hp = 105,
+                .attack = 95,
+                .defense = 80,
+                .sp_attack = 40,
+                .sp_defense = 80,
+                .speed = 90,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 48, 113, 39 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 40,
+                .defense = 70,
+                .sp_attack = 70,
+                .sp_defense = 25,
+                .speed = 60,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 33, 97, 6 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 65,
+                .defense = 95,
+                .sp_attack = 95,
+                .sp_defense = 45,
+                .speed = 85,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 38, 97, 6 },
+        },
+        .{
+            .stats = .{
+                .hp = 45,
+                .attack = 67,
+                .defense = 60,
+                .sp_attack = 35,
+                .sp_defense = 50,
+                .speed = 63,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 33, 41, 31 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 92,
+                .defense = 65,
+                .sp_attack = 65,
+                .sp_defense = 80,
+                .speed = 68,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 33, 41, 31 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 45,
+                .defense = 55,
+                .sp_attack = 70,
+                .sp_defense = 55,
+                .speed = 85,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 35, 30, 148 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 75,
+                .defense = 85,
+                .sp_attack = 100,
+                .sp_defense = 85,
+                .speed = 115,
+            },
+            .types = .{ 10, 13 },
+            .abilities = .{ 35, 30, 148 },
+        },
+        .{
+            .stats = .{
+                .hp = 40,
+                .attack = 45,
+                .defense = 65,
+                .sp_attack = 100,
+                .sp_defense = 120,
+                .speed = 90,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 43, 111, 101 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 110,
+                .defense = 80,
+                .sp_attack = 55,
+                .sp_defense = 80,
+                .speed = 105,
+            },
+            .types = .{ 6, 2 },
+            .abilities = .{ 68, 101, 80 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 50,
+                .defense = 35,
+                .sp_attack = 115,
+                .sp_defense = 95,
+                .speed = 95,
+            },
+            .types = .{ 14, 13 },
+            .abilities = .{ 12, 108, 87 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 83,
+                .defense = 57,
+                .sp_attack = 95,
+                .sp_defense = 85,
+                .speed = 105,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 9, 0, 72 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 95,
+                .defense = 57,
+                .sp_attack = 100,
+                .sp_defense = 85,
+                .speed = 93,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 49, 0, 72 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 125,
+                .defense = 100,
+                .sp_attack = 55,
+                .sp_defense = 70,
+                .speed = 85,
+            },
+            .types = .{ 6, 6 },
+            .abilities = .{ 52, 104, 153 },
+        },
+        .{
+            .stats = .{
+                .hp = 75,
+                .attack = 100,
+                .defense = 95,
+                .sp_attack = 40,
+                .sp_defense = 70,
+                .speed = 110,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 22, 83, 125 },
+        },
+        .{
+            .stats = .{
+                .hp = 20,
+                .attack = 10,
+                .defense = 55,
+                .sp_attack = 15,
+                .sp_defense = 20,
+                .speed = 80,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 33, 0, 155 },
+        },
+        .{
+            .stats = .{
+                .hp = 95,
+                .attack = 125,
+                .defense = 79,
+                .sp_attack = 60,
+                .sp_defense = 100,
+                .speed = 81,
+            },
+            .types = .{ 10, 2 },
+            .abilities = .{ 22, 0, 153 },
+        },
+        .{
+            .stats = .{
+                .hp = 130,
+                .attack = 85,
+                .defense = 80,
+                .sp_attack = 85,
+                .sp_defense = 95,
+                .speed = 60,
+            },
+            .types = .{ 10, 14 },
+            .abilities = .{ 11, 75, 93 },
+        },
+        .{
+            .stats = .{
+                .hp = 48,
+                .attack = 48,
+                .defense = 48,
+                .sp_attack = 48,
+                .sp_defense = 48,
+                .speed = 48,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 7, 0, 150 },
+        },
+        .{
+            .stats = .{
+                .hp = 55,
+                .attack = 55,
+                .defense = 50,
+                .sp_attack = 45,
+                .sp_defense = 65,
+                .speed = 55,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 50, 91, 107 },
+        },
+        .{
+            .stats = .{
+                .hp = 130,
+                .attack = 65,
+                .defense = 60,
+                .sp_attack = 110,
+                .sp_defense = 95,
+                .speed = 65,
+            },
+            .types = .{ 10, 10 },
+            .abilities = .{ 11, 11, 93 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 65,
+                .defense = 60,
+                .sp_attack = 110,
+                .sp_defense = 95,
+                .speed = 130,
+            },
+            .types = .{ 12, 12 },
+            .abilities = .{ 10, 10, 95 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 130,
+                .defense = 60,
+                .sp_attack = 95,
+                .sp_defense = 110,
+                .speed = 65,
+            },
+            .types = .{ 9, 9 },
+            .abilities = .{ 18, 18, 62 },
+        },
+        .{
+            .stats = .{
+                .hp = 65,
+                .attack = 60,
+                .defense = 70,
+                .sp_attack = 85,
+                .sp_defense = 75,
+                .speed = 40,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 36, 88, 148 },
+        },
+        .{
+            .stats = .{
+                .hp = 35,
+                .attack = 40,
+                .defense = 100,
+                .sp_attack = 90,
+                .sp_defense = 55,
+                .speed = 35,
+            },
+            .types = .{ 5, 10 },
+            .abilities = .{ 33, 75, 133 },
+        },
+        .{
+            .stats = .{
+                .hp = 70,
+                .attack = 60,
+                .defense = 125,
+                .sp_attack = 115,
+                .sp_defense = 70,
+                .speed = 55,
+            },
+            .types = .{ 5, 10 },
+            .abilities = .{ 33, 75, 133 },
+        },
+        .{
+            .stats = .{
+                .hp = 30,
+                .attack = 80,
+                .defense = 90,
+                .sp_attack = 55,
+                .sp_defense = 45,
+                .speed = 55,
+            },
+            .types = .{ 5, 10 },
+            .abilities = .{ 33, 4, 133 },
+        },
+        .{
+            .stats = .{
+                .hp = 60,
+                .attack = 115,
+                .defense = 105,
+                .sp_attack = 65,
+                .sp_defense = 70,
+                .speed = 80,
+            },
+            .types = .{ 5, 10 },
+            .abilities = .{ 33, 4, 133 },
+        },
+        .{
+            .stats = .{
+                .hp = 80,
+                .attack = 105,
+                .defense = 65,
+                .sp_attack = 60,
+                .sp_defense = 75,
+                .speed = 130,
+            },
+            .types = .{ 5, 2 },
+            .abilities = .{ 69, 46, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 160,
+                .attack = 110,
+                .defense = 65,
+                .sp_attack = 65,
+                .sp_defense = 110,
+                .speed = 30,
+            },
+            .types = .{ 0, 0 },
+            .abilities = .{ 17, 47, 82 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 85,
+                .defense = 100,
+                .sp_attack = 95,
+                .sp_defense = 125,
+                .speed = 85,
+            },
+            .types = .{ 14, 2 },
+            .abilities = .{ 46, 0, 81 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 90,
+                .defense = 85,
+                .sp_attack = 125,
+                .sp_defense = 90,
+                .speed = 100,
+            },
+            .types = .{ 12, 2 },
+            .abilities = .{ 46, 0, 31 },
+        },
+        .{
+            .stats = .{
+                .hp = 90,
+                .attack = 100,
+                .defense = 90,
+                .sp_attack = 125,
+                .sp_defense = 85,
+                .speed = 90,
+            },
+            .types = .{ 9, 2 },
+            .abilities = .{ 46, 0, 49 },
+        },
+        .{
+            .stats = .{
+                .hp = 41,
+                .attack = 64,
+                .defense = 45,
+                .sp_attack = 50,
+                .sp_defense = 50,
+                .speed = 50,
+            },
+            .types = .{ 15, 15 },
+            .abilities = .{ 61, 0, 63 },
+        },
+        .{
+            .stats = .{
+                .hp = 61,
+                .attack = 84,
+                .defense = 65,
+                .sp_attack = 70,
+                .sp_defense = 70,
+                .speed = 70,
+            },
+            .types = .{ 15, 15 },
+            .abilities = .{ 61, 0, 63 },
+        },
+        .{
+            .stats = .{
+                .hp = 91,
+                .attack = 134,
+                .defense = 95,
+                .sp_attack = 100,
+                .sp_defense = 100,
+                .speed = 80,
+            },
+            .types = .{ 15, 2 },
+            .abilities = .{ 39, 0, 136 },
+        },
+        .{
+            .stats = .{
+                .hp = 106,
+                .attack = 110,
+                .defense = 90,
+                .sp_attack = 154,
+                .sp_defense = 90,
+                .speed = 130,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 46, 0, 127 },
+        },
+        .{
+            .stats = .{
+                .hp = 100,
+                .attack = 100,
+                .defense = 100,
+                .sp_attack = 100,
+                .sp_defense = 100,
+                .speed = 100,
+            },
+            .types = .{ 13, 13 },
+            .abilities = .{ 28, 0, 0 },
+        },
+    },
+    .trainers = &.{},
+    .trainer_parties = &.{
+        .init(.none, &.{
+            .{ .base = .{ .level = 5, .species = 1 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 9, .species = 16 } },
+            .{ .base = .{ .level = 8, .species = 1 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 18, .species = 17 } },
+            .{ .base = .{ .level = 15, .species = 63 } },
+            .{ .base = .{ .level = 15, .species = 19 } },
+            .{ .base = .{ .level = 17, .species = 1 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 19, .species = 17 } },
+            .{ .base = .{ .level = 16, .species = 20 } },
+            .{ .base = .{ .level = 18, .species = 64 } },
+            .{ .base = .{ .level = 20, .species = 2 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 25, .species = 17 } },
+            .{ .base = .{ .level = 23, .species = 130 } },
+            .{ .base = .{ .level = 22, .species = 58 } },
+            .{ .base = .{ .level = 20, .species = 64 } },
+            .{ .base = .{ .level = 25, .species = 2 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 37, .species = 18 } },
+            .{ .base = .{ .level = 38, .species = 130 } },
+            .{ .base = .{ .level = 35, .species = 58 } },
+            .{ .base = .{ .level = 35, .species = 65 } },
+            .{ .base = .{ .level = 40, .species = 3 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 47, .species = 18 } },
+            .{ .base = .{ .level = 45, .species = 111 } },
+            .{ .base = .{ .level = 45, .species = 130 } },
+            .{ .base = .{ .level = 47, .species = 58 } },
+            .{ .base = .{ .level = 50, .species = 65 } },
+            .{ .base = .{ .level = 53, .species = 3 } },
+        }),
+        .init(.none, &.{
+            .{ .base = .{ .level = 61, .species = 18 } },
+            .{ .base = .{ .level = 59, .species = 65 } },
+            .{ .base = .{ .level = 61, .species = 112 } },
+            .{ .base = .{ .level = 61, .species = 130 } },
+            .{ .base = .{ .level = 63, .species = 59 } },
+            .{ .base = .{ .level = 65, .species = 3 } },
+        }),
+    },
+};
+
+test {
+    _ = common;
+}
+
+const gen5 = @import("gen5.zig");
+const common = @import("common.zig");
+const std = @import("std");

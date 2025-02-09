@@ -1,9 +1,3 @@
-const std = @import("std");
-
-const debug = std.debug;
-const math = std.math;
-const mem = std.mem;
-
 pub const Patch = struct {
     offset: usize,
     replacement: []const u8,
@@ -11,45 +5,8 @@ pub const Patch = struct {
 
 pub fn patch(memory: []u8, patches: []const Patch) void {
     for (patches) |p|
-        mem.copy(u8, memory[p.offset..], p.replacement);
+        @memcpy(memory[p.offset..], p.replacement);
 }
-
-pub const PatchIterator = struct {
-    old: []const u8,
-    new: []const u8,
-    i: usize = 0,
-
-    pub fn next(it: *PatchIterator) ?Patch {
-        const end_it = @min(it.old.len, it.new.len);
-
-        const chunk_size = @sizeOf(u256);
-        while (it.i + chunk_size <= end_it) : (it.i += chunk_size) {
-            const new_chunk: *align(1) const u256 = @ptrCast(it.new[it.i..][0..chunk_size]);
-            const old_chunk: *align(1) const u256 = @ptrCast(it.old[it.i..][0..chunk_size]);
-            if (new_chunk.* != old_chunk.*)
-                break;
-        }
-
-        while (it.i < end_it) : (it.i += 1) {
-            if (it.new[it.i] != it.old[it.i])
-                break;
-        }
-
-        const start = it.i;
-        while (it.i < end_it) : (it.i += 1) {
-            if (it.new[it.i] == it.old[it.i])
-                break;
-        }
-
-        const end = if (it.i == it.old.len) it.new.len else it.i;
-        if (start == end)
-            return null;
-        return Patch{
-            .offset = start,
-            .replacement = it.new[start..end],
-        };
-    }
-};
 
 pub const Version = enum {
     red,
@@ -143,6 +100,15 @@ pub const Stats = extern struct {
     speed: u8,
     sp_attack: u8,
     sp_defense: u8,
+
+    pub fn total(stats: Stats) u16 {
+        var res: u16 = 0;
+        const array: [6]u8 = @bitCast(stats);
+        for (array) |stat|
+            res += stat;
+
+        return res;
+    }
 
     comptime {
         std.debug.assert(@sizeOf(Stats) == 6);
@@ -273,3 +239,19 @@ pub const TypeEffectiveness = extern struct {
     defender: u8,
     multiplier: u8,
 };
+
+pub fn IndexableSlice(comptime T: type) type {
+    return struct {
+        slice: []T,
+
+        pub fn at(slice: @This(), i: usize) !*T {
+            return &slice.slice[i];
+        }
+
+        pub fn len(slice: @This()) usize {
+            return slice.slice.len;
+        }
+    };
+}
+
+const std = @import("std");

@@ -19,11 +19,6 @@ const rom = core.rom;
 const gba = rom.gba;
 const offsets = gen3.offsets;
 
-const li16 = rom.int.li16;
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
-const lu64 = rom.int.lu64;
-
 const Program = @This();
 
 allocator: mem.Allocator,
@@ -47,12 +42,12 @@ pub const params = clap.parseParamsComptime(
     \\-v, --version
     \\        Output version information and exit.
     \\
-    \\<ROM>
+    \\<ROM>...
     \\
 );
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    return Program{ .allocator = allocator, .files = args.positionals };
+    return Program{ .allocator = allocator, .files = args.positionals[0] };
 }
 
 pub fn run(
@@ -173,8 +168,8 @@ fn getOffsets(
         &[_][]const u8{"name"},
     });
     const Moves = Searcher(gen3.Move, @alignOf(gen3.Move), &[_][]const []const u8{});
-    const Machines = Searcher(lu64, 4, &[_][]const []const u8{});
-    const Pokemons = Searcher(gen3.BasePokemon, @alignOf(gen3.BasePokemon), &[_][]const []const u8{
+    const Machines = Searcher(u64, 4, &[_][]const []const u8{});
+    const Pokemons = Searcher(gen3.Pokemon, @alignOf(gen3.Pokemon), &[_][]const []const u8{
         &[_][]const u8{"padding"},
         &[_][]const u8{"ev"},
         &[_][]const u8{"egg_group1_pad"},
@@ -184,7 +179,7 @@ fn getOffsets(
         &[_][]const u8{"padding"},
     });
     const LvlUpMoves = Searcher(u8, 1, &[_][]const []const u8{});
-    const HmTms = Searcher(lu16, @alignOf(lu16), &[_][]const []const u8{});
+    const HmTms = Searcher(u16, @alignOf(u16), &[_][]const []const u8{});
     const SpeciesToNationalDex = HmTms;
     const Items = Searcher(gen3.Item, @alignOf(gen3.Item), &[_][]const []const u8{
         &[_][]const u8{"name"},
@@ -453,7 +448,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
         return mem.eql(u8, &mem.toBytes(a), &mem.toBytes(b));
 
     switch (info) {
-        .Array => |array| {
+        .array => |array| {
             if (a.len != b.len)
                 return false;
 
@@ -464,7 +459,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return true;
         },
-        .Optional => |optional| {
+        .optional => |optional| {
             const a_value = a orelse {
                 return if (b) |_| false else true;
             };
@@ -472,7 +467,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return matches(optional.child, ignored_fields, a_value, b_value);
         },
-        .ErrorUnion => |err_union| {
+        .error_union => |err_union| {
             const a_value = a catch |a_err| {
                 if (b) |_| {
                     return false;
@@ -484,7 +479,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return matches(err_union.payload, ignored_fields, a_value, b_value);
         },
-        .Struct => |struct_info| {
+        .@"struct" => |struct_info| {
             const next_ignored = comptime blk: {
                 var res: []const []const []const u8 = &[_][]const []const u8{};
                 for (ignored_fields) |fields| {
@@ -506,7 +501,7 @@ fn matches(comptime T: type, comptime ignored_fields: []const []const []const u8
 
             return true;
         },
-        .Union => |union_info| {
+        .@"union" => |union_info| {
             const first_field = union_info.fields[0];
             comptime {
                 // Only allow comparing unions that have all fields of the same
@@ -670,9 +665,9 @@ const em_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
-        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(0),
+        .items = [_]u16{ 0, 0, 0, 0 },
+        .battle_type = 0,
+        .ai = 0,
         .party = undefined,
     },
     gen3.Trainer{
@@ -681,9 +676,9 @@ const em_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
-        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(7),
+        .items = [_]u16{ 0, 0, 0, 0 },
+        .battle_type = 0,
+        .ai = 7,
         .party = undefined,
     },
 };
@@ -694,9 +689,9 @@ const em_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .encounter_music = undefined,
     .trainer_picture = 0x5c,
     .name = undefined,
-    .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
-    .battle_type = lu32.init(0),
-    .ai = lu32.init(0),
+    .items = [_]u16{ 0, 0, 0, 0 },
+    .battle_type = 0,
+    .ai = 0,
     .party = undefined,
 }};
 
@@ -707,9 +702,9 @@ const rs_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
-        .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(0),
+        .items = [_]u16{ 0, 0, 0, 0 },
+        .battle_type = 0,
+        .ai = 0,
         .party = undefined,
     },
     gen3.Trainer{
@@ -718,9 +713,9 @@ const rs_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0x46,
         .name = undefined,
-        .items = [_]lu16{ lu16.init(0x16), lu16.init(0x16), lu16.init(0), lu16.init(0) },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(7),
+        .items = [_]u16{ 0x16, 0x16, 0, 0 },
+        .battle_type = 0,
+        .ai = 7,
         .party = undefined,
     },
 };
@@ -731,9 +726,9 @@ const rs_last_trainers = [_]gen3.Trainer{gen3.Trainer{
     .encounter_music = undefined,
     .trainer_picture = 0x06,
     .name = undefined,
-    .items = [_]lu16{ lu16.init(0), lu16.init(0), lu16.init(0), lu16.init(0) },
-    .battle_type = lu32.init(0),
-    .ai = lu32.init(1),
+    .items = [_]u16{ 0, 0, 0, 0 },
+    .battle_type = 0,
+    .ai = 1,
     .party = undefined,
 }};
 
@@ -744,14 +739,14 @@ const frls_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
-        .items = [_]lu16{
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
+        .items = [_]u16{
+            0,
+            0,
+            0,
+            0,
         },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(0),
+        .battle_type = 0,
+        .ai = 0,
         .party = undefined,
     },
     gen3.Trainer{
@@ -760,14 +755,14 @@ const frls_first_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0,
         .name = undefined,
-        .items = [_]lu16{
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
+        .items = [_]u16{
+            0,
+            0,
+            0,
+            0,
         },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(1),
+        .battle_type = 0,
+        .ai = 1,
         .party = undefined,
     },
 };
@@ -779,14 +774,14 @@ const frls_last_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 125,
         .name = undefined,
-        .items = [_]lu16{
-            lu16.init(19),
-            lu16.init(19),
-            lu16.init(19),
-            lu16.init(19),
+        .items = [_]u16{
+            19,
+            19,
+            19,
+            19,
         },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(7),
+        .battle_type = 0,
+        .ai = 7,
         .party = undefined,
     },
     gen3.Trainer{
@@ -795,14 +790,14 @@ const frls_last_trainers = [_]gen3.Trainer{
         .encounter_music = undefined,
         .trainer_picture = 0x60,
         .name = undefined,
-        .items = [_]lu16{
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
-            lu16.init(0),
+        .items = [_]u16{
+            0,
+            0,
+            0,
+            0,
         },
-        .battle_type = lu32.init(0),
-        .ai = lu32.init(1),
+        .battle_type = 0,
+        .ai = 1,
         .party = undefined,
     },
 };
@@ -857,23 +852,23 @@ gen3.Move{
     .category = .physical,
 }};
 
-const first_machine_learnsets = [_]lu64{
-    lu64.init(0x0000000000000000), // Dummy Pokemon
-    lu64.init(0x00e41e0884350720), // Bulbasaur
-    lu64.init(0x00e41e0884350720), // Ivysaur
-    lu64.init(0x00e41e0886354730), // Venusaur
+const first_machine_learnsets = [_]u64{
+    0x0000000000000000, // Dummy Pokemon
+    0x00e41e0884350720, // Bulbasaur
+    0x00e41e0884350720, // Ivysaur
+    0x00e41e0886354730, // Venusaur
 };
 
-const last_machine_learnsets = [_]lu64{
-    lu64.init(0x035c5e93b7bbd63e), // Latios
-    lu64.init(0x00408e93b59bc62c), // Jirachi
-    lu64.init(0x00e58fc3f5bbde2d), // Deoxys
-    lu64.init(0x00419f03b41b8e28), // Chimecho
+const last_machine_learnsets = [_]u64{
+    0x035c5e93b7bbd63e, // Latios
+    0x00408e93b59bc62c, // Jirachi
+    0x00e58fc3f5bbde2d, // Deoxys
+    0x00419f03b41b8e28, // Chimecho
 };
 
-const first_pokemons = [_]gen3.BasePokemon{
+const first_pokemons = [_]gen3.Pokemon{
     // Dummy
-    gen3.BasePokemon{
+    gen3.Pokemon{
         .stats = common.Stats{
             .hp = 0,
             .attack = 0,
@@ -886,7 +881,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .catch_rate = 0,
         .base_exp_yield = 0,
         .ev = undefined,
-        .items = [_]lu16{ lu16.init(0), lu16.init(0) },
+        .items = [_]u16{ 0, 0 },
         .gender_ratio = 0,
         .egg_cycles = 0,
         .base_friendship = 0,
@@ -898,7 +893,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .padding = undefined,
     },
     // Bulbasaur
-    gen3.BasePokemon{
+    gen3.Pokemon{
         .stats = common.Stats{
             .hp = 45,
             .attack = 49,
@@ -911,7 +906,7 @@ const first_pokemons = [_]gen3.BasePokemon{
         .catch_rate = 45,
         .base_exp_yield = 64,
         .ev = undefined,
-        .items = [_]lu16{ lu16.init(0), lu16.init(0) },
+        .items = [_]u16{ 0, 0 },
         .gender_ratio = percentFemale(12.5),
         .egg_cycles = 20,
         .base_friendship = 70,
@@ -924,9 +919,9 @@ const first_pokemons = [_]gen3.BasePokemon{
     },
 };
 
-const last_pokemons = [_]gen3.BasePokemon{
+const last_pokemons = [_]gen3.Pokemon{
 // Chimecho
-gen3.BasePokemon{
+gen3.Pokemon{
     .stats = common.Stats{
         .hp = 65,
         .attack = 50,
@@ -943,7 +938,7 @@ gen3.BasePokemon{
 
     .ev = undefined,
 
-    .items = [_]lu16{ lu16.init(0), lu16.init(0) },
+    .items = [_]u16{ 0, 0 },
 
     .gender_ratio = percentFemale(50),
     .egg_cycles = 25,
@@ -960,108 +955,108 @@ gen3.BasePokemon{
     .padding = undefined,
 }};
 
-pub const species_to_national_dex_start = [_]lu16{
-    lu16.init(1),
-    lu16.init(2),
-    lu16.init(3),
-    lu16.init(4),
-    lu16.init(5),
-    lu16.init(6),
-    lu16.init(7),
-    lu16.init(8),
-    lu16.init(9),
-    lu16.init(10),
-    lu16.init(11),
-    lu16.init(12),
-    lu16.init(13),
-    lu16.init(14),
-    lu16.init(15),
-    lu16.init(16),
-    lu16.init(17),
-    lu16.init(18),
-    lu16.init(19),
-    lu16.init(20),
-    lu16.init(21),
-    lu16.init(22),
-    lu16.init(23),
-    lu16.init(24),
-    lu16.init(25),
-    lu16.init(26),
-    lu16.init(27),
-    lu16.init(28),
-    lu16.init(29),
-    lu16.init(30),
-    lu16.init(31),
-    lu16.init(32),
-    lu16.init(33),
-    lu16.init(34),
-    lu16.init(35),
-    lu16.init(36),
-    lu16.init(37),
-    lu16.init(38),
-    lu16.init(39),
+pub const species_to_national_dex_start = [_]u16{
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
 };
 
-pub const species_to_national_dex_end = [_]lu16{
-    lu16.init(378),
-    lu16.init(379),
-    lu16.init(382),
-    lu16.init(383),
-    lu16.init(384),
-    lu16.init(380),
-    lu16.init(381),
-    lu16.init(385),
-    lu16.init(386),
-    lu16.init(358),
+pub const species_to_national_dex_end = [_]u16{
+    378,
+    379,
+    382,
+    383,
+    384,
+    380,
+    381,
+    385,
+    386,
+    358,
 };
 
 pub const emerald_pokedex_start = [_]gen3.EmeraldPokedexEntry{
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(0),
-        .weight = lu16.init(0),
+        .height = 0,
+        .weight = 0,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(7),
-        .weight = lu16.init(69),
+        .height = 7,
+        .weight = 69,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(356),
-        .pokemon_offset = li16.init(17),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 356,
+        .pokemon_offset = 17,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(10),
-        .weight = lu16.init(130),
+        .height = 10,
+        .weight = 130,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(335),
-        .pokemon_offset = li16.init(13),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 335,
+        .pokemon_offset = 13,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(20),
-        .weight = lu16.init(1000),
+        .height = 20,
+        .weight = 1000,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(388),
-        .trainer_offset = li16.init(6),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 388,
+        .trainer_offset = 6,
         .padding = undefined,
     },
 };
@@ -1069,50 +1064,50 @@ pub const emerald_pokedex_start = [_]gen3.EmeraldPokedexEntry{
 pub const emerald_pokedex_end = [_]gen3.EmeraldPokedexEntry{
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(35),
-        .weight = lu16.init(9500),
+        .height = 35,
+        .weight = 9500,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(515),
-        .trainer_offset = li16.init(14),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 515,
+        .trainer_offset = 14,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(70),
-        .weight = lu16.init(2065),
+        .height = 70,
+        .weight = 2065,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(448),
-        .trainer_offset = li16.init(12),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 448,
+        .trainer_offset = 12,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(3),
-        .weight = lu16.init(11),
+        .height = 3,
+        .weight = 11,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(608),
-        .pokemon_offset = li16.init(-8),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 608,
+        .pokemon_offset = -8,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.EmeraldPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(17),
-        .weight = lu16.init(608),
+        .height = 17,
+        .weight = 608,
         .description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(290),
-        .trainer_offset = li16.init(2),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 290,
+        .trainer_offset = 2,
         .padding = undefined,
     },
 };
@@ -1120,54 +1115,54 @@ pub const emerald_pokedex_end = [_]gen3.EmeraldPokedexEntry{
 pub const frlg_pokedex_start = [_]gen3.RSFrLgPokedexEntry{
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(0),
-        .weight = lu16.init(0),
+        .height = 0,
+        .weight = 0,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(7),
-        .weight = lu16.init(69),
+        .height = 7,
+        .weight = 69,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(356),
-        .pokemon_offset = li16.init(16),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(-2),
+        .unused = 0,
+        .pokemon_scale = 356,
+        .pokemon_offset = 16,
+        .trainer_scale = 256,
+        .trainer_offset = -2,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(10),
-        .weight = lu16.init(130),
+        .height = 10,
+        .weight = 130,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(332),
-        .pokemon_offset = li16.init(11),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(-2),
+        .unused = 0,
+        .pokemon_scale = 332,
+        .pokemon_offset = 11,
+        .trainer_scale = 256,
+        .trainer_offset = -2,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(20),
-        .weight = lu16.init(1000),
+        .height = 20,
+        .weight = 1000,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(1),
-        .trainer_scale = lu16.init(375),
-        .trainer_offset = li16.init(6),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 1,
+        .trainer_scale = 375,
+        .trainer_offset = 6,
         .padding = undefined,
     },
 };
@@ -1175,54 +1170,54 @@ pub const frlg_pokedex_start = [_]gen3.RSFrLgPokedexEntry{
 pub const frlg_pokedex_end = [_]gen3.RSFrLgPokedexEntry{
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(35),
-        .weight = lu16.init(9500),
+        .height = 35,
+        .weight = 9500,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(276),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(530),
-        .trainer_offset = li16.init(12),
+        .unused = 0,
+        .pokemon_scale = 276,
+        .pokemon_offset = 0,
+        .trainer_scale = 530,
+        .trainer_offset = 12,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(70),
-        .weight = lu16.init(2065),
+        .height = 70,
+        .weight = 2065,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(286),
-        .pokemon_offset = li16.init(-1),
-        .trainer_scale = lu16.init(483),
-        .trainer_offset = li16.init(9),
+        .unused = 0,
+        .pokemon_scale = 286,
+        .pokemon_offset = -1,
+        .trainer_scale = 483,
+        .trainer_offset = 9,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(3),
-        .weight = lu16.init(11),
+        .height = 3,
+        .weight = 11,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(608),
-        .pokemon_offset = li16.init(-8),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(-2),
+        .unused = 0,
+        .pokemon_scale = 608,
+        .pokemon_offset = -8,
+        .trainer_scale = 256,
+        .trainer_offset = -2,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(17),
-        .weight = lu16.init(608),
+        .height = 17,
+        .weight = 608,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(293),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(337),
-        .trainer_offset = li16.init(2),
+        .unused = 0,
+        .pokemon_scale = 293,
+        .pokemon_offset = 0,
+        .trainer_scale = 337,
+        .trainer_offset = 2,
         .padding = undefined,
     },
 };
@@ -1230,54 +1225,54 @@ pub const frlg_pokedex_end = [_]gen3.RSFrLgPokedexEntry{
 pub const rs_pokedex_start = [_]gen3.RSFrLgPokedexEntry{
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(0),
-        .weight = lu16.init(0),
+        .height = 0,
+        .weight = 0,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(7),
-        .weight = lu16.init(69),
+        .height = 7,
+        .weight = 69,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(356),
-        .pokemon_offset = li16.init(17),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 356,
+        .pokemon_offset = 17,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(10),
-        .weight = lu16.init(130),
+        .height = 10,
+        .weight = 130,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(335),
-        .pokemon_offset = li16.init(13),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 335,
+        .pokemon_offset = 13,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(20),
-        .weight = lu16.init(1000),
+        .height = 20,
+        .weight = 1000,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(388),
-        .trainer_offset = li16.init(6),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 388,
+        .trainer_offset = 6,
         .padding = undefined,
     },
 };
@@ -1285,54 +1280,54 @@ pub const rs_pokedex_start = [_]gen3.RSFrLgPokedexEntry{
 pub const rs_pokedex_end = [_]gen3.RSFrLgPokedexEntry{
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(35),
-        .weight = lu16.init(9500),
+        .height = 35,
+        .weight = 9500,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(515),
-        .trainer_offset = li16.init(14),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 515,
+        .trainer_offset = 14,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(70),
-        .weight = lu16.init(2065),
+        .height = 70,
+        .weight = 2065,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(448),
-        .trainer_offset = li16.init(12),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 448,
+        .trainer_offset = 12,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(3),
-        .weight = lu16.init(11),
+        .height = 3,
+        .weight = 11,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(608),
-        .pokemon_offset = li16.init(-8),
-        .trainer_scale = lu16.init(256),
-        .trainer_offset = li16.init(0),
+        .unused = 0,
+        .pokemon_scale = 608,
+        .pokemon_offset = -8,
+        .trainer_scale = 256,
+        .trainer_offset = 0,
         .padding = undefined,
     },
     gen3.RSFrLgPokedexEntry{
         .category_name = undefined,
-        .height = lu16.init(17),
-        .weight = lu16.init(608),
+        .height = 17,
+        .weight = 608,
         .description = undefined,
         .unused_description = undefined,
-        .unused = lu16.init(0),
-        .pokemon_scale = lu16.init(256),
-        .pokemon_offset = li16.init(0),
-        .trainer_scale = lu16.init(290),
-        .trainer_offset = li16.init(2),
+        .unused = 0,
+        .pokemon_scale = 256,
+        .pokemon_offset = 0,
+        .trainer_scale = 290,
+        .trainer_offset = 2,
         .padding = undefined,
     },
 };
@@ -1344,8 +1339,8 @@ fn percentFemale(percent: f64) u8 {
 const unused_evo = gen3.Evolution{
     .method = .unused,
     .padding1 = undefined,
-    .param = lu16.init(0),
-    .target = lu16.init(0),
+    .param = 0,
+    .target = 0,
     .padding2 = undefined,
 };
 const unused_evo5 = [_]gen3.Evolution{unused_evo} ** 5;
@@ -1359,8 +1354,8 @@ const first_evolutions = [_][5]gen3.Evolution{
         gen3.Evolution{
             .method = .level_up,
             .padding1 = undefined,
-            .param = lu16.init(16),
-            .target = lu16.init(2),
+            .param = 16,
+            .target = 2,
             .padding2 = undefined,
         },
         unused_evo,
@@ -1374,8 +1369,8 @@ const first_evolutions = [_][5]gen3.Evolution{
         gen3.Evolution{
             .method = .level_up,
             .padding1 = undefined,
-            .param = lu16.init(32),
-            .target = lu16.init(3),
+            .param = 32,
+            .target = 3,
             .padding2 = undefined,
         },
         unused_evo,
@@ -1391,8 +1386,8 @@ const last_evolutions = [_][5]gen3.Evolution{
         gen3.Evolution{
             .padding1 = undefined,
             .method = .level_up,
-            .param = lu16.init(20),
-            .target = lu16.init(399),
+            .param = 20,
+            .target = 399,
             .padding2 = undefined,
         },
         unused_evo,
@@ -1406,8 +1401,8 @@ const last_evolutions = [_][5]gen3.Evolution{
         gen3.Evolution{
             .method = .level_up,
             .padding1 = undefined,
-            .param = lu16.init(45),
-            .target = lu16.init(400),
+            .param = 45,
+            .target = 400,
             .padding2 = undefined,
         },
         unused_evo,
@@ -1465,76 +1460,76 @@ const last_levelup_learnsets = [_][]const u8{
     0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
 }};
 
-const hms = [_]lu16{
-    lu16.init(0x000f),
-    lu16.init(0x0013),
-    lu16.init(0x0039),
-    lu16.init(0x0046),
-    lu16.init(0x0094),
-    lu16.init(0x00f9),
-    lu16.init(0x007f),
-    lu16.init(0x0123),
+const hms = [_]u16{
+    0x000f,
+    0x0013,
+    0x0039,
+    0x0046,
+    0x0094,
+    0x00f9,
+    0x007f,
+    0x0123,
 };
 
-const tms = [_]lu16{
-    lu16.init(0x0108),
-    lu16.init(0x0151),
-    lu16.init(0x0160),
-    lu16.init(0x015b),
-    lu16.init(0x002e),
-    lu16.init(0x005c),
-    lu16.init(0x0102),
-    lu16.init(0x0153),
-    lu16.init(0x014b),
-    lu16.init(0x00ed),
-    lu16.init(0x00f1),
-    lu16.init(0x010d),
-    lu16.init(0x003a),
-    lu16.init(0x003b),
-    lu16.init(0x003f),
-    lu16.init(0x0071),
-    lu16.init(0x00b6),
-    lu16.init(0x00f0),
-    lu16.init(0x00ca),
-    lu16.init(0x00db),
-    lu16.init(0x00da),
-    lu16.init(0x004c),
-    lu16.init(0x00e7),
-    lu16.init(0x0055),
-    lu16.init(0x0057),
-    lu16.init(0x0059),
-    lu16.init(0x00d8),
-    lu16.init(0x005b),
-    lu16.init(0x005e),
-    lu16.init(0x00f7),
-    lu16.init(0x0118),
-    lu16.init(0x0068),
-    lu16.init(0x0073),
-    lu16.init(0x015f),
-    lu16.init(0x0035),
-    lu16.init(0x00bc),
-    lu16.init(0x00c9),
-    lu16.init(0x007e),
-    lu16.init(0x013d),
-    lu16.init(0x014c),
-    lu16.init(0x0103),
-    lu16.init(0x0107),
-    lu16.init(0x0122),
-    lu16.init(0x009c),
-    lu16.init(0x00d5),
-    lu16.init(0x00a8),
-    lu16.init(0x00d3),
-    lu16.init(0x011d),
-    lu16.init(0x0121),
-    lu16.init(0x013b),
+const tms = [_]u16{
+    0x0108,
+    0x0151,
+    0x0160,
+    0x015b,
+    0x002e,
+    0x005c,
+    0x0102,
+    0x0153,
+    0x014b,
+    0x00ed,
+    0x00f1,
+    0x010d,
+    0x003a,
+    0x003b,
+    0x003f,
+    0x0071,
+    0x00b6,
+    0x00f0,
+    0x00ca,
+    0x00db,
+    0x00da,
+    0x004c,
+    0x00e7,
+    0x0055,
+    0x0057,
+    0x0059,
+    0x00d8,
+    0x005b,
+    0x005e,
+    0x00f7,
+    0x0118,
+    0x0068,
+    0x0073,
+    0x015f,
+    0x0035,
+    0x00bc,
+    0x00c9,
+    0x007e,
+    0x013d,
+    0x014c,
+    0x0103,
+    0x0107,
+    0x0122,
+    0x009c,
+    0x00d5,
+    0x00a8,
+    0x00d3,
+    0x011d,
+    0x0121,
+    0x013b,
 };
 
 const em_first_items = [_]gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0),
-        .price = lu16.init(0),
+        .id = 0,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1543,15 +1538,15 @@ const em_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     // MASTER BALL
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(1),
-        .price = lu16.init(0),
+        .id = 1,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1560,9 +1555,9 @@ const em_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .poke_balls },
         .type = 0,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(2),
+        .battle_usage = 2,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
@@ -1570,8 +1565,8 @@ const em_last_items = [_]gen3.Item{
     // MAGMA EMBLEM
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0x177),
-        .price = lu16.init(0),
+        .id = 0x177,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1580,15 +1575,15 @@ const em_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .key_items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     // OLD SEA MAP
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0x178),
-        .price = lu16.init(0),
+        .id = 0x178,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1597,9 +1592,9 @@ const em_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .key_items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
@@ -1607,8 +1602,8 @@ const rs_first_items = [_]gen3.Item{
     // ????????
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0),
-        .price = lu16.init(0),
+        .id = 0,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1617,15 +1612,15 @@ const rs_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     // MASTER BALL
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(1),
-        .price = lu16.init(0),
+        .id = 1,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1634,9 +1629,9 @@ const rs_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .poke_balls },
         .type = 0,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(2),
+        .battle_usage = 2,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
@@ -1644,8 +1639,8 @@ const rs_last_items = [_]gen3.Item{
     // HM08
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0x15A),
-        .price = lu16.init(0),
+        .id = 0x15A,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1654,15 +1649,15 @@ const rs_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .tms_hms },
         .type = 1,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     // ????????
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0),
-        .price = lu16.init(0),
+        .id = 0,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1671,15 +1666,15 @@ const rs_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     // ????????
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0),
-        .price = lu16.init(0),
+        .id = 0,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1688,17 +1683,17 @@ const rs_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .rse = .items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
 const frlg_first_items = [_]gen3.Item{
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(0),
-        .price = lu16.init(0),
+        .id = 0,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1707,14 +1702,14 @@ const frlg_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .frlg = .items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(1),
-        .price = lu16.init(0),
+        .id = 1,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1723,17 +1718,17 @@ const frlg_first_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .frlg = .poke_balls },
         .type = 0,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(2),
+        .battle_usage = 2,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
 const frlg_last_items = [_]gen3.Item{
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(372),
-        .price = lu16.init(0),
+        .id = 372,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1742,14 +1737,14 @@ const frlg_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .frlg = .key_items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
     gen3.Item{
         .name = undefined,
-        .id = lu16.init(373),
-        .price = lu16.init(0),
+        .id = 373,
+        .price = 0,
         .battle_effect = 0,
         .battle_effect_param = 0,
         .description = undefined,
@@ -1758,9 +1753,9 @@ const frlg_last_items = [_]gen3.Item{
         .pocket = gen3.Pocket{ .frlg = .key_items },
         .type = 4,
         .field_use_func = undefined,
-        .battle_usage = lu32.init(0),
+        .battle_usage = 0,
         .battle_use_func = undefined,
-        .secondary_id = lu32.init(0),
+        .secondary_id = 0,
     },
 };
 
@@ -1826,8 +1821,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(362),
-    .map_data_id = lu16.init(1),
+    .music = 362,
+    .map_data_id = 1,
     .map_sec = 0x07,
     .cave = 0,
     .weather = 2,
@@ -1851,8 +1846,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(408),
-    .map_data_id = lu16.init(301),
+    .music = 408,
+    .map_data_id = 301,
     .map_sec = 0x27,
     .cave = 0,
     .weather = 0,
@@ -1876,8 +1871,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(362),
-    .map_data_id = lu16.init(1),
+    .music = 362,
+    .map_data_id = 1,
     .map_sec = 0x07,
     .cave = 0,
     .weather = 2,
@@ -1901,8 +1896,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(408),
-    .map_data_id = lu16.init(302),
+    .music = 408,
+    .map_data_id = 302,
     .map_sec = 0x27,
     .cave = 0,
     .weather = 0,
@@ -1926,8 +1921,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(0x12F),
-    .map_data_id = lu16.init(0x2F),
+    .music = 0x12F,
+    .map_data_id = 0x2F,
     .map_sec = 0xC4,
     .cave = 0x0,
     .weather = 0x0,
@@ -1951,8 +1946,8 @@ gen3.MapHeader{
     .map_events = undefined,
     .map_scripts = undefined,
     .map_connections = undefined,
-    .music = lu16.init(0x151),
-    .map_data_id = lu16.init(0xB),
+    .music = 0x151,
+    .map_data_id = 0xB,
     .map_sec = 0xA9,
     .cave = 0x0,
     .weather = 0x0,

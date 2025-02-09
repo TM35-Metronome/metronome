@@ -1,14 +1,7 @@
-const std = @import("std");
-
-const debug = std.debug;
-const math = std.math;
-const mem = std.mem;
-const testing = std.testing;
-
 const default_mask = 0x80;
 const threshold = 2;
 
-pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
+pub fn decode(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     const Lengths = struct {
         enc: u32,
         dec: u32,
@@ -19,7 +12,7 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
     if (data.len < 8)
         return error.BadHeader;
 
-    const inc_len = mem.readInt(u32, data[data.len - 4 ..][0..4], .little);
+    const inc_len = std.mem.readInt(u32, data[data.len - 4 ..][0..4], .little);
     const lengths = if (inc_len == 0) blk: {
         break :blk Lengths{
             .enc = 0,
@@ -32,9 +25,9 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
         if (hdr_len < 8 or hdr_len > 0xB) return error.BadHeaderLength;
         if (data.len <= hdr_len) return error.BadLength;
 
-        const enc_len = mem.readInt(u32, data[data.len - 8 ..][0..4], .little) & 0x00FFFFFF;
-        const dec_len = try math.sub(u32, @as(u32, @intCast(data.len)), enc_len);
-        const pak_len = try math.sub(u32, enc_len, hdr_len);
+        const enc_len = std.mem.readInt(u32, data[data.len - 8 ..][0..4], .little) & 0x00FFFFFF;
+        const dec_len = try std.math.sub(u32, @as(u32, @intCast(data.len)), enc_len);
+        const pak_len = try std.math.sub(u32, enc_len, hdr_len);
         const raw_len = dec_len + enc_len + inc_len;
 
         if (raw_len > 0x00FFFFFF)
@@ -53,9 +46,9 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
     const pak_buffer = try allocator.alloc(u8, data.len + 3);
     defer allocator.free(pak_buffer);
 
-    mem.copy(u8, result, data[0..lengths.dec]);
-    mem.copy(u8, pak_buffer, data);
-    mem.reverse(u8, pak_buffer[lengths.dec .. lengths.dec + lengths.pak]);
+    @memcpy(result[0..lengths.dec], data[0..lengths.dec]);
+    @memcpy(pak_buffer[0..data.len], data);
+    std.mem.reverse(u8, pak_buffer[lengths.dec .. lengths.dec + lengths.pak]);
 
     const pak_end = lengths.dec + lengths.pak;
     var pak = lengths.dec;
@@ -100,11 +93,11 @@ pub fn decode(allocator: mem.Allocator, data: []const u8) ![]u8 {
 
     if (raw != lengths.raw) return error.UnexpectedEnd;
 
-    mem.reverse(u8, result[lengths.dec..lengths.raw]);
+    std.mem.reverse(u8, result[lengths.dec..lengths.raw]);
     return result[0..raw];
 }
 
-pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
+pub fn encode(allocator: std.mem.Allocator, data: []const u8, start: usize) ![]u8 {
     var pos_best: usize = 0;
     var flg: usize = 0;
     var inc_len: usize = 0;
@@ -121,8 +114,8 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
     var pak_len = raw_len + ((raw_len + 7) / 8) + 11;
     var pak_buffer = try allocator.alloc(u8, pak_len);
 
-    var raw_new = raw_len - start;
-    mem.reverse(u8, raw_buffer);
+    const raw_new = raw_len - start;
+    std.mem.reverse(u8, raw_buffer);
 
     var pak: usize = 0;
     var raw: usize = 0;
@@ -167,8 +160,8 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
 
     pak_len = pak;
 
-    mem.reverse(u8, raw_buffer);
-    mem.reverse(u8, pak_buffer[0..pak_len]);
+    std.mem.reverse(u8, raw_buffer);
+    std.mem.reverse(u8, pak_buffer[0..pak_len]);
 
     if (pak_tmp == 0 or (raw_len + 4 < ((pak_tmp + raw_tmp + 3) & 0xFFFFFFFC) + 8)) {
         pak = 0;
@@ -195,11 +188,11 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
         var tmp = try allocator.alloc(u8, raw_tmp + pak_tmp + 11);
         defer allocator.free(tmp);
 
-        mem.copy(u8, tmp[0..raw_tmp], raw_buffer[0..raw_tmp]);
-        mem.copy(u8, tmp[raw_tmp..][0..pak_tmp], pak_buffer[pak_len - pak_tmp ..][0..pak_tmp]);
+        @memcpy(tmp[0..raw_tmp], raw_buffer[0..raw_tmp]);
+        @memcpy(tmp[raw_tmp..][0..pak_tmp], pak_buffer[pak_len - pak_tmp ..][0..pak_tmp]);
 
         pak = 0;
-        mem.swap([]u8, &pak_buffer, &tmp);
+        std.mem.swap([]u8, &pak_buffer, &tmp);
 
         pak = raw_tmp + pak_tmp;
 
@@ -213,24 +206,24 @@ pub fn encode(allocator: mem.Allocator, data: []const u8, start: usize) ![]u8 {
             hdr_len += 1;
         }
 
-        mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(enc_len + hdr_len)), .little);
+        std.mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(enc_len + hdr_len)), .little);
         pak += 3;
         pak_buffer[pak] = @intCast(hdr_len);
         pak += 1;
-        mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(inc_len - hdr_len)), .little);
+        std.mem.writeInt(u32, pak_buffer[pak..][0..4], @as(u32, @intCast(inc_len - hdr_len)), .little);
         pak += 4;
     }
 
     return allocator.realloc(pak_buffer, pak);
 }
 
+// The original 0x1002 is too big a window to search if we want compression to be fast.
+// Lower it to something more reasonable. This should not affect rom loading from emulators
+// in any way, as this compression method does not care about the window size when decoding.
+var blz_n: usize = 0x128;
+
 fn search(_p: usize, raw_buffer: []const u8, raw: usize, raw_end: usize) []const u8 {
     const blz_f = 0x12;
-    // The original 0x1002 is too big a window to search if we want compression to be fast.
-    // Lower it to something more reasonable. This should not affect rom loading from emulators
-    // in any way, as this compression method does not care about the window size when decoding.
-    // const blz_n = 0x1002;
-    const blz_n = 0x128;
     const max = @min(raw, blz_n);
 
     var p = _p;
@@ -262,22 +255,20 @@ fn search(_p: usize, raw_buffer: []const u8, raw: usize, raw_end: usize) []const
 }
 
 fn testIt(expected_decoded: []const u8, expected_encoded: []const u8) !void {
-    const allocator = testing.allocator;
+    const allocator = std.testing.allocator;
 
     const encoded = try encode(allocator, expected_decoded, 0);
     defer allocator.free(encoded);
-    try testing.expectEqualSlices(u8, expected_encoded, encoded);
+    try std.testing.expectEqualSlices(u8, expected_encoded, encoded);
 
     const decoded = try decode(allocator, expected_encoded);
     defer allocator.free(decoded);
-    try testing.expectEqualSlices(u8, expected_decoded, decoded);
+    try std.testing.expectEqualSlices(u8, expected_decoded, decoded);
 }
 
-test "blz" {
+test "blz(0x1002)" {
     // Tests are only valid for original 0x1002 window
-    var disabled = true;
-    if (disabled)
-        return error.SkipZigTest;
+    blz_n = 0x1002;
 
     try testIt(&[_]u8{
         0x29, 0xec, 0x8b, 0x64, 0x54, 0xec, 0x45, 0xa6, 0x23, 0x5d, 0x5d, 0xd1, 0x7a, 0xe7, 0xaa,
@@ -399,3 +390,5 @@ test "blz" {
         },
     );
 }
+
+const std = @import("std");

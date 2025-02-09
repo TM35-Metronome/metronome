@@ -1,38 +1,16 @@
-const common = @import("common.zig");
-const rom = @import("rom.zig");
-const std = @import("std");
-
-const fs = std.fs;
-const io = std.io;
-const math = std.math;
-const mem = std.mem;
-const os = std.os;
-
-const gba = rom.gba;
-
-const li16 = rom.int.li16;
-const li32 = rom.int.li32;
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
-const lu64 = rom.int.lu64;
-
-pub const encodings = @import("gen3/encodings.zig");
-pub const offsets = @import("gen3/offsets.zig");
-pub const script = @import("gen3/script.zig");
-
 pub const Language = enum {
     en_us,
 };
 
 pub fn Ptr(comptime P: type) type {
-    return rom.ptr.RelativePointer(P, u32, .little, 0x8000000, 0);
+    return rom.ptr.RelativePointer(P, u32, 0x8000000, 0);
 }
 
 pub fn Slice(comptime S: type) type {
-    return rom.ptr.RelativeSlice(S, u32, .little, .len_first, 0x8000000);
+    return rom.ptr.RelativeSlice(S, u32, .len_first, 0x8000000);
 }
 
-pub const BasePokemon = extern struct {
+pub const Pokemon = extern struct {
     stats: common.Stats,
     types: [2]u8,
 
@@ -40,7 +18,7 @@ pub const BasePokemon = extern struct {
     base_exp_yield: u8,
 
     ev: common.PaddedEvYield,
-    items: [2]lu16,
+    items: [2]u16,
 
     gender_ratio: u8,
     egg_cycles: u8,
@@ -76,10 +54,10 @@ pub const Trainer = extern struct {
     encounter_music: u8,
     trainer_picture: u8,
     name: [12]u8,
-    items: [4]lu16,
-    battle_type: lu32,
-    ai: lu32,
-    party: Party,
+    items: [4]u16,
+    battle_type: u32,
+    ai: u32,
+    party: PartySlice,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 40);
@@ -87,10 +65,10 @@ pub const Trainer = extern struct {
 
     pub fn partyBytes(trainer: Trainer, data: []u8) ![]u8 {
         return switch (trainer.party_type) {
-            .none => mem.sliceAsBytes(try trainer.party.none.toSlice(data)),
-            .item => mem.sliceAsBytes(try trainer.party.item.toSlice(data)),
-            .moves => mem.sliceAsBytes(try trainer.party.moves.toSlice(data)),
-            .both => mem.sliceAsBytes(try trainer.party.both.toSlice(data)),
+            .none => std.mem.sliceAsBytes(try trainer.party.none.toSlice(data)),
+            .item => std.mem.sliceAsBytes(try trainer.party.item.toSlice(data)),
+            .moves => std.mem.sliceAsBytes(try trainer.party.moves.toSlice(data)),
+            .both => std.mem.sliceAsBytes(try trainer.party.both.toSlice(data)),
         };
     }
 
@@ -111,9 +89,27 @@ pub const Trainer = extern struct {
             .both => @intCast(trainer.party.both.len()),
         };
     }
+
+    pub fn setPartyPtr(trainer: *Trainer, ptr: Ptr([*]u8)) void {
+        return switch (trainer.party_type) {
+            .none => trainer.party.none.inner.ptr.inner = ptr.inner,
+            .item => trainer.party.item.inner.ptr.inner = ptr.inner,
+            .moves => trainer.party.moves.inner.ptr.inner = ptr.inner,
+            .both => trainer.party.both.inner.ptr.inner = ptr.inner,
+        };
+    }
+
+    pub fn setPartyLen(trainer: *Trainer, len: u8) void {
+        return switch (trainer.party_type) {
+            .none => trainer.party.none.inner.len = len,
+            .item => trainer.party.item.inner.len = len,
+            .moves => trainer.party.moves.inner.len = len,
+            .both => trainer.party.both.inner.len = len,
+        };
+    }
 };
 
-pub const Party = extern union {
+pub const PartySlice = extern union {
     none: Slice([]PartyMemberNone),
     item: Slice([]PartyMemberItem),
     moves: Slice([]PartyMemberMoves),
@@ -134,22 +130,22 @@ pub const Party = extern union {
 };
 
 pub const PartyMemberBase = extern struct {
-    iv: lu16 = lu16.init(0),
-    level: lu16 = lu16.init(0),
-    species: lu16 = lu16.init(0),
+    iv: u16 = 0,
+    level: u16 = 0,
+    species: u16 = 0,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 6);
     }
 
     pub fn toParent(base: *PartyMemberBase, comptime Parent: type) *Parent {
-        return @fieldParentPtr(Parent, "base", base);
+        return @fieldParentPtr("base", base);
     }
 };
 
 pub const PartyMemberNone = extern struct {
     base: PartyMemberBase = PartyMemberBase{},
-    pad: lu16 = lu16.init(0),
+    pad: u16 = 0,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -158,7 +154,7 @@ pub const PartyMemberNone = extern struct {
 
 pub const PartyMemberItem = extern struct {
     base: PartyMemberBase = PartyMemberBase{},
-    item: lu16 = lu16.init(0),
+    item: u16 = 0,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
@@ -167,8 +163,8 @@ pub const PartyMemberItem = extern struct {
 
 pub const PartyMemberMoves = extern struct {
     base: PartyMemberBase = PartyMemberBase{},
-    pad: lu16 = lu16.init(0),
-    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
+    pad: u16 = 0,
+    moves: [4]u16 = [_]u16{0} ** 4,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
@@ -177,12 +173,24 @@ pub const PartyMemberMoves = extern struct {
 
 pub const PartyMemberBoth = extern struct {
     base: PartyMemberBase = PartyMemberBase{},
-    item: lu16 = lu16.init(0),
-    moves: [4]lu16 = [_]lu16{lu16.init(0)} ** 4,
+    item: u16 = 0,
+    moves: [4]u16 = [_]u16{0} ** 4,
+
+    pub fn ability(_: PartyMemberBoth) u8 {
+        return 0;
+    }
+
+    pub fn setAbility(_: PartyMemberBoth, _: u8) void {}
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 16);
     }
+};
+
+pub const Party = struct {
+    type: common.PartyType = .none,
+    size: u8 = 0,
+    members: [6]PartyMemberBoth = .{.{}} ** 6,
 };
 
 pub const Move = extern struct {
@@ -232,8 +240,8 @@ pub const Pocket = packed union {
 
 pub const Item = extern struct {
     name: [14]u8,
-    id: lu16,
-    price: lu16,
+    id: u16,
+    price: u16,
     battle_effect: u8,
     battle_effect_param: u8,
     description: Ptr([*:0xff]u8),
@@ -242,9 +250,9 @@ pub const Item = extern struct {
     pocket: Pocket,
     type: u8,
     field_use_func: Ptr(*u8),
-    battle_usage: lu32,
+    battle_usage: u32,
     battle_use_func: Ptr(*u8),
-    secondary_id: lu32,
+    secondary_id: u32,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 44);
@@ -256,8 +264,8 @@ pub const LevelUpMove = packed struct {
     level: u7,
 
     pub const term = LevelUpMove{
-        .id = math.maxInt(u9),
-        .level = math.maxInt(u7),
+        .id = std.math.maxInt(u9),
+        .level = std.math.maxInt(u7),
     };
 
     comptime {
@@ -267,15 +275,15 @@ pub const LevelUpMove = packed struct {
 
 pub const EmeraldPokedexEntry = extern struct {
     category_name: [12]u8,
-    height: lu16,
-    weight: lu16,
+    height: u16,
+    weight: u16,
     description: Ptr([*]u8),
-    unused: lu16,
-    pokemon_scale: lu16,
-    pokemon_offset: li16,
-    trainer_scale: lu16,
-    trainer_offset: li16,
-    padding: lu16,
+    unused: u16,
+    pokemon_scale: u16,
+    pokemon_offset: i16,
+    trainer_scale: u16,
+    trainer_offset: i16,
+    padding: u16,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 32);
@@ -284,16 +292,16 @@ pub const EmeraldPokedexEntry = extern struct {
 
 pub const RSFrLgPokedexEntry = extern struct {
     category_name: [12]u8,
-    height: lu16,
-    weight: lu16,
+    height: u16,
+    weight: u16,
     description: Ptr([*]u8),
     unused_description: Ptr([*]u8),
-    unused: lu16,
-    pokemon_scale: lu16,
-    pokemon_offset: li16,
-    trainer_scale: lu16,
-    trainer_offset: li16,
-    padding: lu16,
+    unused: u16,
+    pokemon_scale: u16,
+    pokemon_offset: i16,
+    trainer_scale: u16,
+    trainer_offset: i16,
+    padding: u16,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 36);
@@ -308,7 +316,7 @@ pub const Pokedex = union {
 pub const WildPokemon = extern struct {
     min_level: u8,
     max_level: u8,
-    species: lu16,
+    species: u16,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 4);
@@ -344,8 +352,8 @@ pub const WildPokemonHeader = extern struct {
 pub const Evolution = extern struct {
     method: common.EvoMethod,
     padding1: u8,
-    param: lu16,
-    target: lu16,
+    param: u16,
+    target: u16,
     padding2: [2]u8,
 
     comptime {
@@ -358,8 +366,8 @@ pub const MapHeader = extern struct {
     map_events: Ptr(*MapEvents),
     map_scripts: Ptr([*]MapScript),
     map_connections: Ptr(*anyopaque),
-    music: lu16,
-    map_data_id: lu16,
+    music: u16,
+    map_data_id: u16,
     map_sec: u8,
     cave: u8,
     weather: u8,
@@ -387,10 +395,10 @@ pub const MapHeader = extern struct {
 };
 
 pub const MapLayout = extern struct {
-    width: li32,
-    height: li32,
-    border: Ptr(*lu16),
-    map: Ptr(*lu16),
+    width: i32,
+    height: i32,
+    border: Ptr(*u16),
+    map: Ptr(*u16),
     primary_tileset: Ptr(*Tileset),
     secondary_tileset: Ptr(*Tileset),
 
@@ -405,8 +413,8 @@ pub const Tileset = extern struct {
     padding: [2]u8,
     tiles: Ptr(*anyopaque),
     palettes: Ptr(*anyopaque),
-    metatiles: Ptr(*lu16),
-    metatiles_attributes: Ptr(*[512]lu16),
+    metatiles: Ptr(*u16),
+    metatiles_attributes: Ptr(*[512]u16),
     callback: Ptr(*anyopaque),
 
     comptime {
@@ -434,16 +442,16 @@ pub const ObjectEvent = extern struct {
     gfx: u8,
     replacement: u8,
     pad1: u8,
-    x: lu16,
-    y: lu16,
+    x: u16,
+    y: u16,
     evelavtion: u8,
     movement_type: u8,
     radius: Point,
     pad2: u8,
-    trainer_type: lu16,
-    sight_radius_tree_etc: lu16,
+    trainer_type: u16,
+    sight_radius_tree_etc: u16,
     script: Ptr(?[*]u8),
-    event_flag: lu16,
+    event_flag: u16,
     pad3: [2]u8,
 
     pub const Point = packed struct {
@@ -457,8 +465,8 @@ pub const ObjectEvent = extern struct {
 };
 
 pub const Warp = extern struct {
-    x: lu16,
-    y: lu16,
+    x: u16,
+    y: u16,
     byte: u8,
     warp: u8,
     map_num: u8,
@@ -470,12 +478,12 @@ pub const Warp = extern struct {
 };
 
 pub const CoordEvent = extern struct {
-    x: lu16,
-    y: lu16,
+    x: u16,
+    y: u16,
     elevation: u8,
     pad1: u8,
-    trigger: lu16,
-    index: lu16,
+    trigger: u16,
+    index: u16,
     pad2: [2]u8,
     scripts: Ptr([*]u8),
 
@@ -485,8 +493,8 @@ pub const CoordEvent = extern struct {
 };
 
 pub const BgEvent = extern struct {
-    x: lu16,
-    y: lu16,
+    x: u16,
+    y: u16,
     elevation: u8,
     kind: u8,
     pad: [2]u8,
@@ -513,8 +521,8 @@ pub const MapScript = extern struct {
 };
 
 pub const MapScript2 = extern struct {
-    word1: lu16,
-    word2: lu16,
+    word1: u16,
+    word2: u16,
     addr: Ptr([*]u8),
 
     comptime {
@@ -523,27 +531,21 @@ pub const MapScript2 = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *align(1) lu16,
+    species: *align(1) u16,
     level: *u8,
 };
 
 const PokeballItem = struct {
-    item: *align(1) lu16,
-    amount: *align(1) lu16,
-};
-
-const TrainerParty = struct {
-    size: u32 = 0,
-    members: [6]PartyMemberBoth = [_]PartyMemberBoth{PartyMemberBoth{}} ** 6,
+    item: *align(1) u16,
+    amount: *align(1) u16,
 };
 
 const ScriptData = struct {
-
     // These keep track of the pointer to what VAR_0x8000 and VAR_0x8001
     // was last set to by the script. This variables are used by callstd
     // to give and obtain items.
-    VAR_0x8000: ?*align(1) lu16 = null,
-    VAR_0x8001: ?*align(1) lu16 = null,
+    VAR_0x8000: ?*align(1) u16 = null,
+    VAR_0x8001: ?*align(1) u16 = null,
     static_pokemons: std.ArrayList(StaticPokemon),
     given_pokemons: std.ArrayList(StaticPokemon),
     pokeball_items: std.ArrayList(PokeballItem),
@@ -564,9 +566,9 @@ const ScriptData = struct {
                 .level = &command.givemon.level,
             }),
             .setorcopyvar => {
-                if (command.setorcopyvar.dest.value() == 0x8000)
+                if (command.setorcopyvar.dest == 0x8000)
                     script_data.VAR_0x8000 = &command.setorcopyvar.src;
-                if (command.setorcopyvar.dest.value() == 0x8001)
+                if (command.setorcopyvar.dest == 0x8001)
                     script_data.VAR_0x8001 = &command.setorcopyvar.src;
             },
             .callstd => switch (command.callstd.function) {
@@ -601,34 +603,37 @@ const ScriptData = struct {
     }
 };
 
+pub const Pokemons = common.IndexableSlice(Pokemon);
+pub const Trainers = common.IndexableSlice(Trainer);
+pub const Parties = common.IndexableSlice(Party);
+
 pub const Game = struct {
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     version: common.Version,
+    info: offsets.Info,
 
     free_offset: usize,
     data: []align(4) u8,
 
     // These fields are owned by the game and will be applied to
     // the rom oppon calling `apply`.
-    trainer_parties: []TrainerParty,
+    trainer_parties: []Party,
 
     // All these fields point into data
-    header: *gba.Header,
+    header: *rom.gba.Header,
 
-    starters: [3]*align(1) lu16,
-    starters_repeat: [3]*align(1) lu16,
+    starters: [3]*align(1) u16,
+    starters_repeat: [3]*align(1) u16,
     text_delays: []u8,
-    trainers: []Trainer,
     moves: []Move,
-    machine_learnsets: []align(4) lu64,
-    pokemons: []BasePokemon,
+    machine_learnsets: []align(4) u64,
     evolutions: [][5]Evolution,
     level_up_learnset_pointers: []Ptr([*]LevelUpMove),
-    hms: []lu16,
-    tms: []lu16,
+    hms: []u16,
+    tms: []u16,
     items: []Item,
     pokedex: Pokedex,
-    species_to_national_dex: []lu16,
+    species_to_national_dex: []u16,
     wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
     pokemon_names: [][11]u8,
@@ -642,11 +647,11 @@ pub const Game = struct {
     text: []*align(1) Ptr([*:0xff]u8),
 
     pub fn identify(reader: anytype) !offsets.Info {
-        const header = try reader.readStruct(gba.Header);
+        const header = try reader.readStruct(rom.gba.Header);
         for (offsets.infos) |info| {
-            if (!mem.eql(u8, info.game_title.slice(), header.game_title.slice()))
+            if (!std.mem.eql(u8, info.game_title.slice(), header.game_title.slice()))
                 continue;
-            if (!mem.eql(u8, &info.gamecode, &header.gamecode))
+            if (!std.mem.eql(u8, &info.gamecode, &header.gamecode))
                 continue;
 
             try header.validate();
@@ -656,7 +661,7 @@ pub const Game = struct {
         return error.UnknownGame;
     }
 
-    pub fn fromFile(file: fs.File, allocator: mem.Allocator) !Game {
+    pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Game {
         const reader = file.reader();
         const info = try identify(reader);
         const size = try file.getEndPos();
@@ -671,11 +676,12 @@ pub const Game = struct {
         const free_offset = try reader.readAll(gba_rom);
         @memset(gba_rom[free_offset..], 0xff);
 
-        const trainers = info.trainers.slice(gba_rom);
-        const trainer_parties = try allocator.alloc(TrainerParty, trainers.len);
-        @memset(trainer_parties, TrainerParty{});
+        const all_trainers = info.trainers.slice(gba_rom);
+        const trainer_parties = try allocator.alloc(Party, all_trainers.len);
+        @memset(trainer_parties, Party{});
 
-        for (trainer_parties, trainers) |*party, trainer| {
+        for (trainer_parties, all_trainers) |*party, trainer| {
+            party.type = trainer.party_type;
             party.size = trainer.partyLen();
 
             for (party.members[0..party.size], 0..) |*member, i| {
@@ -747,25 +753,24 @@ pub const Game = struct {
             .allocator = allocator,
             .free_offset = free_offset,
             .data = gba_rom,
+            .info = info,
 
             .trainer_parties = trainer_parties,
 
             .header = @ptrCast(&gba_rom[0]),
-            .starters = [3]*align(1) lu16{
+            .starters = [3]*align(1) u16{
                 info.starters[0].ptr(gba_rom),
                 info.starters[1].ptr(gba_rom),
                 info.starters[2].ptr(gba_rom),
             },
-            .starters_repeat = [3]*align(1) lu16{
+            .starters_repeat = [3]*align(1) u16{
                 info.starters_repeat[0].ptr(gba_rom),
                 info.starters_repeat[1].ptr(gba_rom),
                 info.starters_repeat[2].ptr(gba_rom),
             },
             .text_delays = info.text_delays.slice(gba_rom),
-            .trainers = trainers,
             .moves = info.moves.slice(gba_rom),
             .machine_learnsets = info.machine_learnsets.slice(gba_rom),
-            .pokemons = info.pokemons.slice(gba_rom),
             .evolutions = info.evolutions.slice(gba_rom),
             .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gba_rom),
             .hms = info.hms.slice(gba_rom),
@@ -794,52 +799,77 @@ pub const Game = struct {
         };
     }
 
+    pub fn pokemons(game: Game) !Pokemons {
+        return .{ .slice = game.info.pokemons.slice(game.data) };
+    }
+
+    pub fn trainers(game: Game) !Trainers {
+        return .{ .slice = game.info.trainers.slice(game.data) };
+    }
+
+    pub fn trainerParties(game: Game) !Parties {
+        return .{ .slice = game.trainer_parties };
+    }
+
+    // TODO: Validate
+    pub fn validSpecies(game: Game, out: *std.ArrayList(u16)) !void {
+        const all = try game.pokemons();
+        try out.ensureUnusedCapacity(all.len());
+
+        var species: u16 = 0;
+        while (species < all.len()) : (species += 1) {
+            const pokemon = try all.at(species);
+            if (species == 0)
+                continue;
+            if (pokemon.catch_rate == 0)
+                continue;
+            if (species >= game.species_to_national_dex.len + 1)
+                continue;
+
+            out.appendAssumeCapacity(species);
+        }
+    }
+
     pub fn apply(game: *Game) !void {
         try game.applyTrainerParties();
     }
 
     fn applyTrainerParties(game: *Game) !void {
-        const trainer_parties = game.trainer_parties;
-        const trainers = game.trainers;
-
-        for (trainer_parties, trainers) |party, *trainer| {
+        const all_trainers = try game.trainers();
+        for (game.trainer_parties, all_trainers.slice) |party, *trainer| {
             const party_bytes = try trainer.partyBytes(game.data);
-            const party_type = trainer.party_type;
-            const party_size = party.size * Party.memberSize(party_type);
-
-            if (party_size == 0) {
-                const p = &trainer.party.none;
-                p.inner.len = lu32.init(party.size);
+            const party_size = party.size * PartySlice.memberSize(party.type);
+            trainer.party_type = party.type;
+            trainer.setPartyLen(party.size);
+            if (party_size == 0)
                 continue;
-            }
 
             const bytes = if (party_bytes.len < party_size)
                 try game.requestFreeBytes(party_size)
             else
                 party_bytes;
 
-            var fbs = io.fixedBufferStream(bytes);
+            var fbs = std.io.fixedBufferStream(bytes);
             const writer = fbs.writer();
             for (party.members[0..party.size]) |member| {
-                switch (party_type) {
-                    .none => writer.writeAll(&mem.toBytes(PartyMemberNone{
+                switch (party.type) {
+                    .none => writer.writeAll(&std.mem.toBytes(PartyMemberNone{
                         .base = member.base,
                     })) catch unreachable,
-                    .item => writer.writeAll(&mem.toBytes(PartyMemberItem{
+                    .item => writer.writeAll(&std.mem.toBytes(PartyMemberItem{
                         .base = member.base,
                         .item = member.item,
                     })) catch unreachable,
-                    .moves => writer.writeAll(&mem.toBytes(PartyMemberMoves{
+                    .moves => writer.writeAll(&std.mem.toBytes(PartyMemberMoves{
                         .base = member.base,
                         .moves = member.moves,
                     })) catch unreachable,
-                    .both => writer.writeAll(&mem.toBytes(member)) catch unreachable,
+                    .both => writer.writeAll(&std.mem.toBytes(member)) catch unreachable,
                 }
             }
 
-            const p = &trainer.party.none;
-            p.inner.ptr.inner = (try Ptr([*]u8).init(bytes.ptr, game.data)).inner;
-            p.inner.len = lu32.init(party.size);
+            trainer.setPartyPtr(try Ptr([*]u8).init(bytes.ptr, game.data));
+            trainer.setPartyLen(party.size);
         }
     }
 
@@ -855,7 +885,7 @@ pub const Game = struct {
             .{ .start = game.free_offset, .end = game.data.len },
             .{ .start = 0, .end = game.free_offset },
         }) |range| {
-            var i = mem.alignForward(usize, range.start, 4);
+            var i = std.mem.alignForward(usize, range.start, 4);
             outer: while (i + size <= range.end) : (i += 4) {
                 // We ensure that the byte before our start byte is
                 // also 0xff. This is because we want to ensure that
@@ -888,3 +918,19 @@ pub const Game = struct {
         game.allocator.free(game.trainer_parties);
     }
 };
+
+test {
+    _ = encodings;
+    _ = offsets;
+    _ = script;
+    _ = common;
+    _ = rom;
+}
+
+pub const encodings = @import("gen3/encodings.zig");
+pub const offsets = @import("gen3/offsets.zig");
+pub const script = @import("gen3/script.zig");
+
+const common = @import("common.zig");
+const rom = @import("rom.zig");
+const std = @import("std");

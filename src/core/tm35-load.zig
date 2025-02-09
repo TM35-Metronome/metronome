@@ -23,8 +23,8 @@ const rom = core.rom;
 const gba = rom.gba;
 const nds = rom.nds;
 
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
+const u16 = rom.int.u16;
+const u32 = rom.int.u32;
 
 const bit = util.bit;
 const escape = util.escape.default;
@@ -819,7 +819,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
     }
 
     for (game.ptrs.pokemons.fat, 0..) |_, i| {
-        const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(i) }, gen5.BasePokemon);
+        const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = @intCast(i) }, gen5.Pokemon);
 
         try ston.serialize(writer, .{ .pokemons = ston.index(i, .{
             .pokedex_entry = i,

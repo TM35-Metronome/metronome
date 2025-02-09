@@ -1,29 +1,18 @@
-const std = @import("std");
-
-const ascii = std.ascii;
-const debug = std.debug;
-const fmt = std.fmt;
-const io = std.io;
-const math = std.math;
-const mem = std.mem;
-const os = std.os;
-const testing = std.testing;
-
 pub const default_escapes = blk: {
     @setEvalBranchQuota(1000000);
     var res: []const Escape = &[_]Escape{};
     var i: u8 = 0;
-    while (i <= math.maxInt(u7)) : (i += 1) {
+    while (i <= std.math.maxInt(u7)) : (i += 1) {
         switch (i) {
             '\\' => res = res ++ [_]Escape{.{ .escaped = "\\\\", .unescaped = "\\" }},
             '\n' => res = res ++ [_]Escape{.{ .escaped = "\\n", .unescaped = "\n" }},
             '\r' => res = res ++ [_]Escape{.{ .escaped = "\\r", .unescaped = "\r" }},
             '\t' => res = res ++ [_]Escape{.{ .escaped = "\\t", .unescaped = "\t" }},
             else => {
-                if (ascii.isPrint(i))
+                if (std.ascii.isPrint(i))
                     continue;
 
-                const escaped = fmt.comptimePrint("\\x{x:02}", .{i});
+                const escaped = std.fmt.comptimePrint("\\x{x:02}", .{i});
                 res = res ++ [_]Escape{.{ .escaped = escaped, .unescaped = &[_]u8{i} }};
             },
         }
@@ -98,7 +87,7 @@ pub fn generate(comptime escapes: []const Escape) type {
             try esc.finish();
         }
 
-        pub fn escapeAlloc(allocator: mem.Allocator, str: []const u8) ![]u8 {
+        pub fn escapeAlloc(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
             var res = std.ArrayList(u8).init(allocator);
             try escapeWrite(res.writer(), str);
             return res.toOwnedSlice();
@@ -120,7 +109,7 @@ pub fn generate(comptime escapes: []const Escape) type {
             try esc.finish();
         }
 
-        pub fn unescapeAlloc(allocator: mem.Allocator, str: []const u8) ![]u8 {
+        pub fn unescapeAlloc(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
             var res = std.ArrayList(u8).init(allocator);
             try unescapeWrite(res.writer(), str);
             return res.toOwnedSlice();
@@ -137,19 +126,19 @@ pub fn generate(comptime escapes: []const Escape) type {
                 pub fn format(
                     self: @This(),
                     comptime fmt_str: []const u8,
-                    options: std.fmt.FormatOptions,
+                    options: std.std.fmt.FormatOptions,
                     writer: anytype,
                 ) @TypeOf(writer).Error!void {
                     var esc = switch (kind) {
                         .escape => escapingWriter(writer),
                         .unescape => unescapingWriter(writer),
                     };
-                    try fmt.formatType(
+                    try std.fmt.formatType(
                         self.value,
                         fmt_str,
                         options,
                         esc.writer(),
-                        fmt.default_max_depth,
+                        std.fmt.default_max_depth,
                     );
                     try esc.finish();
                 }
@@ -163,13 +152,13 @@ pub const Replacement = struct {
     replace: []const u8,
 
     fn lessThan(_: u8, a: Replacement, b: Replacement) bool {
-        return mem.lessThan(u8, a.find, b.find);
+        return std.mem.lessThan(u8, a.find, b.find);
     }
 };
 
 fn startsWith(comptime replacements: []const Replacement, buf: []const u8) ?usize {
     inline for (replacements, 0..) |rep, i| {
-        if (mem.startsWith(u8, buf, rep.find))
+        if (std.mem.startsWith(u8, buf, rep.find))
             return i;
     }
     return null;
@@ -208,26 +197,27 @@ test "transion" {
         .{ .find = "baz", .replace = "stuff" },
         .{ .find = "foo", .replace = "bar" },
     };
-    try testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
-    try testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
-    try testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
-    try testing.expectEqual(@as(?State, State{ .index = 3, .start = 1, .end = 2 }), transion(&replacements, 'z', .{ .index = 2, .start = 0, .end = 2 }));
+    try std.testing.expectEqual(@as(?State, State{ .index = 1, .start = 2, .end = 3 }), transion(&replacements, 'f', .{ .end = 3 }));
+    try std.testing.expectEqual(@as(?State, State{ .index = 1, .start = 0, .end = 2 }), transion(&replacements, 'b', .{ .end = 3 }));
+    try std.testing.expectEqual(@as(?State, State{ .index = 2, .start = 0, .end = 2 }), transion(&replacements, 'a', .{ .index = 1, .start = 0, .end = 2 }));
+    try std.testing.expectEqual(@as(?State, State{ .index = 3, .start = 1, .end = 2 }), transion(&replacements, 'z', .{ .index = 2, .start = 0, .end = 2 }));
 }
 
 pub fn ReplacingWriter(comptime replacements: []const Replacement, comptime ChildWriter: type) type {
     @setEvalBranchQuota(1000000);
-    comptime var replacements_sorted = replacements[0..replacements.len].*;
-    mem.sort(Replacement, &replacements_sorted, @as(u8, 0), Replacement.lessThan);
+    comptime var replacements_sorted_var = replacements[0..replacements.len].*;
+    std.mem.sort(Replacement, &replacements_sorted_var, @as(u8, 0), Replacement.lessThan);
 
+    const replacements_sorted = replacements_sorted_var;
     return struct {
         child_writer: ChildWriter,
         state: State = .{ .end = replacements.len },
 
         pub const Error = switch (@typeInfo(ChildWriter)) {
-            .Pointer => |info| info.child.Error,
+            .pointer => |info| info.child.Error,
             else => ChildWriter.Error,
         };
-        pub const Writer = io.Writer(*@This(), Error, write);
+        pub const Writer = std.io.Writer(*@This(), Error, write);
 
         pub fn writer(self: *@This()) Writer {
             return .{ .context = self };
@@ -283,13 +273,13 @@ pub fn ReplacingReader(comptime replacements: []const Replacement, comptime Chil
         };
 
         child_reader: ChildReader,
-        buf: [mem.page_size]u8 = undefined,
+        buf: [std.mem.page_size]u8 = undefined,
         start: usize = 0,
         end: usize = 0,
         leftovers: []const u8 = "",
 
         pub const Error = ChildReader.Error;
-        pub const Reader = io.Reader(*@This(), Error, read);
+        pub const Reader = std.io.Reader(*@This(), Error, read);
 
         pub fn reader(self: *@This()) Reader {
             return .{ .context = self };
@@ -298,13 +288,13 @@ pub fn ReplacingReader(comptime replacements: []const Replacement, comptime Chil
         pub fn read(self: *@This(), dest: []u8) Error!usize {
             const rest = self.buf[self.start..self.end];
             if (rest.len < longest_find) {
-                mem.copy(u8, &self.buf, rest);
+                @memcpy(self.buf[0..rest.len], rest);
                 self.end -= self.start;
                 self.start = 0;
                 self.end += try self.child_reader.read(self.buf[self.start..]);
             }
 
-            var fbs = io.fixedBufferStream(dest);
+            var fbs = std.io.fixedBufferStream(dest);
 
             // We might have leftovers from a replacement that didn't
             // quite finish. We need to make sure that gets written now.
@@ -348,17 +338,17 @@ pub fn replacingReader(
 }
 
 fn testReplacingStreams(comptime replacements: []const Replacement, input: []const u8, expect: []const u8) !void {
-    var buf: [mem.page_size]u8 = undefined;
-    var fbs = io.fixedBufferStream(&buf);
+    var buf: [std.mem.page_size]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
     var replacing_writer = replacingWriter(replacements, fbs.writer());
     replacing_writer.writer().writeAll(input) catch unreachable;
     replacing_writer.finish() catch unreachable;
-    try testing.expectEqualStrings(expect, fbs.getWritten());
+    try std.testing.expectEqualStrings(expect, fbs.getWritten());
 
-    var fbs2 = io.fixedBufferStream(input);
+    var fbs2 = std.io.fixedBufferStream(input);
     var replacing_reader = replacingReader(replacements, fbs2.reader());
     const res = replacing_reader.reader().readAll(&buf) catch unreachable;
-    try testing.expectEqualStrings(expect, buf[0..res]);
+    try std.testing.expectEqualStrings(expect, buf[0..res]);
 }
 
 test "replacingWriter" {
@@ -376,3 +366,5 @@ test "replacingWriter" {
     try testReplacingStreams(&replacements, "bazbarfoo", "stuffbazbar");
     try testReplacingStreams(&replacements, "baz bar foo", "stuff baz bar");
 }
+
+const std = @import("std");

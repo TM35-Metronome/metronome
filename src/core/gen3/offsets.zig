@@ -1,17 +1,3 @@
-const std = @import("std");
-const util = @import("util");
-
-const common = @import("../common.zig");
-const gen3 = @import("../gen3.zig");
-const rom = @import("../rom.zig");
-
-const debug = std.debug;
-const mem = std.mem;
-
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
-const lu64 = rom.int.lu64;
-
 pub fn Offset(comptime _T: type, comptime _alignment: u29) type {
     return struct {
         pub const T = _T;
@@ -20,7 +6,7 @@ pub fn Offset(comptime _T: type, comptime _alignment: u29) type {
         offset: usize,
 
         pub fn fromOffset(offset: usize) @This() {
-            debug.assert(offset % alignment == 0);
+            std.debug.assert(offset % alignment == 0);
             return .{ .offset = offset };
         }
 
@@ -30,8 +16,8 @@ pub fn Offset(comptime _T: type, comptime _alignment: u29) type {
         ) @This() {
             const data_ptr = @intFromPtr(data_slice.ptr);
             const item_ptr = @intFromPtr(p);
-            debug.assert(data_ptr <= item_ptr);
-            debug.assert(item_ptr + @sizeOf(T) <= data_ptr + data_slice.len);
+            std.debug.assert(data_ptr <= item_ptr);
+            std.debug.assert(item_ptr + @sizeOf(T) <= data_ptr + data_slice.len);
 
             return .{ .offset = item_ptr - data_ptr };
         }
@@ -41,7 +27,7 @@ pub fn Offset(comptime _T: type, comptime _alignment: u29) type {
         }
 
         pub fn ptr(offset: @This(), data: []align(alignment) u8) *align(alignment) T {
-            return &mem.bytesAsSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
+            return &std.mem.bytesAsSlice(T, data[offset.offset..][0..@sizeOf(T)])[0];
         }
     };
 }
@@ -55,7 +41,7 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
         len: usize,
 
         pub fn fromOffset(start: usize, len: usize) @This() {
-            debug.assert(start % alignment == 0);
+            std.debug.assert(start % alignment == 0);
             return .{ .start = start, .len = len };
         }
 
@@ -65,8 +51,8 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
         ) @This() {
             const data_ptr = @intFromPtr(data_slice.ptr);
             const item_ptr = @intFromPtr(items.ptr);
-            debug.assert(data_ptr <= item_ptr);
-            debug.assert(item_ptr + items.len * @sizeOf(Item) <= data_ptr + data_slice.len);
+            std.debug.assert(data_ptr <= item_ptr);
+            std.debug.assert(item_ptr + items.len * @sizeOf(Item) <= data_ptr + data_slice.len);
 
             return .{ .start = item_ptr - data_ptr, .len = items.len };
         }
@@ -76,7 +62,7 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
         }
 
         pub fn slice(sec: @This(), data: []align(alignment) u8) []align(alignment) Item {
-            const result = mem.bytesAsSlice(Item, data[sec.start..sec.end()]);
+            const result = std.mem.bytesAsSlice(Item, data[sec.start..sec.end()]);
 
             // This is safe because:
             // * We have asserted when initializing that the offset is aligned
@@ -87,22 +73,22 @@ pub fn Section(comptime _Item: type, comptime _alignment: u29) type {
 }
 
 pub const AbilityNames = Section([13]u8, 1);
-pub const BaseStatss = Section(gen3.BasePokemon, @alignOf(gen3.BasePokemon));
+pub const BaseStatss = Section(gen3.Pokemon, @alignOf(gen3.Pokemon));
 pub const EmeraldPokedexs = Section(gen3.EmeraldPokedexEntry, @alignOf(gen3.EmeraldPokedexEntry));
 pub const Evolutions = Section([5]gen3.Evolution, @alignOf(gen3.Evolution));
-pub const Hms = Section(lu16, @alignOf(lu16));
+pub const Hms = Section(u16, @alignOf(u16));
 pub const Items = Section(gen3.Item, @alignOf(gen3.Item));
 pub const LevelUpLearnsetPointers = Section(gen3.Ptr([*]gen3.LevelUpMove), @alignOf(gen3.Ptr([*]gen3.LevelUpMove)));
-pub const MachineLearnsets = Section(lu64, 4);
+pub const MachineLearnsets = Section(u64, 4);
 pub const MapHeaders = Section(gen3.MapHeader, @alignOf(gen3.MapHeader));
 pub const MoveNames = Section([13]u8, 1);
 pub const Moves = Section(gen3.Move, @alignOf(gen3.Move));
 pub const PokemonNames = Section([11]u8, 1);
 pub const RSFrLgPokedexs = Section(gen3.RSFrLgPokedexEntry, @alignOf(gen3.RSFrLgPokedexEntry));
-pub const SpeciesToNationalDexs = Section(lu16, @alignOf(u16));
-pub const Starter = Offset(lu16, 1);
+pub const SpeciesToNationalDexs = Section(u16, @alignOf(u16));
+pub const Starter = Offset(u16, 1);
 pub const TextDelays = Section(u8, 1);
-pub const Tms = Section(lu16, @alignOf(lu16));
+pub const Tms = Section(u16, @alignOf(u16));
 pub const Trainers = Section(gen3.Trainer, @alignOf(gen3.Trainer));
 pub const TypeEffectivenesss = Section(common.TypeEffectiveness, @alignOf(common.TypeEffectiveness));
 pub const TypeNames = Section([7]u8, 1);
@@ -341,3 +327,16 @@ pub const sapphire_us_info = Info{
         Starter.fromOffset(0x003F7740),
     },
 };
+
+test {
+    _ = common;
+    _ = gen3;
+    _ = rom;
+    _ = util;
+}
+
+const common = @import("../common.zig");
+const gen3 = @import("../gen3.zig");
+const rom = @import("../rom.zig");
+const std = @import("std");
+const util = @import("../../util.zig");

@@ -27,10 +27,10 @@ const nds = rom.nds;
 const bit = util.bit;
 const escape = util.escape.default;
 
-const lu128 = rom.int.lu128;
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
-const lu64 = rom.int.lu64;
+const u128 = rom.int.u128;
+const u16 = rom.int.u16;
+const u32 = rom.int.u32;
+const u64 = rom.int.u64;
 
 const Program = @This();
 
@@ -283,8 +283,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
         .starters => |starter| {
             if (starter.index >= game.starters.len)
                 return error.Error;
-            game.starters[starter.index].* = lu16.init(starter.value);
-            game.starters_repeat[starter.index].* = lu16.init(starter.value);
+            game.starters[starter.index].* = u16.init(starter.value);
+            game.starters_repeat[starter.index].* = u16.init(starter.value);
         },
         .text_delays => |delay| {
             if (delay.index >= game.text_delays.len)
@@ -300,8 +300,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
                 .trainer_picture => |trainer_picture| trainer.trainer_picture = trainer_picture,
-                .ai => |ai| trainer.ai = lu32.init(ai),
-                .battle_type => |battle_type| trainer.battle_type = lu32.init(battle_type),
+                .ai => |ai| trainer.ai = u32.init(ai),
+                .battle_type => |battle_type| trainer.battle_type = u32.init(battle_type),
                 .party_type => |party_type| trainer.party_type = party_type,
                 .party_size => |party_size| party.size = party_size,
                 .name => |str| try applyGen3String(&trainer.name, str),
@@ -309,7 +309,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                     if (items.index >= trainer.items.len)
                         return error.OutOfBound;
 
-                    trainer.items[items.index] = lu16.init(items.value);
+                    trainer.items[items.index] = u16.init(items.value);
                 },
                 .party => |members| {
                     if (members.index >= party.size)
@@ -317,13 +317,13 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const member = &party.members[members.index];
                     switch (members.value) {
-                        .level => |level| member.base.level = lu16.init(level),
-                        .species => |species| member.base.species = lu16.init(species),
-                        .item => |item| member.item = lu16.init(item),
+                        .level => |level| member.base.level = u16.init(level),
+                        .species => |species| member.base.species = u16.init(species),
+                        .item => |item| member.item = u16.init(item),
                         .moves => |moves| {
                             if (moves.index >= member.moves.len)
                                 return error.IndexOutOfBound;
-                            member.moves[moves.index] = lu16.init(moves.value);
+                            member.moves[moves.index] = u16.init(moves.value);
                         },
                         .ability => return error.DidNotConsumeData,
                     }
@@ -360,7 +360,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
-                    pokemon.items[items.index] = lu16.init(items.value);
+                    pokemon.items[items.index] = u16.init(items.value);
                 },
                 .types => |types| {
                     if (types.index >= pokemon.types.len)
@@ -435,8 +435,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                             .trade_with_pokemon,
                             => return error.DidNotConsumeData,
                         },
-                        .param => |param| evolution.param = lu16.init(param),
-                        .target => |target| evolution.target = lu16.init(target),
+                        .param => |param| evolution.param = u16.init(param),
+                        .target => |target| evolution.target = u16.init(target),
                     }
                 },
                 .catch_rate => |catch_rate| pokemon.catch_rate = catch_rate,
@@ -454,7 +454,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const index = ms.index + game.tms.len * @intFromBool(!is_tms);
                     const learnset = &game.machine_learnsets[pokemons.index];
-                    learnset.* = lu64.init(bit.setTo(u64, learnset.value(), @as(u6, @intCast(index)), ms.value));
+                    learnset.* = u64.init(bit.setTo(u64, learnset.value(), @as(u6, @intCast(index)), ms.value));
                 },
                 .name => |str| {
                     if (pokemons.index >= game.pokemon_names.len)
@@ -464,7 +464,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
                 .pokedex_entry => |entry| {
                     if (pokemons.index == 0 or pokemons.index - 1 >= game.species_to_national_dex.len)
                         return error.Error;
-                    game.species_to_national_dex[pokemons.index - 1] = lu16.init(entry);
+                    game.species_to_national_dex[pokemons.index - 1] = u16.init(entry);
                 },
             }
         },
@@ -495,7 +495,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             if (ms.index >= pick.len)
                 return error.IndexOutOfBound;
-            pick[ms.index] = lu16.init(ms.value);
+            pick[ms.index] = u16.init(ms.value);
         },
         .items => |items| {
             if (items.index >= game.items.len)
@@ -503,7 +503,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const item = &game.items[items.index];
             switch (items.value) {
-                .price => |price| item.price = lu16.init(math.cast(u16, price) orelse return error.Error),
+                .price => |price| item.price = u16.init(math.cast(u16, price) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .name => |str| try applyGen3String(&item.name, str),
                 .description => |str| {
@@ -544,8 +544,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const entry = &game.pokedex.emerald[pokedex.index];
                     switch (pokedex.value) {
-                        .height => |height| entry.height = lu16.init(math.cast(u16, height) orelse return error.Error),
-                        .weight => |weight| entry.weight = lu16.init(math.cast(u16, weight) orelse return error.Error),
+                        .height => |height| entry.height = u16.init(math.cast(u16, height) orelse return error.Error),
+                        .weight => |weight| entry.weight = u16.init(math.cast(u16, weight) orelse return error.Error),
                         .category => return error.DidNotConsumeData,
                     }
                 },
@@ -559,8 +559,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
                     const entry = &game.pokedex.rsfrlg[pokedex.index];
                     switch (pokedex.value) {
-                        .height => |height| entry.height = lu16.init(math.cast(u16, height) orelse return error.Error),
-                        .weight => |weight| entry.weight = lu16.init(math.cast(u16, weight) orelse return error.Error),
+                        .height => |height| entry.height = u16.init(math.cast(u16, height) orelse return error.Error),
+                        .weight => |weight| entry.weight = u16.init(math.cast(u16, weight) orelse return error.Error),
                         .category => return error.DidNotConsumeData,
                     }
                 },
@@ -573,7 +573,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const header = &game.map_headers[maps.index];
             switch (maps.value) {
-                .music => |music| header.music = lu16.init(music),
+                .music => |music| header.music = u16.init(music),
                 .cave => |cave| header.cave = cave,
                 .weather => |weather| header.weather = weather,
                 .type => |_type| header.map_type = _type,
@@ -648,7 +648,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const static_mon = game.static_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| static_mon.species.* = lu16.init(species),
+                .species => |species| static_mon.species.* = u16.init(species),
                 .level => |level| static_mon.level.* = math.cast(u8, level) orelse return error.Error,
             }
         },
@@ -658,7 +658,7 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const given_mon = game.given_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| given_mon.species.* = lu16.init(species),
+                .species => |species| given_mon.species.* = u16.init(species),
                 .level => |level| given_mon.level.* = math.cast(u8, level) orelse return error.Error,
             }
         },
@@ -668,8 +668,8 @@ fn applyGen3(game: *gen3.Game, parsed: format.Game) !void {
 
             const given_item = game.pokeball_items[items.index];
             switch (items.value) {
-                .item => |item| given_item.item.* = lu16.init(item),
-                .amount => |amount| given_item.amount.* = lu16.init(amount),
+                .item => |item| given_item.item.* = u16.init(item),
+                .amount => |amount| given_item.amount.* = u16.init(amount),
             }
         },
         .text => |texts| {
@@ -704,7 +704,7 @@ fn applyGen3Area(area: format.WildArea, rate: *u8, wilds: []gen3.WildPokemon) !v
             switch (pokemons.value) {
                 .min_level => |min_level| wild.min_level = min_level,
                 .max_level => |max_level| wild.max_level = max_level,
-                .species => |species| wild.species = lu16.init(species),
+                .species => |species| wild.species = u16.init(species),
             }
         },
     }
@@ -738,7 +738,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
         .starters => |starters| {
             if (starters.index >= game.ptrs.starters.len)
                 return error.Error;
-            game.ptrs.starters[starters.index].* = lu16.init(starters.value);
+            game.ptrs.starters[starters.index].* = u16.init(starters.value);
         },
         .trainers => |trainers| {
             if (trainers.index >= game.ptrs.trainers.len)
@@ -747,7 +747,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const trainer = &game.ptrs.trainers[trainers.index];
             switch (trainers.value) {
                 .class => |class| trainer.class = class,
-                .ai => |ai| trainer.ai = lu32.init(ai),
+                .ai => |ai| trainer.ai = u32.init(ai),
                 .battle_type => |battle_type| trainer.battle_type = math.cast(u8, battle_type) orelse
                     return error.Error,
                 .party_size => |party_size| trainer.party_size = party_size,
@@ -755,7 +755,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .items => |items| {
                     if (items.index >= trainer.items.len)
                         return error.IndexOutOfBound;
-                    trainer.items[items.index] = lu16.init(items.value);
+                    trainer.items[items.index] = u16.init(items.value);
                 },
                 .party => |party| {
                     if (trainers.index >= game.owned.trainer_parties.len)
@@ -766,13 +766,13 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     const member = &game.owned.trainer_parties[trainers.index][party.index];
                     switch (party.value) {
                         .ability => |ability| member.base.gender_ability.ability = ability,
-                        .level => |level| member.base.level = lu16.init(level),
-                        .species => |species| member.base.species = lu16.init(species),
-                        .item => |item| member.item = lu16.init(item),
+                        .level => |level| member.base.level = u16.init(level),
+                        .species => |species| member.base.species = u16.init(species),
+                        .item => |item| member.item = u16.init(item),
                         .moves => |moves| {
                             if (moves.index >= member.moves.len)
                                 return error.IndexOutOfBound;
-                            member.moves[moves.index] = lu16.init(moves.value);
+                            member.moves[moves.index] = u16.init(moves.value);
                         },
                     }
                 },
@@ -824,7 +824,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
                 .description, .name => unreachable,
-                .price => |price| item.price = lu16.init(math.cast(u16, price) orelse return error.Error),
+                .price => |price| item.price = u16.init(math.cast(u16, price) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .pocket => |pocket| item.setPocket(switch (pocket) {
                     .items => .items,
@@ -841,12 +841,12 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .height => |height| {
                     if (pokedex.index >= game.ptrs.pokedex_heights.len)
                         return error.Error;
-                    game.ptrs.pokedex_heights[pokedex.index] = lu32.init(height);
+                    game.ptrs.pokedex_heights[pokedex.index] = u32.init(height);
                 },
                 .weight => |weight| {
                     if (pokedex.index >= game.ptrs.pokedex_weights.len)
                         return error.Error;
-                    game.ptrs.pokedex_weights[pokedex.index] = lu32.init(weight);
+                    game.ptrs.pokedex_weights[pokedex.index] = u32.init(weight);
                 },
                 .category => return error.DidNotConsumeData,
             }
@@ -875,7 +875,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
-                    pokemon.items[items.index] = lu16.init(items.value);
+                    pokemon.items[items.index] = u16.init(items.value);
                 },
                 .types => |types| {
                     if (types.index >= pokemon.types.len)
@@ -907,7 +907,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
                     const index = ms.index + game.ptrs.tms.len * @intFromBool(!is_tms);
                     const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
+                    learnset.* = u128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
                 },
                 .moves => |moves| {
                     const bytes = game.ptrs.level_up_moves.fileData(.{ .i = @intCast(pokemons.index) });
@@ -966,14 +966,14 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                             .trade_with_pokemon,
                             => return error.DidNotConsumeData,
                         },
-                        .param => |param| evolution.param = lu16.init(param),
-                        .target => |target| evolution.target = lu16.init(target),
+                        .param => |param| evolution.param = u16.init(param),
+                        .target => |target| evolution.target = u16.init(target),
                     }
                 },
                 .pokedex_entry => |pokedex_entry| {
                     if (pokemons.index == 0 or pokemons.index - 1 >= game.ptrs.species_to_national_dex.len)
                         return error.Error;
-                    game.ptrs.species_to_national_dex[pokemons.index - 1] = lu16.init(pokedex_entry);
+                    game.ptrs.species_to_national_dex[pokemons.index - 1] = u16.init(pokedex_entry);
                 },
             }
         },
@@ -986,7 +986,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
             if (ms.index >= pick.len)
                 return error.IndexOutOfBound;
-            pick[ms.index] = lu16.init(ms.value);
+            pick[ms.index] = u16.init(ms.value);
         },
         .wild_pokemons => |pokemons| {
             const wild_pokemons = game.ptrs.wild_pokemons;
@@ -1001,7 +1001,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                     const wilds = &wild_pokemons.dppt[pokemons.index];
                     switch (pokemons.value) {
                         .grass_0 => |grass| switch (grass) {
-                            .encounter_rate => |encounter_rate| wilds.grass_rate = lu32.init(encounter_rate),
+                            .encounter_rate => |encounter_rate| wilds.grass_rate = u32.init(encounter_rate),
                             .pokemons => |mons| {
                                 if (mons.index >= wilds.grass.len)
                                     return error.IndexOutOfBound;
@@ -1010,7 +1010,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
                                 switch (mons.value) {
                                     .min_level => |min_level| mon.level = min_level,
                                     .max_level => |max_level| mon.level = max_level,
-                                    .species => |species| mon.species = lu16.init(species),
+                                    .species => |species| mon.species = u16.init(species),
                                 }
                             },
                         },
@@ -1101,8 +1101,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
             const static_mon = game.ptrs.static_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| static_mon.species.* = lu16.init(species),
-                .level => |level| static_mon.level.* = lu16.init(level),
+                .species => |species| static_mon.species.* = u16.init(species),
+                .level => |level| static_mon.level.* = u16.init(level),
             }
         },
         .given_pokemons => |pokemons| {
@@ -1111,8 +1111,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 
             const given_mon = game.ptrs.given_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| given_mon.species.* = lu16.init(species),
-                .level => |level| given_mon.level.* = lu16.init(level),
+                .species => |species| given_mon.species.* = u16.init(species),
+                .level => |level| given_mon.level.* = u16.init(level),
             }
         },
         .pokeball_items => |items| {
@@ -1121,8 +1121,8 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
             const given_item = game.ptrs.pokeball_items[items.index];
 
             switch (items.value) {
-                .item => |item| given_item.item.* = lu16.init(item),
-                .amount => |amount| given_item.amount.* = lu16.init(amount),
+                .item => |item| given_item.item.* = u16.init(item),
+                .amount => |amount| given_item.amount.* = u16.init(amount),
             }
         },
         .hidden_hollows,
@@ -1136,7 +1136,7 @@ fn applyGen4(game: gen4.Game, parsed: format.Game) !void {
 fn applyHgssGrass(
     area: format.WildArea,
     wilds: *align(1) gen4.HgssWildPokemons,
-    grass: *align(1) [12]lu16,
+    grass: *align(1) [12]u16,
 ) !void {
     switch (area) {
         .encounter_rate => |encounter_rate| wilds.grass_rate = math.cast(u8, encounter_rate) orelse return error.Error,
@@ -1147,7 +1147,7 @@ fn applyHgssGrass(
             switch (pokemons.value) {
                 .min_level => |min_level| wilds.grass_levels[pokemons.index] = min_level,
                 .max_level => |max_level| wilds.grass_levels[pokemons.index] = max_level,
-                .species => |species| grass[pokemons.index] = lu16.init(species),
+                .species => |species| grass[pokemons.index] = u16.init(species),
             }
         },
     }
@@ -1166,7 +1166,7 @@ fn applyHgssSea(
 
             const mon = &sea[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| mon.species = lu16.init(species),
+                .species => |species| mon.species = u16.init(species),
                 .min_level => |min_level| mon.min_level = min_level,
                 .max_level => |max_level| mon.max_level = max_level,
             }
@@ -1182,7 +1182,7 @@ fn applyDpptReplacement(area: format.WildArea, replacements: []align(1) gen4.Dpp
 
             const replacement = &replacements[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| replacement.species = lu16.init(species),
+                .species => |species| replacement.species = u16.init(species),
                 .min_level,
                 .max_level,
                 => return error.DidNotConsumeData,
@@ -1194,14 +1194,14 @@ fn applyDpptReplacement(area: format.WildArea, replacements: []align(1) gen4.Dpp
 
 fn applyDpptSea(area: format.WildArea, sea: *align(1) gen4.DpptWildPokemons.Sea) !void {
     switch (area) {
-        .encounter_rate => |encounter_rate| sea.rate = lu32.init(encounter_rate),
+        .encounter_rate => |encounter_rate| sea.rate = u32.init(encounter_rate),
         .pokemons => |pokemons| {
             if (pokemons.index >= sea.mons.len)
                 return error.IndexOutOfBound;
 
             const mon = &sea.mons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| mon.species = lu16.init(species),
+                .species => |species| mon.species = u16.init(species),
                 .min_level => |min_level| mon.min_level = min_level,
                 .max_level => |max_level| mon.max_level = max_level,
             }
@@ -1245,7 +1245,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (starters.index >= game.ptrs.starters.len)
                 return error.Error;
             for (game.ptrs.starters[starters.index]) |starter|
-                starter.* = lu16.init(starters.value);
+                starter.* = u16.init(starters.value);
         },
         .trainers => |trainers| {
             if (trainers.index == 0 or trainers.index - 1 >= game.ptrs.trainers.len)
@@ -1259,9 +1259,9 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .items => |items| {
                     if (items.index >= trainer.items.len)
                         return error.IndexOutOfBound;
-                    trainer.items[items.index] = lu16.init(items.value);
+                    trainer.items[items.index] = u16.init(items.value);
                 },
-                .ai => |ai| trainer.ai = lu32.init(ai),
+                .ai => |ai| trainer.ai = u32.init(ai),
                 .battle_type => |battle_type| trainer.battle_type = math.cast(u8, battle_type) orelse
                     return error.Error,
                 .party_size => |party_size| trainer.party_size = party_size,
@@ -1276,12 +1276,12 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     switch (party.value) {
                         .ability => |ability| member.base.gender_ability.ability = ability,
                         .level => |level| member.base.level = level,
-                        .species => |species| member.base.species = lu16.init(species),
-                        .item => |item| member.item = lu16.init(item),
+                        .species => |species| member.base.species = u16.init(species),
+                        .item => |item| member.item = u16.init(item),
                         .moves => |moves| {
                             if (moves.index >= member.moves.len)
                                 return error.IndexOutOfBound;
-                            member.moves[moves.index] = lu16.init(moves.value);
+                            member.moves[moves.index] = u16.init(moves.value);
                         },
                     }
                 },
@@ -1293,14 +1293,14 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 return error.Error;
 
             const names = game.owned.text.pokemon_names;
-            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.BasePokemon);
+            const pokemon = try game.ptrs.pokemons.fileAs(.{ .i = pokemons.index }, gen5.Pokemon);
             switch (pokemons.value) {
                 .stats => |stats| format.setField(&pokemon.stats, stats),
                 .ev_yield => |ev_yield| format.setField(&pokemon.ev.yield, ev_yield),
                 .items => |items| {
                     if (items.index >= pokemon.items.len)
                         return error.IndexOutOfBound;
-                    pokemon.items[items.index] = lu16.init(items.value);
+                    pokemon.items[items.index] = u16.init(items.value);
                 },
                 .types => |types| {
                     if (types.index >= pokemon.types.len)
@@ -1321,7 +1321,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                 .gender_ratio => |gender_ratio| pokemon.gender_ratio = gender_ratio,
                 .egg_cycles => |egg_cycles| pokemon.egg_cycles = egg_cycles,
                 .base_friendship => |base_friendship| pokemon.base_friendship = base_friendship,
-                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = lu16.init(base_exp_yield),
+                .base_exp_yield => |base_exp_yield| pokemon.base_exp_yield = u16.init(base_exp_yield),
                 .growth_rate => |growth_rate| pokemon.growth_rate = growth_rate,
                 .name => |str| try applyGen5String(names, pokemons.index, str),
                 .tms, .hms => |ms| {
@@ -1332,7 +1332,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
                     const index = if (is_tms) ms.index else ms.index + game.ptrs.tms1.len + game.ptrs.tms2.len;
                     const learnset = &pokemon.machine_learnset;
-                    learnset.* = lu128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
+                    learnset.* = u128.init(bit.setTo(u128, learnset.value(), @as(u7, @intCast(index)), ms.value));
                 },
                 .moves => |moves| {
                     const bytes = game.ptrs.level_up_moves.fileData(.{ .i = pokemons.index });
@@ -1344,8 +1344,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
                     const lvl_up_move = &lvl_up_moves[moves.index];
                     switch (moves.value) {
-                        .id => |id| lvl_up_move.id = lu16.init(id),
-                        .level => |level| lvl_up_move.level = lu16.init(level),
+                        .id => |id| lvl_up_move.id = u16.init(id),
+                        .level => |level| lvl_up_move.level = u16.init(level),
                     }
                 },
                 .evos => |evos| {
@@ -1391,8 +1391,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                             .friend_ship_during_night,
                             => return error.DidNotConsumeData,
                         },
-                        .param => |param| evolution.param = lu16.init(param),
-                        .target => |target| evolution.target = lu16.init(target),
+                        .param => |param| evolution.param = u16.init(param),
+                        .target => |target| evolution.target = u16.init(target),
                     }
                 },
                 .pokedex_entry => |pokedex_entry| {
@@ -1405,15 +1405,15 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             if (tms.index >= game.ptrs.tms1.len + game.ptrs.tms2.len)
                 return error.IndexOutOfBound;
             if (tms.index < game.ptrs.tms1.len) {
-                game.ptrs.tms1[tms.index] = lu16.init(tms.value);
+                game.ptrs.tms1[tms.index] = u16.init(tms.value);
             } else {
-                game.ptrs.tms2[tms.index - game.ptrs.tms1.len] = lu16.init(tms.value);
+                game.ptrs.tms2[tms.index - game.ptrs.tms1.len] = u16.init(tms.value);
             }
         },
         .hms => |hms| {
             if (hms.index >= game.ptrs.hms.len)
                 return error.IndexOutOfBound;
-            game.ptrs.hms[hms.index] = lu16.init(hms.value);
+            game.ptrs.hms[hms.index] = u16.init(hms.value);
         },
         .items => |items| {
             if (items.index >= game.ptrs.items.len)
@@ -1422,7 +1422,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             const descriptions = game.owned.text.item_descriptions;
             const item = &game.ptrs.items[items.index];
             switch (items.value) {
-                .price => |price| item.price = lu16.init(math.cast(u16, price / 10) orelse return error.Error),
+                .price => |price| item.price = u16.init(math.cast(u16, price / 10) orelse return error.Error),
                 .battle_effect => |battle_effect| item.battle_effect = battle_effect,
                 .description => |str| try applyGen5String(descriptions, items.index, str),
                 .name => |str| {
@@ -1469,7 +1469,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             switch (moves.value) {
                 .description => |str| try applyGen5String(descriptions, moves.index, str),
                 .name => |str| try applyGen5String(names, moves.index, str),
-                .effect => |effect| move.effect = lu16.init(effect),
+                .effect => |effect| move.effect = u16.init(effect),
                 .power => |power| move.power = power,
                 .type => |_type| move.type = _type,
                 .accuracy => |accuracy| move.accuracy = accuracy,
@@ -1501,7 +1501,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const map_header = &game.ptrs.map_headers[maps.index];
             switch (maps.value) {
-                .music => |music| map_header.music = lu16.init(music),
+                .music => |music| map_header.music = u16.init(music),
                 .battle_scene => |battle_scene| map_header.battle_scene = battle_scene,
                 .allow_cycling,
                 .allow_escaping,
@@ -1565,8 +1565,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const static_mon = game.ptrs.static_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| static_mon.species.* = lu16.init(species),
-                .level => |level| static_mon.level.* = lu16.init(level),
+                .species => |species| static_mon.species.* = u16.init(species),
+                .level => |level| static_mon.level.* = u16.init(level),
             }
         },
         .given_pokemons => |pokemons| {
@@ -1575,8 +1575,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const given_mon = game.ptrs.given_pokemons[pokemons.index];
             switch (pokemons.value) {
-                .species => |species| given_mon.species.* = lu16.init(species),
-                .level => |level| given_mon.level.* = lu16.init(level),
+                .species => |species| given_mon.species.* = u16.init(species),
+                .level => |level| given_mon.level.* = u16.init(level),
             }
         },
         .pokeball_items => |items| {
@@ -1585,8 +1585,8 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
 
             const given_item = game.ptrs.pokeball_items[items.index];
             switch (items.value) {
-                .item => |item| given_item.item.* = lu16.init(item),
-                .amount => |amount| given_item.amount.* = lu16.init(amount),
+                .item => |item| given_item.item.* = u16.init(item),
+                .amount => |amount| given_item.amount.* = u16.init(amount),
             }
         },
         .hidden_hollows => |hidden_hollows| if (game.ptrs.hidden_hollows) |hollows| {
@@ -1606,7 +1606,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                                 return error.IndexOutOfBound;
 
                             switch (pokemons.value) {
-                                .species => |species| group.species[pokemons.index] = lu16.init(species),
+                                .species => |species| group.species[pokemons.index] = u16.init(species),
                             }
                         },
                     }
@@ -1615,7 +1615,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
                     if (items.index >= hollow.items.len)
                         return error.DidNotConsumeData;
 
-                    hollow.items[items.index] = lu16.init(items.value);
+                    hollow.items[items.index] = u16.init(items.value);
                 },
             }
         } else {
@@ -1683,7 +1683,7 @@ fn applyGen5StringReplace(
     if (copy_into.len < written.len)
         return error.Error;
 
-    mem.copy(u8, copy_into, written);
+    @memcpy(copy_into, written);
 
     // Null terminate, if we didn't fill the buffer
     if (written.len < copy_into.len)

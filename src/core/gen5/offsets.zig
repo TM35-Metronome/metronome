@@ -1,5 +1,3 @@
-const common = @import("../common.zig");
-
 pub const NarcOffset = struct {
     file: usize,
     offset: usize,
@@ -278,3 +276,9 @@ const white_info = Info{
 pub const hm_count = 6;
 pub const hm_tm_prefix = "\x87\x03\x88\x03";
 pub const tm_count = 95;
+
+test {
+    _ = common;
+}
+
+const common = @import("../common.zig");

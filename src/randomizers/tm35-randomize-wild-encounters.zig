@@ -13,7 +13,6 @@ const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
 const os = std.os;
-const rand = std.rand;
 const testing = std.testing;
 
 const format = core.format;
@@ -177,7 +176,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    var default_random = rand.DefaultPrng.init(program.options.seed);
+    var default_random = std.Random.DefaultPrng.init(program.options.seed);
     const random = default_random.random();
     var simular = std.ArrayList(u16).init(allocator);
 
@@ -226,7 +225,7 @@ fn foldu8(a: usize, b: u8) usize {
     return a + b;
 }
 
-const number_of_areas = @typeInfo(format.WildPokemons).Union.fields.len;
+const number_of_areas = @typeInfo(format.WildPokemons).@"union".fields.len;
 
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);

@@ -1,5 +1,3 @@
-const common = @import("../common.zig");
-
 pub const StarterLocation = union(enum) {
     arm9: usize,
     overlay9: Overlay,
@@ -259,3 +257,9 @@ const platinum_info = Info{
 pub const hm_count = 8;
 pub const starters_len = 12;
 pub const tm_count = 92;
+
+test {
+    _ = common;
+}
+
+const common = @import("../common.zig");

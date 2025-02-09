@@ -1,11 +1,3 @@
-const rom = @import("../rom.zig");
-const std = @import("std");
-
-const io = std.io;
-const mem = std.mem;
-
-// TODO: Replace with Replacing/Escaping streams
-
 pub const all = [_]rom.encoding.Char{
     .{ "\\x0000", "\x00\x00" },
     .{ "\\x0001", "\x01\x00" },
@@ -1170,6 +1162,13 @@ pub fn decode(reader: anytype, writer: anytype) !void {
 }
 
 pub fn decodeBytes(in: []const u8, writer: anytype) !void {
-    var fbs = io.fixedBufferStream(in);
+    var fbs = std.io.fixedBufferStream(in);
     try decode(fbs.reader(), writer);
 }
+
+test {
+    _ = rom;
+}
+
+const rom = @import("../rom.zig");
+const std = @import("std");

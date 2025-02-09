@@ -1,8 +1,3 @@
-const std = @import("std");
-
-const mem = std.mem;
-const testing = std.testing;
-
 test "glob" {
     try testGlob("test case", "test case", true);
     try testGlob("case", "test case", false);
@@ -23,25 +18,25 @@ test "glob" {
 }
 
 fn testGlob(comptime glob: []const u8, str: []const u8, res: bool) !void {
-    const glob_split = try split(testing.allocator, glob);
-    defer testing.allocator.free(glob_split);
+    const glob_split = try split(std.testing.allocator, glob);
+    defer std.testing.allocator.free(glob_split);
 
-    try testing.expect(match(glob, str) == res);
-    try testing.expect(matchSplit(glob_split, str) == res);
+    try std.testing.expect(match(glob, str) == res);
+    try std.testing.expect(matchSplit(glob_split, str) == res);
 }
 
-pub fn split(allocator: mem.Allocator, glob: []const u8) ![]const []const u8 {
+pub fn split(allocator: std.mem.Allocator, glob: []const u8) ![]const []const u8 {
     var res = std.ArrayList([]const u8).init(allocator);
     errdefer res.deinit();
 
-    var matches = mem.split(u8, glob, "*");
+    var matches = std.mem.splitScalar(u8, glob, '*');
     while (matches.next()) |str|
         try res.append(str);
 
     return res.toOwnedSlice();
 }
 
-pub fn splitAll(allocator: mem.Allocator, globs: []const []const u8) ![]const []const []const u8 {
+pub fn splitAll(allocator: std.mem.Allocator, globs: []const []const u8) ![]const []const []const u8 {
     var res = std.ArrayList([]const []const u8).init(allocator);
     errdefer {
         for (res.items) |item|
@@ -60,35 +55,35 @@ pub fn matchSplit(glob: []const []const u8, str: []const u8) bool {
         return true;
 
     const first = glob[0];
-    if (!mem.startsWith(u8, str, first))
+    if (!std.mem.startsWith(u8, str, first))
         return false;
     if (glob.len == 1)
         return str.len == first.len;
 
     var pos: usize = first.len;
     for (glob[1 .. glob.len - 1]) |curr| {
-        pos = mem.indexOfPos(u8, str, pos, curr) orelse return false;
+        pos = std.mem.indexOfPos(u8, str, pos, curr) orelse return false;
         pos += curr.len;
     }
 
-    return mem.endsWith(u8, str[pos..], glob[glob.len - 1]);
+    return std.mem.endsWith(u8, str[pos..], glob[glob.len - 1]);
 }
 
 pub fn match(glob: []const u8, str: []const u8) bool {
-    var matches = mem.split(u8, glob, "*");
+    var matches = std.mem.splitScalar(u8, glob, '*');
     const first = matches.next().?;
 
-    if (!mem.startsWith(u8, str, first))
+    if (!std.mem.startsWith(u8, str, first))
         return false;
 
     var pos: usize = first.len;
     var curr = matches.next() orelse return str.len == first.len;
     while (matches.next()) |next| : (curr = next) {
-        pos = mem.indexOfPos(u8, str, pos, curr) orelse return false;
+        pos = std.mem.indexOfPos(u8, str, pos, curr) orelse return false;
         pos += curr.len;
     }
 
-    return mem.endsWith(u8, str[pos..], curr);
+    return std.mem.endsWith(u8, str[pos..], curr);
 }
 
 pub fn matchesOneOf(str: []const u8, globs: []const []const u8) ?usize {
@@ -108,3 +103,5 @@ pub fn matchesOneOfSplit(str: []const u8, globs: []const []const []const u8) ?us
 
     return null;
 }
+
+const std = @import("std");
