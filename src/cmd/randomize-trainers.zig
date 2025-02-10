@@ -31,7 +31,7 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
     defer arena_state.deinit();
 
     var this = try init(arena, random.random(), options, game);
-    if (this.species.count() == 0)
+    if (this.base.species.count() == 0)
         return;
 
     const parties = try game.trainerParties();
@@ -51,19 +51,19 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
         .types = switch (this.options.types) {
             .themed => blk: {
                 const types = this.species_by_type.keys();
-                const t = types[this.random.uintAtMost(usize, types.len - 1)];
+                const t = this.base.randomItem(types).?.*;
                 break :blk [_]u8{ t, t };
             },
             .dual_themed => blk: {
                 const types = this.species_by_dual_type.keys();
-                break :blk types[this.random.uintAtMost(usize, types.len - 1)];
+                break :blk this.base.randomItem(types).?.*;
             },
             else => null,
         },
         .ability = switch (this.options.abilities) {
             .themed => blk: {
                 const abilities = this.species_by_ability.keys();
-                break :blk abilities[this.random.uintAtMost(usize, abilities.len - 1)];
+                break :blk this.base.randomItem(abilities).?.*;
             },
             else => null,
         },
@@ -92,7 +92,7 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
             this.options.party_size_min,
             this.options.party_size_max,
         ),
-        .random => this.random.intRangeAtMost(
+        .random => this.base.random.intRangeAtMost(
             u8,
             this.options.party_size_min,
             this.options.party_size_max,
@@ -159,7 +159,7 @@ fn randomizePartyMember(
     const pokemons = try game.pokemons();
     const pick_from_type = switch (this.options.types) {
         .same => blk: {
-            const pokemon = pokemons.at(member.base.species) catch break :blk this.species;
+            const pokemon = pokemons.at(member.base.species) catch break :blk this.base.species;
             break :blk this.species_by_type.get(pokemon.types[0]).?;
         },
         .themed => this.species_by_type.get(themes.types.?[0]).?,
@@ -170,10 +170,10 @@ fn randomizePartyMember(
     var new_ability: ?u16 = null;
     const pick_from_ability = switch (this.options.abilities) {
         .same0, .same1 => blk: {
-            const pokemon = pokemons.at(member.base.species) catch break :blk this.species;
+            const pokemon = pokemons.at(member.base.species) catch break :blk this.base.species;
             const ability = pokemon.abilities[member.ability()];
             if (ability == 0)
-                break :blk this.species;
+                break :blk this.base.species;
 
             new_ability = ability;
             break :blk this.species_by_ability.get(ability).?;
@@ -189,7 +189,7 @@ fn randomizePartyMember(
         // The intersection between the type_set and ability_set will give
         // us all pokémons that have a certain type+ability pair. This is
         // the set we will pick from.
-        var intersection = this.intersection.promote(this.arena);
+        var intersection = this.intersection.promote(this.base.arena);
         intersection.clearRetainingCapacity();
         try util.set.intersectInline(&intersection, pick_from_ability, pick_from_type);
         this.intersection = intersection.unmanaged;
@@ -203,13 +203,13 @@ fn randomizePartyMember(
     else if (pick_from_type.count() != 0)
         pick_from_type
     else
-        this.species;
+        this.base.species;
 
     if (this.options.avoid_same) {
         // Now, we have to exclude party members already in the party. To do this we construct a
         // new set from `pick_from` with `other_party_members` excluded.
         this.pick_from_excluded.clearRetainingCapacity();
-        try this.pick_from_excluded.ensureTotalCapacity(this.arena, pick_from.count());
+        try this.pick_from_excluded.ensureTotalCapacity(this.base.arena, pick_from.count());
 
         for (pick_from.keys()) |picked|
             this.pick_from_excluded.putAssumeCapacity(picked, {});
@@ -241,52 +241,26 @@ fn randomizePartyMember(
     };
 
     member.base.species = switch (this.options.stats) {
-        .follow_level => try this.randomSpeciesWithSimilarTotalStats(
+        .follow_level => try this.base.randomSpeciesWithStatsFollowingLevel(
             game,
             pick_from,
-            common.totalStatsLevelScaling(this.stats.min, this.stats.max, member.base.level),
+            member.base.level,
         ),
         .similar => if (pokemons.at(member.base.species)) |pokemon|
-            try this.randomSpeciesWithSimilarTotalStats(
+            try this.base.randomSpeciesWithSimilarTotalStats(
                 game,
                 pick_from,
                 pokemon.stats.total(),
             )
         else |_|
-            pick_from.keys()[this.random.uintAtMost(usize, pick_from.count() - 1)],
-        .random0, .random1 => pick_from.keys()[this.random.uintAtMost(usize, pick_from.count() - 1)],
+            this.base.randomItem(pick_from.keys()).?.*,
+        .random0, .random1 => this.base.randomItem(pick_from.keys()).?.*,
     };
 }
 
-fn randomSpeciesWithSimilarTotalStats(this: *@This(), game: anytype, pick_from: Set, total_stats: u16) !u16 {
-    const pokemons = try game.pokemons();
-    const range = 5;
-    var min = @as(isize, @intCast(total_stats)) - range;
-    var max = min + range * 2;
-
-    this.similar.shrinkRetainingCapacity(0);
-    while (this.similar.items.len < 25) : ({
-        min -= range;
-        max += range;
-    }) {
-        try this.similar.ensureUnusedCapacity(this.arena, pick_from.count());
-        for (pick_from.keys()) |s| {
-            const p = pokemons.at(s) catch continue;
-            const total: isize = @intCast(p.stats.total());
-            if (min <= total and total <= max)
-                this.similar.appendAssumeCapacity(s);
-        }
-    }
-
-    return this.similar.items[this.random.uintAtMost(usize, this.similar.items.len - 1)];
-}
-
-arena: std.mem.Allocator,
-random: std.Random,
+base: common.Randomizer,
 options: Options,
 
-stats: MinMax(u16),
-species: Set,
 species_by_ability: SpeciesByAbility,
 species_by_type: SpeciesByType,
 species_by_dual_type: SpeciesByDualType,
@@ -304,32 +278,18 @@ fn init(arena: std.mem.Allocator, random: std.Random, opt: Options, game: anytyp
     options.party_size_min = std.math.clamp(options.party_size_min, 1, 6);
     options.party_size_max = std.math.clamp(options.party_size_max, 1, 6);
 
-    var valid_species = std.ArrayList(u16).init(arena);
-    try game.validSpecies(&valid_species);
-
-    var species_set = Set{};
-    try species_set.ensureTotalCapacity(arena, valid_species.items.len);
-    for (valid_species.items) |species|
-        species_set.putAssumeCapacity(species, {});
+    const base = try common.Randomizer.init(arena, random, game);
 
     var species_by_ability = SpeciesByAbility{};
     var species_by_type = SpeciesByType{};
     var species_by_dual_type = SpeciesByDualType{};
-    var stats: MinMax(u16) = .{
-        .min = std.math.maxInt(u16),
-        .max = 0,
-    };
     species_by_ability = species_by_ability;
     species_by_type = species_by_type;
     species_by_dual_type = species_by_dual_type;
 
     const pokemons = try game.pokemons();
-    for (species_set.keys()) |species| {
+    for (base.species.keys()) |species| {
         const pokemon = try pokemons.at(species);
-
-        const total_stats = pokemon.stats.total();
-        stats.min = @min(stats.min, total_stats);
-        stats.max = @max(stats.max, total_stats);
 
         for (pokemon.abilities) |ability| {
             if (ability == 0)
@@ -356,11 +316,8 @@ fn init(arena: std.mem.Allocator, random: std.Random, opt: Options, game: anytyp
     }
 
     return .{
-        .arena = arena,
-        .random = random,
+        .base = base,
         .options = options,
-        .stats = stats,
-        .species = species_set,
         .species_by_ability = species_by_ability,
         .species_by_type = species_by_type,
         .species_by_dual_type = species_by_dual_type,
@@ -371,10 +328,6 @@ const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 const SpeciesByAbility = std.AutoArrayHashMapUnmanaged(u16, Set);
 const SpeciesByType = std.AutoArrayHashMapUnmanaged(u8, Set);
 const SpeciesByDualType = std.AutoArrayHashMapUnmanaged([2]u8, Set);
-
-fn MinMax(comptime T: type) type {
-    return struct { min: T, max: T };
-}
 
 const Themes = struct {
     types: ?[2]u8,

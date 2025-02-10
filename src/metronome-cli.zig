@@ -1,5 +1,9 @@
 pub fn main() !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_state.allocator();
+    defer _ = gpa_state.deinit();
+
+    var arena_state = std.heap.ArenaAllocator.init(gpa);
     const arena = arena_state.allocator();
     defer arena_state.deinit();
 
@@ -22,7 +26,9 @@ pub fn main() !void {
     var output_file = try std.fs.cwd().createFile(output orelse return error.NoOutput, .{});
     defer output_file.close();
 
-    var game = try core.Game.fromFile(input_file, arena);
+    var game = try core.Game.fromFile(input_file, gpa);
+    defer game.deinit();
+
     while (args.next()) {
         const command_name = args.positional().?;
         const command = Command.find(command_name) orelse return error.UnknownCommand;

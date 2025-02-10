@@ -3,6 +3,8 @@ pub const command = Command{
     .description = "",
     .parameters = Command.Parameter.fromType(Options, .{
         .seed = .{},
+        .pokemons = .{},
+        .stats = .{},
     }),
     .createOptions = Command.Options.createFromType(Options),
     .function = randomize,
@@ -20,27 +22,43 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
     const arena = arena_state.allocator();
     defer arena_state.deinit();
 
+    switch (options.pokemons) {
+        .unchanged => return,
+        .randomize => {},
+    }
+
     const this = try init(arena, random.random(), options, game);
     _ = this;
 }
 
-arena: std.mem.Allocator,
-random: std.Random,
+base: common.Randomizer,
 options: Options,
 
 fn init(arena: std.mem.Allocator, random: std.Random, options: Options, game: anytype) !This {
-    var valid_species = std.ArrayList(u16).init(arena);
-    try game.validSpecies(&valid_species);
+    const base = try common.Randomizer.init(arena, random, game);
 
     return .{
-        .arena = arena,
-        .random = random,
+        .base = base,
         .options = options,
     };
 }
 
 const Options = packed struct {
     seed: u64 = 0,
+    pokemons: Pokemons = .unchanged,
+    stats: Stats = .random0,
+
+    const Pokemons = enum(u1) {
+        unchanged,
+        randomize,
+    };
+
+    const Stats = enum(u2) {
+        random0,
+        random1,
+        similar,
+        follow_level,
+    };
 };
 
 fn doTest(options: Options, from: core.dummy.Game.Init, to: core.dummy.Game.Init) !void {

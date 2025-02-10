@@ -89,4 +89,89 @@ test partySizeLevelScaling {
     try std.testing.expectEqual(@as(u16, 4), partySizeLevelScaling(1, 4, 100));
 }
 
+pub const Randomizer = struct {
+    arena: std.mem.Allocator,
+    random: std.Random,
+
+    species: Set,
+    stats: MinMax(u16),
+
+    // `randomSpeciesWithSimilarTotalStats` uses this as a buffer that is reused between calls
+    similar: std.ArrayListUnmanaged(u16) = std.ArrayListUnmanaged(u16){},
+
+    pub fn init(arena: std.mem.Allocator, random: std.Random, game: anytype) !Randomizer {
+        var valid_species = std.ArrayList(u16).init(arena);
+        try game.validSpecies(&valid_species);
+
+        var species_set = Set{};
+        try species_set.ensureTotalCapacity(arena, valid_species.items.len);
+        for (valid_species.items) |species|
+            species_set.putAssumeCapacity(species, {});
+
+        var stats: MinMax(u16) = .{
+            .min = std.math.maxInt(u16),
+            .max = 0,
+        };
+
+        const pokemons = try game.pokemons();
+        for (species_set.keys()) |species| {
+            const pokemon = try pokemons.at(species);
+
+            const total_stats = pokemon.stats.total();
+            stats.min = @min(stats.min, total_stats);
+            stats.max = @max(stats.max, total_stats);
+        }
+
+        return .{
+            .arena = arena,
+            .random = random,
+            .species = species_set,
+            .stats = stats,
+        };
+    }
+
+    pub fn randomItem(this: Randomizer, items: anytype) ?@TypeOf(&items[0]) {
+        if (items.len == 0)
+            return null;
+        return &items[this.random.uintAtMost(usize, items.len - 1)];
+    }
+
+    pub fn randomSpeciesWithSimilarTotalStats(this: *Randomizer, game: anytype, pick_from: Set, total_stats: u16) !u16 {
+        const pokemons = try game.pokemons();
+        const range = 5;
+        var min = @as(isize, @intCast(total_stats)) - range;
+        var max = min + range * 2;
+
+        this.similar.shrinkRetainingCapacity(0);
+        while (this.similar.items.len < 25) : ({
+            min -= range;
+            max += range;
+        }) {
+            try this.similar.ensureUnusedCapacity(this.arena, pick_from.count());
+            for (pick_from.keys()) |s| {
+                const p = pokemons.at(s) catch continue;
+                const total: isize = @intCast(p.stats.total());
+                if (min <= total and total <= max)
+                    this.similar.appendAssumeCapacity(s);
+            }
+        }
+
+        return this.randomItem(this.similar.items).?.*;
+    }
+
+    pub fn randomSpeciesWithStatsFollowingLevel(this: *Randomizer, game: anytype, pick_from: Set, level: u16) !u16 {
+        return this.randomSpeciesWithSimilarTotalStats(
+            game,
+            pick_from,
+            totalStatsLevelScaling(this.stats.min, this.stats.max, level),
+        );
+    }
+};
+
+pub fn MinMax(comptime T: type) type {
+    return struct { min: T, max: T };
+}
+
+pub const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+
 const std = @import("std");
