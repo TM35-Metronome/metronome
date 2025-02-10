@@ -291,9 +291,28 @@ pub const Species = extern struct {
 };
 
 pub const WildPokemon = extern struct {
-    species: Species,
-    min_level: u8,
-    max_level: u8,
+    m: extern struct {
+        species: Species,
+        min_level: u8,
+        max_level: u8,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species.species();
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species.setSpecies(@intCast(s));
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.min_level;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.min_level = l;
+        pokemon.m.max_level = l;
+    }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 4);
@@ -303,13 +322,14 @@ pub const WildPokemon = extern struct {
 pub const WildPokemons = extern struct {
     rates: [7]u8,
     pad: u8,
-    grass: [12]WildPokemon,
-    dark_grass: [12]WildPokemon,
-    rustling_grass: [12]WildPokemon,
-    surf: [5]WildPokemon,
-    ripple_surf: [5]WildPokemon,
-    fishing: [5]WildPokemon,
-    ripple_fishing: [5]WildPokemon,
+    pokemons: [12 + 12 + 12 + 5 + 5 + 5 + 5]WildPokemon,
+    // grass: [12]WildPokemon,
+    // dark_grass: [12]WildPokemon,
+    // rustling_grass: [12]WildPokemon,
+    // surf: [5]WildPokemon,
+    // ripple_surf: [5]WildPokemon,
+    // fishing: [5]WildPokemon,
+    // ripple_fishing: [5]WildPokemon,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 232);
@@ -786,6 +806,34 @@ pub const StringTable = struct {
     }
 };
 
+pub const WildAreas = struct {
+    fs: rom.nds.fs.Fs,
+
+    pub fn at(areas: WildAreas, i: usize) !WildArea {
+        const file = rom.nds.fs.File{ .i = @intCast(i) };
+        return .{ .wilds = areas.fs.fileAs(file, [4]WildPokemons) catch
+            try areas.fs.fileAs(file, [1]WildPokemons) };
+    }
+
+    pub fn len(areas: WildAreas) usize {
+        return areas.fs.fat.len;
+    }
+};
+
+pub const WildArea = struct {
+    wilds: []align(1) WildPokemons,
+
+    pub fn at(pokemons: WildArea, i: usize) !*align(1) WildPokemon {
+        const wilds: WildPokemons = undefined;
+        return &pokemons.wilds[i / wilds.pokemons.len].pokemons[i % wilds.pokemons.len];
+    }
+
+    pub fn len(pokemons: WildArea) usize {
+        const wilds: WildPokemons = undefined;
+        return pokemons.wilds.len * wilds.pokemons.len;
+    }
+};
+
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -1081,6 +1129,11 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.owned.trainer_parties };
+    }
+
+    pub fn wildAreas(game: Game) !WildAreas {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.trainers) };
     }
 
     // TODO: Validate

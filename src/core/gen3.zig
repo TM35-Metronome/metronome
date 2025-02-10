@@ -314,9 +314,28 @@ pub const Pokedex = union {
 };
 
 pub const WildPokemon = extern struct {
-    min_level: u8,
-    max_level: u8,
-    species: u16,
+    m: extern struct {
+        min_level: u8,
+        max_level: u8,
+        species: u16,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species;
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.min_level;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.min_level = l;
+        pokemon.m.max_level = l;
+    }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 4);
@@ -603,6 +622,55 @@ const ScriptData = struct {
     }
 };
 
+pub const WildAreas = struct {
+    data: []align(4) u8,
+    headers: []WildPokemonHeader,
+
+    pub fn at(areas: WildAreas, i: usize) !WildArea {
+        return .{
+            .data = areas.data,
+            .land = try areas.unwrap(areas.headers[i].land),
+            .surf = try areas.unwrap(areas.headers[i].surf),
+            .rock_smash = try areas.unwrap(areas.headers[i].rock_smash),
+            .fishing = try areas.unwrap(areas.headers[i].fishing),
+        };
+    }
+
+    pub fn len(areas: WildAreas) usize {
+        return areas.headers.len;
+    }
+
+    fn unwrap(areas: WildAreas, ptr: anytype) ![]WildPokemon {
+        const pokemon_info = try ptr.toPtr(areas.data);
+        return try pokemon_info.wild_pokemons.toPtr(areas.data);
+    }
+};
+
+pub const WildArea = struct {
+    data: []align(4) u8,
+    land: []WildPokemon,
+    surf: []WildPokemon,
+    rock_smash: []WildPokemon,
+    fishing: []WildPokemon,
+
+    pub fn at(area: WildArea, i: usize) !*WildPokemon {
+        var off = i;
+        inline for (.{ "land", "surf", "rock_smash", "fishing" }) |field| {
+            if (off < @field(area, field).len)
+                return &@field(area, field)[off];
+            off -= @field(area, field).len;
+        }
+        unreachable;
+    }
+
+    pub fn len(area: WildArea) usize {
+        return area.land.len +
+            area.surf.len +
+            area.rock_smash.len +
+            area.fishing.len;
+    }
+};
+
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -634,7 +702,6 @@ pub const Game = struct {
     items: []Item,
     pokedex: Pokedex,
     species_to_national_dex: []u16,
-    wild_pokemon_headers: []WildPokemonHeader,
     map_headers: []MapHeader,
     pokemon_names: [][11]u8,
     ability_names: [][13]u8,
@@ -786,7 +853,6 @@ pub const Game = struct {
                 else => unreachable,
             },
             .species_to_national_dex = info.species_to_national_dex.slice(gba_rom),
-            .wild_pokemon_headers = info.wild_pokemon_headers.slice(gba_rom),
             .pokemon_names = info.pokemon_names.slice(gba_rom),
             .ability_names = info.ability_names.slice(gba_rom),
             .move_names = info.move_names.slice(gba_rom),
@@ -809,6 +875,13 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.trainer_parties };
+    }
+
+    pub fn wildAreas(game: Game) !WildAreas {
+        return .{
+            .data = game.data,
+            .headers = game.info.wild_pokemon_headers.slice(game.data),
+        };
     }
 
     // TODO: Validate

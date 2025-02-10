@@ -244,6 +244,8 @@ pub fn IndexableSlice(comptime T: type) type {
     return struct {
         slice: []T,
 
+        pub const empty: @This() = .{ .slice = &.{} };
+
         pub fn at(slice: @This(), i: usize) !*T {
             return &slice.slice[i];
         }

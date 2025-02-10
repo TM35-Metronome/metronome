@@ -4,6 +4,7 @@ pub const Game = struct {
         pokemons: []Pokemon,
         trainers: []Trainer,
         trainer_parties: []Party,
+        wild_areas: []WildArea,
     },
 
     pub fn init(gpa: std.mem.Allocator, values: Init) !Game {
@@ -17,6 +18,7 @@ pub const Game = struct {
                 .pokemons = try arena.dupe(Pokemon, values.pokemons),
                 .trainers = try arena.dupe(Trainer, values.trainers),
                 .trainer_parties = try arena.dupe(Party, values.trainer_parties),
+                .wild_areas = try arena.dupe(WildArea, values.wild_areas),
             },
         };
         res.arena = arena_state;
@@ -37,6 +39,10 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.m.trainer_parties };
+    }
+
+    pub fn wildAreas(game: Game) !WildAreas {
+        return .{ .slice = game.m.wild_areas };
     }
 
     pub fn validSpecies(game: Game, out: *std.ArrayList(u16)) !void {
@@ -63,18 +69,8 @@ pub const Game = struct {
         pokemons: []const Pokemon,
         trainers: []const Trainer,
         trainer_parties: []const Party,
+        wild_areas: []const WildArea,
     };
-};
-
-pub const Type = enum {
-    grass,
-    poision,
-};
-
-pub const Ability = enum {
-    null,
-    overgrowth,
-    chlorophyll,
 };
 
 pub const Pokemon = struct {
@@ -101,9 +97,70 @@ pub const Party = struct {
     }
 };
 
+pub const WildReplacement = struct {
+    species: u16,
+};
+
+pub const WildPokemon = struct {
+    m: struct {
+        min_level: u8,
+        max_level: u8,
+        species: u16,
+    },
+
+    pub fn init(s: u16, min: u8, max: u8) WildPokemon {
+        return .{ .m = .{
+            .species = s,
+            .min_level = min,
+            .max_level = max,
+        } };
+    }
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species;
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.min_level;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.min_level = l;
+        pokemon.m.max_level = l;
+    }
+};
+
+pub const WildArea = struct {
+    size: u8,
+    mons: [6]WildPokemon,
+
+    pub fn init(mons: []const WildPokemon) WildArea {
+        var res = WildArea{
+            .size = @intCast(mons.len),
+            .mons = @splat(.init(0, 0, 0)),
+        };
+        @memcpy(res.mons[0..mons.len], mons);
+        return res;
+    }
+
+    pub fn at(area: *WildArea, i: usize) !*WildPokemon {
+        std.debug.assert(i < area.size);
+        return &area.mons[i];
+    }
+
+    pub fn len(area: WildArea) usize {
+        return area.size;
+    }
+};
+
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
+pub const WildAreas = common.IndexableSlice(WildArea);
 
 pub const default = Game.Init{
     .pokemons = &.{
@@ -1983,6 +2040,9 @@ pub const default = Game.Init{
             .{ .base = .{ .level = 63, .species = 59 } },
             .{ .base = .{ .level = 65, .species = 3 } },
         }),
+    },
+    .wild_areas = &.{
+        .init(&.{}),
     },
 };
 

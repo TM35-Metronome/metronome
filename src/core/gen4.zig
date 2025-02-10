@@ -241,21 +241,48 @@ pub const LevelUpMove = packed struct {
     }
 };
 
+pub const WildPokemon = struct {
+    m: struct {
+        species: *align(1) u16,
+        min_level: *align(1) u8,
+        max_level: *align(1) u8,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species.*;
+    }
+
+    pub fn setSpecies(pokemon: WildPokemon, s: u16) void {
+        pokemon.m.species.* = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.min_level.*;
+    }
+
+    pub fn setLevel(pokemon: WildPokemon, l: u8) void {
+        pokemon.m.min_level.* = l;
+        pokemon.m.max_level.* = l;
+    }
+};
+
 pub const DpptWildPokemons = extern struct {
     grass_rate: u32,
     grass: [12]Grass,
-    swarm_replace: [2]Replacement, // Replaces grass[0, 1]
-    day_replace: [2]Replacement, // Replaces grass[2, 3]
-    night_replace: [2]Replacement, // Replaces grass[2, 3]
-    radar_replace: [4]Replacement, // Replaces grass[4, 5, 10, 11]
-    unknown_replace: [6]Replacement, // ???
-    gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
+    replace: [2 + 2 + 2 + 4 + 6 + 10]Replacement,
+    // swarm_replace: [2]Replacement, // Replaces grass[0, 1]
+    // day_replace: [2]Replacement, // Replaces grass[2, 3]
+    // night_replace: [2]Replacement, // Replaces grass[2, 3]
+    // radar_replace: [4]Replacement, // Replaces grass[4, 5, 10, 11]
+    // unknown_replace: [6]Replacement, // ???
+    // gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
 
-    surf: Sea,
-    sea_unknown: Sea,
-    old_rod: Sea,
-    good_rod: Sea,
-    super_rod: Sea,
+    sea: [5]Sea,
+    // surf: Sea,
+    // sea_unknown: Sea,
+    // old_rod: Sea,
+    // good_rod: Sea,
+    // super_rod: Sea,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 424);
@@ -300,19 +327,22 @@ pub const DpptWildPokemons = extern struct {
 };
 
 pub const HgssWildPokemons = extern struct {
-    grass_rate: u8,
-    sea_rates: [5]u8,
+    rates: [6]u8,
+    // grass_rate: u8,
+    // sea_rates: [5]u8,
     unknown: [2]u8,
     grass_levels: [12]u8,
     grass_morning: [12]u16,
     grass_day: [12]u16,
     grass_night: [12]u16,
     radio: [4]u16,
-    surf: [5]Sea,
-    sea_unknown: [2]Sea,
-    old_rod: [5]Sea,
-    good_rod: [5]Sea,
-    super_rod: [5]Sea,
+
+    sea: [5 + 2 + 5 + 5 + 5]Sea,
+    // surf: [5]Sea,
+    // sea_unknown: [2]Sea,
+    // old_rod: [5]Sea,
+    // good_rod: [5]Sea,
+    // super_rod: [5]Sea,
     swarm: [4]u16,
 
     comptime {
@@ -540,6 +570,132 @@ pub const StringTable = struct {
             @intCast(table.number_of_strings),
             @intCast(table.maxStringLen() * table.number_of_strings),
         );
+    }
+};
+
+pub const Version = enum {
+    hgss,
+    dppt,
+};
+
+pub const WildAreas = struct {
+    version: Version,
+    fs: rom.nds.fs.Fs,
+
+    pub fn at(areas: WildAreas, i: usize) !WildArea {
+        const file = rom.nds.fs.File{ .i = @intCast(i) };
+        return switch (areas.version) {
+            .hgss => .{ .hgss = try areas.fs.fileAs(file, HgssWildPokemons) },
+            .dppt => .{ .dppt = try areas.fs.fileAs(file, DpptWildPokemons) },
+        };
+    }
+
+    pub fn len(areas: WildAreas) usize {
+        return areas.fs.fat.len;
+    }
+};
+
+pub const WildArea = union(Version) {
+    hgss: *align(1) HgssWildPokemons,
+    dppt: *align(1) DpptWildPokemons,
+
+    pub fn at(arena: WildArea, i: usize) !WildPokemon {
+        var off = i;
+        switch (arena) {
+            .hgss => |hgss| {
+                inline for (.{ "grass_morning", "grass_day", "grass_night" }) |field| {
+                    if (off < @field(hgss, field).len)
+                        return .{ .m = .{
+                            .species = &@field(hgss, field)[off],
+                            .min_level = &hgss.grass_levels[off],
+                            .max_level = &hgss.grass_levels[off],
+                        } };
+
+                    off -= @field(hgss, field).len;
+                }
+
+                if (off < hgss.radio.len)
+                    return .{ .m = .{
+                        .species = &hgss.radio[off],
+                        .min_level = &hgss.grass_levels[off],
+                        .max_level = &hgss.grass_levels[off],
+                    } };
+
+                off -= hgss.radio.len;
+                if (off < hgss.sea.len)
+                    return .{ .m = .{
+                        .species = &hgss.sea[off].species,
+                        .min_level = &hgss.sea[off].min_level,
+                        .max_level = &hgss.sea[off].max_level,
+                    } };
+
+                off -= hgss.sea.len;
+                if (off < hgss.swarm.len)
+                    return .{ .m = .{
+                        .species = &hgss.swarm[off],
+                        .min_level = &hgss.grass_levels[off],
+                        .max_level = &hgss.grass_levels[off],
+                    } };
+
+                unreachable;
+            },
+            .dppt => |dppt| {
+                if (off < dppt.grass.len)
+                    return .{ .m = .{
+                        .species = &dppt.grass[off].species,
+                        .min_level = &dppt.grass[off].level,
+                        .max_level = &dppt.grass[off].level,
+                    } };
+
+                off -= dppt.grass.len;
+                if (off < dppt.replace.len) {
+                    const level_index = switch (off) {
+                        // swarm_replace: [2]Replacement, // Replaces grass[0, 1]
+                        // day_replace: [2]Replacement, // Replaces grass[2, 3]
+                        // night_replace: [2]Replacement, // Replaces grass[2, 3]
+                        0, 1, 10, 11 => off,
+                        2, 4, 6 => 2,
+                        3, 5, 7 => 3,
+                        // radar_replace: [4]Replacement, // Replaces grass[4, 5, 10, 11]
+                        8 => 4,
+                        9 => 5,
+                        // unknown_replace: [6]Replacement, // ???
+                        12, 13, 14, 15, 16, 17 => 0,
+                        // gba_replace: [10]Replacement, // Each even replaces grass[8], each uneven replaces grass[9]
+                        else => 8 + off / 2,
+                    };
+                    return .{ .m = .{
+                        .species = &dppt.replace[off].species,
+                        .min_level = &dppt.grass[level_index].level,
+                        .max_level = &dppt.grass[level_index].level,
+                    } };
+                }
+
+                off -= dppt.replace.len;
+                const sea_len = dppt.sea[0].mons.len;
+                if (off < (dppt.sea.len * sea_len))
+                    return .{ .m = .{
+                        .species = &dppt.sea[off / sea_len].mons[off % sea_len].species,
+                        .min_level = &dppt.sea[off / sea_len].mons[off % sea_len].min_level,
+                        .max_level = &dppt.sea[off / sea_len].mons[off % sea_len].max_level,
+                    } };
+
+                unreachable;
+            },
+        }
+    }
+
+    pub fn len(area: WildArea) usize {
+        switch (area) {
+            // TODO: Radio, Swarm
+            .hgss => |hgss| return hgss.grass_morning.len +
+                hgss.grass_day.len +
+                hgss.grass_night.len +
+                hgss.sea.len,
+            .dppt => |dppt| return dppt.grass.len +
+                dppt.replace.len +
+                (dppt.sea.len * dppt.sea[0].mons.len),
+        }
     }
 };
 
@@ -816,6 +972,18 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.owned.trainer_parties };
+    }
+
+    pub fn wildAreas(game: Game) !WildAreas {
+        const file_system = game.rom.fileSystem();
+        return .{
+            .version = switch (game.info.version) {
+                .heart_gold, .soul_silver => .hgss,
+                .diamond, .pearl, .platinum => .dppt,
+                else => unreachable,
+            },
+            .fs = try file_system.openNarc(rom.nds.fs.root, game.info.wild_pokemons),
+        };
     }
 
     // TODO: Validate

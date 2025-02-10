@@ -29,6 +29,18 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
 
     const this = try init(arena, random.random(), options, game);
     _ = this;
+
+    const wild_areas = try game.wildAreas();
+    var i: usize = 0;
+    while (i < wild_areas.len()) : (i += 1) {
+        const wild_pokemons = wild_areas.at(i) catch continue;
+
+        var j: usize = 0;
+        while (j < wild_pokemons.len()) : (j += 1) {
+            const pokemon = wild_pokemons.at(j) catch continue;
+            _ = pokemon; // autofix
+        }
+    }
 }
 
 base: common.Randomizer,
