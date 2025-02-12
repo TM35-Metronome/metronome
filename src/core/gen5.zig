@@ -257,15 +257,6 @@ pub const Evolution = extern struct {
     };
 };
 
-pub const EvolutionTable = extern struct {
-    items: [7]Evolution,
-    terminator: u16,
-
-    comptime {
-        std.debug.assert(@sizeOf(@This()) == 44);
-    }
-};
-
 pub const Species = extern struct {
     value: u16,
 
@@ -834,6 +825,7 @@ pub const WildArea = struct {
     }
 };
 
+pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -920,7 +912,6 @@ pub const Game = struct {
         tms1: []align(1) u16,
         hms: []align(1) u16,
         tms2: []align(1) u16,
-        evolutions: []align(1) EvolutionTable,
         map_headers: []align(1) MapHeader,
         hidden_hollows: ?[]align(1) HiddenHollow,
 
@@ -1100,7 +1091,6 @@ pub const Game = struct {
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .trainers = try (try file_system.openNarc(rom.nds.fs.root, info.trainers)).toSlice(1, Trainer),
                 .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
-                .evolutions = try (try file_system.openNarc(rom.nds.fs.root, info.evolutions)).toSlice(0, EvolutionTable),
                 .map_headers = std.mem.bytesAsSlice(MapHeader, map_header_bytes[0..]),
                 .tms1 = hm_tms[0..92],
                 .hms = hm_tms[92..98],
@@ -1120,6 +1110,11 @@ pub const Game = struct {
     pub fn pokemons(game: Game) !Pokemons {
         const file_system = game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.pokemons) };
+    }
+
+    pub fn evolutions(game: Game) !Evolutions {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
     }
 
     pub fn trainers(game: Game) !Trainers {

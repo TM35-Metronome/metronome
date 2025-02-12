@@ -671,6 +671,18 @@ pub const WildArea = struct {
     }
 };
 
+pub const Evolutions = struct {
+    evos: [][5]Evolution,
+
+    pub fn at(evos: @This(), i: usize) ![]Evolution {
+        return &evos.evos[i];
+    }
+
+    pub fn len(evos: @This()) usize {
+        return evos.evos.len;
+    }
+};
+
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -695,7 +707,6 @@ pub const Game = struct {
     text_delays: []u8,
     moves: []Move,
     machine_learnsets: []align(4) u64,
-    evolutions: [][5]Evolution,
     level_up_learnset_pointers: []Ptr([*]LevelUpMove),
     hms: []u16,
     tms: []u16,
@@ -838,7 +849,6 @@ pub const Game = struct {
             .text_delays = info.text_delays.slice(gba_rom),
             .moves = info.moves.slice(gba_rom),
             .machine_learnsets = info.machine_learnsets.slice(gba_rom),
-            .evolutions = info.evolutions.slice(gba_rom),
             .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gba_rom),
             .hms = info.hms.slice(gba_rom),
             .tms = info.tms.slice(gba_rom),
@@ -867,6 +877,10 @@ pub const Game = struct {
 
     pub fn pokemons(game: Game) !Pokemons {
         return .{ .slice = game.info.pokemons.slice(game.data) };
+    }
+
+    pub fn evolutions(game: Game) !Evolutions {
+        return .{ .evos = game.info.evolutions.slice(game.data) };
     }
 
     pub fn trainers(game: Game) !Trainers {
@@ -904,6 +918,9 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
+        game.starters_repeat[0].* = game.starters[0].*;
+        game.starters_repeat[1].* = game.starters[1].*;
+        game.starters_repeat[2].* = game.starters[2].*;
         try game.applyTrainerParties();
     }
 

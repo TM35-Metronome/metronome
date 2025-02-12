@@ -33,6 +33,10 @@ pub const Game = struct {
         return .{ .slice = game.m.pokemons };
     }
 
+    pub fn evolutions(game: Game) !Evolutions {
+        return .{ .pokemons = game.m.pokemons };
+    }
+
     pub fn trainers(game: Game) !Trainers {
         return .{ .slice = game.m.trainers };
     }
@@ -77,6 +81,28 @@ pub const Pokemon = struct {
     stats: common.Stats,
     types: [2]u8,
     abilities: [3]u8,
+    evolutions: [3]Evolution,
+
+    pub fn init(values: struct {
+        stats: common.Stats,
+        types: [2]u8,
+        abilities: [3]u8,
+        evolutions: []const Evolution,
+    }) Pokemon {
+        var res = Pokemon{
+            .stats = values.stats,
+            .types = values.types,
+            .abilities = values.abilities,
+            .evolutions = @splat(.{}),
+        };
+        @memcpy(res.evolutions[0..values.evolutions.len], values.evolutions);
+        return res;
+    }
+};
+
+pub const Evolution = struct {
+    method: common.EvoMethod = .unused,
+    target: u16 = 0,
 };
 
 pub const Trainer = struct {};
@@ -157,6 +183,18 @@ pub const WildArea = struct {
     }
 };
 
+pub const Evolutions = struct {
+    pokemons: []Pokemon,
+
+    pub fn at(evos: @This(), i: usize) ![]Evolution {
+        return &evos.pokemons[i].evolutions;
+    }
+
+    pub fn len(evos: @This()) usize {
+        return evos.pokemons.len;
+    }
+};
+
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -164,7 +202,7 @@ pub const WildAreas = common.IndexableSlice(WildArea);
 
 pub const default = Game.Init{
     .pokemons = &.{
-        .{
+        .init(.{
             .stats = .{
                 .hp = 0,
                 .attack = 0,
@@ -175,8 +213,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 0, 0, 0 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 49,
@@ -187,8 +226,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 65, 0, 34 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 2 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 62,
@@ -199,8 +241,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 65, 0, 34 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 3 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 82,
@@ -211,8 +256,9 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 65, 0, 34 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 39,
                 .attack = 52,
@@ -223,8 +269,11 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 66, 0, 94 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 5 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 58,
                 .attack = 64,
@@ -235,8 +284,11 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 66, 0, 94 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 6 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 78,
                 .attack = 84,
@@ -247,8 +299,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 2 },
             .abilities = .{ 66, 0, 94 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 44,
                 .attack = 48,
@@ -259,8 +312,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 67, 0, 44 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 8 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 59,
                 .attack = 63,
@@ -271,8 +327,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 67, 0, 44 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 9 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 79,
                 .attack = 83,
@@ -283,8 +342,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 67, 0, 44 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 30,
@@ -295,8 +355,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 6 },
             .abilities = .{ 19, 0, 50 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 11 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 20,
@@ -307,8 +370,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 6 },
             .abilities = .{ 61, 0, 61 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 12 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 45,
@@ -319,8 +385,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 2 },
             .abilities = .{ 14, 0, 110 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 35,
@@ -331,8 +398,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 3 },
             .abilities = .{ 19, 0, 50 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 14 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 25,
@@ -343,8 +413,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 3 },
             .abilities = .{ 61, 0, 61 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 15 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 80,
@@ -355,8 +428,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 3 },
             .abilities = .{ 68, 0, 97 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 45,
@@ -367,8 +441,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 77, 145 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 17 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 63,
                 .attack = 60,
@@ -379,8 +456,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 77, 145 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 18 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 83,
                 .attack = 80,
@@ -391,8 +471,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 77, 145 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 56,
@@ -403,8 +484,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 50, 62, 55 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 20 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 81,
@@ -415,8 +499,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 50, 62, 55 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 60,
@@ -427,8 +512,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 0, 97 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 22 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 90,
@@ -439,8 +527,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 0, 97 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 60,
@@ -451,8 +540,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 22, 61, 127 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 24 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 85,
@@ -463,8 +555,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 22, 61, 127 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 55,
@@ -475,8 +568,11 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 9, 0, 31 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 26 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 90,
@@ -487,8 +583,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 9, 0, 31 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 75,
@@ -499,8 +596,11 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 8, 0, 146 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 28 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 75,
                 .attack = 100,
@@ -511,8 +611,9 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 8, 0, 146 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 47,
@@ -523,8 +624,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 38, 79, 55 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 30 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 62,
@@ -535,8 +639,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 38, 79, 55 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 31 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 82,
@@ -547,8 +654,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 4 },
             .abilities = .{ 38, 79, 125 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 46,
                 .attack = 57,
@@ -559,8 +667,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 38, 79, 55 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 33 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 61,
                 .attack = 72,
@@ -571,8 +682,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 38, 79, 55 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 34 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 81,
                 .attack = 92,
@@ -583,8 +697,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 4 },
             .abilities = .{ 38, 79, 125 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 45,
@@ -595,8 +710,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 56, 98, 132 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 36 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 95,
                 .attack = 70,
@@ -607,8 +725,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 56, 98, 109 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 38,
                 .attack = 41,
@@ -619,8 +738,11 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 18, 0, 70 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 38 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 73,
                 .attack = 76,
@@ -631,8 +753,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 18, 0, 70 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 115,
                 .attack = 45,
@@ -643,8 +766,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 56, 0, 132 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 40 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 140,
                 .attack = 70,
@@ -655,8 +781,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 56, 0, 119 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 45,
@@ -667,8 +794,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 2 },
             .abilities = .{ 39, 0, 151 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 42 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 75,
                 .attack = 80,
@@ -679,8 +809,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 2 },
             .abilities = .{ 39, 0, 151 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 50,
@@ -691,8 +822,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 50 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 44 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 65,
@@ -703,8 +837,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 1 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 45 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 75,
                 .attack = 80,
@@ -715,8 +852,9 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 27 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 70,
@@ -727,8 +865,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 11 },
             .abilities = .{ 27, 87, 6 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 47 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 95,
@@ -739,8 +880,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 11 },
             .abilities = .{ 27, 87, 6 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 55,
@@ -751,8 +893,11 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 3 },
             .abilities = .{ 14, 110, 50 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 49 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 65,
@@ -763,8 +908,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 3 },
             .abilities = .{ 19, 110, 147 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 10,
                 .attack = 55,
@@ -775,8 +921,11 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 8, 71, 159 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 51 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 80,
@@ -787,8 +936,9 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 8, 71, 159 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 45,
@@ -799,8 +949,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 53, 101, 127 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 53 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 70,
@@ -811,8 +964,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 7, 101, 127 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 52,
@@ -823,8 +977,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 6, 13, 33 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 55 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 82,
@@ -835,8 +992,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 6, 13, 33 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 80,
@@ -847,8 +1005,11 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 72, 83, 128 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 57 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 105,
@@ -859,8 +1020,9 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 72, 83, 128 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 70,
@@ -871,8 +1033,11 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 22, 18, 154 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 59 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 110,
@@ -883,8 +1048,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 22, 18, 154 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 50,
@@ -895,8 +1061,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 11, 6, 33 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 61 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 65,
@@ -907,8 +1076,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 11, 6, 33 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 62 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 85,
@@ -919,8 +1091,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 1 },
             .abilities = .{ 11, 6, 33 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 25,
                 .attack = 20,
@@ -931,8 +1104,11 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 28, 39, 98 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 64 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 35,
@@ -943,8 +1119,11 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 28, 39, 98 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .trade, .target = 65 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 50,
@@ -955,8 +1134,9 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 28, 39, 98 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 80,
@@ -967,8 +1147,11 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 62, 99, 80 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 67 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 100,
@@ -979,8 +1162,11 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 62, 99, 80 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .trade, .target = 68 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 130,
@@ -991,8 +1177,9 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 62, 99, 80 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 75,
@@ -1003,8 +1190,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 82 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 70 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 90,
@@ -1015,8 +1205,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 82 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 71 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 105,
@@ -1027,8 +1220,9 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 3 },
             .abilities = .{ 34, 0, 82 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 40,
@@ -1039,8 +1233,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 3 },
             .abilities = .{ 29, 64, 44 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 73 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 70,
@@ -1051,8 +1248,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 3 },
             .abilities = .{ 29, 64, 44 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 80,
@@ -1063,8 +1261,11 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 4 },
             .abilities = .{ 69, 5, 8 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 75 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 95,
@@ -1075,8 +1276,11 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 4 },
             .abilities = .{ 69, 5, 8 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .trade, .target = 76 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 110,
@@ -1087,8 +1291,9 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 4 },
             .abilities = .{ 69, 5, 8 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 85,
@@ -1099,8 +1304,11 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 50, 18, 49 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 78 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 100,
@@ -1111,8 +1319,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 50, 18, 49 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 65,
@@ -1123,8 +1332,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 13 },
             .abilities = .{ 12, 20, 144 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 80 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 95,
                 .attack = 75,
@@ -1135,8 +1347,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 13 },
             .abilities = .{ 12, 20, 144 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 25,
                 .attack = 35,
@@ -1147,8 +1360,11 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 8 },
             .abilities = .{ 42, 5, 148 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 82 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 60,
@@ -1159,8 +1375,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 8 },
             .abilities = .{ 42, 5, 148 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 52,
                 .attack = 65,
@@ -1171,8 +1388,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 51, 39, 128 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 85,
@@ -1183,8 +1401,11 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 50, 48, 77 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 85 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 110,
@@ -1195,8 +1416,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 2 },
             .abilities = .{ 50, 48, 77 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 45,
@@ -1207,8 +1429,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 47, 93, 115 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 87 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 70,
@@ -1219,8 +1444,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 14 },
             .abilities = .{ 47, 93, 115 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 80,
@@ -1231,8 +1457,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 1, 60, 143 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 89 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 105,
                 .attack = 105,
@@ -1243,8 +1472,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 1, 60, 143 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 65,
@@ -1255,8 +1485,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 75, 92, 142 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 91 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 95,
@@ -1267,8 +1500,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 14 },
             .abilities = .{ 75, 92, 142 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 35,
@@ -1279,8 +1513,11 @@ pub const default = Game.Init{
             },
             .types = .{ 7, 3 },
             .abilities = .{ 26, 0, 0 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 93 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 50,
@@ -1291,8 +1528,11 @@ pub const default = Game.Init{
             },
             .types = .{ 7, 3 },
             .abilities = .{ 26, 0, 0 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .trade, .target = 94 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 65,
@@ -1303,8 +1543,9 @@ pub const default = Game.Init{
             },
             .types = .{ 7, 3 },
             .abilities = .{ 26, 0, 0 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 45,
@@ -1315,8 +1556,9 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 4 },
             .abilities = .{ 69, 5, 133 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 48,
@@ -1327,8 +1569,11 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 15, 108, 39 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 97 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 85,
                 .attack = 73,
@@ -1339,8 +1584,9 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 15, 108, 39 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 105,
@@ -1351,8 +1597,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 52, 75, 125 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 99 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 130,
@@ -1363,8 +1612,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 52, 75, 125 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 30,
@@ -1375,8 +1625,11 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 43, 9, 106 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 101 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 50,
@@ -1387,8 +1640,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 43, 9, 106 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 40,
@@ -1399,8 +1653,11 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 13 },
             .abilities = .{ 34, 0, 139 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 103 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 95,
                 .attack = 95,
@@ -1411,8 +1668,9 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 13 },
             .abilities = .{ 34, 0, 139 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 50,
@@ -1423,8 +1681,11 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 69, 31, 4 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 105 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 80,
@@ -1435,8 +1696,9 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 4 },
             .abilities = .{ 69, 31, 4 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 120,
@@ -1447,8 +1709,9 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 7, 120, 84 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 50,
                 .attack = 105,
@@ -1459,8 +1722,9 @@ pub const default = Game.Init{
             },
             .types = .{ 1, 1 },
             .abilities = .{ 51, 89, 39 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 55,
@@ -1471,8 +1735,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 20, 12, 13 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 65,
@@ -1483,8 +1748,11 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 26, 0, 0 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 110 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 90,
@@ -1495,8 +1763,9 @@ pub const default = Game.Init{
             },
             .types = .{ 3, 3 },
             .abilities = .{ 26, 0, 0 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 85,
@@ -1507,8 +1776,11 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 5 },
             .abilities = .{ 31, 69, 120 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 112 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 105,
                 .attack = 130,
@@ -1519,8 +1791,9 @@ pub const default = Game.Init{
             },
             .types = .{ 4, 5 },
             .abilities = .{ 31, 69, 120 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 250,
                 .attack = 5,
@@ -1531,8 +1804,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 30, 32, 131 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 55,
@@ -1543,8 +1817,9 @@ pub const default = Game.Init{
             },
             .types = .{ 11, 11 },
             .abilities = .{ 34, 102, 144 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 105,
                 .attack = 95,
@@ -1555,8 +1830,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 48, 113, 39 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 40,
@@ -1567,8 +1843,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 33, 97, 6 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 117 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 65,
@@ -1579,8 +1858,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 38, 97, 6 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 45,
                 .attack = 67,
@@ -1591,8 +1871,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 33, 41, 31 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 119 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 92,
@@ -1603,8 +1886,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 33, 41, 31 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 45,
@@ -1615,8 +1899,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 35, 30, 148 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 121 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 75,
@@ -1627,8 +1914,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 13 },
             .abilities = .{ 35, 30, 148 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 40,
                 .attack = 45,
@@ -1639,8 +1927,9 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 43, 111, 101 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 110,
@@ -1651,8 +1940,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 2 },
             .abilities = .{ 68, 101, 80 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 50,
@@ -1663,8 +1953,9 @@ pub const default = Game.Init{
             },
             .types = .{ 14, 13 },
             .abilities = .{ 12, 108, 87 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 83,
@@ -1675,8 +1966,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 9, 0, 72 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 95,
@@ -1687,8 +1979,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 49, 0, 72 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 125,
@@ -1699,8 +1992,9 @@ pub const default = Game.Init{
             },
             .types = .{ 6, 6 },
             .abilities = .{ 52, 104, 153 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 75,
                 .attack = 100,
@@ -1711,8 +2005,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 22, 83, 125 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 20,
                 .attack = 10,
@@ -1723,8 +2018,11 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 33, 0, 155 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 130 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 95,
                 .attack = 125,
@@ -1735,8 +2033,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 2 },
             .abilities = .{ 22, 0, 153 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 130,
                 .attack = 85,
@@ -1747,8 +2046,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 14 },
             .abilities = .{ 11, 75, 93 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 48,
                 .attack = 48,
@@ -1759,8 +2059,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 7, 0, 150 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 55,
                 .attack = 55,
@@ -1771,8 +2072,13 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 50, 91, 107 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .use_item, .target = 134 },
+                .{ .method = .use_item, .target = 135 },
+                .{ .method = .use_item, .target = 136 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 130,
                 .attack = 65,
@@ -1783,8 +2089,9 @@ pub const default = Game.Init{
             },
             .types = .{ 10, 10 },
             .abilities = .{ 11, 11, 93 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 65,
@@ -1795,8 +2102,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 12 },
             .abilities = .{ 10, 10, 95 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 130,
@@ -1807,8 +2115,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 9 },
             .abilities = .{ 18, 18, 62 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 65,
                 .attack = 60,
@@ -1819,8 +2128,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 36, 88, 148 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 35,
                 .attack = 40,
@@ -1831,8 +2141,11 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 10 },
             .abilities = .{ 33, 75, 133 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 139 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 70,
                 .attack = 60,
@@ -1843,8 +2156,9 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 10 },
             .abilities = .{ 33, 75, 133 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 30,
                 .attack = 80,
@@ -1855,8 +2169,11 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 10 },
             .abilities = .{ 33, 4, 133 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 141 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 60,
                 .attack = 115,
@@ -1867,8 +2184,9 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 10 },
             .abilities = .{ 33, 4, 133 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 80,
                 .attack = 105,
@@ -1879,8 +2197,9 @@ pub const default = Game.Init{
             },
             .types = .{ 5, 2 },
             .abilities = .{ 69, 46, 127 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 160,
                 .attack = 110,
@@ -1891,8 +2210,9 @@ pub const default = Game.Init{
             },
             .types = .{ 0, 0 },
             .abilities = .{ 17, 47, 82 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 85,
@@ -1903,8 +2223,9 @@ pub const default = Game.Init{
             },
             .types = .{ 14, 2 },
             .abilities = .{ 46, 0, 81 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 90,
@@ -1915,8 +2236,9 @@ pub const default = Game.Init{
             },
             .types = .{ 12, 2 },
             .abilities = .{ 46, 0, 31 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 90,
                 .attack = 100,
@@ -1927,8 +2249,9 @@ pub const default = Game.Init{
             },
             .types = .{ 9, 2 },
             .abilities = .{ 46, 0, 49 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 41,
                 .attack = 64,
@@ -1939,8 +2262,11 @@ pub const default = Game.Init{
             },
             .types = .{ 15, 15 },
             .abilities = .{ 61, 0, 63 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 148 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 61,
                 .attack = 84,
@@ -1951,8 +2277,11 @@ pub const default = Game.Init{
             },
             .types = .{ 15, 15 },
             .abilities = .{ 61, 0, 63 },
-        },
-        .{
+            .evolutions = &.{
+                .{ .method = .level_up, .target = 149 },
+            },
+        }),
+        .init(.{
             .stats = .{
                 .hp = 91,
                 .attack = 134,
@@ -1963,8 +2292,9 @@ pub const default = Game.Init{
             },
             .types = .{ 15, 2 },
             .abilities = .{ 39, 0, 136 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 106,
                 .attack = 110,
@@ -1975,8 +2305,9 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 46, 0, 127 },
-        },
-        .{
+            .evolutions = &.{},
+        }),
+        .init(.{
             .stats = .{
                 .hp = 100,
                 .attack = 100,
@@ -1987,7 +2318,8 @@ pub const default = Game.Init{
             },
             .types = .{ 13, 13 },
             .abilities = .{ 28, 0, 0 },
-        },
+            .evolutions = &.{},
+        }),
     },
     .trainers = &.{},
     .trainer_parties = &.{

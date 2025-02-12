@@ -97,7 +97,7 @@ pub const Randomizer = struct {
     arena: std.mem.Allocator,
     random: std.Random,
 
-    species: Set,
+    species: SpeciesSet,
     stats: MinMax(u16),
 
     // `randomSpeciesWithSimilarTotalStats` uses this as a buffer that is reused between calls
@@ -107,7 +107,7 @@ pub const Randomizer = struct {
         var valid_species = std.ArrayList(u16).init(arena);
         try game.validSpecies(&valid_species);
 
-        var species_set = Set{};
+        var species_set = SpeciesSet{};
         try species_set.ensureTotalCapacity(arena, valid_species.items.len);
         for (valid_species.items) |species|
             species_set.putAssumeCapacity(species, {});
@@ -140,7 +140,7 @@ pub const Randomizer = struct {
         return &items[this.random.uintAtMost(usize, items.len - 1)];
     }
 
-    pub fn randomSpeciesWithSimilarTotalStats(this: *Randomizer, game: anytype, pick_from: Set, total_stats: u16) !u16 {
+    pub fn randomSpeciesWithSimilarTotalStats(this: *Randomizer, game: anytype, pick_from: SpeciesSet, total_stats: u16) !u16 {
         const pokemons = try game.pokemons();
         const range = 5;
         var min = @as(isize, @intCast(total_stats)) - range;
@@ -163,7 +163,7 @@ pub const Randomizer = struct {
         return this.randomItem(this.similar.items).?.*;
     }
 
-    pub fn randomSpeciesWithStatsFollowingLevel(this: *Randomizer, game: anytype, pick_from: Set, level: u16) !u16 {
+    pub fn randomSpeciesWithStatsFollowingLevel(this: *Randomizer, game: anytype, pick_from: SpeciesSet, level: u16) !u16 {
         return this.randomSpeciesWithSimilarTotalStats(
             game,
             pick_from,
@@ -176,6 +176,7 @@ pub fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
 }
 
-pub const Set = std.AutoArrayHashMapUnmanaged(u16, void);
+pub const SpeciesSet = std.AutoArrayHashMapUnmanaged(u16, void);
+pub const SpeciesToSpeciesMap = std.AutoArrayHashMapUnmanaged(u16, void);
 
 const std = @import("std");

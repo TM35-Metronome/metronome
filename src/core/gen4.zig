@@ -40,15 +40,6 @@ pub const Evolution = extern struct {
     }
 };
 
-pub const EvolutionTable = extern struct {
-    items: [7]Evolution,
-    terminator: u16,
-
-    comptime {
-        std.debug.assert(@sizeOf(@This()) == 44);
-    }
-};
-
 pub const MoveTutor = extern struct {
     move: u16,
     cost: u8,
@@ -699,6 +690,7 @@ pub const WildArea = union(Version) {
     }
 };
 
+pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -763,7 +755,6 @@ pub const Game = struct {
         items: []align(1) Item,
         tms: []align(1) u16,
         hms: []align(1) u16,
-        evolutions: []align(1) EvolutionTable,
 
         level_up_moves: rom.nds.fs.Fs,
 
@@ -927,7 +918,6 @@ pub const Game = struct {
                 },
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
-                .evolutions = try (try file_system.openNarc(rom.nds.fs.root, info.evolutions)).toSlice(0, EvolutionTable),
                 .wild_pokemons = blk: {
                     const narc = try file_system.openNarc(rom.nds.fs.root, info.wild_pokemons);
                     switch (info.version) {
@@ -961,6 +951,11 @@ pub const Game = struct {
     }
 
     pub fn pokemons(game: Game) !Pokemons {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
+    }
+
+    pub fn evolutions(game: Game) !Evolutions {
         const file_system = game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.pokemons) };
     }
