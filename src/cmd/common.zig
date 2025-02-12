@@ -45,8 +45,10 @@ pub fn partySizeLevelScaling(min: u8, max: u8, level: u16) u8 {
 
     const max_party_size_level = 60;
     const steps = max - min;
-    const level_steps = max_party_size_level / steps;
+    if (steps == 0)
+        return max;
 
+    const level_steps = max_party_size_level / steps;
     const res = level / level_steps;
     return @intCast(std.math.clamp(min + res, min, max));
 }
@@ -87,6 +89,8 @@ test partySizeLevelScaling {
     try std.testing.expectEqual(@as(u16, 4), partySizeLevelScaling(1, 4, 80));
     try std.testing.expectEqual(@as(u16, 4), partySizeLevelScaling(1, 4, 90));
     try std.testing.expectEqual(@as(u16, 4), partySizeLevelScaling(1, 4, 100));
+
+    try std.testing.expectEqual(@as(u16, 6), partySizeLevelScaling(6, 6, 100));
 }
 
 pub const Randomizer = struct {

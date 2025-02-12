@@ -74,7 +74,7 @@ fn fuzzFromFile(input: []const u8) !void {
     try input_file.writeAll(input);
     try input_file.seekTo(0);
 
-    const game = try Game.fromFile(input_file, std.testing.allocator);
+    const game = Game.fromFile(input_file, std.testing.allocator) catch return;
     defer game.deinit();
 
     try game.write(output_file.writer());
