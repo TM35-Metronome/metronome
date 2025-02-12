@@ -278,7 +278,7 @@ pub const Species = extern struct {
     }
 
     pub fn setSpecies(s: *align(1) Species, spe: u10) void {
-        s.value = u16.init((@as(u16, s.form()) << @as(u4, 10)) | spe);
+        s.value = (@as(u16, s.form()) << @as(u4, 10)) | spe;
     }
 
     pub fn form(s: Species) u6 {
@@ -286,7 +286,7 @@ pub const Species = extern struct {
     }
 
     pub fn setForm(s: *align(1) Species, f: u10) void {
-        s.value = u16.init((@as(u16, f) << @as(u4, 10)) | s.species());
+        s.value = (@as(u16, f) << @as(u4, 10)) | s.species();
     }
 };
 
@@ -301,7 +301,7 @@ pub const WildPokemon = extern struct {
         return pokemon.m.species.species();
     }
 
-    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+    pub fn setSpecies(pokemon: *align(1) WildPokemon, s: u16) void {
         pokemon.m.species.setSpecies(@intCast(s));
     }
 
@@ -309,7 +309,7 @@ pub const WildPokemon = extern struct {
         return pokemon.m.min_level;
     }
 
-    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+    pub fn setLevel(pokemon: *align(1) WildPokemon, l: u8) void {
         pokemon.m.min_level = l;
         pokemon.m.max_level = l;
     }

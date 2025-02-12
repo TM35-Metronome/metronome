@@ -27,9 +27,9 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
         .randomize => {},
     }
 
-    const this = try init(arena, random.random(), options, game);
-    _ = this;
+    var this = try init(arena, random.random(), options, game);
 
+    const pokemons = try game.pokemons();
     const wild_areas = try game.wildAreas();
     var i: usize = 0;
     while (i < wild_areas.len()) : (i += 1) {
@@ -37,8 +37,23 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
 
         var j: usize = 0;
         while (j < wild_pokemons.len()) : (j += 1) {
-            const pokemon = wild_pokemons.at(j) catch continue;
-            _ = pokemon; // autofix
+            const wild_pokemon = wild_pokemons.at(j) catch continue;
+            wild_pokemon.setSpecies(switch (this.options.stats) {
+                .random0, .random1 => this.base.randomItem(this.base.species.keys()).?.*,
+                .similar => if (pokemons.at(wild_pokemon.species())) |pokemon|
+                    try this.base.randomSpeciesWithSimilarTotalStats(
+                        game,
+                        this.base.species,
+                        pokemon.stats.total(),
+                    )
+                else |_|
+                    this.base.randomItem(this.base.species.keys()).?.*,
+                .follow_level => try this.base.randomSpeciesWithStatsFollowingLevel(
+                    game,
+                    this.base.species,
+                    wild_pokemon.level(),
+                ),
+            });
         }
     }
 }
