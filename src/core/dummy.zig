@@ -125,7 +125,7 @@ pub const WildPokemon = struct {
     }
 
     pub fn level(pokemon: WildPokemon) u8 {
-        return pokemon.m.min_level;
+        return (pokemon.m.min_level + pokemon.m.max_level) / 2;
     }
 
     pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
@@ -136,7 +136,7 @@ pub const WildPokemon = struct {
 
 pub const WildArea = struct {
     size: u8,
-    mons: [6]WildPokemon,
+    mons: [8]WildPokemon,
 
     pub fn init(mons: []const WildPokemon) WildArea {
         var res = WildArea{
@@ -2042,7 +2042,27 @@ pub const default = Game.Init{
         }),
     },
     .wild_areas = &.{
-        .init(&.{}),
+        .init(&.{
+            .init(16, 2, 5),
+            .init(19, 2, 4),
+        }),
+        .init(&.{
+            .init(16, 18, 22),
+            .init(17, 23, 25),
+            .init(21, 20, 22),
+            .init(22, 24, 24),
+            .init(84, 18, 22),
+        }),
+        .init(&.{
+            .init(72, 5, 40),
+            .init(129, 5, 5),
+            .init(60, 10, 10),
+            .init(118, 10, 10),
+            .init(73, 20, 40),
+            .init(90, 15, 15),
+            .init(116, 15, 15),
+            .init(120, 15, 15),
+        }),
     },
 };
 

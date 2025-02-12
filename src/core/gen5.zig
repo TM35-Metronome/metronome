@@ -306,7 +306,7 @@ pub const WildPokemon = extern struct {
     }
 
     pub fn level(pokemon: WildPokemon) u8 {
-        return pokemon.m.min_level;
+        return (pokemon.m.min_level + pokemon.m.max_level) / 2;
     }
 
     pub fn setLevel(pokemon: *align(1) WildPokemon, l: u8) void {
