@@ -716,7 +716,7 @@ pub const Game = struct {
     pub fn identify(reader: anytype) !offsets.Info {
         const header = try reader.readStruct(rom.gba.Header);
         for (offsets.infos) |info| {
-            if (!std.mem.eql(u8, info.game_title.slice(), header.game_title.slice()))
+            if (!std.mem.eql(u8, &info.game_title, &header.game_title))
                 continue;
             if (!std.mem.eql(u8, &info.gamecode, &header.gamecode))
                 continue;
