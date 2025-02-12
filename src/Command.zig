@@ -5,8 +5,8 @@ createOptions: Options.Create,
 function: *const fn (std.mem.Allocator, Options, *core.Game) anyerror!void,
 
 pub const all = [_]Command{
-    @import("cmd/randomize-trainers.zig").command,
-    @import("cmd/randomize-wild-encounters.zig").command,
+    @import("cmd/trainers.zig").command,
+    @import("cmd/wild-encounters.zig").command,
 };
 
 pub fn find(name: []const u8) ?*const Command {
