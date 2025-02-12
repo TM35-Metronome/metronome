@@ -62,6 +62,28 @@ pub const Game = union(enum) {
     }
 };
 
+fn fuzzFromFile(input: []const u8) !void {
+    const cwd = std.fs.cwd();
+    const input_file = try cwd.createFile(".zig-cache/fuzz_game_from_file.input", .{
+        .read = true,
+    });
+    defer input_file.close();
+    const output_file = try cwd.createFile(".zig-cache/fuzz_game_from_file.output", .{});
+    defer output_file.close();
+
+    try input_file.writeAll(input);
+    try input_file.seekTo(0);
+
+    const game = try Game.fromFile(input_file, std.testing.allocator);
+    defer game.deinit();
+
+    try game.write(output_file.writer());
+}
+
+test "Game.fromFile fuzz" {
+    try std.testing.fuzz(fuzzFromFile, .{});
+}
+
 test {
     _ = gen3;
     _ = gen4;
