@@ -120,6 +120,42 @@ const Options = packed struct {
 
 test randomizeAny {
     try core.dummy.doTest(Options{}, randomizeAny, core.dummy.default, core.dummy.default);
+    try core.dummy.doTest(Options{
+        .starters = .random,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.starters = &.{ 50, 58, 55 };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .starters = .random_lowest_2_stage_evolution,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.starters = &.{ 86, 35, 133 };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .starters = .random_lowest_3_stage_evolution,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.starters = &.{ 13, 16, 13 };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .starters = .random_lowest_3_stage_evolution,
+        .avoid_same = true,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.starters = &.{ 13, 74, 92 };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .starters = .random_lowest_evolution,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.starters = &.{ 84, 133, 29 };
+        break :blk res;
+    });
 }
 
 test "fuzz" {
