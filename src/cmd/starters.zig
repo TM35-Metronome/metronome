@@ -4,6 +4,7 @@ pub const command = Command{
     .parameters = Command.Parameter.fromType(Options, .{
         .seed = .{},
         .starters = .{},
+        .avoid_same = .{},
     }),
     .createOptions = Command.Options.createFromType(Options),
     .function = randomize,
@@ -22,18 +23,25 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
     defer arena_state.deinit();
 
     const this = try init(arena, random.random(), options, game);
-    _ = this; // autofix
-
-    switch (options.starters) {
+    const pick_from_base = switch (options.starters) {
+        .random => this.base.species,
+        .random_lowest_2_stage_evolution => this.lowest_2_stage_evolutions,
+        .random_lowest_3_stage_evolution => this.lowest_3_stage_evolutions,
+        .random_lowest_evolution => this.lowest_evolutions,
         .unchanged => return,
-        .random0,
-        .random1,
-        .random2,
-        .random3,
-        .random_lowest_2_stage_evolution,
-        .random_lowest_3_stage_evolution,
-        .random_lowest_evolution,
-        => {},
+    };
+    if (pick_from_base.count() == 0)
+        return error.NoStarterToPick;
+
+    var pick_from = try pick_from_base.clone(arena);
+    for (game.starters()) |*starter| {
+        var pick_from_non_empty = pick_from;
+        if (pick_from_non_empty.count() == 0)
+            pick_from_non_empty = pick_from_base;
+
+        starter.* = this.base.randomItem(pick_from_non_empty.keys()).?.*;
+        if (options.avoid_same)
+            _ = pick_from.swapRemove(starter.*);
     }
 }
 
@@ -99,63 +107,23 @@ fn countEvolutions(species: u16, start_species: u16, game: anytype) usize {
 const Options = packed struct {
     seed: u64 = 0,
     starters: Starters = .unchanged,
+    avoid_same: bool = false,
 
     const Starters = enum(u3) {
         unchanged,
-        random0,
-        random1,
-        random2,
-        random3,
+        random,
         random_lowest_2_stage_evolution,
         random_lowest_3_stage_evolution,
         random_lowest_evolution,
     };
 };
 
-fn doTest(options: Options, from: core.dummy.Game.Init, to: core.dummy.Game.Init) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const from_game = try core.dummy.Game.init(arena, from);
-    const to_game = try core.dummy.Game.init(arena, to);
-    try randomizeAny(std.testing.allocator, options, from_game);
-
-    // Avoid large error trace by not using `catch` or `try` here
-    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
-    if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
-        std.testing.expectEqualStrings(to_str, from_str) catch {};
-        return error.TestExpectedEqual;
-    }
-}
-
 test randomizeAny {
-    try doTest(.{}, core.dummy.default, core.dummy.default);
-}
-
-fn fuzzOne(input: []const u8) !void {
-    var options: Options = .{};
-    const options_bytes = std.mem.asBytes(&options);
-    const len = @min(options_bytes.len, input.len);
-    @memcpy(options_bytes[0..len], input[0..len]);
-
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const first = try core.dummy.Game.init(arena, core.dummy.default);
-    const second = try core.dummy.Game.init(arena, core.dummy.default);
-    try randomizeAny(std.testing.allocator, options, first);
-    try randomizeAny(std.testing.allocator, options, second);
-    try std.testing.expectEqualDeep(first.m, second.m);
+    try core.dummy.doTest(Options{}, randomizeAny, core.dummy.default, core.dummy.default);
 }
 
 test "fuzz" {
-    try std.testing.fuzz(fuzzOne, .{});
+    try core.dummy.doFuzz(Options, randomizeAny);
 }
 
 test {

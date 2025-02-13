@@ -746,7 +746,7 @@ pub const Game = struct {
     // The fields below are pointers into the nds rom and will
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
-        starters: [3]*align(1) u16,
+        starters: [3]u16,
         moves: []align(1) Move,
         wild_pokemons: union {
             dppt: []align(1) DpptWildPokemons,
@@ -870,7 +870,6 @@ pub const Game = struct {
         owned: Owned,
     ) !Game {
         const file_system = nds_rom.fileSystem();
-        const arm9_overlay_table = nds_rom.arm9OverlayTable();
 
         const hm_tm_prefix_index = std.mem.indexOf(u8, owned.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
@@ -887,34 +886,17 @@ pub const Game = struct {
             allocator.free(commands.pokeball_items);
         }
 
+        const starts = try getStarter(nds_rom, info, owned);
         return Game{
             .info = info,
             .allocator = allocator,
             .rom = nds_rom,
             .owned = owned,
             .ptrs = .{
-                .starters = switch (info.starters) {
-                    .arm9 => |offset| blk: {
-                        if (owned.arm9.len < offset + offsets.starters_len)
-                            return error.CouldNotFindStarters;
-                        const starters_section = std.mem.bytesAsSlice(u16, owned.arm9[offset..][0..offsets.starters_len]);
-                        break :blk [_]*align(1) u16{
-                            &starters_section[0],
-                            &starters_section[2],
-                            &starters_section[4],
-                        };
-                    },
-                    .overlay9 => |overlay| blk: {
-                        const overlay_entry = arm9_overlay_table[overlay.file];
-                        const fat_entry = file_system.fat[overlay_entry.file_id];
-                        const file_data = file_system.data[fat_entry.start..fat_entry.end];
-                        const starters_section = std.mem.bytesAsSlice(u16, file_data[overlay.offset..][0..offsets.starters_len]);
-                        break :blk [_]*align(1) u16{
-                            &starters_section[0],
-                            &starters_section[2],
-                            &starters_section[4],
-                        };
-                    },
+                .starters = .{
+                    starts[0].*,
+                    starts[1].*,
+                    starts[2].*,
                 },
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
@@ -948,6 +930,10 @@ pub const Game = struct {
                 .pokeball_items = commands.pokeball_items,
             },
         };
+    }
+
+    pub fn starters(game: *Game) *[3]u16 {
+        return &game.ptrs.starters;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -1001,6 +987,8 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
+        try game.applyStarters();
+
         if (game.info.arm9_is_encoded) {
             const arm9 = try rom.nds.blz.encode(game.allocator, game.owned.arm9, 0x4000);
             defer game.allocator.free(arm9);
@@ -1034,6 +1022,43 @@ pub const Game = struct {
             game.info,
             game.owned,
         );
+    }
+
+    fn applyStarters(game: Game) !void {
+        const starts = try getStarter(game.rom, game.info, game.owned);
+        for (game.ptrs.starters, starts) |starter, out|
+            out.* = starter;
+    }
+
+    fn getStarter(
+        nds_rom: *rom.nds.Rom,
+        info: offsets.Info,
+        owned: Owned,
+    ) ![3]*align(1) u16 {
+        const file_system = nds_rom.fileSystem();
+        const arm9_overlay_table = nds_rom.arm9OverlayTable();
+        switch (info.starters) {
+            .arm9 => |offset| {
+                if (owned.arm9.len < offset + offsets.starters_len)
+                    return error.CouldNotFindStarters;
+                const starters_section = std.mem.bytesAsSlice(u16, owned.arm9[offset..][0..offsets.starters_len]);
+                return [_]*align(1) u16{
+                    &starters_section[0],
+                    &starters_section[2],
+                    &starters_section[4],
+                };
+            },
+            .overlay9 => |overlay| {
+                const overlay_entry = arm9_overlay_table[overlay.file];
+                const file_data = file_system.fileData(.{ .i = overlay_entry.file_id });
+                const starters_section = std.mem.bytesAsSlice(u16, file_data[overlay.offset..][0..offsets.starters_len]);
+                return [_]*align(1) u16{
+                    &starters_section[0],
+                    &starters_section[2],
+                    &starters_section[4],
+                };
+            },
+        }
     }
 
     fn applyTrainerParties(game: Game) !void {

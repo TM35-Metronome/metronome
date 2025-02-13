@@ -45,7 +45,6 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
 fn randomizeWildPokemon(this: *@This(), game: anytype, wild_pokemon: anytype) !void {
     const pokemons = try game.pokemons();
     wild_pokemon.setSpecies(switch (this.options.stats) {
-        .random0, .random1 => this.base.randomItem(this.base.species.keys()).?.*,
         .similar => if (pokemons.at(wild_pokemon.species())) |pokemon|
             try this.base.randomSpeciesWithSimilarTotalStats(
                 game,
@@ -59,6 +58,7 @@ fn randomizeWildPokemon(this: *@This(), game: anytype, wild_pokemon: anytype) !v
             this.base.species,
             wild_pokemon.level(),
         ),
+        .random => this.base.randomItem(this.base.species.keys()).?.*,
     });
 }
 
@@ -77,7 +77,7 @@ fn init(arena: std.mem.Allocator, random: std.Random, options: Options, game: an
 const Options = packed struct {
     seed: u64 = 0,
     pokemons: Pokemons = .unchanged,
-    stats: Stats = .random0,
+    stats: Stats = .random,
 
     // TODO: Avoid same
 
@@ -87,39 +87,17 @@ const Options = packed struct {
     };
 
     const Stats = enum(u2) {
-        random0,
-        random1,
+        random,
         similar,
         follow_level,
     };
 };
 
-fn doTest(options: Options, from: core.dummy.Game.Init, to: core.dummy.Game.Init) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const from_game = try core.dummy.Game.init(arena, from);
-    const to_game = try core.dummy.Game.init(arena, to);
-    try randomizeAny(std.testing.allocator, options, from_game);
-
-    // Avoid large error trace by not using `catch` or `try` here
-    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
-    if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
-        std.testing.expectEqualStrings(to_str, from_str) catch {};
-        return error.TestExpectedEqual;
-    }
-}
-
 test randomizeAny {
-    try doTest(.{}, core.dummy.default, core.dummy.default);
-    try doTest(.{
+    try core.dummy.doTest(Options{}, randomizeAny, core.dummy.default, core.dummy.default);
+    try core.dummy.doTest(Options{
         .pokemons = .randomize,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.wild_areas = &.{
             .init(&.{
@@ -146,10 +124,10 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .pokemons = .randomize,
         .stats = .similar,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.wild_areas = &.{
             .init(&.{
@@ -176,10 +154,10 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .pokemons = .randomize,
         .stats = .follow_level,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.wild_areas = &.{
             .init(&.{
@@ -208,25 +186,8 @@ test randomizeAny {
     });
 }
 
-fn fuzzOne(input: []const u8) !void {
-    var options: Options = .{};
-    const options_bytes = std.mem.asBytes(&options);
-    const len = @min(options_bytes.len, input.len);
-    @memcpy(options_bytes[0..len], input[0..len]);
-
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const first = try core.dummy.Game.init(arena, core.dummy.default);
-    const second = try core.dummy.Game.init(arena, core.dummy.default);
-    try randomizeAny(std.testing.allocator, options, first);
-    try randomizeAny(std.testing.allocator, options, second);
-    try std.testing.expectEqualDeep(first.m, second.m);
-}
-
 test "fuzz" {
-    try std.testing.fuzz(fuzzOne, .{});
+    try core.dummy.doFuzz(Options, randomizeAny);
 }
 
 test {

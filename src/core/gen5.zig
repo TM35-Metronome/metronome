@@ -905,7 +905,7 @@ pub const Game = struct {
     // The fields below are pointers into the nds rom and will
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
-        starters: [3][]*align(1) u16,
+        starters: [3]u16,
         moves: []align(1) Move,
         trainers: []align(1) Trainer,
         items: []align(1) Item,
@@ -924,8 +924,6 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
 
         pub fn deinit(ptrs: Pointers, allocator: std.mem.Allocator) void {
-            for (ptrs.starters) |starter_ptrs|
-                allocator.free(starter_ptrs);
             allocator.free(ptrs.static_pokemons);
             allocator.free(ptrs.given_pokemons);
             allocator.free(ptrs.pokeball_items);
@@ -1053,27 +1051,13 @@ pub const Game = struct {
         const map_file = try file_system.openNarc(rom.nds.fs.root, info.map_file);
         const scripts = try file_system.openNarc(rom.nds.fs.root, info.scripts);
 
-        const starters = blk: {
-            var res: [3][]*align(1) u16 = undefined;
-            var filled: usize = 0;
-            errdefer for (res[0..filled]) |item|
-                allocator.free(item);
+        var starts: [3]u16 = undefined;
+        for (info.starters, &starts) |offs, *starter| {
+            const file_data = file_system.fileData(.{ .i = offs[0].file });
+            starter.* = std.mem.bytesAsValue(u16, file_data[offs[0].offset..][0..2]).*;
+        }
 
-            for (info.starters, &res) |offs, *res_offs| {
-                res_offs.* = try allocator.alloc(*align(1) u16, offs.len);
-                filled += 1;
-
-                for (offs, res_offs.*) |offset, *res_offset| {
-                    const fat = scripts.fat[offset.file];
-                    const file_data = scripts.data[fat.start..fat.end];
-                    res_offset.* = std.mem.bytesAsValue(u16, file_data[offset.offset..][0..2]);
-                }
-            }
-
-            break :blk res;
-        };
-
-        const commands = try findScriptCommands(scripts, allocator, starters);
+        const commands = try findScriptCommands(scripts, allocator);
         errdefer {
             allocator.free(commands.static_pokemons);
             allocator.free(commands.given_pokemons);
@@ -1087,7 +1071,7 @@ pub const Game = struct {
             .rom = nds_rom,
             .owned = owned,
             .ptrs = .{
-                .starters = starters,
+                .starters = starts,
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .trainers = try (try file_system.openNarc(rom.nds.fs.root, info.trainers)).toSlice(1, Trainer),
                 .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
@@ -1105,6 +1089,10 @@ pub const Game = struct {
                 .scripts = scripts,
             },
         };
+    }
+
+    pub fn starters(game: *Game) *[3]u16 {
+        return &game.ptrs.starters;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -1148,7 +1136,6 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
-        game.updateStarterDialog();
         try game.applyArm9();
         try game.applyTrainerParties();
         try game.applyStrings(&game.owned.story.asArray(), game.info.story);
@@ -1161,6 +1148,17 @@ pub const Game = struct {
             game.info,
             game.owned,
         );
+    }
+
+    fn applyStarters(game: Game) void {
+        const file_system = game.rom.fileSystem();
+        for (game.info.starters, game.ptrs.starters) |offs, starter| {
+            for (offs) |offset| {
+                const file_data = file_system.fileData(.{ .i = offset.file });
+                std.mem.bytesAsValue(u16, file_data[offset.offset..][0..2]).* = starter;
+            }
+        }
+        game.updateStarterDialog();
     }
 
     fn updateStarterDialog(game: Game) void {
@@ -1384,11 +1382,7 @@ pub const Game = struct {
         pokeball_items: []PokeballItem,
     };
 
-    fn findScriptCommands(
-        scripts: rom.nds.fs.Fs,
-        allocator: std.mem.Allocator,
-        starters: [3][]*align(1) u16,
-    ) !ScriptCommands {
+    fn findScriptCommands(scripts: rom.nds.fs.Fs, allocator: std.mem.Allocator) !ScriptCommands {
         var static_pokemons = std.ArrayList(StaticPokemon).init(allocator);
         errdefer static_pokemons.deinit();
         var given_pokemons = std.ArrayList(StaticPokemon).init(allocator);
@@ -1543,22 +1537,6 @@ pub const Game = struct {
                     else => {},
                 }
             }
-        }
-
-        // Remove starters from given Pokémons
-        var i: usize = 0;
-        while (i < given_pokemons.items.len) {
-            const given_pokemon = given_pokemons.items[i];
-            for (starters) |starters_inner| {
-                for (starters_inner) |starter| {
-                    if (starter == given_pokemon.species) {
-                        _ = given_pokemons.swapRemove(i);
-                        continue;
-                    }
-                }
-            }
-
-            i += 1;
         }
 
         return ScriptCommands{

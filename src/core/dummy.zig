@@ -1,6 +1,7 @@
 pub const Game = struct {
     arena: std.heap.ArenaAllocator,
     m: struct {
+        starters: []u16,
         pokemons: []Pokemon,
         trainers: []Trainer,
         trainer_parties: []Party,
@@ -15,6 +16,7 @@ pub const Game = struct {
         var res = Game{
             .arena = undefined,
             .m = .{
+                .starters = try arena.dupe(u16, values.starters),
                 .pokemons = try arena.dupe(Pokemon, values.pokemons),
                 .trainers = try arena.dupe(Trainer, values.trainers),
                 .trainer_parties = try arena.dupe(Party, values.trainer_parties),
@@ -27,6 +29,10 @@ pub const Game = struct {
 
     pub fn deinit(game: Game) void {
         game.arena.deinit();
+    }
+
+    pub fn starters(game: Game) []u16 {
+        return game.m.starters;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -70,6 +76,7 @@ pub const Game = struct {
     }
 
     pub const Init = struct {
+        starters: []const u16,
         pokemons: []const Pokemon,
         trainers: []const Trainer,
         trainer_parties: []const Party,
@@ -200,7 +207,62 @@ pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
 pub const WildAreas = common.IndexableSlice(WildArea);
 
+pub fn doTest(options: anytype, function: anytype, from: Game.Init, to: Game.Init) !void {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    const arena = arena_state.allocator();
+    defer arena_state.deinit();
+
+    const from_game = try Game.init(arena, from);
+    const to_game = try Game.init(arena, to);
+    try function(std.testing.allocator, options, from_game);
+
+    // Avoid large error trace by not using `catch` or `try` here
+    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
+    if (is_err) {
+        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
+        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
+        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
+        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
+        std.testing.expectEqualStrings(to_str, from_str) catch {};
+        return error.TestExpectedEqual;
+    }
+}
+
+pub fn doFuzz(comptime Options: type, comptime function: anytype) !void {
+    return std.testing.fuzz({}, struct {
+        fn fuzzOne(_: void, input: []const u8) !void {
+            var options: Options = .{};
+            const options_bytes = std.mem.asBytes(&options);
+            const len = @min(options_bytes.len, input.len);
+            @memcpy(options_bytes[0..len], input[0..len]);
+
+            // We might get enums that do not exhaust all its bits. Handle this by finding each
+            // enum field, take the integer value and converting it to a valid tag for that enum
+            inline for (std.meta.fields(Options)) |field| {
+                const field_info = @typeInfo(field.type);
+                if (field_info != .@"enum")
+                    continue;
+
+                const tags = std.meta.tags(field.type);
+                const field_value = @intFromEnum(@field(options, field.name));
+                @field(options, field.name) = tags[field_value % tags.len];
+            }
+
+            var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+            const arena = arena_state.allocator();
+            defer arena_state.deinit();
+
+            const first = try Game.init(arena, default);
+            const second = try Game.init(arena, default);
+            try function(std.testing.allocator, options, first);
+            try function(std.testing.allocator, options, second);
+            try std.testing.expectEqualDeep(first.m, second.m);
+        }
+    }.fuzzOne, .{});
+}
+
 pub const default = Game.Init{
+    .starters = &.{ 1, 4, 7 },
     .pokemons = &.{
         .init(.{
             .stats = .{

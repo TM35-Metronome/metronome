@@ -71,7 +71,7 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
 
     const wants_moves = switch (this.options.moves) {
         .unchanged => party.type.haveMoves(),
-        .none0, .none1, .none2 => false,
+        .none => false,
         .best,
         .best_for_level,
         .random_learnable,
@@ -80,8 +80,8 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
     };
     const wants_items = switch (this.options.held_items) {
         .unchanged => party.type.haveItem(),
-        .none0, .none1 => false,
         .random => true,
+        .none => false,
     };
 
     const average_level = common.averagePartyLevel(party);
@@ -169,7 +169,7 @@ fn randomizePartyMember(
 
     var new_ability: ?u16 = null;
     const pick_from_ability = switch (this.options.abilities) {
-        .same0, .same1 => blk: {
+        .same => blk: {
             const pokemon = pokemons.at(member.base.species) catch break :blk this.base.species;
             const ability = pokemon.abilities[member.ability()];
             if (ability == 0)
@@ -254,7 +254,7 @@ fn randomizePartyMember(
             )
         else |_|
             this.base.randomItem(pick_from.keys()).?.*,
-        .random0, .random1 => this.base.randomItem(pick_from.keys()).?.*,
+        .random => this.base.randomItem(pick_from.keys()).?.*,
     };
 }
 
@@ -342,15 +342,13 @@ const Options = packed struct {
     held_items: HeldItem = .unchanged,
     abilities: AbilityTheme = .random,
     types: TypeTheme = .random,
-    stats: Stats = .random0,
+    stats: Stats = .random,
     party_size: PartySize = .unchanged,
     party_pokemons: PartyPokemons = .unchanged,
     avoid_same: bool = false,
 
     const Move = enum(u3) {
-        none0,
-        none1,
-        none2,
+        none,
         unchanged,
         best,
         best_for_level,
@@ -359,15 +357,13 @@ const Options = packed struct {
     };
 
     const HeldItem = enum(u2) {
-        none0,
-        none1,
+        none,
         unchanged,
         random,
     };
 
     const AbilityTheme = enum(u2) {
-        same0,
-        same1,
+        same,
         random,
         themed,
     };
@@ -380,8 +376,7 @@ const Options = packed struct {
     };
 
     const Stats = enum(u2) {
-        random0,
-        random1,
+        random,
         similar,
         follow_level,
     };
@@ -399,32 +394,11 @@ const Options = packed struct {
     };
 };
 
-fn doTest(options: Options, from: core.dummy.Game.Init, to: core.dummy.Game.Init) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const from_game = try core.dummy.Game.init(arena, from);
-    const to_game = try core.dummy.Game.init(arena, to);
-    try randomizeAny(std.testing.allocator, options, from_game);
-
-    // Avoid large error trace by not using `catch` or `try` here
-    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
-    if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
-        std.testing.expectEqualStrings(to_str, from_str) catch {};
-        return error.TestExpectedEqual;
-    }
-}
-
 test randomizeAny {
-    try doTest(.{}, core.dummy.default, core.dummy.default);
-    try doTest(.{
+    try core.dummy.doTest(Options{}, randomizeAny, core.dummy.default, core.dummy.default);
+    try core.dummy.doTest(Options{
         .party_pokemons = .randomize,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -479,10 +453,10 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_size_min = 1,
         .party_size_max = 1,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -512,10 +486,10 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_size_min = 6,
         .party_size_max = 6,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -585,11 +559,11 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_size_min = 1,
         .party_size_max = 6,
         .party_size = .random,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -641,11 +615,11 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_size_min = 1,
         .party_size_max = 6,
         .party_size = .follow_level,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -689,10 +663,10 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_pokemons = .randomize,
         .stats = .similar,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -747,11 +721,11 @@ test randomizeAny {
         };
         break :blk res;
     });
-    try doTest(.{
+    try core.dummy.doTest(Options{
         .party_pokemons = .randomize,
         .stats = .similar,
         .avoid_same = true,
-    }, core.dummy.default, blk: {
+    }, randomizeAny, core.dummy.default, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -808,25 +782,8 @@ test randomizeAny {
     });
 }
 
-fn fuzzOne(input: []const u8) !void {
-    var options: Options = .{};
-    const options_bytes = std.mem.asBytes(&options);
-    const len = @min(options_bytes.len, input.len);
-    @memcpy(options_bytes[0..len], input[0..len]);
-
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const first = try core.dummy.Game.init(arena, core.dummy.default);
-    const second = try core.dummy.Game.init(arena, core.dummy.default);
-    try randomizeAny(std.testing.allocator, options, first);
-    try randomizeAny(std.testing.allocator, options, second);
-    try std.testing.expectEqualDeep(first.m, second.m);
-}
-
 test "fuzz" {
-    try std.testing.fuzz(fuzzOne, .{});
+    try core.dummy.doFuzz(Options, randomizeAny);
 }
 
 test {

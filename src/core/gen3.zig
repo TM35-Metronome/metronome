@@ -702,8 +702,7 @@ pub const Game = struct {
     // All these fields point into data
     header: *rom.gba.Header,
 
-    starters: [3]*align(1) u16,
-    starters_repeat: [3]*align(1) u16,
+    _starters: [3]u16,
     text_delays: []u8,
     moves: []Move,
     machine_learnsets: []align(4) u64,
@@ -836,15 +835,10 @@ pub const Game = struct {
             .trainer_parties = trainer_parties,
 
             .header = @ptrCast(&gba_rom[0]),
-            .starters = [3]*align(1) u16{
-                info.starters[0].ptr(gba_rom),
-                info.starters[1].ptr(gba_rom),
-                info.starters[2].ptr(gba_rom),
-            },
-            .starters_repeat = [3]*align(1) u16{
-                info.starters_repeat[0].ptr(gba_rom),
-                info.starters_repeat[1].ptr(gba_rom),
-                info.starters_repeat[2].ptr(gba_rom),
+            ._starters = [3]u16{
+                info.starters[0].ptr(gba_rom).*,
+                info.starters[1].ptr(gba_rom).*,
+                info.starters[2].ptr(gba_rom).*,
             },
             .text_delays = info.text_delays.slice(gba_rom),
             .moves = info.moves.slice(gba_rom),
@@ -873,6 +867,10 @@ pub const Game = struct {
             .pokeball_items = try script_data.pokeball_items.toOwnedSlice(),
             .text = try script_data.text.toOwnedSlice(),
         };
+    }
+
+    pub fn starters(game: *Game) *[3]u16 {
+        return &game._starters;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -918,10 +916,15 @@ pub const Game = struct {
     }
 
     pub fn apply(game: *Game) !void {
-        game.starters_repeat[0].* = game.starters[0].*;
-        game.starters_repeat[1].* = game.starters[1].*;
-        game.starters_repeat[2].* = game.starters[2].*;
+        game.applyStarters();
         try game.applyTrainerParties();
+    }
+
+    fn applyStarters(game: Game) void {
+        for (game.info.starters, game.info.starters_repeat, game._starters) |off1, off2, starter| {
+            off1.ptr(game.data).* = starter;
+            off2.ptr(game.data).* = starter;
+        }
     }
 
     fn applyTrainerParties(game: *Game) !void {

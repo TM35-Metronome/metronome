@@ -1,5 +1,5 @@
 pub const NarcOffset = struct {
-    file: usize,
+    file: u32,
     offset: usize,
 };
 

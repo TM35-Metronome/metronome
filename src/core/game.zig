@@ -62,7 +62,7 @@ pub const Game = union(enum) {
     }
 };
 
-fn fuzzFromFile(input: []const u8) !void {
+fn fuzzFromFile(_: void, input: []const u8) !void {
     const cwd = std.fs.cwd();
     const input_file = try cwd.createFile(".zig-cache/fuzz_game_from_file.input", .{
         .read = true,
@@ -81,7 +81,7 @@ fn fuzzFromFile(input: []const u8) !void {
 }
 
 test "Game.fromFile fuzz" {
-    try std.testing.fuzz(fuzzFromFile, .{});
+    try std.testing.fuzz({}, fuzzFromFile, .{});
 }
 
 test {
