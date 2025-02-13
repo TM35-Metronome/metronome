@@ -6,6 +6,7 @@ function: *const fn (std.mem.Allocator, Options, *core.Game) anyerror!void,
 
 pub const all = [_]Command{
     @import("cmd/starters.zig").command,
+    @import("cmd/static-encounters.zig").command,
     @import("cmd/trainers.zig").command,
     @import("cmd/wild-encounters.zig").command,
 };

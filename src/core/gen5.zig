@@ -523,8 +523,26 @@ const HollowPokemons = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *align(1) u16,
-    level: *align(1) u16,
+    m: struct {
+        species: *align(1) u16,
+        level: *align(1) u16,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species.*;
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species.* = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.level.*;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.level.* = l;
+    }
 };
 
 const PokeballItem = struct {
@@ -1053,7 +1071,7 @@ pub const Game = struct {
 
         var starts: [3]u16 = undefined;
         for (info.starters, &starts) |offs, *starter| {
-            const file_data = file_system.fileData(.{ .i = offs[0].file });
+            const file_data = scripts.fileData(.{ .i = offs[0].file });
             starter.* = std.mem.bytesAsValue(u16, file_data[offs[0].offset..][0..2]).*;
         }
 
@@ -1093,6 +1111,14 @@ pub const Game = struct {
 
     pub fn starters(game: *Game) *[3]u16 {
         return &game.ptrs.starters;
+    }
+
+    pub fn staticPokemons(game: *Game) []StaticPokemon {
+        return game.ptrs.static_pokemons;
+    }
+
+    pub fn givenPokemons(game: *Game) []StaticPokemon {
+        return game.ptrs.given_pokemons;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -1423,19 +1449,19 @@ pub const Game = struct {
                 };
                 while (decoder.next() catch continue) |command| : (command_offset = decoder.i) {
                     switch (command.kind) {
-                        .wild_battle => try static_pokemons.append(.{
+                        .wild_battle => try static_pokemons.append(.{ .m = .{
                             .species = &command.wild_battle.species,
                             .level = &command.wild_battle.level,
-                        }),
-                        .wild_battle_store_result => try static_pokemons.append(.{
+                        } }),
+                        .wild_battle_store_result => try static_pokemons.append(.{ .m = .{
                             .species = &command.wild_battle_store_result.species,
                             .level = &command.wild_battle_store_result.level,
-                        }),
+                        } }),
                         .give_pokemon_1 => if (command.give_pokemon_1.species & 0x8000 == 0) {
-                            try given_pokemons.append(.{
+                            try given_pokemons.append(.{ .m = .{
                                 .species = &command.give_pokemon_1.species,
                                 .level = &command.give_pokemon_1.level,
-                            });
+                            } });
                         } else {
                             try given_pokemons_to_resolve.put(
                                 command.give_pokemon_1.species,
@@ -1443,10 +1469,10 @@ pub const Game = struct {
                             );
                         },
                         .give_pokemon_2 => if (command.give_pokemon_2.species & 0x8000 == 0) {
-                            try given_pokemons.append(.{
+                            try given_pokemons.append(.{ .m = .{
                                 .species = &command.give_pokemon_2.species,
                                 .level = &command.give_pokemon_2.level,
-                            });
+                            } });
                         } else {
                             try given_pokemons_to_resolve.put(
                                 command.give_pokemon_2.species,
@@ -1454,10 +1480,10 @@ pub const Game = struct {
                             );
                         },
                         .give_pokemon_4 => if (command.give_pokemon_4.species & 0x8000 == 0) {
-                            try given_pokemons.append(.{
+                            try given_pokemons.append(.{ .m = .{
                                 .species = &command.give_pokemon_4.species,
                                 .level = &command.give_pokemon_4.level,
-                            });
+                            } });
                         } else {
                             try given_pokemons_to_resolve.put(
                                 command.give_pokemon_4.species,
@@ -1497,10 +1523,10 @@ pub const Game = struct {
                     .set_var_eq_val => if (given_pokemons_to_resolve.get(
                         first.set_var_eq_val.container,
                     )) |level| {
-                        try given_pokemons.append(.{
+                        try given_pokemons.append(.{ .m = .{
                             .species = &first.set_var_eq_val.value,
                             .level = level,
-                        });
+                        } });
                     } else {
                         const item = &first.set_var_eq_val;
                         const amount = script.expectNext(&decoder, .set_var_eq_val) orelse continue;

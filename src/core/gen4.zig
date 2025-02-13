@@ -418,8 +418,26 @@ pub const MapHeader = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *align(1) u16,
-    level: *align(1) u16,
+    m: struct {
+        species: *align(1) u16,
+        level: *align(1) u16,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species.*;
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species.* = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.level.*;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.level.* = l;
+    }
 };
 
 const PokeballItem = struct {
@@ -936,6 +954,14 @@ pub const Game = struct {
         return &game.ptrs.starters;
     }
 
+    pub fn staticPokemons(game: *Game) []StaticPokemon {
+        return game.ptrs.static_pokemons;
+    }
+
+    pub fn givenPokemons(game: *Game) []StaticPokemon {
+        return game.ptrs.given_pokemons;
+    }
+
     pub fn pokemons(game: Game) !Pokemons {
         const file_system = game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
@@ -1297,22 +1323,22 @@ pub const Game = struct {
                     defer var_8008 = var_8008_tmp;
 
                     switch (command.kind) {
-                        .wild_battle => try static_pokemons.append(.{
+                        .wild_battle => try static_pokemons.append(.{ .m = .{
                             .species = &command.wild_battle.species,
                             .level = &command.wild_battle.level,
-                        }),
-                        .wild_battle2 => try static_pokemons.append(.{
+                        } }),
+                        .wild_battle2 => try static_pokemons.append(.{ .m = .{
                             .species = &command.wild_battle2.species,
                             .level = &command.wild_battle2.level,
-                        }),
-                        .wild_battle3 => try static_pokemons.append(.{
+                        } }),
+                        .wild_battle3 => try static_pokemons.append(.{ .m = .{
                             .species = &command.wild_battle3.species,
                             .level = &command.wild_battle3.level,
-                        }),
-                        .give_pokemon => try given_pokemons.append(.{
+                        } }),
+                        .give_pokemon => try given_pokemons.append(.{ .m = .{
                             .species = &command.give_pokemon.species,
                             .level = &command.give_pokemon.level,
-                        }),
+                        } }),
 
                         // In scripts, field items are two SetVar commands
                         // followed by a jump to the code that gives this item:
@@ -1323,7 +1349,7 @@ pub const Game = struct {
                             0x8008 => var_8008_tmp = &command.set_var.value,
                             0x8009 => if (var_8008) |item| {
                                 const amount = &command.set_var.value;
-                                try pokeball_items.append(PokeballItem{
+                                try pokeball_items.append(.{
                                     .item = item,
                                     .amount = amount,
                                 });

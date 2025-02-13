@@ -170,7 +170,96 @@ pub const Randomizer = struct {
             totalStatsLevelScaling(this.stats.min, this.stats.max, level),
         );
     }
+
+    pub fn legendaries(this: Randomizer, game: anytype) !SpeciesSet {
+        // There is no way to specify in game that a Pokemon is a legendary.
+        // There are therefore two methods we can use to pick legendaries
+        // 1. Have a table of Pokemons which are legendaries.
+        //    - This does not work with roms that have been hacked
+        //      in a way that changes which Pokemons should be considered
+        //      legendary
+        // 2. Find legendaries by looking at their stats, evolution line
+        //    and other patterns common for legendaries
+        //
+        // I have chosen the latter method.
+
+        const pokemons = try game.pokemons();
+        const pokemon_evolutions = try game.evolutions();
+
+        var is_evolution = SpeciesSet{};
+        for (this.species.keys()) |species| {
+            const evolutions = pokemon_evolutions.at(species) catch continue;
+            for (evolutions) |evo| {
+                if (evo.method == .unused) continue;
+                try is_evolution.put(this.arena, evo.target, {});
+            }
+        }
+
+        // First, lets give each Pokemon a "legendary rating" which
+        // is a measure as to how many "legendary" criteria this
+        // Pokemon fits into. This rating can be negative.
+        var ratings = std.AutoArrayHashMap(u16, isize).init(this.arena);
+        try ratings.ensureTotalCapacity(this.species.count());
+
+        for (this.species.keys()) |species| {
+            const pokemon = pokemons.at(species) catch continue;
+            const rating = (ratings.getOrPutAssumeCapacity(species)).value_ptr;
+            rating.* = 0;
+
+            // Legendaries are generally in the "slow" to "medium_slow"
+            // growth rating
+            rating.* += @as(isize, @intFromBool(pokemon.growth_rate == .slow or
+                pokemon.growth_rate == .medium_slow));
+
+            // They generally have a catch rate of 45 or less
+            rating.* += @as(isize, @intFromBool(pokemon.catch_rate <= 45));
+
+            // They tend to not have a gender (255 in gender_ratio means
+            // genderless).
+            rating.* += @as(isize, @intFromBool(pokemon.gender_ratio == 255));
+
+            // Most are part of the "undiscovered" egg group
+            for (pokemon.egg_groups) |egg_group|
+                rating.* += @as(isize, @intFromBool(egg_group == .undiscovered));
+
+            // And they don't evolve from anything. Subtract score from this Pokemons evolutions.
+            rating.* -= @as(isize, @intFromBool(is_evolution.get(species) != null)) * 10;
+        }
+
+        const rating_to_be_legendary = blk: {
+            var res: isize = 0;
+            for (ratings.values()) |rating|
+                res = @max(res, rating);
+
+            // Not all legendaries match all criteria. Let's
+            // allow for legendaries that miss on criteria.
+            break :blk res - 1;
+        };
+
+        var res = SpeciesSet{};
+        for (ratings.keys(), ratings.values()) |species, rating| {
+            if (rating < rating_to_be_legendary)
+                continue;
+            _ = try res.put(this.arena, species, {});
+        }
+
+        return res;
+    }
 };
+
+test "legendaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+    const this = try Randomizer.init(arena.allocator(), undefined, game);
+    const legendaries = try this.legendaries(game);
+
+    try std.testing.expectEqualSlices(u16, &.{
+        144, 145, 146,
+        150, 151,
+    }, legendaries.keys());
+}
 
 pub fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
@@ -178,5 +267,11 @@ pub fn MinMax(comptime T: type) type {
 
 pub const SpeciesSet = std.AutoArrayHashMapUnmanaged(u16, void);
 pub const SpeciesToSpeciesMap = std.AutoArrayHashMapUnmanaged(u16, void);
+
+test {
+    _ = core;
+}
+
+const core = @import("../core.zig");
 
 const std = @import("std");

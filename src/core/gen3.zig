@@ -550,8 +550,26 @@ pub const MapScript2 = extern struct {
 };
 
 const StaticPokemon = struct {
-    species: *align(1) u16,
-    level: *u8,
+    m: struct {
+        species: *align(1) u16,
+        level: *u8,
+    },
+
+    pub fn species(pokemon: WildPokemon) u16 {
+        return pokemon.m.species.*;
+    }
+
+    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+        pokemon.m.species.* = s;
+    }
+
+    pub fn level(pokemon: WildPokemon) u8 {
+        return pokemon.m.level.*;
+    }
+
+    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+        pokemon.m.level.* = l;
+    }
 };
 
 const PokeballItem = struct {
@@ -576,14 +594,14 @@ const ScriptData = struct {
         command: *align(1) script.Command,
     ) !void {
         switch (command.kind) {
-            .setwildbattle => try script_data.static_pokemons.append(.{
+            .setwildbattle => try script_data.static_pokemons.append(.{ .m = .{
                 .species = &command.setwildbattle.species,
                 .level = &command.setwildbattle.level,
-            }),
-            .givemon => try script_data.given_pokemons.append(.{
+            } }),
+            .givemon => try script_data.given_pokemons.append(.{ .m = .{
                 .species = &command.givemon.species,
                 .level = &command.givemon.level,
-            }),
+            } }),
             .setorcopyvar => {
                 if (command.setorcopyvar.dest == 0x8000)
                     script_data.VAR_0x8000 = &command.setorcopyvar.src;
@@ -871,6 +889,14 @@ pub const Game = struct {
 
     pub fn starters(game: *Game) *[3]u16 {
         return &game._starters;
+    }
+
+    pub fn staticPokemons(game: *Game) []StaticPokemon {
+        return game.static_pokemons;
+    }
+
+    pub fn givenPokemons(game: *Game) []StaticPokemon {
+        return game.given_pokemons;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
