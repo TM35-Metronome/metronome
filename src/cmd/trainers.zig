@@ -1,12 +1,12 @@
 pub const command = Command{
-    .name = "randomize-trainers",
+    .name = "trainers",
     .description = "",
     .parameters = Command.Parameter.fromType(Options, .{
         .seed = .{},
         .party_size_max = .{},
         .party_size_min = .{},
-        .moves = .{},
-        .held_items = .{},
+        // .moves = .{}, TODO
+        // .held_items = .{}, TODO
         .abilities = .{},
         .types = .{},
         .stats = .{},
@@ -69,20 +69,20 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
         },
     };
 
-    const wants_moves = switch (this.options.moves) {
-        .unchanged => party.type.haveMoves(),
-        .none => false,
-        .best,
-        .best_for_level,
-        .random_learnable,
-        .random,
-        => true,
-    };
-    const wants_items = switch (this.options.held_items) {
-        .unchanged => party.type.haveItem(),
-        .random => true,
-        .none => false,
-    };
+    // const wants_moves = switch (this.options.moves) { TODO
+    //     .unchanged => party.type.haveMoves(),
+    //     .none => false,
+    //     .best,
+    //     .best_for_level,
+    //     .random_learnable,
+    //     .random,
+    //     => true,
+    // };
+    // const wants_items = switch (this.options.held_items) { TODO
+    //     .unchanged => party.type.haveItem(),
+    //     .random => true,
+    //     .none => false,
+    // };
 
     const average_level = common.averagePartyLevel(party);
     const old_party_size = party.size;
@@ -104,16 +104,16 @@ fn randomizeParty(this: *This, game: anytype, party: anytype) !void {
         ),
         .minimum => this.options.party_size_min,
     };
-    party.type = switch (wants_moves) {
-        true => switch (wants_items) {
-            true => .both,
-            false => .moves,
-        },
-        false => switch (wants_items) {
-            true => .item,
-            false => .none,
-        },
-    };
+    // party.type = switch (wants_moves) { TODO
+    //     true => switch (wants_items) {
+    //         true => .both,
+    //         false => .moves,
+    //     },
+    //     false => switch (wants_items) {
+    //         true => .item,
+    //         false => .none,
+    //     },
+    // };
 
     // Fill trainer party with more Pokémons. The Pokémons we fill the party with are Pokémons that
     // are already in the party.
@@ -338,8 +338,8 @@ const Options = packed struct {
     seed: u64 = 0,
     party_size_max: u3 = 6,
     party_size_min: u3 = 1,
-    moves: Move = .unchanged,
-    held_items: HeldItem = .unchanged,
+    // moves: Move = .unchanged, TODO
+    // held_items: HeldItem = .unchanged, TODO
     abilities: AbilityTheme = .random,
     types: TypeTheme = .random,
     stats: Stats = .random,

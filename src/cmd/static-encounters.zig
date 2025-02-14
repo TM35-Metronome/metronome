@@ -5,7 +5,7 @@ pub const command = Command{
         .seed = .{},
         .static_pokemons = .{},
         .given_pokemons = .{},
-        .hidden_hollows = .{},
+        // .hidden_hollows = .{}, TODO
         .legendary_with_legendary = .{},
     }),
     .createOptions = Command.Options.createFromType(Options),
@@ -35,24 +35,26 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
         false => this.base.species,
     };
 
-    switch (options.static_pokemons) {
+    inline for (.{
+        .{ options.static_pokemons, game.staticPokemons() },
+        .{ options.given_pokemons, game.givenPokemons() },
+    }) |item| switch (item[0]) {
         .unchanged => {},
-        .randomize => for (game.staticPokemons()) |static_pokemon| {
+        .randomize => for (item[1]) |*static_pokemon| {
             const pick_from = switch (this.legendaries.get(static_pokemon.species()) != null) {
                 true => pick_from_legendaries,
                 false => pick_from_non_legendaries,
             };
-            _ = pick_from; // autofix
+
+            const new_species = this.base.randomItem(pick_from.keys()).?.*;
+            static_pokemon.setSpecies(new_species);
         },
-    }
-    switch (options.given_pokemons) {
-        .unchanged => {},
-        .randomize => {},
-    }
-    switch (options.hidden_hollows) {
-        .unchanged => {},
-        .randomize => {},
-    }
+    };
+
+    // switch (options.hidden_hollows) {
+    //     .unchanged => {},
+    //     .randomize => {},
+    // }
 }
 
 base: common.Randomizer,
@@ -86,7 +88,7 @@ const Options = packed struct {
     seed: u64 = 0,
     static_pokemons: Pokemons = .unchanged,
     given_pokemons: Pokemons = .unchanged,
-    hidden_hollows: Pokemons = .unchanged,
+    // hidden_hollows: Pokemons = .unchanged, TODO
     legendary_with_legendary: bool = false,
 
     pub const Pokemons = enum(u1) {
@@ -97,6 +99,66 @@ const Options = packed struct {
 
 test randomizeAny {
     try core.dummy.doTest(Options{}, randomizeAny, core.dummy.default, core.dummy.default);
+    try core.dummy.doTest(Options{
+        .static_pokemons = .randomize,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.static_pokemons = &.{
+            .init(50, 30),
+            .init(58, 50),
+            .init(55, 50),
+            .init(2, 50),
+            .init(75, 70),
+        };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .static_pokemons = .randomize,
+        .legendary_with_legendary = true,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.static_pokemons = &.{
+            .init(48, 30),
+            .init(145, 50),
+            .init(145, 50),
+            .init(144, 50),
+            .init(146, 70),
+        };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .given_pokemons = .randomize,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.given_pokemons = &.{
+            .init(50, 30),
+            .init(58, 30),
+            .init(55, 5),
+            .init(2, 15),
+            .init(75, 25),
+            .init(4, 30),
+            .init(130, 30),
+            .init(128, 30),
+        };
+        break :blk res;
+    });
+    try core.dummy.doTest(Options{
+        .given_pokemons = .randomize,
+        .legendary_with_legendary = true,
+    }, randomizeAny, core.dummy.default, blk: {
+        var res = core.dummy.default;
+        res.given_pokemons = &.{
+            .init(48, 30),
+            .init(56, 30),
+            .init(53, 5),
+            .init(2, 15),
+            .init(73, 25),
+            .init(4, 30),
+            .init(126, 30),
+            .init(124, 30),
+        };
+        break :blk res;
+    });
 }
 
 test "fuzz" {

@@ -29,19 +29,6 @@ pub fn main() !void {
     var game = try core.Game.fromFile(input_file, gpa);
     defer game.deinit();
 
-    switch (game) {
-        .gen5 => |g| {
-            const pokemons = try g.pokemons();
-            var i: usize = 0;
-            while (i < pokemons.len()) : (i += 1) {
-                const pokemon = pokemons.at(i) catch continue;
-                const stdout = std.io.getStdOut();
-                try stdout.writer().print(".gender_ratio = {},\n", .{pokemon.gender_ratio});
-            }
-        },
-        else => {},
-    }
-
     while (args.next()) {
         const command_name = args.positional().?;
         const command = Command.find(command_name) orelse return error.UnknownCommand;

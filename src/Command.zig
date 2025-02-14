@@ -121,6 +121,11 @@ pub const Options = struct {
                         .int => @field(data, field.name) = try std.fmt.parseInt(field.type, value, 0),
                         .@"enum" => @field(data, field.name) = std.meta.stringToEnum(field.type, value) orelse
                             return error.InvalidString,
+                        .bool => {
+                            const res = std.meta.stringToEnum(enum { false, true }, value) orelse
+                                return error.InvalidString;
+                            @field(data, field.name) = res == .true;
+                        },
                         else => return error.UnsupportedType,
                     }
                     return;

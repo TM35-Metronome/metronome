@@ -528,19 +528,19 @@ const StaticPokemon = struct {
         level: *align(1) u16,
     },
 
-    pub fn species(pokemon: WildPokemon) u16 {
+    pub fn species(pokemon: StaticPokemon) u16 {
         return pokemon.m.species.*;
     }
 
-    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+    pub fn setSpecies(pokemon: *StaticPokemon, s: u16) void {
         pokemon.m.species.* = s;
     }
 
-    pub fn level(pokemon: WildPokemon) u8 {
+    pub fn level(pokemon: StaticPokemon) u8 {
         return pokemon.m.level.*;
     }
 
-    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+    pub fn setLevel(pokemon: *StaticPokemon, l: u8) void {
         pokemon.m.level.* = l;
     }
 };
@@ -933,7 +933,6 @@ pub const Game = struct {
         map_headers: []align(1) MapHeader,
         hidden_hollows: ?[]align(1) HiddenHollow,
 
-        wild_pokemons: rom.nds.fs.Fs,
         level_up_moves: rom.nds.fs.Fs,
         scripts: rom.nds.fs.Fs,
 
@@ -980,7 +979,7 @@ pub const Game = struct {
 
         for (trainer_parties, 0..) |*party, i| {
             const trainer = all_trainers.at(i) catch continue;
-            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(i) });
+            const party_data = try trainer_parties_narc.fileData(.{ .i = @intCast(i) });
 
             party.size = trainer.party_size;
             party.type = trainer.party_type;
@@ -1071,7 +1070,7 @@ pub const Game = struct {
 
         var starts: [3]u16 = undefined;
         for (info.starters, &starts) |offs, *starter| {
-            const file_data = scripts.fileData(.{ .i = offs[0].file });
+            const file_data = try scripts.fileData(.{ .i = offs[0].file });
             starter.* = std.mem.bytesAsValue(u16, file_data[offs[0].offset..][0..2]).*;
         }
 
@@ -1082,7 +1081,7 @@ pub const Game = struct {
             allocator.free(commands.pokeball_items);
         }
 
-        const map_header_bytes = map_file.fileData(.{ .i = info.map_headers });
+        const map_header_bytes = try map_file.fileData(.{ .i = info.map_headers });
         return Game{
             .info = info,
             .allocator = allocator,
@@ -1101,7 +1100,6 @@ pub const Game = struct {
                 .given_pokemons = commands.given_pokemons,
                 .pokeball_items = commands.pokeball_items,
 
-                .wild_pokemons = try file_system.openNarc(rom.nds.fs.root, info.wild_pokemons),
                 .level_up_moves = try file_system.openNarc(rom.nds.fs.root, info.level_up_moves),
                 .hidden_hollows = if (info.hidden_hollows) |h| try (try file_system.openNarc(rom.nds.fs.root, h)).toSlice(0, HiddenHollow) else null,
                 .scripts = scripts,
@@ -1142,7 +1140,7 @@ pub const Game = struct {
 
     pub fn wildAreas(game: Game) !WildAreas {
         const file_system = game.rom.fileSystem();
-        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.trainers) };
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.wild_pokemons) };
     }
 
     // TODO: Validate
@@ -1163,6 +1161,7 @@ pub const Game = struct {
 
     pub fn apply(game: *Game) !void {
         try game.applyArm9();
+        try game.applyStarters();
         try game.applyTrainerParties();
         try game.applyStrings(&game.owned.story.asArray(), game.info.story);
         try game.applyStrings(&game.owned.text.asArray(), game.info.text);
@@ -1176,11 +1175,12 @@ pub const Game = struct {
         );
     }
 
-    fn applyStarters(game: Game) void {
+    fn applyStarters(game: Game) !void {
         const file_system = game.rom.fileSystem();
+        const scripts = try file_system.openNarc(rom.nds.fs.root, game.info.scripts);
         for (game.info.starters, game.ptrs.starters) |offs, starter| {
             for (offs) |offset| {
-                const file_data = file_system.fileData(.{ .i = offset.file });
+                const file_data = try scripts.fileData(.{ .i = offset.file });
                 std.mem.bytesAsValue(u16, file_data[offset.offset..][0..2]).* = starter;
             }
         }
@@ -1188,12 +1188,11 @@ pub const Game = struct {
     }
 
     fn updateStarterDialog(game: Game) void {
-        for (game.ptrs.starters, game.info.starter_choice_indexs) |starter_ptrs, index| {
-            const starter = starter_ptrs[0];
+        for (game.ptrs.starters, game.info.starter_choice_indexs) |starter, index| {
             const text = game.owned.story.starter_choice.get(index);
             @memset(text, 0);
 
-            const starter_name = game.owned.text.pokemon_names.getSpan(starter.*);
+            const starter_name = game.owned.text.pokemon_names.getSpan(starter);
             @memcpy(text[0..starter_name.len], starter_name);
         }
     }
@@ -1573,7 +1572,7 @@ pub const Game = struct {
     }
 
     fn decryptStringTable(allocator: std.mem.Allocator, max_string_len: usize, text: rom.nds.fs.Fs, file: u16) !StringTable {
-        const table = EncryptedStringTable{ .data = text.fileData(.{ .i = file }) };
+        const table = EncryptedStringTable{ .data = try text.fileData(.{ .i = file }) };
         std.debug.assert(table.sectionCount() == 1);
 
         const count = table.entryCount();

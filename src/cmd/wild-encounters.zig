@@ -1,5 +1,5 @@
 pub const command = Command{
-    .name = "randomize-wild-encounters",
+    .name = "wild-encounters",
     .description = "",
     .parameters = Command.Parameter.fromType(Options, .{
         .seed = .{},
@@ -32,11 +32,11 @@ fn randomizeAny(gpa: std.mem.Allocator, options: Options, game: anytype) !void {
     const wild_areas = try game.wildAreas();
     var i: usize = 0;
     while (i < wild_areas.len()) : (i += 1) {
-        const wild_pokemons = wild_areas.at(i) catch continue;
+        const wild_pokemons = try wild_areas.at(i);
 
         var j: usize = 0;
         while (j < wild_pokemons.len()) : (j += 1) {
-            const wild_pokemon = wild_pokemons.at(j) catch continue;
+            const wild_pokemon = try wild_pokemons.at(j);
             try this.randomizeWildPokemon(game, wild_pokemon);
         }
     }

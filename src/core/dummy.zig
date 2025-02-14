@@ -2,6 +2,8 @@ pub const Game = struct {
     arena: std.heap.ArenaAllocator,
     m: struct {
         starters: []u16,
+        static_pokemons: []StaticPokemon,
+        given_pokemons: []StaticPokemon,
         pokemons: []Pokemon,
         trainers: []Trainer,
         trainer_parties: []Party,
@@ -17,6 +19,8 @@ pub const Game = struct {
             .arena = undefined,
             .m = .{
                 .starters = try arena.dupe(u16, values.starters),
+                .static_pokemons = try arena.dupe(StaticPokemon, values.static_pokemons),
+                .given_pokemons = try arena.dupe(StaticPokemon, values.given_pokemons),
                 .pokemons = try arena.dupe(Pokemon, values.pokemons),
                 .trainers = try arena.dupe(Trainer, values.trainers),
                 .trainer_parties = try arena.dupe(Party, values.trainer_parties),
@@ -33,6 +37,14 @@ pub const Game = struct {
 
     pub fn starters(game: Game) []u16 {
         return game.m.starters;
+    }
+
+    pub fn staticPokemons(game: Game) []StaticPokemon {
+        return game.m.static_pokemons;
+    }
+
+    pub fn givenPokemons(game: Game) []StaticPokemon {
+        return game.m.given_pokemons;
     }
 
     pub fn pokemons(game: Game) !Pokemons {
@@ -77,6 +89,8 @@ pub const Game = struct {
 
     pub const Init = struct {
         starters: []const u16,
+        static_pokemons: []const StaticPokemon,
+        given_pokemons: []const StaticPokemon,
         pokemons: []const Pokemon,
         trainers: []const Trainer,
         trainer_parties: []const Party,
@@ -214,6 +228,33 @@ pub const Evolutions = struct {
     }
 };
 
+const StaticPokemon = struct {
+    m: struct {
+        species: u16,
+        level: u8,
+    },
+
+    pub fn init(s: u16, l: u8) StaticPokemon {
+        return .{ .m = .{ .species = s, .level = l } };
+    }
+
+    pub fn species(pokemon: StaticPokemon) u16 {
+        return pokemon.m.species;
+    }
+
+    pub fn setSpecies(pokemon: *StaticPokemon, s: u16) void {
+        pokemon.m.species = s;
+    }
+
+    pub fn level(pokemon: StaticPokemon) u8 {
+        return pokemon.m.level;
+    }
+
+    pub fn setLevel(pokemon: *StaticPokemon, l: u8) void {
+        pokemon.m.level = l;
+    }
+};
+
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
 pub const Parties = common.IndexableSlice(Party);
@@ -275,6 +316,23 @@ pub fn doFuzz(comptime Options: type, comptime function: anytype) !void {
 
 pub const default = Game.Init{
     .starters = &.{ 1, 4, 7 },
+    .static_pokemons = &.{
+        .init(143, 30),
+        .init(144, 50),
+        .init(145, 50),
+        .init(146, 50),
+        .init(150, 70),
+    },
+    .given_pokemons = &.{
+        .init(106, 30),
+        .init(107, 30),
+        .init(129, 5),
+        .init(131, 15),
+        .init(133, 25),
+        .init(138, 30),
+        .init(140, 30),
+        .init(142, 30),
+    },
     .pokemons = &.{
         .init(.{
             .stats = .{

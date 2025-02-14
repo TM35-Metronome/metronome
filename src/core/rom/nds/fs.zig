@@ -75,13 +75,15 @@ pub const Fs = struct {
     }
 
     pub fn fileAs(fs: Fs, file: File, comptime T: type) !*align(1) T {
-        const data = fs.fileData(file);
+        const data = try fs.fileData(file);
         if (@sizeOf(T) > data.len)
             return error.FileToSmall;
         return @ptrCast(data.ptr);
     }
 
-    pub fn fileData(fs: Fs, file: File) []u8 {
+    pub fn fileData(fs: Fs, file: File) ![]u8 {
+        if (fs.fat.len <= file.i)
+            return error.FileDoesNotExist;
         const f = fs.fat[file.i];
         return fs.data[f.start..f.end];
     }
@@ -176,7 +178,7 @@ pub fn Indexable(comptime T: type) type {
         fs: nds.fs.Fs,
 
         pub fn at(fs: @This(), i: usize) !*align(1) T {
-            return try fs.fs.fileAs(.{ .i = @intCast(i) }, T);
+            return fs.fs.fileAs(.{ .i = @intCast(i) }, T);
         }
 
         pub fn len(fs: @This()) usize {

@@ -423,19 +423,19 @@ const StaticPokemon = struct {
         level: *align(1) u16,
     },
 
-    pub fn species(pokemon: WildPokemon) u16 {
+    pub fn species(pokemon: StaticPokemon) u16 {
         return pokemon.m.species.*;
     }
 
-    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+    pub fn setSpecies(pokemon: *StaticPokemon, s: u16) void {
         pokemon.m.species.* = s;
     }
 
-    pub fn level(pokemon: WildPokemon) u8 {
+    pub fn level(pokemon: StaticPokemon) u8 {
         return pokemon.m.level.*;
     }
 
-    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+    pub fn setLevel(pokemon: *StaticPokemon, l: u8) void {
         pokemon.m.level.* = l;
     }
 };
@@ -826,7 +826,7 @@ pub const Game = struct {
 
         for (trainer_parties, 0..) |*party, i| {
             const trainer = all_trainers.at(i) catch continue;
-            const party_data = trainer_parties_narc.fileData(.{ .i = @intCast(i) });
+            const party_data = try trainer_parties_narc.fileData(.{ .i = @intCast(i) });
 
             party.type = trainer.party_type;
             party.size = trainer.party_size;
@@ -937,9 +937,9 @@ pub const Game = struct {
                 .level_up_moves = try file_system.openNarc(rom.nds.fs.root, info.level_up_moves),
 
                 .pokedex = pokedex,
-                .pokedex_heights = std.mem.bytesAsSlice(u32, pokedex.fileData(.{ .i = info.pokedex_heights })),
-                .pokedex_weights = std.mem.bytesAsSlice(u32, pokedex.fileData(.{ .i = info.pokedex_weights })),
-                .species_to_national_dex = std.mem.bytesAsSlice(u16, pokedex.fileData(.{ .i = info.species_to_national_dex })),
+                .pokedex_heights = std.mem.bytesAsSlice(u32, try pokedex.fileData(.{ .i = info.pokedex_heights })),
+                .pokedex_weights = std.mem.bytesAsSlice(u32, try pokedex.fileData(.{ .i = info.pokedex_weights })),
+                .species_to_national_dex = std.mem.bytesAsSlice(u16, try pokedex.fileData(.{ .i = info.species_to_national_dex })),
 
                 .text = text,
                 .scripts = scripts,
@@ -1076,7 +1076,7 @@ pub const Game = struct {
             },
             .overlay9 => |overlay| {
                 const overlay_entry = arm9_overlay_table[overlay.file];
-                const file_data = file_system.fileData(.{ .i = overlay_entry.file_id });
+                const file_data = try file_system.fileData(.{ .i = overlay_entry.file_id });
                 const starters_section = std.mem.bytesAsSlice(u16, file_data[overlay.offset..][0..offsets.starters_len]);
                 return [_]*align(1) u16{
                     &starters_section[0],
@@ -1387,7 +1387,7 @@ pub const Game = struct {
         text: rom.nds.fs.Fs,
         file: u16,
     ) !StringTable {
-        const table = EncryptedStringTable{ .data = text.fileData(.{ .i = file }) };
+        const table = EncryptedStringTable{ .data = try text.fileData(.{ .i = file }) };
         const res = try StringTable.create(
             allocator,
             file,

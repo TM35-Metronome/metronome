@@ -555,19 +555,19 @@ const StaticPokemon = struct {
         level: *u8,
     },
 
-    pub fn species(pokemon: WildPokemon) u16 {
+    pub fn species(pokemon: StaticPokemon) u16 {
         return pokemon.m.species.*;
     }
 
-    pub fn setSpecies(pokemon: *WildPokemon, s: u16) void {
+    pub fn setSpecies(pokemon: *StaticPokemon, s: u16) void {
         pokemon.m.species.* = s;
     }
 
-    pub fn level(pokemon: WildPokemon) u8 {
+    pub fn level(pokemon: StaticPokemon) u8 {
         return pokemon.m.level.*;
     }
 
-    pub fn setLevel(pokemon: *WildPokemon, l: u8) void {
+    pub fn setLevel(pokemon: *StaticPokemon, l: u8) void {
         pokemon.m.level.* = l;
     }
 };
