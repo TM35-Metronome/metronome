@@ -22,45 +22,48 @@ pub fn init(gpa: std.mem.Allocator, random: std.Random, game: anytype) !Metronom
     const arena = arena_state.allocator();
     defer arena_state.deinit();
 
-    var species_set = blk: {
-        var valid_species = std.ArrayList(u16).init(arena);
-        try game.validSpecies(&valid_species);
+    var species_set = try validSpecies(arena, game);
+    const stats = blk: {
+        var stats: MinMax(u16) = .{
+            .min = std.math.maxInt(u16),
+            .max = 0,
+        };
 
-        var species_set = SpeciesSet{};
-        try species_set.ensureTotalCapacity(arena, valid_species.items.len);
-        for (valid_species.items) |species|
-            species_set.putAssumeCapacity(species, {});
+        for (species_set.keys()) |species| {
+            const pokemon = try pokemons.at(species);
 
-        break :blk species_set;
+            const total_stats = pokemon.stats.total();
+            stats.min = @min(stats.min, total_stats);
+            stats.max = @max(stats.max, total_stats);
+        }
+
+        break :blk stats;
     };
 
-    const legendaries = try findLegendaries(arena, species_set, game);
     return .{
         .gpa = gpa,
         .arena = arena_state,
         .random = random,
 
         .species = species_set,
-
-        .legendaries = legendaries,
-        .stats = blk: {
-            var stats: MinMax(u16) = .{
-                .min = std.math.maxInt(u16),
-                .max = 0,
-            };
-
-            const pokemons = try game.pokemons();
-            for (species_set.keys()) |species| {
-                const pokemon = try pokemons.at(species);
-
-                const total_stats = pokemon.stats.total();
-                stats.min = @min(stats.min, total_stats);
-                stats.max = @max(stats.max, total_stats);
-            }
-
-            break :blk stats;
-        },
+        .species_by_ability = try speciesByAbility(arena, species_set, game),
+        .species_by_type = try speciesByType(arena, species_set, game),
+        .species_by_dual_type = try speciesByDualType(arena, species_set, game),
+        .legendaries = try findLegendaries(arena, species_set, game),
+        .stats = stats,
     };
+}
+
+fn validSpecies(arena: std.mem.Allocator, game: anytype) !SpeciesSet {
+    var valid_species = std.ArrayList(u16).init(arena);
+    try game.validSpecies(&valid_species);
+
+    var species_set = SpeciesSet{};
+    try species_set.ensureTotalCapacity(arena, valid_species.items.len);
+    for (valid_species.items) |species|
+        species_set.putAssumeCapacity(species, {});
+
+    return species_set;
 }
 
 fn findLegendaries(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesSet {
@@ -133,13 +136,103 @@ test findLegendaries {
     defer arena.deinit();
 
     const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const metronome = try Metronome.init(arena.allocator(), undefined, game);
-    const legendaries = try metronome.findLegendaries(game);
+    const species = try validSpecies(arena, game);
+    const legendaries = try findLegendaries(arena, species, game);
 
     try std.testing.expectEqualSlices(u16, &.{
         144, 145, 146,
         150, 151,
     }, legendaries.keys());
+}
+
+fn speciesByType(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByType {
+    const pokemons = try game.pokemons();
+    var species_by_type = SpeciesByType{};
+    for (species_set.keys()) |species| {
+        const pokemon = try pokemons.at(species);
+
+        for (pokemon.types) |t| {
+            const entry = try species_by_type.getOrPutValue(arena, t, .{});
+            try entry.value_ptr.put(arena, species, {});
+        }
+    }
+
+    return species_by_type;
+}
+
+test speciesByType {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+    const species = try validSpecies(arena, game);
+    const species_by_type = try speciesByType(arena, species, game);
+    _ = species_by_type; // TODO
+
+    // try std.testing.expectEqualSlices(u16, &.{
+    //     144, 145, 146,
+    //     150, 151,
+    // }, legendaries.keys());
+}
+
+fn speciesByDualType(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByDualType {
+    const pokemons = try game.pokemons();
+    var species_by_dual_type = SpeciesByDualType{};
+    for (species_set.keys()) |species| {
+        const pokemon = try pokemons.at(species);
+        const entry = try species_by_dual_type.getOrPutValue(arena, .{
+            @min(pokemon.types[0], pokemon.types[1]),
+            @max(pokemon.types[0], pokemon.types[1]),
+        }, .{});
+        try entry.value_ptr.put(arena, species, {});
+    }
+
+    return species_by_dual_type;
+}
+
+test speciesByDualType {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+    const species = try validSpecies(arena, game);
+    const species_by_dual_type = try speciesByDualType(arena, species, game);
+    _ = species_by_dual_type; // TODO
+
+    // try std.testing.expectEqualSlices(u16, &.{
+    //     144, 145, 146,
+    //     150, 151,
+    // }, legendaries.keys());
+}
+
+fn speciesByAbility(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByAbility {
+    const pokemons = try game.pokemons();
+    var species_by_ability = SpeciesByAbility{};
+    for (species_set.keys()) |species| {
+        const pokemon = try pokemons.at(species);
+
+        for (pokemon.abilities) |t| {
+            const entry = try species_by_ability.getOrPutValue(arena, t, .{});
+            try entry.value_ptr.put(arena, species, {});
+        }
+    }
+
+    return species_by_ability;
+}
+
+test speciesByAbility {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+    const species = try validSpecies(arena, game);
+    const species_by_ability = try SpeciesByAbility(arena, species, game);
+    _ = species_by_ability; // TODO
+
+    // try std.testing.expectEqualSlices(u16, &.{
+    //     144, 145, 146,
+    //     150, 151,
+    // }, legendaries.keys());
 }
 
 fn randomItem(metronome: Metronome, items: anytype) ?@TypeOf(&items[0]) {
