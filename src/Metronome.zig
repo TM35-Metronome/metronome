@@ -8,7 +8,7 @@ species_by: struct {
     type: SpeciesByType,
     dual_type: SpeciesByDualType,
 },
-evolutions: Evolutions,
+lowest_evolutions: LowestEvolutions,
 
 legendaries: SpeciesSet,
 stats: MinMax(u16),
@@ -36,7 +36,7 @@ pub fn init(gpa: std.mem.Allocator, random: std.Random, game: anytype) !Metronom
             .type = try speciesByType(arena.allocator(), species_set, game),
             .dual_type = try speciesByDualType(arena.allocator(), species_set, game),
         },
-        .evolutions = try findEvolutions(arena.allocator(), species_set, game),
+        .lowest_evolutions = try findLowestEvolutions(arena.allocator(), species_set, game),
         .legendaries = try findLegendaries(arena.allocator(), species_set, game),
         .stats = minMaxTotalStats(species_set, game),
     };
@@ -90,17 +90,21 @@ test minMaxTotalStats {
     try std.testing.expectEqual(@as(u16, 680), minmax.max);
 }
 
-const Evolutions = struct {
-    lowest_2_stage: SpeciesSet,
-    lowest_3_stage: SpeciesSet,
-    lowest: SpeciesSet,
+const LowestEvolutions = struct {
+    stage_2: SpeciesSet,
+    stage_3: SpeciesSet,
+    all: SpeciesSet,
 };
 
-fn findEvolutions(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !Evolutions {
-    var res = Evolutions{
-        .lowest_2_stage = .{},
-        .lowest_3_stage = .{},
-        .lowest = try species_set.clone(arena),
+fn findLowestEvolutions(
+    arena: std.mem.Allocator,
+    species_set: SpeciesSet,
+    game: anytype,
+) !LowestEvolutions {
+    var res = LowestEvolutions{
+        .stage_2 = .{},
+        .stage_3 = .{},
+        .all = try species_set.clone(arena),
     };
 
     const pokemons_evolutions = try game.evolutions();
@@ -109,14 +113,14 @@ fn findEvolutions(arena: std.mem.Allocator, species_set: SpeciesSet, game: anyty
         for (evolutions) |evolution| {
             if (evolution.method == .unused)
                 continue;
-            _ = res.lowest.swapRemove(evolution.target);
+            _ = res.all.swapRemove(evolution.target);
         }
     }
 
-    for (res.lowest.keys()) |species| {
+    for (res.all.keys()) |species| {
         switch (countEvolutions(species, species, game)) {
-            1 => try res.lowest_2_stage.put(arena, species, {}),
-            2 => try res.lowest_3_stage.put(arena, species, {}),
+            1 => try res.stage_2.put(arena, species, {}),
+            2 => try res.stage_3.put(arena, species, {}),
             else => {},
         }
     }
@@ -124,13 +128,13 @@ fn findEvolutions(arena: std.mem.Allocator, species_set: SpeciesSet, game: anyty
     return res;
 }
 
-test findEvolutions {
+test findLowestEvolutions {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
     const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
     const species = try validSpecies(arena.allocator(), game);
-    const evolutions = try findEvolutions(arena.allocator(), species, game);
+    const evolutions = try findLowestEvolutions(arena.allocator(), species, game);
 
     try std.testing.expectEqualSlices(u16, &.{
         1,   151, 150, 4,   96,  81,  7,  147, 146, 10,  145, 144, 13,  143, 142, 16,  104, 140,
@@ -138,14 +142,14 @@ test findEvolutions {
         37,  129, 39,  128, 41,  127, 43, 126, 125, 46,  124, 48,  123, 50,  122, 52,  88,  54,
         120, 56,  95,  58,  118, 60,  90, 116, 63,  115, 114, 66,  113, 100, 69,  111, 92,  72,
         109, 74,  108, 107, 77,  106, 79,
-    }, evolutions.lowest.keys());
+    }, evolutions.all.keys());
     try std.testing.expectEqualSlices(u16, &.{
         96, 81, 104, 140, 19, 21, 138, 23, 25, 84,  27, 98,  86,  133, 35, 102, 37, 129, 39, 41,
         46, 48, 50,  52,  88, 54, 120, 56, 58, 118, 90, 116, 100, 111, 72, 109, 77, 79,
-    }, evolutions.lowest_2_stage.keys());
+    }, evolutions.stage_2.keys());
     try std.testing.expectEqualSlices(u16, &.{
         1, 4, 7, 147, 10, 13, 16, 29, 32, 43, 60, 63, 66, 69, 92, 74,
-    }, evolutions.lowest_3_stage.keys());
+    }, evolutions.stage_3.keys());
 }
 
 fn countEvolutions(species: u16, start_species: u16, game: anytype) usize {
@@ -314,8 +318,8 @@ test speciesByType {
         4, 5, 6, 37, 38, 58, 59, 77, 78, 126, 136, 146,
     }, species_by_type.get(9).?.keys());
     try std.testing.expectEqualSlices(u16, &.{ // Water
-        7,   8,   9,   54,  55,  60,  61,  62,  72,  73,  79,  80,  86, 87, 90, 91, 98, 99, 116, 117,
-        118, 119, 120, 121, 129, 130, 131, 134, 138, 139, 140, 141,
+        7,   8,   9,   54,  55,  60,  61,  62,  72,  73,  79,  80,  86,  87, 90, 91, 98, 99, 116,
+        117, 118, 119, 120, 121, 129, 130, 131, 134, 138, 139, 140, 141,
     }, species_by_type.get(10).?.keys());
     try std.testing.expectEqualSlices(u16, &.{ // Grass
         1, 2, 3, 43, 44, 45, 46, 47, 69, 70, 71, 102, 103, 114,
@@ -334,7 +338,11 @@ test speciesByType {
     }, species_by_type.get(15).?.keys());
 }
 
-fn speciesByDualType(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByDualType {
+fn speciesByDualType(
+    arena: std.mem.Allocator,
+    species_set: SpeciesSet,
+    game: anytype,
+) !SpeciesByDualType {
     const pokemons = try game.pokemons();
     var species_by_dual_type = SpeciesByDualType{};
     for (species_set.keys()) |species| {
@@ -462,7 +470,11 @@ test speciesByDualType {
     }, species_by_dual_type.get(.{ 15, 15 }).?.keys());
 }
 
-fn speciesByAbility(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByAbility {
+fn speciesByAbility(
+    arena: std.mem.Allocator,
+    species_set: SpeciesSet,
+    game: anytype,
+) !SpeciesByAbility {
     const pokemons = try game.pokemons();
     var species_by_ability = SpeciesByAbility{};
     for (species_set.keys()) |species| {
@@ -492,7 +504,7 @@ test speciesByAbility {
     // }, legendaries.keys());
 }
 
-pub const RandomizeTrainerOptions = packed struct {
+pub const RandomizeTrainerOptions = struct {
     seed: u64 = 0,
     party_size_max: u3 = 6,
     party_size_min: u3 = 1,
@@ -505,7 +517,7 @@ pub const RandomizeTrainerOptions = packed struct {
     party_pokemons: PartyPokemons = .unchanged,
     avoid_same: bool = false,
 
-    const Move = enum(u3) {
+    const Move = enum {
         none,
         unchanged,
         best,
@@ -514,45 +526,49 @@ pub const RandomizeTrainerOptions = packed struct {
         random,
     };
 
-    const HeldItem = enum(u2) {
+    const HeldItem = enum {
         none,
         unchanged,
         random,
     };
 
-    const AbilityTheme = enum(u2) {
+    const AbilityTheme = enum {
         same,
         random,
         themed,
     };
 
-    const TypeTheme = enum(u2) {
+    const TypeTheme = enum {
         same,
         random,
         themed,
         dual_themed,
     };
 
-    const Stats = enum(u2) {
+    const Stats = enum {
         random,
         similar,
         follow_level,
     };
 
-    const PartySize = enum(u2) {
+    const PartySize = enum {
         unchanged,
         minimum,
         follow_level,
         random,
     };
 
-    const PartyPokemons = enum(u1) {
+    const PartyPokemons = enum {
         unchanged,
         randomize,
     };
 };
 
-pub fn randomizeTrainers(metronome: *Metronome, options: RandomizeTrainerOptions, game: anytype) !void {
+pub fn randomizeTrainers(
+    metronome: *Metronome,
+    options: RandomizeTrainerOptions,
+    game: anytype,
+) !void {
     if (metronome.species.count() == 0)
         return;
 
@@ -569,10 +585,10 @@ pub fn randomizeTrainers(metronome: *Metronome, options: RandomizeTrainerOptions
 }
 
 test randomizeTrainers {
-    try testCommand(0, RandomizeTrainerOptions{}, randomizeTrainers, core.dummy.default, core.dummy.default);
+    try testCommand(0, RandomizeTrainerOptions{}, randomizeTrainers, core.dummy.default);
     try testCommand(0, RandomizeTrainerOptions{
         .party_pokemons = .randomize,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -630,7 +646,7 @@ test randomizeTrainers {
     try testCommand(0, RandomizeTrainerOptions{
         .party_size_min = 1,
         .party_size_max = 1,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -663,7 +679,7 @@ test randomizeTrainers {
     try testCommand(0, RandomizeTrainerOptions{
         .party_size_min = 6,
         .party_size_max = 6,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -737,7 +753,7 @@ test randomizeTrainers {
         .party_size_min = 1,
         .party_size_max = 6,
         .party_size = .random,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -793,7 +809,7 @@ test randomizeTrainers {
         .party_size_min = 1,
         .party_size_max = 6,
         .party_size = .follow_level,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -840,7 +856,7 @@ test randomizeTrainers {
     try testCommand(0, RandomizeTrainerOptions{
         .party_pokemons = .randomize,
         .stats = .similar,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -899,7 +915,7 @@ test randomizeTrainers {
         .party_pokemons = .randomize,
         .stats = .similar,
         .avoid_same = true,
-    }, randomizeTrainers, core.dummy.default, blk: {
+    }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.none, &.{
@@ -956,7 +972,12 @@ test randomizeTrainers {
     });
 }
 
-fn randomizeParty(metronome: *Metronome, options: RandomizeTrainerOptions, game: anytype, party: anytype) !void {
+fn randomizeParty(
+    metronome: *Metronome,
+    options: RandomizeTrainerOptions,
+    game: anytype,
+    party: anytype,
+) !void {
     const themes = TrainerTheme{
         .types = switch (options.types) {
             .themed => blk: {
@@ -1127,7 +1148,10 @@ fn randomizePartyMember(
         // Now, we have to exclude party members already in the party. To do this we construct a
         // new set from `pick_from` with `other_party_members` excluded.
         metronome.pick_from_excluded.clearRetainingCapacity();
-        try metronome.pick_from_excluded.ensureTotalCapacity(metronome.arena.allocator(), pick_from.count());
+        try metronome.pick_from_excluded.ensureTotalCapacity(
+            metronome.arena.allocator(),
+            pick_from.count(),
+        );
 
         for (pick_from.keys()) |picked|
             metronome.pick_from_excluded.putAssumeCapacity(picked, {});
@@ -1176,12 +1200,12 @@ fn randomizePartyMember(
     };
 }
 
-pub const RandomizeStartersOptions = packed struct {
+pub const RandomizeStartersOptions = struct {
     seed: u64 = 0,
     starters: Starters = .unchanged,
     avoid_same: bool = false,
 
-    const Starters = enum(u3) {
+    const Starters = enum {
         unchanged,
         random,
         random_lowest_2_stage_evolution,
@@ -1190,12 +1214,16 @@ pub const RandomizeStartersOptions = packed struct {
     };
 };
 
-fn randomizeStarters(metronome: *Metronome, options: RandomizeStartersOptions, game: anytype) !void {
+fn randomizeStarters(
+    metronome: *Metronome,
+    options: RandomizeStartersOptions,
+    game: anytype,
+) !void {
     const pick_from_base = switch (options.starters) {
         .random => metronome.species,
-        .random_lowest_2_stage_evolution => metronome.evolutions.lowest_2_stage,
-        .random_lowest_3_stage_evolution => metronome.evolutions.lowest_3_stage,
-        .random_lowest_evolution => metronome.evolutions.lowest,
+        .random_lowest_2_stage_evolution => metronome.lowest_evolutions.stage_2,
+        .random_lowest_3_stage_evolution => metronome.lowest_evolutions.stage_3,
+        .random_lowest_evolution => metronome.lowest_evolutions.all,
         .unchanged => return,
     };
     if (pick_from_base.count() == 0)
@@ -1216,24 +1244,24 @@ fn randomizeStarters(metronome: *Metronome, options: RandomizeStartersOptions, g
 }
 
 test randomizeStarters {
-    try testCommand(0, RandomizeStartersOptions{}, randomizeStarters, core.dummy.default, core.dummy.default);
+    try testCommand(0, RandomizeStartersOptions{}, randomizeStarters, core.dummy.default);
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random,
-    }, randomizeStarters, core.dummy.default, blk: {
+    }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 50, 58, 55 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_2_stage_evolution,
-    }, randomizeStarters, core.dummy.default, blk: {
+    }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 86, 35, 133 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_3_stage_evolution,
-    }, randomizeStarters, core.dummy.default, blk: {
+    }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 13, 16, 13 };
         break :blk res;
@@ -1241,17 +1269,161 @@ test randomizeStarters {
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_3_stage_evolution,
         .avoid_same = true,
-    }, randomizeStarters, core.dummy.default, blk: {
+    }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 13, 74, 92 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_evolution,
-    }, randomizeStarters, core.dummy.default, blk: {
+    }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 84, 133, 29 };
         break :blk res;
+    });
+}
+
+const RandomizeWildEncountersOptions = struct {
+    seed: u64 = 0,
+    stats: Stats = .random,
+
+    // TODO: Avoid same
+
+    const Stats = enum {
+        random,
+        similar,
+        follow_level,
+    };
+};
+
+pub fn randomizeWildEncounters(
+    metronome: *Metronome,
+    options: RandomizeWildEncountersOptions,
+    game: anytype,
+) !void {
+    const wild_areas = try game.wildAreas();
+    var i: usize = 0;
+    while (i < wild_areas.len()) : (i += 1) {
+        const wild_pokemons = try wild_areas.at(i);
+
+        var j: usize = 0;
+        while (j < wild_pokemons.len()) : (j += 1) {
+            const wild_pokemon = try wild_pokemons.at(j);
+            try metronome.randomizeWildPokemon(options, game, wild_pokemon);
+        }
+    }
+}
+
+test randomizeWildEncounters {
+    try testCommand(0, RandomizeWildEncountersOptions{}, randomizeWildEncounters, blk: {
+        var res = core.dummy.default;
+        res.wild_areas = &.{
+            .init(&.{
+                .init(50, 2, 5),
+                .init(58, 2, 4),
+            }),
+            .init(&.{
+                .init(55, 18, 22),
+                .init(2, 23, 25),
+                .init(75, 20, 22),
+                .init(4, 24, 24),
+                .init(130, 18, 22),
+            }),
+            .init(&.{
+                .init(128, 5, 40),
+                .init(45, 5, 5),
+                .init(12, 10, 10),
+                .init(48, 10, 10),
+                .init(10, 20, 40),
+                .init(16, 15, 15),
+                .init(15, 15, 15),
+                .init(10, 15, 15),
+            }),
+        };
+        break :blk res;
+    });
+    try testCommand(0, RandomizeWildEncountersOptions{
+        .stats = .similar,
+    }, randomizeWildEncounters, blk: {
+        var res = core.dummy.default;
+        res.wild_areas = &.{
+            .init(&.{
+                .init(16, 2, 5),
+                .init(41, 2, 4),
+            }),
+            .init(&.{
+                .init(19, 18, 22),
+                .init(17, 23, 25),
+                .init(19, 20, 22),
+                .init(22, 24, 24),
+                .init(90, 18, 22),
+            }),
+            .init(&.{
+                .init(104, 5, 40),
+                .init(13, 5, 5),
+                .init(37, 10, 10),
+                .init(104, 10, 10),
+                .init(121, 20, 40),
+                .init(48, 15, 15),
+                .init(37, 15, 15),
+                .init(109, 15, 15),
+            }),
+        };
+        break :blk res;
+    });
+    try testCommand(0, RandomizeWildEncountersOptions{
+        .stats = .follow_level,
+    }, randomizeWildEncounters, blk: {
+        var res = core.dummy.default;
+        res.wild_areas = &.{
+            .init(&.{
+                .init(16, 2, 5),
+                .init(19, 2, 4),
+            }),
+            .init(&.{
+                .init(33, 18, 22),
+                .init(44, 23, 25),
+                .init(95, 20, 22),
+                .init(44, 24, 24),
+                .init(95, 18, 22),
+            }),
+            .init(&.{
+                .init(64, 5, 40),
+                .init(21, 5, 5),
+                .init(132, 10, 10),
+                .init(32, 10, 10),
+                .init(24, 20, 40),
+                .init(98, 15, 15),
+                .init(96, 15, 15),
+                .init(88, 15, 15),
+            }),
+        };
+        break :blk res;
+    });
+}
+
+fn randomizeWildPokemon(
+    metronome: *Metronome,
+    options: RandomizeWildEncountersOptions,
+    game: anytype,
+    wild_pokemon: anytype,
+) !void {
+    const pokemons = try game.pokemons();
+    wild_pokemon.setSpecies(switch (options.stats) {
+        .similar => if (pokemons.at(wild_pokemon.species())) |pokemon|
+            try metronome.randomSpeciesWithSimilarTotalStats(
+                game,
+                metronome.species,
+                pokemon.stats.total(),
+            )
+        else |_|
+            metronome.randomItem(metronome.species.keys()).?.*,
+        .follow_level => try metronome.randomSpeciesWithStatsFollowingLevel(
+            game,
+            metronome.species,
+            wild_pokemon.level(),
+        ),
+        .random => metronome.randomItem(metronome.species.keys()).?.*,
     });
 }
 
@@ -1261,7 +1433,12 @@ fn randomItem(metronome: Metronome, items: anytype) ?@TypeOf(&items[0]) {
     return &items[metronome.random.uintAtMost(usize, items.len - 1)];
 }
 
-fn randomSpeciesWithSimilarTotalStats(metronome: *Metronome, game: anytype, pick_from: SpeciesSet, total_stats: u16) !u16 {
+fn randomSpeciesWithSimilarTotalStats(
+    metronome: *Metronome,
+    game: anytype,
+    pick_from: SpeciesSet,
+    total_stats: u16,
+) !u16 {
     const pokemons = try game.pokemons();
     const range = 5;
     var min = @as(isize, @intCast(total_stats)) - range;
@@ -1284,7 +1461,12 @@ fn randomSpeciesWithSimilarTotalStats(metronome: *Metronome, game: anytype, pick
     return metronome.randomItem(metronome.similar.items).?.*;
 }
 
-fn randomSpeciesWithStatsFollowingLevel(metronome: *Metronome, game: anytype, pick_from: SpeciesSet, level: u16) !u16 {
+fn randomSpeciesWithStatsFollowingLevel(
+    metronome: *Metronome,
+    game: anytype,
+    pick_from: SpeciesSet,
+    level: u16,
+) !u16 {
     return metronome.randomSpeciesWithSimilarTotalStats(
         game,
         pick_from,
@@ -1386,25 +1568,30 @@ test partySizeLevelScaling {
     try std.testing.expectEqual(@as(u16, 6), partySizeLevelScaling(6, 6, 100));
 }
 
-fn testCommand(seed: u64, options: anytype, function: anytype, from: core.dummy.Game.Init, to: core.dummy.Game.Init) !void {
+fn testCommand(
+    seed: u64,
+    options: anytype,
+    function: anytype,
+    expected: core.dummy.Game.Init,
+) !void {
     var random = std.Random.DefaultPrng.init(seed);
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     const arena = arena_state.allocator();
     defer arena_state.deinit();
 
-    const from_game = try core.dummy.Game.init(arena, from);
-    const to_game = try core.dummy.Game.init(arena, to);
+    const actual_game = try core.dummy.Game.init(arena, core.dummy.default);
+    const expected_game = try core.dummy.Game.init(arena, expected);
 
-    var metronome = try init(std.testing.allocator, random.random(), from_game);
+    var metronome = try init(std.testing.allocator, random.random(), actual_game);
     defer metronome.deinit();
 
-    try function(&metronome, options, from_game);
+    try function(&metronome, options, actual_game);
 
     // Avoid large error trace by not using `catch` or `try` here
-    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
+    const is_err = if (std.testing.expectEqualDeep(expected_game.m, actual_game.m)) false else |_| true;
     if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
+        const from_str = try std.fmt.allocPrint(arena, "{}", .{actual_game});
+        const to_str = try std.fmt.allocPrint(arena, "{}", .{expected_game});
         try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
         try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
         std.testing.expectEqualStrings(to_str, from_str) catch {};
