@@ -55,12 +55,14 @@ pub fn main() !void {
 test {
     _ = ArgParser;
     _ = Command;
+    _ = Metronome;
 
     _ = core;
 }
 
 const ArgParser = @import("util/ArgParser.zig");
 const Command = @import("Command.zig");
+const Metronome = @import("Metronome.zig");
 
 const core = @import("core.zig");
 const std = @import("std");
