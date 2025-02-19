@@ -19,6 +19,9 @@ legendary_ratings: std.AutoArrayHashMapUnmanaged(u16, i16) = .{},
 legendaries_set: SpeciesSet = .{},
 legendaries_valid: bool = false,
 
+none_legendaries_set: SpeciesSet = .{},
+none_legendaries_valid: bool = false,
+
 evolutions_set: SpeciesSet = .{},
 evolutions_valid: bool = false,
 
@@ -254,6 +257,56 @@ test legendaries {
         try std.testing.expectEqualSlices(u16, &.{
             144, 145, 146,
             150, 151,
+        }, res.keys());
+    }
+}
+
+/// Finds all none legendary species
+pub fn noneLegendaries(cache: *Cache, game: anytype) !*const SpeciesSet {
+    cache.assertCorrectGame(game);
+    if (cache.none_legendaries_valid)
+        return &cache.none_legendaries_set;
+
+    const legends = try cache.legendaries(game);
+    const species_set = try cache.species(game);
+
+    cache.none_legendaries_set.shrinkRetainingCapacity(0);
+    for (species_set.keys()) |s| {
+        if (legends.get(s)) |_|
+            continue;
+        try cache.none_legendaries_set.put(cache.arena, s, {});
+    }
+
+    cache.none_legendaries_valid = true;
+    return &cache.none_legendaries_set;
+}
+
+test noneLegendaries {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var cache = Cache{ .arena = arena.allocator() };
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+
+    for ([_][2]bool{
+        .{ false, false },
+        .{ true, true },
+        .{ true, false },
+    }) |cache_validation| {
+        try std.testing.expectEqual(cache_validation[0], cache.none_legendaries_valid);
+        cache.none_legendaries_valid = cache_validation[1];
+
+        const res = try cache.noneLegendaries(&game);
+        try std.testing.expectEqualSlices(u16, &.{
+            1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,
+            18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,
+            35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,
+            52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,  66,  67,  68,
+            69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,
+            86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102,
+            103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+            120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
+            137, 138, 139, 140, 141, 142, 143, 147, 148, 149,
         }, res.keys());
     }
 }

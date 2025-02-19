@@ -29,24 +29,25 @@ pub fn main() !void {
     var game = try core.Game.fromFile(input_file, gpa);
     defer game.deinit();
 
-    while (args.next()) {
-        const command_name = args.positional().?;
-        const command = Command.find(command_name) orelse return error.UnknownCommand;
-        const options = try command.createOptions(arena);
+    // TODO:
+    // while (args.next()) {
+    //     const command_name = args.positional().?;
+    //     const command = Command.find(command_name) orelse return error.UnknownCommand;
+    //     const options = try command.createOptions(arena);
 
-        while (args.next()) {
-            for (command.parameters) |parameter| {
-                var buf: [128]u8 = undefined;
-                const cli_param = try std.fmt.bufPrint(&buf, "--{s}", .{parameter.name});
-                if (args.option(&.{cli_param})) |value|
-                    try options.set(options, arena, parameter.name, value);
-            }
-            if (!args.consumed)
-                break;
-        }
+    //     while (args.next()) {
+    //         for (command.parameters) |parameter| {
+    //             var buf: [128]u8 = undefined;
+    //             const cli_param = try std.fmt.bufPrint(&buf, "--{s}", .{parameter.name});
+    //             if (args.option(&.{cli_param})) |value|
+    //                 try options.set(options, arena, parameter.name, value);
+    //         }
+    //         if (!args.consumed)
+    //             break;
+    //     }
 
-        try command.function(arena, options, &game);
-    }
+    //     try command.function(arena, options, &game);
+    // }
 
     try game.apply();
     try game.write(output_file.writer());
@@ -54,14 +55,12 @@ pub fn main() !void {
 
 test {
     _ = ArgParser;
-    _ = Command;
     _ = Metronome;
 
     _ = core;
 }
 
 const ArgParser = @import("util/ArgParser.zig");
-const Command = @import("Command.zig");
 const Metronome = @import("Metronome.zig");
 
 const core = @import("core.zig");
