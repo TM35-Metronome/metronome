@@ -20,7 +20,6 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, random: std.Random
 }
 
 pub const RandomizeTrainerOptions = struct {
-    seed: u64 = 0,
     party_size_max: u3 = 6,
     party_size_min: u3 = 1,
     // moves: Move = .unchanged, TODO
@@ -30,7 +29,7 @@ pub const RandomizeTrainerOptions = struct {
     stats: Stats = .random,
     party_size: PartySize = .unchanged,
     party_pokemons: PartyPokemons = .unchanged,
-    avoid_same: bool = false,
+    avoid_duplicates: bool = false,
 
     const Move = enum {
         none,
@@ -430,7 +429,7 @@ test randomizeTrainers {
     try testCommand(0, RandomizeTrainerOptions{
         .party_pokemons = .randomize,
         .stats = .similar,
-        .avoid_same = true,
+        .avoid_duplicates = true,
     }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
@@ -610,11 +609,12 @@ fn randomizePartyMember(
     other_members: anytype,
     member: anytype,
 ) !void {
+    const species = try metronome.cache.species(game);
     const pokemons = try game.pokemons();
     const pick_from_type = switch (options.types) {
         .same => blk: {
             const species_by = try metronome.cache.speciesByType(game);
-            const pokemon = pokemons.at(member.base.species) catch break :blk metronome.species;
+            const pokemon = pokemons.at(member.base.species) catch break :blk species.*;
             break :blk species_by.get(pokemon.types[0]).?;
         },
         .themed => blk: {
@@ -631,8 +631,7 @@ fn randomizePartyMember(
     var new_ability: ?u16 = null;
     const pick_from_ability = switch (options.abilities) {
         .same => blk: {
-            const species = try metronome.cache.species(game);
-            const pokemon = pokemons.at(member.base.species) catch break :blk metronome.species;
+            const pokemon = pokemons.at(member.base.species) catch break :blk species.*;
             const ability = pokemon.abilities[member.ability()];
             if (ability == 0)
                 break :blk species.*;
@@ -670,7 +669,7 @@ fn randomizePartyMember(
     else
         (try metronome.cache.species(game));
 
-    if (options.avoid_same) {
+    if (options.avoid_duplicates) {
         // Now, we have to exclude party members already in the party. To do this we construct a
         // new set from `pick_from` with `other_party_members` excluded.
         metronome.pick_from_excluded.clearRetainingCapacity();
@@ -724,12 +723,10 @@ fn randomizePartyMember(
 }
 
 pub const RandomizeStartersOptions = struct {
-    seed: u64 = 0,
-    starters: Starters = .unchanged,
-    avoid_same: bool = false,
+    method: Method = .random,
+    avoid_duplicates: bool = false,
 
-    const Starters = enum {
-        unchanged,
+    const Method = enum {
         random,
         random_lowest_2_stage_evolution,
         random_lowest_3_stage_evolution,
@@ -742,12 +739,11 @@ fn randomizeStarters(
     options: RandomizeStartersOptions,
     game: anytype,
 ) !void {
-    const pick_from_base = switch (options.starters) {
+    const pick_from_base = switch (options.method) {
         .random => try metronome.cache.species(game),
         .random_lowest_2_stage_evolution => &(try metronome.cache.lowestEvolutions(game)).stage_2,
         .random_lowest_3_stage_evolution => &(try metronome.cache.lowestEvolutions(game)).stage_3,
         .random_lowest_evolution => &(try metronome.cache.lowestEvolutions(game)).all,
-        .unchanged => return,
     };
     if (pick_from_base.count() == 0)
         return error.NoStarterToPick;
@@ -761,44 +757,43 @@ fn randomizeStarters(
             pick_from_non_empty = pick_from_base;
 
         starter.* = metronome.randomItem(pick_from_non_empty.keys()).?.*;
-        if (options.avoid_same)
+        if (options.avoid_duplicates)
             _ = pick_from.swapRemove(starter.*);
     }
 }
 
 test randomizeStarters {
-    try testCommand(0, RandomizeStartersOptions{}, randomizeStarters, core.dummy.default);
     try testCommand(0, RandomizeStartersOptions{
-        .starters = .random,
+        .method = .random,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 50, 58, 55 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
-        .starters = .random_lowest_2_stage_evolution,
+        .method = .random_lowest_2_stage_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 52, 56, 54 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
-        .starters = .random_lowest_3_stage_evolution,
+        .method = .random_lowest_3_stage_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 16, 29, 16 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
-        .starters = .random_lowest_3_stage_evolution,
-        .avoid_same = true,
+        .method = .random_lowest_3_stage_evolution,
+        .avoid_duplicates = true,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 16, 147, 92 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
-        .starters = .random_lowest_evolution,
+        .method = .random_lowest_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
         res.starters = &.{ 60, 74, 69 };
@@ -807,7 +802,6 @@ test randomizeStarters {
 }
 
 const RandomizeWildEncountersOptions = struct {
-    seed: u64 = 0,
     stats: Stats = .random,
 
     // TODO: Avoid same
@@ -951,8 +945,7 @@ fn randomizeWildPokemon(
     });
 }
 
-const RandomizeStaticEncountersOptions = packed struct {
-    seed: u64 = 0,
+const RandomizeStaticEncountersOptions = struct {
     static_pokemons: Pokemons = .unchanged,
     given_pokemons: Pokemons = .unchanged,
     // hidden_hollows: Pokemons = .unchanged, TODO
@@ -1626,14 +1619,98 @@ fn testCommand(
 }
 
 pub const Commands = struct {
-    commands: std.ArrayListUnmanaged(Command),
+    commands: std.ArrayListUnmanaged(Command) = .{},
 
-    pub const Command = union(enum) {
-        generate_wiki: void,
-        randomize_starters: RandomizeStartersOptions,
-        randomize_static_encounters: RandomizeStaticEncountersOptions,
-        randomize_trainers: RandomizeTrainerOptions,
-        randomize_wild_encounters: RandomizeWildEncountersOptions,
+    pub const descriptions = [_]Command.Description{
+        .{
+            .id = "generate_wiki",
+            .name = "Generate Wiki",
+            .description = "TODO: Description",
+            .options = &.{},
+        },
+        .{
+            .id = "randomize_starters",
+            .name = "Randomize Starters",
+            .description = "TODO: Description",
+            .options = &.{
+                .{ .id = "method", .name = "Method", .description = "TODO: Description" },
+                .{ .id = "avoid_duplicates", .name = "Avoid duplicates", .description = "TODO: Description" },
+            },
+        },
+        .{
+            .id = "randomize_static_encounters",
+            .name = "Randomize Static Encounters",
+            .description = "TODO: Description",
+            .options = &.{
+                .{ .id = "static_pokemons", .name = "Static Pokemons", .description = "TODO: Description" },
+                .{ .id = "given_pokemons", .name = "Given Pokemons", .description = "TODO: Description" },
+                .{ .id = "legendary_with_legendary", .name = "Replace legendary with legendary", .description = "TODO: Description" },
+            },
+        },
+        .{
+            .id = "randomize_trainers",
+            .name = "Randomize Trainers",
+            .description = "TODO: Description",
+            .options = &.{
+                .{ .id = "party_size_max", .name = "Maximum party size", .description = "TODO: Description" },
+                .{ .id = "party_size_min", .name = "Minimum party size", .description = "TODO: Description" },
+                .{ .id = "abilities", .name = "Abilities of party members", .description = "TODO: Description" },
+                .{ .id = "types", .name = "Types of party members", .description = "TODO: Description" },
+                .{ .id = "stats", .name = "Stats of party members", .description = "TODO: Description" },
+                .{ .id = "party_size", .name = "Party size", .description = "TODO: Description" },
+                .{ .id = "party_pokemons", .name = "Party members", .description = "TODO: Description" },
+                .{ .id = "avoid_duplicates", .name = "Avoid duplicates", .description = "TODO: Description" },
+            },
+        },
+        .{
+            .id = "randomize_wild_encounters",
+            .name = "Randomize Wild Encounters",
+            .description = "TODO: Description",
+            .options = &.{
+                .{ .id = "stats", .name = "Stats of encounters", .description = "TODO: Description" },
+            },
+        },
+    };
+
+    comptime {
+        // Comptime assert that there is a Command.Description for every field of Command
+        const command_fields = std.meta.fields(Command);
+        std.debug.assert(command_fields.len == descriptions.len);
+
+        for (command_fields, descriptions) |command_field, description| {
+            if (!std.mem.eql(u8, command_field.name, description.id))
+                @compileError("Expected " ++ command_field.name ++ " found " ++ description.id);
+
+            const command_options = std.meta.fields(command_field.type);
+            if (command_options.len != description.options.len)
+                @compileError(description.id ++ " is missing options");
+
+            for (command_options, description.options) |option_field, option| {
+                if (!std.mem.eql(u8, option_field.name, option.id))
+                    @compileError("Expected " ++ command_field.name ++ " found " ++ description.id);
+            }
+        }
+    }
+};
+
+pub const Command = union(enum) {
+    generate_wiki: struct {},
+    randomize_starters: RandomizeStartersOptions,
+    randomize_static_encounters: RandomizeStaticEncountersOptions,
+    randomize_trainers: RandomizeTrainerOptions,
+    randomize_wild_encounters: RandomizeWildEncountersOptions,
+
+    pub const Description = struct {
+        id: []const u8,
+        name: []const u8,
+        description: []const u8,
+        options: []const OptionDescription,
+    };
+
+    pub const OptionDescription = struct {
+        id: []const u8,
+        name: []const u8,
+        description: []const u8,
     };
 };
 
@@ -1657,7 +1734,7 @@ test runCommands {
     const game = try core.dummy.Game.init(arena, core.dummy.default);
 
     var metronome = try init(std.testing.allocator, arena, random.random());
-    try metronome.runCommands(.{ .commands = .{} }, &game);
+    try metronome.runCommands(.{}, &game);
 }
 
 const Metronome = @This();

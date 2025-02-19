@@ -37,10 +37,14 @@ pub fn TerminatedArray(comptime n: usize, comptime T: type, comptime sentinel: T
 }
 
 test {
+    _ = ArgParser;
+
     _ = bit;
     _ = glob;
     _ = set;
 }
+
+pub const ArgParser = @import("util/ArgParser.zig");
 
 pub const bit = @import("util/bit.zig");
 pub const glob = @import("util/glob.zig");

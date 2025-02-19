@@ -8,8 +8,9 @@ pub fn main() !void {
     defer arena_state.deinit();
 
     const args_slice = try std.process.argsAlloc(arena);
-    var args = ArgParser{ .args = args_slice[1..] };
+    var args = util.ArgParser{ .args = args_slice[1..] };
 
+    var seed: ?u64 = null;
     var input: ?[]const u8 = null;
     var output: ?[]const u8 = null;
     while (args.next()) {
@@ -17,6 +18,8 @@ pub fn main() !void {
             input = i;
         if (args.option(&.{ "-o", "--output" })) |o|
             output = o;
+        if (args.option(&.{ "-s", "--seed" })) |s|
+            seed = try parseString(u64, s);
         if (!args.consumed)
             break;
     }
@@ -29,39 +32,72 @@ pub fn main() !void {
     var game = try core.Game.fromFile(input_file, gpa);
     defer game.deinit();
 
-    // TODO:
-    // while (args.next()) {
-    //     const command_name = args.positional().?;
-    //     const command = Command.find(command_name) orelse return error.UnknownCommand;
-    //     const options = try command.createOptions(arena);
+    var commands = Metronome.Commands{};
 
-    //     while (args.next()) {
-    //         for (command.parameters) |parameter| {
-    //             var buf: [128]u8 = undefined;
-    //             const cli_param = try std.fmt.bufPrint(&buf, "--{s}", .{parameter.name});
-    //             if (args.option(&.{cli_param})) |value|
-    //                 try options.set(options, arena, parameter.name, value);
-    //         }
-    //         if (!args.consumed)
-    //             break;
-    //     }
+    while (args.next()) {
+        const command_name = args.positional().?;
 
-    //     try command.function(arena, options, &game);
-    // }
+        inline for (Metronome.Commands.descriptions) |command_description| loop_blk: {
+            if (!std.mem.eql(u8, command_name, command_description.name))
+                break :loop_blk; // TODO: We cannot use `continue` in `inline for`
+
+            var command_outer = @unionInit(Metronome.Command, command_description.id, .{});
+            const command = &@field(command_outer, command_description.id);
+
+            while (args.next()) {
+                if (args.flag(&.{ "-h", "--help" })) {
+                    // TODO: Print help
+                }
+
+                var buf: [128]u8 = undefined;
+                inline for (command_description.options) |option_desciption| {
+                    const cli_id = try std.fmt.bufPrint(&buf, "--{s}", .{option_desciption.id});
+                    const OptionT = @TypeOf(@field(command, option_desciption.id));
+
+                    if (OptionT == bool and args.flag(&.{cli_id}))
+                        @field(command, option_desciption.id) = true;
+                    if (args.option(&.{cli_id})) |value|
+                        @field(command, option_desciption.id) = try parseString(OptionT, value);
+                }
+
+                if (!args.consumed)
+                    break;
+            }
+
+            try commands.commands.append(arena, command_outer);
+        }
+    }
+
+    var random = std.Random.DefaultPrng.init(seed orelse std.crypto.random.int(u64));
+    var metronome = try Metronome.init(gpa, arena, random.random());
+    switch (game) {
+        inline else => |*g| try metronome.runCommands(commands, g),
+    }
 
     try game.apply();
     try game.write(output_file.writer());
 }
 
+fn parseString(comptime T: type, string: []const u8) !T {
+    switch (@typeInfo(T)) {
+        .int => return std.fmt.parseInt(T, string, 0),
+        .@"enum" => return std.meta.stringToEnum(T, string) orelse return error.InvalidValue,
+        .bool => return (std.meta.stringToEnum(enum { false, true }, string) orelse
+            return error.InvalidValue) == .true,
+        else => @compileError("Not implemented for " ++ @typeName(T)),
+    }
+}
+
 test {
-    _ = ArgParser;
     _ = Metronome;
 
     _ = core;
+    _ = util;
 }
 
-const ArgParser = @import("util/ArgParser.zig");
 const Metronome = @import("Metronome.zig");
 
 const core = @import("core.zig");
+const util = @import("util.zig");
+
 const std = @import("std");
