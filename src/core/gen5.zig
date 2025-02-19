@@ -5,7 +5,7 @@ pub const Pokemon = extern struct {
     catch_rate: u8,
     stage: u8,
 
-    ev: common.PaddedEvYield,
+    ev: common.EvYield,
     items: [3]u16,
 
     gender_ratio: u8,

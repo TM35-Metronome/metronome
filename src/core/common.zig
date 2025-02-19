@@ -219,18 +219,10 @@ pub const EvYield = packed struct {
     speed: u2,
     sp_attack: u2,
     sp_defense: u2,
-
-    comptime {
-        std.debug.assert(@sizeOf(EvYield) == 2);
-    }
-};
-
-pub const PaddedEvYield = packed struct {
-    yield: EvYield,
     pad: u4,
 
     comptime {
-        std.debug.assert(@sizeOf(PaddedEvYield) == 2);
+        std.debug.assert(@sizeOf(EvYield) == 2);
     }
 };
 
