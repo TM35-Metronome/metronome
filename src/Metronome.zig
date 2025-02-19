@@ -1,507 +1,22 @@
 gpa: std.mem.Allocator,
-arena: std.heap.ArenaAllocator,
+arena: std.mem.Allocator,
 random: std.Random,
-
-species: SpeciesSet,
-species_by: struct {
-    ability: SpeciesByAbility,
-    type: SpeciesByType,
-    dual_type: SpeciesByDualType,
-},
-lowest_evolutions: LowestEvolutions,
-
-legendaries: SpeciesSet,
-stats: MinMax(u16),
+cache: Cache,
 
 // `randomSpeciesWithSimilarTotalStats` uses metronome as a buffer that is reused between calls
-similar: std.ArrayListUnmanaged(u16) = std.ArrayListUnmanaged(u16){},
+similar: Cache.SpeciesList = .{},
 
 // TODO: Document where used
-intersection: Set = Set{},
-pick_from_excluded: Set = Set{},
+intersection: Cache.SpeciesSet = .{},
+pick_from_excluded: Cache.SpeciesSet = .{},
 
-pub fn init(gpa: std.mem.Allocator, random: std.Random, game: anytype) !Metronome {
-    var arena = std.heap.ArenaAllocator.init(gpa);
-    errdefer arena.deinit();
-
-    const species_set = try validSpecies(arena.allocator(), game);
-    var res: Metronome = .{
+pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, random: std.Random) !Metronome {
+    return .{
         .gpa = gpa,
-        .arena = undefined,
+        .arena = arena,
         .random = random,
-
-        .species = species_set,
-        .species_by = .{
-            .ability = try speciesByAbility(arena.allocator(), species_set, game),
-            .type = try speciesByType(arena.allocator(), species_set, game),
-            .dual_type = try speciesByDualType(arena.allocator(), species_set, game),
-        },
-        .lowest_evolutions = try findLowestEvolutions(arena.allocator(), species_set, game),
-        .legendaries = try findLegendaries(arena.allocator(), species_set, game),
-        .stats = minMaxTotalStats(species_set, game),
+        .cache = .{ .arena = arena },
     };
-    res.arena = arena;
-    return res;
-}
-
-pub fn deinit(metronome: *Metronome) void {
-    metronome.arena.deinit();
-}
-
-/// Gets the set of all valid species in a pokemon game. This will exclude things like:
-/// * species 0, which is always the "null" pokemon
-/// * gen5 Pokéstar Studios pokemon
-fn validSpecies(arena: std.mem.Allocator, game: anytype) !SpeciesSet {
-    var valid_species = std.ArrayList(u16).init(arena);
-    try game.validSpecies(&valid_species);
-
-    var species_set = SpeciesSet{};
-    try species_set.ensureTotalCapacity(arena, valid_species.items.len);
-    for (valid_species.items) |species|
-        species_set.putAssumeCapacity(species, {});
-
-    return species_set;
-}
-
-/// Finds the minimum and maximum total stats species in the `species_set` has. In gen5, this is
-/// 180 (Sunkern) and 720 (Arceus)
-fn minMaxTotalStats(species_set: SpeciesSet, game: anytype) MinMax(u16) {
-    const pokemons = try game.pokemons();
-    var stats: MinMax(u16) = .{ .max = 0, .min = std.math.maxInt(u16) };
-
-    for (species_set.keys()) |species| {
-        const pokemon = pokemons.at(species) catch continue;
-        const total_stats = pokemon.stats.total();
-        stats.min = @min(stats.min, total_stats);
-        stats.max = @max(stats.max, total_stats);
-    }
-
-    return stats;
-}
-
-test minMaxTotalStats {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const minmax = minMaxTotalStats(species, game);
-    try std.testing.expectEqual(@as(u16, 195), minmax.min);
-    try std.testing.expectEqual(@as(u16, 680), minmax.max);
-}
-
-const LowestEvolutions = struct {
-    stage_2: SpeciesSet,
-    stage_3: SpeciesSet,
-    all: SpeciesSet,
-};
-
-fn findLowestEvolutions(
-    arena: std.mem.Allocator,
-    species_set: SpeciesSet,
-    game: anytype,
-) !LowestEvolutions {
-    var res = LowestEvolutions{
-        .stage_2 = .{},
-        .stage_3 = .{},
-        .all = try species_set.clone(arena),
-    };
-
-    const pokemons_evolutions = try game.evolutions();
-    for (species_set.keys()) |species| {
-        const evolutions = pokemons_evolutions.at(species) catch continue;
-        for (evolutions) |evolution| {
-            if (evolution.method == .unused)
-                continue;
-            _ = res.all.swapRemove(evolution.target);
-        }
-    }
-
-    for (res.all.keys()) |species| {
-        switch (countEvolutions(species, species, game)) {
-            1 => try res.stage_2.put(arena, species, {}),
-            2 => try res.stage_3.put(arena, species, {}),
-            else => {},
-        }
-    }
-
-    return res;
-}
-
-test findLowestEvolutions {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const evolutions = try findLowestEvolutions(arena.allocator(), species, game);
-
-    try std.testing.expectEqualSlices(u16, &.{
-        1,   151, 150, 4,   96,  81,  7,  147, 146, 10,  145, 144, 13,  143, 142, 16,  104, 140,
-        19,  83,  21,  138, 23,  137, 25, 84,  27,  98,  29,  86,  133, 32,  132, 131, 35,  102,
-        37,  129, 39,  128, 41,  127, 43, 126, 125, 46,  124, 48,  123, 50,  122, 52,  88,  54,
-        120, 56,  95,  58,  118, 60,  90, 116, 63,  115, 114, 66,  113, 100, 69,  111, 92,  72,
-        109, 74,  108, 107, 77,  106, 79,
-    }, evolutions.all.keys());
-    try std.testing.expectEqualSlices(u16, &.{
-        96, 81, 104, 140, 19, 21, 138, 23, 25, 84,  27, 98,  86,  133, 35, 102, 37, 129, 39, 41,
-        46, 48, 50,  52,  88, 54, 120, 56, 58, 118, 90, 116, 100, 111, 72, 109, 77, 79,
-    }, evolutions.stage_2.keys());
-    try std.testing.expectEqualSlices(u16, &.{
-        1, 4, 7, 147, 10, 13, 16, 29, 32, 43, 60, 63, 66, 69, 92, 74,
-    }, evolutions.stage_3.keys());
-}
-
-fn countEvolutions(species: u16, start_species: u16, game: anytype) usize {
-    var res: usize = 0;
-
-    const pokemons_evolutions = game.evolutions() catch return res;
-    const evolutions = pokemons_evolutions.at(species) catch return res;
-    for (evolutions) |evolution| {
-        if (evolution.method == .unused)
-            continue;
-        if (start_species == evolution.target)
-            continue;
-
-        res = @max(res, 1 + countEvolutions(evolution.target, start_species, game));
-    }
-
-    return res;
-}
-
-test countEvolutions {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    try std.testing.expectEqual(@as(usize, 2), countEvolutions(1, 1, &game));
-    try std.testing.expectEqual(@as(usize, 1), countEvolutions(2, 2, &game));
-    try std.testing.expectEqual(@as(usize, 0), countEvolutions(3, 3, &game));
-    try std.testing.expectEqual(@as(usize, 1), countEvolutions(21, 21, &game));
-    try std.testing.expectEqual(@as(usize, 0), countEvolutions(22, 22, &game));
-    try std.testing.expectEqual(@as(usize, 0), countEvolutions(150, 150, &game));
-}
-
-fn findLegendaries(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesSet {
-    // There is no way to specify in game that a Pokemon is a legendary. Instead we find
-    // legendaries by looking at their stats, evolution line and other patterns common for
-    // legendaries
-
-    const pokemons = try game.pokemons();
-    const pokemon_evolutions = try game.evolutions();
-
-    var is_evolution = SpeciesSet{};
-    for (species_set.keys()) |species| {
-        const evolutions = pokemon_evolutions.at(species) catch continue;
-        for (evolutions) |evo| {
-            if (evo.method == .unused) continue;
-            try is_evolution.put(arena, evo.target, {});
-        }
-    }
-
-    // First, lets give each Pokemon a "legendary rating" which is a measure as to how many
-    // "legendary" criteria this pokemon fits into. This rating can be negative.
-    var ratings = std.AutoArrayHashMap(u16, isize).init(arena);
-    try ratings.ensureTotalCapacity(species_set.count());
-
-    for (species_set.keys()) |species| {
-        const pokemon = pokemons.at(species) catch continue;
-        const rating = (ratings.getOrPutAssumeCapacity(species)).value_ptr;
-        rating.* = 0;
-
-        // Legendaries are generally in the "slow" to "medium_slow" growth rating
-        rating.* += @as(isize, @intFromBool(pokemon.growth_rate == .slow or
-            pokemon.growth_rate == .medium_slow));
-
-        // They generally have a catch rate of 45 or less
-        rating.* += @as(isize, @intFromBool(pokemon.catch_rate <= 45));
-
-        // They tend to not have a gender (255 in gender_ratio means genderless).
-        rating.* += @as(isize, @intFromBool(pokemon.gender_ratio == 255));
-
-        // Most are part of the "undiscovered" egg group
-        for (pokemon.egg_groups) |egg_group|
-            rating.* += @as(isize, @intFromBool(egg_group == .undiscovered));
-
-        // They don't evolve from anything. Subtract score from metronome Pokemons evolutions.
-        rating.* -= @as(isize, @intFromBool(is_evolution.get(species) != null)) * 10;
-    }
-
-    const rating_to_be_legendary = blk: {
-        var res: isize = 0;
-        for (ratings.values()) |rating|
-            res = @max(res, rating);
-
-        // Not all legendaries match all criteria. Let's allow for legendaries that miss on
-        // criteria.
-        break :blk res - 1;
-    };
-
-    var res = SpeciesSet{};
-    for (ratings.keys(), ratings.values()) |species, rating| {
-        if (rating < rating_to_be_legendary)
-            continue;
-        _ = try res.put(arena, species, {});
-    }
-
-    return res;
-}
-
-test findLegendaries {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const legendaries = try findLegendaries(arena.allocator(), species, game);
-
-    try std.testing.expectEqualSlices(u16, &.{
-        144, 145, 146,
-        150, 151,
-    }, legendaries.keys());
-}
-
-fn speciesByType(arena: std.mem.Allocator, species_set: SpeciesSet, game: anytype) !SpeciesByType {
-    const pokemons = try game.pokemons();
-    var species_by_type = SpeciesByType{};
-    for (species_set.keys()) |species| {
-        const pokemon = try pokemons.at(species);
-
-        for (pokemon.types) |t| {
-            const entry = try species_by_type.getOrPutValue(arena, t, .{});
-            try entry.value_ptr.put(arena, species, {});
-        }
-    }
-
-    return species_by_type;
-}
-
-test speciesByType {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const species_by_type = try speciesByType(arena.allocator(), species, game);
-
-    try std.testing.expectEqual(@as(usize, 16), species_by_type.count());
-    try std.testing.expectEqualSlices(u16, &.{ // Normal
-        16,  17,  18,  19, 20, 21, 22, 35, 36, 39, 40, 52, 53, 83, 84, 85, 108, 113, 115, 128, 132,
-        133, 137, 143,
-    }, species_by_type.get(0).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Fighting
-        56, 57, 62, 66, 67, 68, 106, 107,
-    }, species_by_type.get(1).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying
-        6, 12, 16, 17, 18, 21, 22, 41, 42, 83, 84, 85, 123, 130, 142, 144, 145, 146, 149,
-    }, species_by_type.get(2).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison
-        1,  2,  3,  13, 14, 15, 23, 24, 29, 30,  31,  32, 33, 34, 41, 42, 43, 44, 45, 48, 49, 69,
-        70, 71, 72, 73, 88, 89, 92, 93, 94, 109, 110,
-    }, species_by_type.get(3).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Ground
-        27, 28, 31, 34, 50, 51, 74, 75, 76, 95, 104, 105, 111, 112,
-    }, species_by_type.get(4).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Rock
-        74, 75, 76, 95, 111, 112, 138, 139, 140, 141, 142,
-    }, species_by_type.get(5).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Bug
-        10, 11, 12, 13, 14, 15, 46, 47, 48, 49, 123, 127,
-    }, species_by_type.get(6).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Ghost
-        92, 93, 94,
-    }, species_by_type.get(7).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Steel
-        81, 82,
-    }, species_by_type.get(8).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Fire
-        4, 5, 6, 37, 38, 58, 59, 77, 78, 126, 136, 146,
-    }, species_by_type.get(9).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Water
-        7,   8,   9,   54,  55,  60,  61,  62,  72,  73,  79,  80,  86,  87, 90, 91, 98, 99, 116,
-        117, 118, 119, 120, 121, 129, 130, 131, 134, 138, 139, 140, 141,
-    }, species_by_type.get(10).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Grass
-        1, 2, 3, 43, 44, 45, 46, 47, 69, 70, 71, 102, 103, 114,
-    }, species_by_type.get(11).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Electric
-        25, 26, 81, 82, 100, 101, 125, 135, 145,
-    }, species_by_type.get(12).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Psychic
-        63, 64, 65, 79, 80, 96, 97, 102, 103, 121, 122, 124, 150, 151,
-    }, species_by_type.get(13).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Ice
-        87, 91, 124, 131, 144,
-    }, species_by_type.get(14).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Dragon
-        147, 148, 149,
-    }, species_by_type.get(15).?.keys());
-}
-
-fn speciesByDualType(
-    arena: std.mem.Allocator,
-    species_set: SpeciesSet,
-    game: anytype,
-) !SpeciesByDualType {
-    const pokemons = try game.pokemons();
-    var species_by_dual_type = SpeciesByDualType{};
-    for (species_set.keys()) |species| {
-        const pokemon = try pokemons.at(species);
-        const entry = try species_by_dual_type.getOrPutValue(arena, .{
-            @min(pokemon.types[0], pokemon.types[1]),
-            @max(pokemon.types[0], pokemon.types[1]),
-        }, .{});
-        try entry.value_ptr.put(arena, species, {});
-    }
-
-    return species_by_dual_type;
-}
-
-test speciesByDualType {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const species_by_dual_type = try speciesByDualType(arena.allocator(), species, game);
-
-    try std.testing.expectEqual(@as(usize, 34), species_by_dual_type.count());
-    try std.testing.expectEqualSlices(u16, &.{ // Normal, Normal
-        19, 20, 35, 36, 39, 40, 52, 53, 108, 113, 115, 128, 132, 133, 137, 143,
-    }, species_by_dual_type.get(.{ 0, 0 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Normal, Flying
-        16, 17, 18, 21, 22, 83, 84, 85,
-    }, species_by_dual_type.get(.{ 0, 2 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Fighting, Fighting
-        56, 57, 66, 67, 68, 106, 107,
-    }, species_by_dual_type.get(.{ 1, 1 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Fighting, Water
-        62,
-    }, species_by_dual_type.get(.{ 1, 10 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Poison
-        41, 42,
-    }, species_by_dual_type.get(.{ 2, 3 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Rock
-        142,
-    }, species_by_dual_type.get(.{ 2, 5 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Bug
-        12, 123,
-    }, species_by_dual_type.get(.{ 2, 6 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Fire
-        6, 146,
-    }, species_by_dual_type.get(.{ 2, 9 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Water
-        130,
-    }, species_by_dual_type.get(.{ 2, 10 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Electric
-        145,
-    }, species_by_dual_type.get(.{ 2, 12 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Ice
-        144,
-    }, species_by_dual_type.get(.{ 2, 14 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Flying, Dragon
-        149,
-    }, species_by_dual_type.get(.{ 2, 15 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Poison
-        23, 24, 29, 30, 32, 33, 88, 89, 109, 110,
-    }, species_by_dual_type.get(.{ 3, 3 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Ground
-        31, 34,
-    }, species_by_dual_type.get(.{ 3, 4 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Bug
-        13, 14, 15, 48, 49,
-    }, species_by_dual_type.get(.{ 3, 6 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Ghost
-        92, 93, 94,
-    }, species_by_dual_type.get(.{ 3, 7 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Water
-        72, 73,
-    }, species_by_dual_type.get(.{ 3, 10 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Poison, Grass
-        1, 2, 3, 43, 44, 45, 69, 70, 71,
-    }, species_by_dual_type.get(.{ 3, 11 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Ground, Ground
-        27, 28, 50, 51, 104, 105,
-    }, species_by_dual_type.get(.{ 4, 4 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Ground, Rock
-        74, 75, 76, 95, 111, 112,
-    }, species_by_dual_type.get(.{ 4, 5 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Rock, Water
-        138, 139, 140, 141,
-    }, species_by_dual_type.get(.{ 5, 10 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Bug, Bug
-        10, 11, 127,
-    }, species_by_dual_type.get(.{ 6, 6 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Bug, Grass
-        46, 47,
-    }, species_by_dual_type.get(.{ 6, 11 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Steel, Eletric
-        81, 82,
-    }, species_by_dual_type.get(.{ 8, 12 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Fire, Fire
-        4, 5, 37, 38, 58, 59, 77, 78, 126, 136,
-    }, species_by_dual_type.get(.{ 9, 9 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Water, Water
-        7, 8, 9, 54, 55, 60, 61, 86, 90, 98, 99, 116, 117, 118, 119, 120, 129, 134,
-    }, species_by_dual_type.get(.{ 10, 10 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Water, Psychic
-        79, 80, 121,
-    }, species_by_dual_type.get(.{ 10, 13 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Water, Ice
-        87, 91, 131,
-    }, species_by_dual_type.get(.{ 10, 14 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Grass, Grass
-        114,
-    }, species_by_dual_type.get(.{ 11, 11 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Grass, Psychic
-        102, 103,
-    }, species_by_dual_type.get(.{ 11, 13 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Electric, Electric
-        25, 26, 100, 101, 125, 135,
-    }, species_by_dual_type.get(.{ 12, 12 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Psychic, Psychic
-        63, 64, 65, 96, 97, 122, 150, 151,
-    }, species_by_dual_type.get(.{ 13, 13 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Psychic, Ice
-        124,
-    }, species_by_dual_type.get(.{ 13, 14 }).?.keys());
-    try std.testing.expectEqualSlices(u16, &.{ // Dragon, Dragon
-        147, 148,
-    }, species_by_dual_type.get(.{ 15, 15 }).?.keys());
-}
-
-fn speciesByAbility(
-    arena: std.mem.Allocator,
-    species_set: SpeciesSet,
-    game: anytype,
-) !SpeciesByAbility {
-    const pokemons = try game.pokemons();
-    var species_by_ability = SpeciesByAbility{};
-    for (species_set.keys()) |species| {
-        const pokemon = try pokemons.at(species);
-
-        for (pokemon.abilities) |t| {
-            const entry = try species_by_ability.getOrPutValue(arena, t, .{});
-            try entry.value_ptr.put(arena, species, {});
-        }
-    }
-
-    return species_by_ability;
-}
-
-test speciesByAbility {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
-    const species = try validSpecies(arena.allocator(), game);
-    const species_by_ability = try speciesByAbility(arena.allocator(), species, game);
-    _ = species_by_ability; // TODO
-
-    // try std.testing.expectEqualSlices(u16, &.{
-    //     144, 145, 146,
-    //     150, 151,
-    // }, legendaries.keys());
 }
 
 pub const RandomizeTrainerOptions = struct {
@@ -569,7 +84,8 @@ pub fn randomizeTrainers(
     options: RandomizeTrainerOptions,
     game: anytype,
 ) !void {
-    if (metronome.species.count() == 0)
+    const species = try metronome.cache.species(game);
+    if (species.count() == 0)
         return;
 
     const parties = try game.trainerParties();
@@ -981,20 +497,20 @@ fn randomizeParty(
     const themes = TrainerTheme{
         .types = switch (options.types) {
             .themed => blk: {
-                const types = metronome.species_by.type.keys();
-                const t = metronome.randomItem(types).?.*;
+                const species_by = try metronome.cache.speciesByType(game);
+                const t = metronome.randomItem(species_by.keys()).?.*;
                 break :blk [_]u8{ t, t };
             },
             .dual_themed => blk: {
-                const types = metronome.species_by.dual_type.keys();
-                break :blk metronome.randomItem(types).?.*;
+                const species_by = try metronome.cache.speciesByDualType(game);
+                break :blk metronome.randomItem(species_by.keys()).?.*;
             },
             else => null,
         },
         .ability = switch (options.abilities) {
             .themed => blk: {
-                const abilities = metronome.species_by.ability.keys();
-                break :blk metronome.randomItem(abilities).?.*;
+                const species_by = try metronome.cache.speciesByAbility(game);
+                break :blk metronome.randomItem(species_by.keys()).?.*;
             },
             else => null,
         },
@@ -1097,37 +613,47 @@ fn randomizePartyMember(
     const pokemons = try game.pokemons();
     const pick_from_type = switch (options.types) {
         .same => blk: {
+            const species_by = try metronome.cache.speciesByType(game);
             const pokemon = pokemons.at(member.base.species) catch break :blk metronome.species;
-            break :blk metronome.species_by.type.get(pokemon.types[0]).?;
+            break :blk species_by.get(pokemon.types[0]).?;
         },
-        .themed => metronome.species_by.type.get(themes.types.?[0]).?,
-        .dual_themed => metronome.species_by.dual_type.get(themes.types.?).?,
-        .random => Set{},
+        .themed => blk: {
+            const species_by = try metronome.cache.speciesByType(game);
+            break :blk species_by.get(themes.types.?[0]).?;
+        },
+        .dual_themed => blk: {
+            const species_by = try metronome.cache.speciesByDualType(game);
+            break :blk species_by.get(themes.types.?).?;
+        },
+        .random => Cache.SpeciesSet{},
     };
 
     var new_ability: ?u16 = null;
     const pick_from_ability = switch (options.abilities) {
         .same => blk: {
+            const species = try metronome.cache.species(game);
             const pokemon = pokemons.at(member.base.species) catch break :blk metronome.species;
             const ability = pokemon.abilities[member.ability()];
             if (ability == 0)
-                break :blk metronome.species;
+                break :blk species.*;
 
+            const species_by = try metronome.cache.speciesByAbility(game);
             new_ability = ability;
-            break :blk metronome.species_by.ability.get(ability).?;
+            break :blk species_by.get(ability).?;
         },
         .themed => blk: {
+            const species_by = try metronome.cache.speciesByAbility(game);
             new_ability = themes.ability;
-            break :blk metronome.species_by.ability.get(themes.ability.?).?;
+            break :blk species_by.get(themes.ability.?).?;
         },
-        .random => Set{},
+        .random => Cache.SpeciesSet{},
     };
 
     if (options.abilities != .random and options.types != .random) {
         // The intersection between the type_set and ability_set will give
         // us all pokémons that have a certain type+ability pair. This is
         // the set we will pick from.
-        var intersection = metronome.intersection.promote(metronome.arena.allocator());
+        var intersection = metronome.intersection.promote(metronome.arena);
         intersection.clearRetainingCapacity();
 
         try util.set.intersectInline(&intersection, pick_from_ability, pick_from_type);
@@ -1136,22 +662,19 @@ fn randomizePartyMember(
 
     // Pick the first set that has items in it.
     var pick_from = if (metronome.intersection.count() != 0)
-        metronome.intersection
+        &metronome.intersection
     else if (pick_from_ability.count() != 0)
-        pick_from_ability
+        &pick_from_ability
     else if (pick_from_type.count() != 0)
-        pick_from_type
+        &pick_from_type
     else
-        metronome.species;
+        (try metronome.cache.species(game));
 
     if (options.avoid_same) {
         // Now, we have to exclude party members already in the party. To do this we construct a
         // new set from `pick_from` with `other_party_members` excluded.
         metronome.pick_from_excluded.clearRetainingCapacity();
-        try metronome.pick_from_excluded.ensureTotalCapacity(
-            metronome.arena.allocator(),
-            pick_from.count(),
-        );
+        try metronome.pick_from_excluded.ensureTotalCapacity(metronome.arena, pick_from.count());
 
         for (pick_from.keys()) |picked|
             metronome.pick_from_excluded.putAssumeCapacity(picked, {});
@@ -1161,7 +684,7 @@ fn randomizePartyMember(
         // If we end up with 0 things to pick from, then we cannot avoid same. So only use our
         // newly created set, if it actually has things to pick from.
         if (metronome.pick_from_excluded.count() != 0)
-            pick_from = metronome.pick_from_excluded;
+            pick_from = &metronome.pick_from_excluded;
     }
 
     // When we have picked a new species for our Pokémon we also need
@@ -1220,10 +743,10 @@ fn randomizeStarters(
     game: anytype,
 ) !void {
     const pick_from_base = switch (options.starters) {
-        .random => metronome.species,
-        .random_lowest_2_stage_evolution => metronome.lowest_evolutions.stage_2,
-        .random_lowest_3_stage_evolution => metronome.lowest_evolutions.stage_3,
-        .random_lowest_evolution => metronome.lowest_evolutions.all,
+        .random => try metronome.cache.species(game),
+        .random_lowest_2_stage_evolution => &(try metronome.cache.lowestEvolutions(game)).stage_2,
+        .random_lowest_3_stage_evolution => &(try metronome.cache.lowestEvolutions(game)).stage_3,
+        .random_lowest_evolution => &(try metronome.cache.lowestEvolutions(game)).all,
         .unchanged => return,
     };
     if (pick_from_base.count() == 0)
@@ -1233,7 +756,7 @@ fn randomizeStarters(
     defer pick_from.deinit(metronome.gpa);
 
     for (game.starters()) |*starter| {
-        var pick_from_non_empty = pick_from;
+        var pick_from_non_empty: *const Cache.SpeciesSet = &pick_from;
         if (pick_from_non_empty.count() == 0)
             pick_from_non_empty = pick_from_base;
 
@@ -1256,14 +779,14 @@ test randomizeStarters {
         .starters = .random_lowest_2_stage_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
-        res.starters = &.{ 86, 35, 133 };
+        res.starters = &.{ 52, 56, 54 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_3_stage_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
-        res.starters = &.{ 13, 16, 13 };
+        res.starters = &.{ 16, 29, 16 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
@@ -1271,14 +794,14 @@ test randomizeStarters {
         .avoid_same = true,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
-        res.starters = &.{ 13, 74, 92 };
+        res.starters = &.{ 16, 147, 92 };
         break :blk res;
     });
     try testCommand(0, RandomizeStartersOptions{
         .starters = .random_lowest_evolution,
     }, randomizeStarters, blk: {
         var res = core.dummy.default;
-        res.starters = &.{ 84, 133, 29 };
+        res.starters = &.{ 60, 74, 69 };
         break :blk res;
     });
 }
@@ -1409,21 +932,22 @@ fn randomizeWildPokemon(
     wild_pokemon: anytype,
 ) !void {
     const pokemons = try game.pokemons();
+    const species = try metronome.cache.species(game);
     wild_pokemon.setSpecies(switch (options.stats) {
         .similar => if (pokemons.at(wild_pokemon.species())) |pokemon|
             try metronome.randomSpeciesWithSimilarTotalStats(
                 game,
-                metronome.species,
+                species,
                 pokemon.stats.total(),
             )
         else |_|
-            metronome.randomItem(metronome.species.keys()).?.*,
+            metronome.randomItem(species.keys()).?.*,
         .follow_level => try metronome.randomSpeciesWithStatsFollowingLevel(
             game,
-            metronome.species,
+            species,
             wild_pokemon.level(),
         ),
-        .random => metronome.randomItem(metronome.species.keys()).?.*,
+        .random => metronome.randomItem(species.keys()).?.*,
     });
 }
 
@@ -1436,7 +960,7 @@ fn randomItem(metronome: Metronome, items: anytype) ?@TypeOf(&items[0]) {
 fn randomSpeciesWithSimilarTotalStats(
     metronome: *Metronome,
     game: anytype,
-    pick_from: SpeciesSet,
+    pick_from: *const Cache.SpeciesSet,
     total_stats: u16,
 ) !u16 {
     const pokemons = try game.pokemons();
@@ -1449,7 +973,7 @@ fn randomSpeciesWithSimilarTotalStats(
         min -= range;
         max += range;
     }) {
-        try metronome.similar.ensureUnusedCapacity(metronome.arena.allocator(), pick_from.count());
+        try metronome.similar.ensureUnusedCapacity(metronome.arena, pick_from.count());
         for (pick_from.keys()) |s| {
             const p = pokemons.at(s) catch continue;
             const total: isize = @intCast(p.stats.total());
@@ -1464,13 +988,14 @@ fn randomSpeciesWithSimilarTotalStats(
 fn randomSpeciesWithStatsFollowingLevel(
     metronome: *Metronome,
     game: anytype,
-    pick_from: SpeciesSet,
+    pick_from: *const Cache.SpeciesSet,
     level: u16,
 ) !u16 {
+    const stats = try metronome.cache.totalStatsMinMax(game);
     return metronome.randomSpeciesWithSimilarTotalStats(
         game,
         pick_from,
-        totalStatsLevelScaling(metronome.stats.min, metronome.stats.max, level),
+        totalStatsLevelScaling(stats.min, stats.max, level),
     );
 }
 
@@ -1582,10 +1107,8 @@ fn testCommand(
     const actual_game = try core.dummy.Game.init(arena, core.dummy.default);
     const expected_game = try core.dummy.Game.init(arena, expected);
 
-    var metronome = try init(std.testing.allocator, random.random(), actual_game);
-    defer metronome.deinit();
-
-    try function(&metronome, options, actual_game);
+    var metronome = try init(std.testing.allocator, arena, random.random());
+    try function(&metronome, options, &actual_game);
 
     // Avoid large error trace by not using `catch` or `try` here
     const is_err = if (std.testing.expectEqualDeep(expected_game.m, actual_game.m)) false else |_| true;
@@ -1599,23 +1122,16 @@ fn testCommand(
     }
 }
 
-fn MinMax(comptime T: type) type {
-    return struct { min: T, max: T };
-}
-
-const Set = std.AutoArrayHashMapUnmanaged(u16, void);
-const SpeciesByAbility = std.AutoArrayHashMapUnmanaged(u16, Set);
-const SpeciesByDualType = std.AutoArrayHashMapUnmanaged([2]u8, Set);
-const SpeciesByType = std.AutoArrayHashMapUnmanaged(u8, Set);
-const SpeciesSet = std.AutoArrayHashMapUnmanaged(u16, void);
-const SpeciesToSpeciesMap = std.AutoArrayHashMapUnmanaged(u16, void);
-
 const Metronome = @This();
 
 test {
+    _ = Cache;
+
     _ = core;
     _ = util;
 }
+
+const Cache = @import("Metronome/Cache.zig");
 
 const core = @import("core.zig");
 const util = @import("util.zig");
