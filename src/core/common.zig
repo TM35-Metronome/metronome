@@ -232,6 +232,11 @@ pub const TypeEffectiveness = extern struct {
     multiplier: u8,
 };
 
+pub const ItemBattleEffect = enum(u8) {
+    none = 0,
+    _,
+};
+
 pub fn IndexableSlice(comptime T: type) type {
     return struct {
         slice: []T,

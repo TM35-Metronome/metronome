@@ -338,7 +338,7 @@ pub const Pocket = enum(u4) {
 // https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
 pub const Item = extern struct {
     price: u16,
-    battle_effect: u8,
+    battle_effect: common.ItemBattleEffect,
     gain: u8,
     berry: u8,
     fling_effect: u8,
@@ -844,8 +844,10 @@ pub const WildArea = struct {
 };
 
 pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
+pub const Items = rom.nds.fs.Indexable(Item);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
+
 pub const Parties = common.IndexableSlice(Party);
 
 pub const Game = struct {
@@ -926,7 +928,6 @@ pub const Game = struct {
         starters: [3]u16,
         moves: []align(1) Move,
         trainers: []align(1) Trainer,
-        items: []align(1) Item,
         tms1: []align(1) u16,
         hms: []align(1) u16,
         tms2: []align(1) u16,
@@ -1091,7 +1092,6 @@ pub const Game = struct {
                 .starters = starts,
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .trainers = try (try file_system.openNarc(rom.nds.fs.root, info.trainers)).toSlice(1, Trainer),
-                .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
                 .map_headers = std.mem.bytesAsSlice(MapHeader, map_header_bytes[0..]),
                 .tms1 = hm_tms[0..92],
                 .hms = hm_tms[92..98],
@@ -1136,6 +1136,11 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.owned.trainer_parties };
+    }
+
+    pub fn items(game: Game) !Items {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.items) };
     }
 
     pub fn wildAreas(game: Game) !WildAreas {

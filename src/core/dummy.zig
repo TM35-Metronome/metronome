@@ -7,6 +7,7 @@ pub const Game = struct {
         pokemons: []Pokemon,
         trainers: []Trainer,
         trainer_parties: []Party,
+        items: []Item,
         wild_areas: []WildArea,
     },
 
@@ -24,6 +25,7 @@ pub const Game = struct {
                 .pokemons = try arena.dupe(Pokemon, values.pokemons),
                 .trainers = try arena.dupe(Trainer, values.trainers),
                 .trainer_parties = try arena.dupe(Party, values.trainer_parties),
+                .items = try arena.dupe(Item, values.items),
                 .wild_areas = try arena.dupe(WildArea, values.wild_areas),
             },
         };
@@ -63,6 +65,10 @@ pub const Game = struct {
         return .{ .slice = game.m.trainer_parties };
     }
 
+    pub fn items(game: Game) !Items {
+        return .{ .slice = game.m.items };
+    }
+
     pub fn wildAreas(game: Game) !WildAreas {
         return .{ .slice = game.m.wild_areas };
     }
@@ -94,6 +100,7 @@ pub const Game = struct {
         pokemons: []const Pokemon,
         trainers: []const Trainer,
         trainer_parties: []const Party,
+        items: []const Item,
         wild_areas: []const WildArea,
     };
 };
@@ -158,8 +165,43 @@ pub const Party = struct {
     }
 };
 
-pub const WildReplacement = struct {
-    species: u16,
+pub const Item = struct {
+    price: u16,
+    battle_effect: common.ItemBattleEffect,
+
+    // gen3
+    // name: [14]u8,
+    // id: u16,
+    // battle_effect_param: u8,
+    // description: Ptr([*:0xff]u8),
+    // importance: u8,
+    // unknown: u8,
+    // pocket: Pocket,
+    // type: u8,
+    // field_use_func: Ptr(*u8),
+    // battle_usage: u32,
+    // battle_use_func: Ptr(*u8),
+    // secondary_id: u32,
+
+    // gen4
+    // gain: u8,
+    // berry: u8,
+    // fling_effect: u8,
+    // fling_power: u8,
+    // natural_gift_power: u8,
+    // flag: u8,
+    // _pocket: u8,
+    // unknown: [26]u8,
+
+    // gen5
+    // gain: u8,
+    // berry: u8,
+    // fling_effect: u8,
+    // fling_power: u8,
+    // natural_gift_power: u8,
+    // flag: u8,
+    // _pocket: u8,
+    // unknown: [26]u8,
 };
 
 pub const WildPokemon = struct {
@@ -257,64 +299,11 @@ const StaticPokemon = struct {
     }
 };
 
+pub const Items = common.IndexableSlice(Item);
+pub const Parties = common.IndexableSlice(Party);
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
-pub const Parties = common.IndexableSlice(Party);
 pub const WildAreas = common.IndexableSlice(WildArea);
-
-pub fn doTest(options: anytype, function: anytype, from: Game.Init, to: Game.Init) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    const from_game = try Game.init(arena, from);
-    const to_game = try Game.init(arena, to);
-    try function(std.testing.allocator, options, from_game);
-
-    // Avoid large error trace by not using `catch` or `try` here
-    const is_err = if (std.testing.expectEqualDeep(to_game.m, from_game.m)) false else |_| true;
-    if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{from_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{to_game});
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
-        std.testing.expectEqualStrings(to_str, from_str) catch {};
-        return error.TestExpectedEqual;
-    }
-}
-
-pub fn doFuzz(comptime Options: type, comptime function: anytype) !void {
-    return std.testing.fuzz({}, struct {
-        fn fuzzOne(_: void, input: []const u8) !void {
-            var options: Options = .{};
-            const options_bytes = std.mem.asBytes(&options);
-            const len = @min(options_bytes.len, input.len);
-            @memcpy(options_bytes[0..len], input[0..len]);
-
-            // We might get enums that do not exhaust all its bits. Handle this by finding each
-            // enum field, take the integer value and converting it to a valid tag for that enum
-            inline for (std.meta.fields(Options)) |field| {
-                const field_info = @typeInfo(field.type);
-                if (field_info != .@"enum")
-                    continue;
-
-                const tags = std.meta.tags(field.type);
-                const field_value = @intFromEnum(@field(options, field.name));
-                @field(options, field.name) = tags[field_value % tags.len];
-            }
-
-            var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-            const arena = arena_state.allocator();
-            defer arena_state.deinit();
-
-            const first = try Game.init(arena, default);
-            const second = try Game.init(arena, default);
-            try function(std.testing.allocator, options, first);
-            try function(std.testing.allocator, options, second);
-            try std.testing.expectEqualDeep(first.m, second.m);
-        }
-    }.fuzzOne, .{});
-}
 
 pub const default = Game.Init{
     .starters = &.{ 1, 4, 7 },
@@ -3114,6 +3103,58 @@ pub const default = Game.Init{
             .{ .base = .{ .level = 63, .species = 59 } },
             .{ .base = .{ .level = 65, .species = 3 } },
         }),
+    },
+    .items = &.{
+        .{
+            // Null
+            .price = 0,
+            .battle_effect = .none,
+        },
+        .{
+            // Potion
+            .price = 300,
+            .battle_effect = .none,
+        },
+        .{
+            // Super Potion
+            .price = 700,
+            .battle_effect = .none,
+        },
+        .{
+            // Hyper Potion
+            .price = 1500,
+            .battle_effect = .none,
+        },
+        .{
+            // Choice Band
+            .price = 100,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
+        .{
+            // Choice Scarf
+            .price = 200,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
+        .{
+            // Choice Specs
+            .price = 200,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
+        .{
+            // Cheri Berry
+            .price = 20,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
+        .{
+            // Chesto Berry
+            .price = 20,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
+        .{
+            // Pecha Berry
+            .price = 20,
+            .battle_effect = @enumFromInt(1), // Dummy effect
+        },
     },
     .wild_areas = &.{
         .init(&.{

@@ -242,7 +242,7 @@ pub const Item = extern struct {
     name: [14]u8,
     id: u16,
     price: u16,
-    battle_effect: u8,
+    battle_effect: common.ItemBattleEffect,
     battle_effect_param: u8,
     description: Ptr([*:0xff]u8),
     importance: u8,
@@ -701,9 +701,10 @@ pub const Evolutions = struct {
     }
 };
 
+pub const Items = common.IndexableSlice(Item);
+pub const Parties = common.IndexableSlice(Party);
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
-pub const Parties = common.IndexableSlice(Party);
 
 pub const Game = struct {
     allocator: std.mem.Allocator,
@@ -727,7 +728,6 @@ pub const Game = struct {
     level_up_learnset_pointers: []Ptr([*]LevelUpMove),
     hms: []u16,
     tms: []u16,
-    items: []Item,
     pokedex: Pokedex,
     species_to_national_dex: []u16,
     map_headers: []MapHeader,
@@ -864,7 +864,6 @@ pub const Game = struct {
             .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gba_rom),
             .hms = info.hms.slice(gba_rom),
             .tms = info.tms.slice(gba_rom),
-            .items = info.items.slice(gba_rom),
             .pokedex = switch (info.version) {
                 .emerald => .{ .emerald = info.pokedex.emerald.slice(gba_rom) },
                 .ruby,
@@ -913,6 +912,10 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.trainer_parties };
+    }
+
+    pub fn items(game: Game) !Items {
+        return .{ .slice = game.info.items.slice(game.data) };
     }
 
     pub fn wildAreas(game: Game) !WildAreas {

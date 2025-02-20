@@ -23,7 +23,7 @@ pub const RandomizeTrainerOptions = struct {
     party_size_max: u3 = 6,
     party_size_min: u3 = 1,
     // moves: Move = .unchanged, TODO
-    // held_items: HeldItem = .unchanged, TODO
+    held_items: HeldItem = .unchanged,
     abilities: AbilityTheme = .random,
     types: TypeTheme = .random,
     stats: Stats = .random,
@@ -485,6 +485,64 @@ test randomizeTrainers {
         };
         break :blk res;
     });
+
+    try testCommand(0, RandomizeTrainerOptions{
+        .held_items = .random,
+    }, randomizeTrainers, blk: {
+        var res = core.dummy.default;
+        res.trainer_parties = &.{
+            .init(.item, &.{
+                .{ .base = .{ .level = 5, .species = 1 }, .item = 5 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 9, .species = 16 }, .item = 6 },
+                .{ .base = .{ .level = 8, .species = 1 }, .item = 6 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 18, .species = 17 }, .item = 4 },
+                .{ .base = .{ .level = 15, .species = 63 }, .item = 6 },
+                .{ .base = .{ .level = 15, .species = 19 }, .item = 4 },
+                .{ .base = .{ .level = 17, .species = 1 }, .item = 9 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 19, .species = 17 }, .item = 9 },
+                .{ .base = .{ .level = 16, .species = 20 }, .item = 5 },
+                .{ .base = .{ .level = 18, .species = 64 }, .item = 4 },
+                .{ .base = .{ .level = 20, .species = 2 }, .item = 5 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 25, .species = 17 }, .item = 4 },
+                .{ .base = .{ .level = 23, .species = 130 }, .item = 4 },
+                .{ .base = .{ .level = 22, .species = 58 }, .item = 4 },
+                .{ .base = .{ .level = 20, .species = 64 }, .item = 4 },
+                .{ .base = .{ .level = 25, .species = 2 }, .item = 6 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 37, .species = 18 }, .item = 7 },
+                .{ .base = .{ .level = 38, .species = 130 }, .item = 4 },
+                .{ .base = .{ .level = 35, .species = 58 }, .item = 5 },
+                .{ .base = .{ .level = 35, .species = 65 }, .item = 6 },
+                .{ .base = .{ .level = 40, .species = 3 }, .item = 5 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 47, .species = 18 }, .item = 4 },
+                .{ .base = .{ .level = 45, .species = 111 }, .item = 4 },
+                .{ .base = .{ .level = 45, .species = 130 }, .item = 5 },
+                .{ .base = .{ .level = 47, .species = 58 }, .item = 6 },
+                .{ .base = .{ .level = 50, .species = 65 }, .item = 6 },
+                .{ .base = .{ .level = 53, .species = 3 }, .item = 4 },
+            }),
+            .init(.item, &.{
+                .{ .base = .{ .level = 61, .species = 18 }, .item = 7 },
+                .{ .base = .{ .level = 59, .species = 65 }, .item = 9 },
+                .{ .base = .{ .level = 61, .species = 112 }, .item = 4 },
+                .{ .base = .{ .level = 61, .species = 130 }, .item = 5 },
+                .{ .base = .{ .level = 63, .species = 59 }, .item = 6 },
+                .{ .base = .{ .level = 65, .species = 3 }, .item = 6 },
+            }),
+        };
+        break :blk res;
+    });
 }
 
 fn randomizeParty(
@@ -515,21 +573,6 @@ fn randomizeParty(
         },
     };
 
-    // const wants_moves = switch (options.moves) { TODO
-    //     .unchanged => party.type.haveMoves(),
-    //     .none => false,
-    //     .best,
-    //     .best_for_level,
-    //     .random_learnable,
-    //     .random,
-    //     => true,
-    // };
-    // const wants_items = switch (options.held_items) { TODO
-    //     .unchanged => party.type.haveItem(),
-    //     .random => true,
-    //     .none => false,
-    // };
-
     const average_level = averagePartyLevel(party);
     const old_party_size = party.size;
     party.size = switch (options.party_size) {
@@ -549,6 +592,25 @@ fn randomizeParty(
             average_level,
         ),
         .minimum => options.party_size_min,
+    };
+
+    // const wants_moves = switch (options.moves) { TODO
+    //     .unchanged => party.type.haveMoves(),
+    //     .none => false,
+    //     .best,
+    //     .best_for_level,
+    //     .random_learnable,
+    //     .random,
+    //     => true,
+    // };
+    const wants_items = switch (options.held_items) {
+        .unchanged => party.type.haveItem(),
+        .random => true,
+        .none => false,
+    };
+    party.type = switch (wants_items) {
+        true => .item,
+        false => .none,
     };
     // party.type = switch (wants_moves) { TODO
     //     true => switch (wants_items) {
@@ -581,12 +643,24 @@ fn randomizeParty(
             ),
             .unchanged => {},
         }
-        // TODO:
-        // switch (options.held_items) {
-        //     .unchanged => {},
-        //     .none0, .none1 => member.item = 0,
-        //     .random => {}, // TODO
-        // }
+        switch (options.held_items) {
+            .unchanged => {},
+            .none => member.item = 0,
+            .random => blk: {
+                const held_items = try metronome.cache.heldItems(game);
+                member.item = (metronome.randomItem(held_items.items) orelse break :blk).*;
+            },
+        }
+
+        // .items => |items| switch (items.value) {
+        //     .battle_effect => |effect| {
+        //         if (effect != 0)
+        //             _ = try program.held_items.put(allocator, items.index, {});
+        //         return error.DidNotConsumeData;
+        //     },
+        //     else => return error.DidNotConsumeData,
+        // },
+
         // switch (options.moves) {
         //     .none0, .none1, .none2, .unchanged => {},
         //     .best, .best_for_level => {},
@@ -746,7 +820,7 @@ fn randomizeStarters(
         .random_lowest_evolution => &(try metronome.cache.lowestEvolutions(game)).all,
     };
     if (pick_from_base.count() == 0)
-        return error.NoStarterToPick;
+        return;
 
     var pick_from = try pick_from_base.clone(metronome.gpa);
     defer pick_from.deinit(metronome.gpa);
@@ -1654,6 +1728,7 @@ pub const Commands = struct {
             .options = &.{
                 .{ .id = "party_size_max", .name = "Maximum party size", .description = "TODO: Description" },
                 .{ .id = "party_size_min", .name = "Minimum party size", .description = "TODO: Description" },
+                .{ .id = "held_items", .name = "Held items of party members", .description = "TODO: Description" },
                 .{ .id = "abilities", .name = "Abilities of party members", .description = "TODO: Description" },
                 .{ .id = "types", .name = "Types of party members", .description = "TODO: Description" },
                 .{ .id = "stats", .name = "Stats of party members", .description = "TODO: Description" },
@@ -1687,7 +1762,7 @@ pub const Commands = struct {
 
             for (command_options, description.options) |option_field, option| {
                 if (!std.mem.eql(u8, option_field.name, option.id))
-                    @compileError("Expected " ++ command_field.name ++ " found " ++ description.id);
+                    @compileError("Expected " ++ option_field.name ++ " found " ++ option.id);
             }
         }
     }

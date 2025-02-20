@@ -1,7 +1,8 @@
 //! It is quite useful to structure the data in a pokemon game in certain ways, like getting a map
 //! of type -> species and others. The `Cache` provides methods for getting the data of the game
 //! structured in a certain way. This data is cached so it does not need to be recomputed every
-//! time it is needed.
+//! time it is needed. The cache is also lazy. Only data requested from the cache is computed.
+//! This avoids unneeded work.
 //!
 //! It is the responsibility of the owner of the cache to invalidate entries when they modify the
 //! game in a way that makes certain entries invalid. For example, if you change the types pokemon
@@ -39,6 +40,9 @@ species_by_ability_valid: bool = false,
 
 lowest_evolutions: LowestEvolutions = .{},
 lowest_evolutions_valid: bool = false,
+
+held_items: ItemIndexList = .{},
+held_items_valid: bool = false,
 
 // Fields like `species_by_type` is a map of sets. When such entries needs to be recomputed, the
 // old sets will be put into this list so they capacity can be reused.
@@ -633,6 +637,7 @@ pub const LowestEvolutions = struct {
 };
 
 pub fn lowestEvolutions(cache: *Cache, game: anytype) !*const LowestEvolutions {
+    cache.assertCorrectGame(game);
     if (cache.lowest_evolutions_valid)
         return &cache.lowest_evolutions;
 
@@ -725,10 +730,54 @@ test countEvolutions {
     try std.testing.expectEqual(@as(usize, 0), countEvolutions(150, 150, &game));
 }
 
+pub fn heldItems(cache: *Cache, game: anytype) !*const ItemIndexList {
+    cache.assertCorrectGame(game);
+    if (cache.held_items_valid)
+        return &cache.held_items;
+
+    const items = try game.items();
+    cache.held_items.shrinkRetainingCapacity(0);
+
+    var i: usize = 0;
+    while (i < items.len()) : (i += 1) {
+        const item = items.at(i) catch continue;
+        if (item.battle_effect == .none)
+            continue;
+
+        try cache.held_items.append(cache.arena, @intCast(i));
+    }
+
+    cache.held_items_valid = true;
+    return &cache.held_items;
+}
+
+test heldItems {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var cache = Cache{ .arena = arena.allocator() };
+    const game = try core.dummy.Game.init(arena.allocator(), core.dummy.default);
+
+    for ([_][2]bool{
+        .{ false, false },
+        .{ true, true },
+        .{ true, false },
+    }) |cache_validation| {
+        try std.testing.expectEqual(cache_validation[0], cache.held_items_valid);
+        cache.held_items_valid = cache_validation[1];
+
+        const held_items = try cache.heldItems(&game);
+        try std.testing.expectEqualSlices(u16, &.{
+            4, 5, 6, 7, 8, 9,
+        }, held_items.items);
+    }
+}
+
 pub fn MinMax(comptime T: type) type {
     return struct { min: T, max: T };
 }
 
+pub const ItemIndexList = std.ArrayListUnmanaged(u16);
 pub const SpeciesByAbility = std.AutoArrayHashMapUnmanaged(u16, SpeciesSet);
 pub const SpeciesByDualType = std.AutoArrayHashMapUnmanaged([2]u8, SpeciesSet);
 pub const SpeciesByType = std.AutoArrayHashMapUnmanaged(u8, SpeciesSet);

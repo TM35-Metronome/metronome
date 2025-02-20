@@ -363,7 +363,7 @@ pub const Pocket = enum(u4) {
 // https://github.com/projectpokemon/PPRE/blob/master/pokemon/itemtool/itemdata.py
 pub const Item = extern struct {
     price: u16,
-    battle_effect: u8,
+    battle_effect: common.ItemBattleEffect,
     gain: u8,
     berry: u8,
     fling_effect: u8,
@@ -709,8 +709,10 @@ pub const WildArea = union(Version) {
 };
 
 pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
+pub const Items = rom.nds.fs.Indexable(Item);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
+
 pub const Parties = common.IndexableSlice(Party);
 
 pub const Game = struct {
@@ -770,7 +772,6 @@ pub const Game = struct {
             dppt: []align(1) DpptWildPokemons,
             hgss: []align(1) HgssWildPokemons,
         },
-        items: []align(1) Item,
         tms: []align(1) u16,
         hms: []align(1) u16,
 
@@ -917,7 +918,6 @@ pub const Game = struct {
                     starts[2].*,
                 },
                 .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
-                .items = try (try file_system.openNarc(rom.nds.fs.root, info.itemdata)).toSlice(0, Item),
                 .wild_pokemons = blk: {
                     const narc = try file_system.openNarc(rom.nds.fs.root, info.wild_pokemons);
                     switch (info.version) {
@@ -979,6 +979,11 @@ pub const Game = struct {
 
     pub fn trainerParties(game: Game) !Parties {
         return .{ .slice = game.owned.trainer_parties };
+    }
+
+    pub fn items(game: Game) !Items {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.items) };
     }
 
     pub fn wildAreas(game: Game) !WildAreas {
