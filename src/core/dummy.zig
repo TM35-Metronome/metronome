@@ -7,6 +7,7 @@ pub const Game = struct {
         pokemons: []Pokemon,
         trainers: []Trainer,
         trainer_parties: []Party,
+        moves: []Move,
         items: []Item,
         wild_areas: []WildArea,
     },
@@ -25,6 +26,7 @@ pub const Game = struct {
                 .pokemons = try arena.dupe(Pokemon, values.pokemons),
                 .trainers = try arena.dupe(Trainer, values.trainers),
                 .trainer_parties = try arena.dupe(Party, values.trainer_parties),
+                .moves = try arena.dupe(Move, values.moves),
                 .items = try arena.dupe(Item, values.items),
                 .wild_areas = try arena.dupe(WildArea, values.wild_areas),
             },
@@ -55,6 +57,14 @@ pub const Game = struct {
 
     pub fn evolutions(game: Game) !Evolutions {
         return .{ .pokemons = game.m.pokemons };
+    }
+
+    pub fn levelUpMoves(game: Game) !LevelUpMoves {
+        return .{ .pokemons = game.m.pokemons };
+    }
+
+    pub fn moves(game: Game) !Moves {
+        return .{ .slice = game.m.moves };
     }
 
     pub fn trainers(game: Game) !Trainers {
@@ -100,6 +110,7 @@ pub const Game = struct {
         pokemons: []const Pokemon,
         trainers: []const Trainer,
         trainer_parties: []const Party,
+        moves: []const Move,
         items: []const Item,
         wild_areas: []const WildArea,
     };
@@ -115,17 +126,22 @@ pub const Pokemon = struct {
     growth_rate: common.GrowthRate,
     egg_groups: [2]common.EggGroup,
     evolutions: [3]Evolution,
+    level_up_moves: [2]LevelUpMove,
 
-    pub fn init(values: struct {
-        stats: common.Stats,
-        types: [2]u8,
-        abilities: [3]u8,
-        gender_ratio: u8,
-        catch_rate: u8,
-        growth_rate: common.GrowthRate,
-        egg_groups: [2]common.EggGroup,
-        evolutions: []const Evolution,
-    }) Pokemon {
+    pub fn init(
+        values: struct {
+            stats: common.Stats,
+            types: [2]u8,
+            abilities: [3]u8,
+            gender_ratio: u8,
+            catch_rate: u8,
+            growth_rate: common.GrowthRate,
+            egg_groups: [2]common.EggGroup,
+            evolutions: []const Evolution,
+            // TODO: Remove default init
+            level_up_moves: []const LevelUpMove = &.{},
+        },
+    ) Pokemon {
         var res = Pokemon{
             .stats = values.stats,
             .types = values.types,
@@ -136,8 +152,10 @@ pub const Pokemon = struct {
             .growth_rate = values.growth_rate,
             .egg_groups = values.egg_groups,
             .evolutions = @splat(.{}),
+            .level_up_moves = @splat(.{}),
         };
         @memcpy(res.evolutions[0..values.evolutions.len], values.evolutions);
+        @memcpy(res.level_up_moves[0..values.level_up_moves.len], values.level_up_moves);
         return res;
     }
 };
@@ -145,6 +163,18 @@ pub const Pokemon = struct {
 pub const Evolution = struct {
     method: common.EvoMethod = .unused,
     target: u16 = 0,
+};
+
+pub const LevelUpMove = struct {
+    level: u16 = 0,
+    id: u16 = 0,
+};
+
+pub const Move = struct {
+    power: u8,
+    type: u8,
+    accuracy: u8,
+    pp: u8,
 };
 
 pub const Trainer = struct {};
@@ -272,6 +302,24 @@ pub const Evolutions = struct {
     }
 };
 
+pub const LevelUpMoves = struct {
+    pokemons: []Pokemon,
+
+    pub fn at(evos: @This(), i: usize) ![]LevelUpMove {
+        const level_up_moves = &evos.pokemons[i].level_up_moves;
+        for (level_up_moves, 0..) |move, j| {
+            if (move.id == 0)
+                return level_up_moves[0..j];
+        }
+
+        return level_up_moves;
+    }
+
+    pub fn len(evos: @This()) usize {
+        return evos.pokemons.len;
+    }
+};
+
 const StaticPokemon = struct {
     m: struct {
         species: u16,
@@ -300,6 +348,7 @@ const StaticPokemon = struct {
 };
 
 pub const Items = common.IndexableSlice(Item);
+pub const Moves = common.IndexableSlice(Move);
 pub const Parties = common.IndexableSlice(Party);
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
@@ -3104,6 +3153,7 @@ pub const default = Game.Init{
             .{ .base = .{ .level = 65, .species = 3 } },
         }),
     },
+    .moves = &.{}, // TODO
     .items = &.{
         .{
             // Null
