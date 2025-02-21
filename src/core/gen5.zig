@@ -204,8 +204,8 @@ pub const LevelUpMove = extern struct {
     level: u16,
 
     pub const term = LevelUpMove{
-        .id = u16.init(std.math.maxInt(u16)),
-        .level = u16.init(std.math.maxInt(u16)),
+        .id = std.math.maxInt(u16),
+        .level = std.math.maxInt(u16),
     };
 
     comptime {
@@ -843,8 +843,29 @@ pub const WildArea = struct {
     }
 };
 
+pub const LevelUpMoves = struct {
+    fs: rom.nds.fs.Fs,
+
+    pub fn at(moves: @This(), i: usize) ![]align(1) LevelUpMove {
+        const bytes = try moves.fs.fileData(.{ .i = @intCast(i) });
+        const level_up_moves = std.mem.bytesAsSlice(LevelUpMove, bytes);
+
+        for (level_up_moves, 0..) |move, j| {
+            if (std.meta.eql(move, LevelUpMove.term))
+                return level_up_moves[0..j];
+        }
+
+        return level_up_moves;
+    }
+
+    pub fn len(moves: @This()) usize {
+        return moves.fs.fat.len;
+    }
+};
+
 pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
 pub const Items = rom.nds.fs.Indexable(Item);
+pub const Moves = rom.nds.fs.Indexable(Move);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
 
@@ -926,7 +947,6 @@ pub const Game = struct {
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
         starters: [3]u16,
-        moves: []align(1) Move,
         trainers: []align(1) Trainer,
         tms1: []align(1) u16,
         hms: []align(1) u16,
@@ -934,7 +954,6 @@ pub const Game = struct {
         map_headers: []align(1) MapHeader,
         hidden_hollows: ?[]align(1) HiddenHollow,
 
-        level_up_moves: rom.nds.fs.Fs,
         scripts: rom.nds.fs.Fs,
 
         static_pokemons: []StaticPokemon,
@@ -1090,7 +1109,6 @@ pub const Game = struct {
             .owned = owned,
             .ptrs = .{
                 .starters = starts,
-                .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .trainers = try (try file_system.openNarc(rom.nds.fs.root, info.trainers)).toSlice(1, Trainer),
                 .map_headers = std.mem.bytesAsSlice(MapHeader, map_header_bytes[0..]),
                 .tms1 = hm_tms[0..92],
@@ -1100,7 +1118,6 @@ pub const Game = struct {
                 .given_pokemons = commands.given_pokemons,
                 .pokeball_items = commands.pokeball_items,
 
-                .level_up_moves = try file_system.openNarc(rom.nds.fs.root, info.level_up_moves),
                 .hidden_hollows = if (info.hidden_hollows) |h| try (try file_system.openNarc(rom.nds.fs.root, h)).toSlice(0, HiddenHollow) else null,
                 .scripts = scripts,
             },
@@ -1127,6 +1144,16 @@ pub const Game = struct {
     pub fn evolutions(game: Game) !Evolutions {
         const file_system = game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
+    }
+
+    pub fn levelUpMoves(game: Game) !LevelUpMoves {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.level_up_moves) };
+    }
+
+    pub fn moves(game: Game) !Moves {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.moves) };
     }
 
     pub fn trainers(game: Game) !Trainers {

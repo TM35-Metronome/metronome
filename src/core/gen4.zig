@@ -708,8 +708,29 @@ pub const WildArea = union(Version) {
     }
 };
 
+pub const LevelUpMoves = struct {
+    fs: rom.nds.fs.Fs,
+
+    pub fn at(moves: @This(), i: usize) ![]align(1) LevelUpMove {
+        const bytes = try moves.fs.fileData(.{ .i = @intCast(i) });
+        const level_up_moves = std.mem.bytesAsSlice(LevelUpMove, bytes);
+
+        for (level_up_moves, 0..) |move, j| {
+            if (std.meta.eql(move, LevelUpMove.term))
+                return level_up_moves[0..j];
+        }
+
+        return level_up_moves;
+    }
+
+    pub fn len(moves: @This()) usize {
+        return moves.fs.fat.len;
+    }
+};
+
 pub const Evolutions = rom.nds.fs.Indexable([7]Evolution);
 pub const Items = rom.nds.fs.Indexable(Item);
+pub const Moves = rom.nds.fs.Indexable(Move);
 pub const Pokemons = rom.nds.fs.Indexable(Pokemon);
 pub const Trainers = rom.nds.fs.Indexable(Trainer);
 
@@ -767,15 +788,12 @@ pub const Game = struct {
     // be invalidated oppon calling `apply`.
     pub const Pointers = struct {
         starters: [3]u16,
-        moves: []align(1) Move,
         wild_pokemons: union {
             dppt: []align(1) DpptWildPokemons,
             hgss: []align(1) HgssWildPokemons,
         },
         tms: []align(1) u16,
         hms: []align(1) u16,
-
-        level_up_moves: rom.nds.fs.Fs,
 
         pokedex: rom.nds.fs.Fs,
         pokedex_heights: []align(1) u32,
@@ -917,7 +935,6 @@ pub const Game = struct {
                     starts[1].*,
                     starts[2].*,
                 },
-                .moves = try (try file_system.openNarc(rom.nds.fs.root, info.moves)).toSlice(0, Move),
                 .wild_pokemons = blk: {
                     const narc = try file_system.openNarc(rom.nds.fs.root, info.wild_pokemons);
                     switch (info.version) {
@@ -933,8 +950,6 @@ pub const Game = struct {
                 },
                 .tms = hm_tms[0..92],
                 .hms = hm_tms[92..],
-
-                .level_up_moves = try file_system.openNarc(rom.nds.fs.root, info.level_up_moves),
 
                 .pokedex = pokedex,
                 .pokedex_heights = std.mem.bytesAsSlice(u32, try pokedex.fileData(.{ .i = info.pokedex_heights })),
@@ -970,6 +985,16 @@ pub const Game = struct {
     pub fn evolutions(game: Game) !Evolutions {
         const file_system = game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.pokemons) };
+    }
+
+    pub fn levelUpMoves(game: Game) !LevelUpMoves {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.level_up_moves) };
+    }
+
+    pub fn moves(game: Game) !Moves {
+        const file_system = game.rom.fileSystem();
+        return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.moves) };
     }
 
     pub fn trainers(game: Game) !Trainers {

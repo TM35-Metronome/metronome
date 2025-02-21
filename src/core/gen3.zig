@@ -701,7 +701,22 @@ pub const Evolutions = struct {
     }
 };
 
+pub const LevelUpMoves = struct {
+    data: []u8,
+    ptrs: []Ptr([*]LevelUpMove),
+
+    pub fn at(moves: @This(), i: usize) ![]LevelUpMove {
+        const ptr = moves.ptrs[i];
+        return ptr.toSliceZ2(moves.data, LevelUpMove.term);
+    }
+
+    pub fn len(moves: @This()) usize {
+        return moves.ptrs.len;
+    }
+};
+
 pub const Items = common.IndexableSlice(Item);
+pub const Moves = common.IndexableSlice(Move);
 pub const Parties = common.IndexableSlice(Party);
 pub const Pokemons = common.IndexableSlice(Pokemon);
 pub const Trainers = common.IndexableSlice(Trainer);
@@ -723,7 +738,6 @@ pub const Game = struct {
 
     _starters: [3]u16,
     text_delays: []u8,
-    moves: []Move,
     machine_learnsets: []align(4) u64,
     level_up_learnset_pointers: []Ptr([*]LevelUpMove),
     hms: []u16,
@@ -859,7 +873,6 @@ pub const Game = struct {
                 info.starters[2].ptr(gba_rom).*,
             },
             .text_delays = info.text_delays.slice(gba_rom),
-            .moves = info.moves.slice(gba_rom),
             .machine_learnsets = info.machine_learnsets.slice(gba_rom),
             .level_up_learnset_pointers = info.level_up_learnset_pointers.slice(gba_rom),
             .hms = info.hms.slice(gba_rom),
@@ -904,6 +917,17 @@ pub const Game = struct {
 
     pub fn evolutions(game: Game) !Evolutions {
         return .{ .evos = game.info.evolutions.slice(game.data) };
+    }
+
+    pub fn levelUpMoves(game: Game) !LevelUpMoves {
+        return .{
+            .data = game.data,
+            .ptrs = game.info.level_up_learnset_pointers.slice(game.data),
+        };
+    }
+
+    pub fn moves(game: Game) !Moves {
+        return .{ .slice = game.info.moves.slice(game.data) };
     }
 
     pub fn trainers(game: Game) !Trainers {

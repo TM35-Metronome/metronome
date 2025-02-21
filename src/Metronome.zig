@@ -22,7 +22,7 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, random: std.Random
 pub const RandomizeTrainerOptions = struct {
     party_size_max: u3 = 6,
     party_size_min: u3 = 1,
-    // moves: Move = .unchanged, TODO
+    moves: Move = .unchanged,
     held_items: HeldItem = .unchanged,
     abilities: AbilityTheme = .random,
     types: TypeTheme = .random,
@@ -573,6 +573,31 @@ fn randomizeParty(
         },
     };
 
+    const wants_moves = switch (options.moves) {
+        .unchanged => party.type.haveMoves(),
+        .none => false,
+        .best,
+        .best_for_level,
+        .random_learnable,
+        .random,
+        => true,
+    };
+    const wants_items = switch (options.held_items) {
+        .unchanged => party.type.haveItem(),
+        .random => true,
+        .none => false,
+    };
+    party.type = switch (wants_moves) {
+        true => switch (wants_items) {
+            true => .both,
+            false => .moves,
+        },
+        false => switch (wants_items) {
+            true => .item,
+            false => .none,
+        },
+    };
+
     const average_level = averagePartyLevel(party);
     const old_party_size = party.size;
     party.size = switch (options.party_size) {
@@ -593,35 +618,6 @@ fn randomizeParty(
         ),
         .minimum => options.party_size_min,
     };
-
-    // const wants_moves = switch (options.moves) { TODO
-    //     .unchanged => party.type.haveMoves(),
-    //     .none => false,
-    //     .best,
-    //     .best_for_level,
-    //     .random_learnable,
-    //     .random,
-    //     => true,
-    // };
-    const wants_items = switch (options.held_items) {
-        .unchanged => party.type.haveItem(),
-        .random => true,
-        .none => false,
-    };
-    party.type = switch (wants_items) {
-        true => .item,
-        false => .none,
-    };
-    // party.type = switch (wants_moves) { TODO
-    //     true => switch (wants_items) {
-    //         true => .both,
-    //         false => .moves,
-    //     },
-    //     false => switch (wants_items) {
-    //         true => .item,
-    //         false => .none,
-    //     },
-    // };
 
     // Fill trainer party with more Pokémons. The Pokémons we fill the party with are Pokémons that
     // are already in the party.
@@ -652,21 +648,28 @@ fn randomizeParty(
             },
         }
 
-        // .items => |items| switch (items.value) {
-        //     .battle_effect => |effect| {
-        //         if (effect != 0)
-        //             _ = try program.held_items.put(allocator, items.index, {});
-        //         return error.DidNotConsumeData;
-        //     },
-        //     else => return error.DidNotConsumeData,
-        // },
-
-        // switch (options.moves) {
-        //     .none0, .none1, .none2, .unchanged => {},
-        //     .best, .best_for_level => {},
-        //     .random_learnable => {},
-        //     .random => {},
-        // }
+        switch (options.moves) {
+            .none, .unchanged => {},
+            .best, .best_for_level => {
+                const level = switch (options.moves) {
+                    .best => std.math.maxInt(u8),
+                    .best_for_level => member.base.level,
+                    else => unreachable,
+                };
+                try fillWithBestMovesForLevel(
+                    game,
+                    member.base.species,
+                    level,
+                    &member.moves,
+                );
+            },
+            .random_learnable => try metronome.fillWithRandomLevelUpMoves(
+                game,
+                member.base.species,
+                &member.moves,
+            ),
+            .random => try metronome.fillWithRandomMoves(game, &member.moves),
+        }
     }
 }
 
@@ -794,6 +797,136 @@ fn randomizePartyMember(
             metronome.randomItem(pick_from.keys()).?.*,
         .random => metronome.randomItem(pick_from.keys()).?.*,
     };
+}
+
+fn fillWithBestMovesForLevel(
+    game: anytype,
+    species: u16,
+    level: u16,
+    moves: []u16,
+) !void {
+    // Represents a moves power in relation to the pokemon who uses it
+    const RelativeMove = struct {
+        power: u16,
+        accuracy: u8,
+        pp: u8,
+
+        fn from(p: anytype, m: anytype) @This() {
+            const is_stab = std.mem.indexOfScalar(u8, &p.types, m.type) != null;
+            return .{
+                .power = @as(u16, m.power) + (m.power / 2) * @intFromBool(is_stab),
+                .accuracy = m.accuracy,
+                .pp = m.pp,
+            };
+        }
+
+        fn lessThan(a: @This(), b: @This()) bool {
+            if (a.power < b.power)
+                return true;
+            if (a.power > b.power)
+                return false;
+            if (a.accuracy < b.accuracy)
+                return true;
+            if (a.accuracy > b.accuracy)
+                return false;
+            return a.pp < b.pp;
+        }
+    };
+
+    // Before pick best moves, we make sure the Pokémon has no moves.
+    @memset(moves, 0);
+
+    const pokemons = try game.pokemons();
+    const all_moves = try game.moves();
+    const level_up_movess = try game.levelUpMoves();
+
+    // Go over all level up moves, and replace the current moves with better moves
+    // as we find them
+    const pokemon = try pokemons.at(species);
+    const level_up_moves = try level_up_movess.at(species);
+    for (level_up_moves) |lvl_up_move| {
+        if (lvl_up_move.id == 0)
+            continue;
+        if (level < lvl_up_move.level)
+            continue;
+
+        // Pokémon already have this move. We don't wonna have the same move twice
+        if (std.mem.indexOfScalar(u16, moves, lvl_up_move.id)) |_|
+            continue;
+
+        const this_move = try all_moves.at(lvl_up_move.id);
+        const this_move_r = RelativeMove.from(pokemon, this_move);
+
+        for (moves) |*move| {
+            const prev_move = all_moves.at(move.*) catch {
+                // Could not find info about this move. Assume it's and invalid or bad
+                // move and replace it.
+                move.* = lvl_up_move.id;
+                break;
+            };
+
+            const prev_move_r = RelativeMove.from(pokemon, prev_move);
+            if (!this_move_r.lessThan(prev_move_r)) {
+                // We found a move that is better what the Pokémon already have!
+                move.* = lvl_up_move.id;
+                break;
+            }
+        }
+    }
+}
+
+fn fillWithRandomLevelUpMoves(
+    metronome: *Metronome,
+    game: anytype,
+    species: u16,
+    moves: []u16,
+) !void {
+    const level_up_movess = try game.levelUpMoves();
+
+    // Go over all level up moves, and replace the current moves with better moves
+    // as we find them
+    const level_up_moves = try level_up_movess.at(species);
+    for (moves, 0..) |*move, i| {
+        // We need to have more moves in the learnset than the party member can have,
+        // otherwise, we cannot pick only unique moves.
+        // TODO: This code does no take into account that `lvl_up_moves` can contain
+        //       duplicates or moves with `id == null`. We need to do a count of
+        //       "valid moves" from the learnset and do this check against that
+        //       instead.
+        if (level_up_moves.len <= i) {
+            move.* = 0;
+            continue;
+        }
+
+        // Loop until we have picked a move that the party member does not already
+        // have.
+        move.* = while (true) {
+            const pick = metronome.randomItem(level_up_moves).?.id;
+            if (pick != 0 and std.mem.indexOfScalar(u16, moves[0..i], pick) == null)
+                break pick;
+        };
+    }
+}
+
+fn fillWithRandomMoves(metronome: *Metronome, game: anytype, moves: []u16) !void {
+    const all_moves = try game.moves();
+    for (moves, 0..) |*move, i| {
+        // We need to have more moves in the game than the party member can have,
+        // otherwise, we cannot pick only unique moves. Also, move `0` is the
+        // `null` move, so we don't count that as a move we can pick from.
+        if (all_moves.len() - 1 <= i) {
+            move.* = 0;
+            continue;
+        }
+
+        // Loop until we have picked a move that the party member does not already
+        // have.
+        move.* = while (true) {
+            const pick = metronome.random.uintAtMost(u16, @intCast(all_moves.len() - 1));
+            if (pick != 0 and std.mem.indexOfScalar(u16, moves[0..i], pick) == null)
+                break pick;
+        };
+    }
 }
 
 pub const RandomizeStartersOptions = struct {
@@ -1728,6 +1861,7 @@ pub const Commands = struct {
             .options = &.{
                 .{ .id = "party_size_max", .name = "Maximum party size", .description = "TODO: Description" },
                 .{ .id = "party_size_min", .name = "Minimum party size", .description = "TODO: Description" },
+                .{ .id = "moves", .name = "Moves of party members", .description = "TODO: Description" },
                 .{ .id = "held_items", .name = "Held items of party members", .description = "TODO: Description" },
                 .{ .id = "abilities", .name = "Abilities of party members", .description = "TODO: Description" },
                 .{ .id = "types", .name = "Types of party members", .description = "TODO: Description" },
