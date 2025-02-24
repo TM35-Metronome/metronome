@@ -34,9 +34,9 @@ pub const RandomizeTrainerOptions = struct {
     const Move = enum {
         none,
         unchanged,
-        best,
-        best_for_level,
-        random_learnable,
+        random_level_up_learnable,
+        highest_power_level_up_learnable,
+        highest_power_level_up_learnable_for_level,
         random,
     };
 
@@ -485,60 +485,230 @@ test randomizeTrainers {
         };
         break :blk res;
     });
-
     try testCommand(0, RandomizeTrainerOptions{
         .held_items = .random,
     }, randomizeTrainers, blk: {
         var res = core.dummy.default;
         res.trainer_parties = &.{
             .init(.item, &.{
-                .{ .base = .{ .level = 5, .species = 1 }, .item = 5 },
+                .{ .base = .{ .level = 5, .species = 1 }, .item = 174 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 9, .species = 16 }, .item = 6 },
-                .{ .base = .{ .level = 8, .species = 1 }, .item = 6 },
+                .{ .base = .{ .level = 9, .species = 16 }, .item = 182 },
+                .{ .base = .{ .level = 8, .species = 1 }, .item = 181 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 18, .species = 17 }, .item = 4 },
-                .{ .base = .{ .level = 15, .species = 63 }, .item = 6 },
-                .{ .base = .{ .level = 15, .species = 19 }, .item = 4 },
-                .{ .base = .{ .level = 17, .species = 1 }, .item = 9 },
+                .{ .base = .{ .level = 18, .species = 17 }, .item = 44 },
+                .{ .base = .{ .level = 15, .species = 63 }, .item = 190 },
+                .{ .base = .{ .level = 15, .species = 19 }, .item = 133 },
+                .{ .base = .{ .level = 17, .species = 1 }, .item = 216 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 19, .species = 17 }, .item = 9 },
-                .{ .base = .{ .level = 16, .species = 20 }, .item = 5 },
-                .{ .base = .{ .level = 18, .species = 64 }, .item = 4 },
-                .{ .base = .{ .level = 20, .species = 2 }, .item = 5 },
+                .{ .base = .{ .level = 19, .species = 17 }, .item = 215 },
+                .{ .base = .{ .level = 16, .species = 20 }, .item = 172 },
+                .{ .base = .{ .level = 18, .species = 64 }, .item = 137 },
+                .{ .base = .{ .level = 20, .species = 2 }, .item = 174 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 25, .species = 17 }, .item = 4 },
-                .{ .base = .{ .level = 23, .species = 130 }, .item = 4 },
-                .{ .base = .{ .level = 22, .species = 58 }, .item = 4 },
-                .{ .base = .{ .level = 20, .species = 64 }, .item = 4 },
-                .{ .base = .{ .level = 25, .species = 2 }, .item = 6 },
+                .{ .base = .{ .level = 25, .species = 17 }, .item = 136 },
+                .{ .base = .{ .level = 23, .species = 130 }, .item = 139 },
+                .{ .base = .{ .level = 22, .species = 58 }, .item = 138 },
+                .{ .base = .{ .level = 20, .species = 64 }, .item = 136 },
+                .{ .base = .{ .level = 25, .species = 2 }, .item = 184 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 37, .species = 18 }, .item = 7 },
-                .{ .base = .{ .level = 38, .species = 130 }, .item = 4 },
-                .{ .base = .{ .level = 35, .species = 58 }, .item = 5 },
-                .{ .base = .{ .level = 35, .species = 65 }, .item = 6 },
-                .{ .base = .{ .level = 40, .species = 3 }, .item = 5 },
+                .{ .base = .{ .level = 37, .species = 18 }, .item = 199 },
+                .{ .base = .{ .level = 38, .species = 130 }, .item = 140 },
+                .{ .base = .{ .level = 35, .species = 58 }, .item = 174 },
+                .{ .base = .{ .level = 35, .species = 65 }, .item = 184 },
+                .{ .base = .{ .level = 40, .species = 3 }, .item = 171 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 47, .species = 18 }, .item = 4 },
-                .{ .base = .{ .level = 45, .species = 111 }, .item = 4 },
-                .{ .base = .{ .level = 45, .species = 130 }, .item = 5 },
-                .{ .base = .{ .level = 47, .species = 58 }, .item = 6 },
-                .{ .base = .{ .level = 50, .species = 65 }, .item = 6 },
-                .{ .base = .{ .level = 53, .species = 3 }, .item = 4 },
+                .{ .base = .{ .level = 47, .species = 18 }, .item = 141 },
+                .{ .base = .{ .level = 45, .species = 111 }, .item = 134 },
+                .{ .base = .{ .level = 45, .species = 130 }, .item = 171 },
+                .{ .base = .{ .level = 47, .species = 58 }, .item = 186 },
+                .{ .base = .{ .level = 50, .species = 65 }, .item = 182 },
+                .{ .base = .{ .level = 53, .species = 3 }, .item = 141 },
             }),
             .init(.item, &.{
-                .{ .base = .{ .level = 61, .species = 18 }, .item = 7 },
-                .{ .base = .{ .level = 59, .species = 65 }, .item = 9 },
-                .{ .base = .{ .level = 61, .species = 112 }, .item = 4 },
-                .{ .base = .{ .level = 61, .species = 130 }, .item = 5 },
-                .{ .base = .{ .level = 63, .species = 59 }, .item = 6 },
-                .{ .base = .{ .level = 65, .species = 3 }, .item = 6 },
+                .{ .base = .{ .level = 61, .species = 18 }, .item = 201 },
+                .{ .base = .{ .level = 59, .species = 65 }, .item = 219 },
+                .{ .base = .{ .level = 61, .species = 112 }, .item = 135 },
+                .{ .base = .{ .level = 61, .species = 130 }, .item = 169 },
+                .{ .base = .{ .level = 63, .species = 59 }, .item = 183 },
+                .{ .base = .{ .level = 65, .species = 3 }, .item = 180 },
+            }),
+        };
+        break :blk res;
+    });
+    try testCommand(0, RandomizeTrainerOptions{
+        .moves = .random,
+    }, randomizeTrainers, blk: {
+        var res = core.dummy.default;
+        res.trainer_parties = &.{
+            .init(.moves, &.{
+                .{ .base = .{ .level = 5, .species = 1 }, .moves = .{ 78, 465, 271, 205 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 9, .species = 16 }, .moves = .{ 207, 309, 5, 440 } },
+                .{ .base = .{ .level = 8, .species = 1 }, .moves = .{ 527, 166, 335, 170 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 18, .species = 17 }, .moves = .{ 27, 505, 37, 330 } },
+                .{ .base = .{ .level = 15, .species = 63 }, .moves = .{ 10, 342, 539, 19 } },
+                .{ .base = .{ .level = 15, .species = 19 }, .moves = .{ 550, 191, 150, 283 } },
+                .{ .base = .{ .level = 17, .species = 1 }, .moves = .{ 123, 170, 126, 233 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 19, .species = 17 }, .moves = .{ 110, 283, 219, 418 } },
+                .{ .base = .{ .level = 16, .species = 20 }, .moves = .{ 12, 509, 282, 486 } },
+                .{ .base = .{ .level = 18, .species = 64 }, .moves = .{ 510, 472, 516, 360 } },
+                .{ .base = .{ .level = 20, .species = 2 }, .moves = .{ 384, 156, 416, 426 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 25, .species = 17 }, .moves = .{ 232, 31, 344, 35 } },
+                .{ .base = .{ .level = 23, .species = 130 }, .moves = .{ 246, 102, 49, 490 } },
+                .{ .base = .{ .level = 22, .species = 58 }, .moves = .{ 167, 283, 17, 502 } },
+                .{ .base = .{ .level = 20, .species = 64 }, .moves = .{ 246, 558, 416, 48 } },
+                .{ .base = .{ .level = 25, .species = 2 }, .moves = .{ 275, 338, 59, 537 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 37, .species = 18 }, .moves = .{ 148, 232, 190, 318 } },
+                .{ .base = .{ .level = 38, .species = 130 }, .moves = .{ 529, 44, 507, 414 } },
+                .{ .base = .{ .level = 35, .species = 58 }, .moves = .{ 184, 391, 331, 135 } },
+                .{ .base = .{ .level = 35, .species = 65 }, .moves = .{ 318, 491, 532, 73 } },
+                .{ .base = .{ .level = 40, .species = 3 }, .moves = .{ 117, 13, 393, 370 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 47, .species = 18 }, .moves = .{ 307, 367, 155, 549 } },
+                .{ .base = .{ .level = 45, .species = 111 }, .moves = .{ 390, 500, 295, 223 } },
+                .{ .base = .{ .level = 45, .species = 130 }, .moves = .{ 57, 420, 306, 207 } },
+                .{ .base = .{ .level = 47, .species = 58 }, .moves = .{ 355, 257, 104, 508 } },
+                .{ .base = .{ .level = 50, .species = 65 }, .moves = .{ 96, 367, 32, 484 } },
+                .{ .base = .{ .level = 53, .species = 3 }, .moves = .{ 40, 390, 248, 348 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 61, .species = 18 }, .moves = .{ 111, 32, 325, 74 } },
+                .{ .base = .{ .level = 59, .species = 65 }, .moves = .{ 269, 483, 208, 155 } },
+                .{ .base = .{ .level = 61, .species = 112 }, .moves = .{ 223, 523, 463, 296 } },
+                .{ .base = .{ .level = 61, .species = 130 }, .moves = .{ 447, 433, 497, 34 } },
+                .{ .base = .{ .level = 63, .species = 59 }, .moves = .{ 32, 424, 413, 345 } },
+                .{ .base = .{ .level = 65, .species = 3 }, .moves = .{ 450, 451, 423, 94 } },
+            }),
+        };
+        break :blk res;
+    });
+    try testCommand(0, RandomizeTrainerOptions{
+        .moves = .highest_power_level_up_learnable,
+    }, randomizeTrainers, blk: {
+        var res = core.dummy.default;
+        res.trainer_parties = &.{
+            .init(.moves, &.{
+                .{ .base = .{ .level = 5, .species = 1 }, .moves = .{ 38, 402, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 9, .species = 16 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 8, .species = 1 }, .moves = .{ 38, 402, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 18, .species = 17 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 15, .species = 63 }, .moves = .{ 100, 0, 0, 0 } },
+                .{ .base = .{ .level = 15, .species = 19 }, .moves = .{ 38, 158, 242, 389 } },
+                .{ .base = .{ .level = 17, .species = 1 }, .moves = .{ 38, 402, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 19, .species = 17 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 16, .species = 20 }, .moves = .{ 38, 158, 242, 389 } },
+                .{ .base = .{ .level = 18, .species = 64 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 20, .species = 2 }, .moves = .{ 76, 38, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 25, .species = 17 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 23, .species = 130 }, .moves = .{ 56, 63, 401, 37 } },
+                .{ .base = .{ .level = 22, .species = 58 }, .moves = .{ 394, 257, 53, 200 } },
+                .{ .base = .{ .level = 20, .species = 64 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 25, .species = 2 }, .moves = .{ 76, 38, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 37, .species = 18 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 38, .species = 130 }, .moves = .{ 56, 63, 401, 37 } },
+                .{ .base = .{ .level = 35, .species = 58 }, .moves = .{ 394, 257, 53, 200 } },
+                .{ .base = .{ .level = 35, .species = 65 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 40, .species = 3 }, .moves = .{ 80, 76, 38, 36 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 47, .species = 18 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 45, .species = 111 }, .moves = .{ 89, 444, 529, 224 } },
+                .{ .base = .{ .level = 45, .species = 130 }, .moves = .{ 56, 63, 401, 37 } },
+                .{ .base = .{ .level = 47, .species = 58 }, .moves = .{ 394, 257, 53, 200 } },
+                .{ .base = .{ .level = 50, .species = 65 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 53, .species = 3 }, .moves = .{ 80, 76, 38, 36 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 61, .species = 18 }, .moves = .{ 542, 403, 17, 33 } },
+                .{ .base = .{ .level = 59, .species = 65 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 61, .species = 112 }, .moves = .{ 89, 444, 529, 224 } },
+                .{ .base = .{ .level = 61, .species = 130 }, .moves = .{ 56, 63, 401, 37 } },
+                .{ .base = .{ .level = 63, .species = 59 }, .moves = .{ 424, 245, 422, 44 } },
+                .{ .base = .{ .level = 65, .species = 3 }, .moves = .{ 80, 76, 38, 36 } },
+            }),
+        };
+        break :blk res;
+    });
+    try testCommand(0, RandomizeTrainerOptions{
+        .moves = .highest_power_level_up_learnable_for_level,
+    }, randomizeTrainers, blk: {
+        var res = core.dummy.default;
+        res.trainer_parties = &.{
+            .init(.moves, &.{
+                .{ .base = .{ .level = 5, .species = 1 }, .moves = .{ 33, 45, 0, 0 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 9, .species = 16 }, .moves = .{ 33, 16, 28, 0 } },
+                .{ .base = .{ .level = 8, .species = 1 }, .moves = .{ 33, 45, 73, 0 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 18, .species = 17 }, .moves = .{ 33, 16, 98, 18 } },
+                .{ .base = .{ .level = 15, .species = 63 }, .moves = .{ 100, 0, 0, 0 } },
+                .{ .base = .{ .level = 15, .species = 19 }, .moves = .{ 33, 98, 44, 228 } },
+                .{ .base = .{ .level = 17, .species = 1 }, .moves = .{ 36, 22, 33, 45 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 19, .species = 17 }, .moves = .{ 33, 16, 98, 18 } },
+                .{ .base = .{ .level = 16, .species = 20 }, .moves = .{ 158, 33, 98, 44 } },
+                .{ .base = .{ .level = 18, .species = 64 }, .moves = .{ 93, 100, 50, 134 } },
+                .{ .base = .{ .level = 20, .species = 2 }, .moves = .{ 36, 75, 22, 33 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 25, .species = 17 }, .moves = .{ 33, 16, 98, 239 } },
+                .{ .base = .{ .level = 23, .species = 130 }, .moves = .{ 37, 44, 82, 0 } },
+                .{ .base = .{ .level = 22, .species = 58 }, .moves = .{ 424, 172, 44, 52 } },
+                .{ .base = .{ .level = 20, .species = 64 }, .moves = .{ 93, 100, 50, 134 } },
+                .{ .base = .{ .level = 25, .species = 2 }, .moves = .{ 36, 75, 22, 33 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 37, .species = 18 }, .moves = .{ 33, 16, 98, 239 } },
+                .{ .base = .{ .level = 38, .species = 130 }, .moves = .{ 401, 37, 423, 44 } },
+                .{ .base = .{ .level = 35, .species = 58 }, .moves = .{ 53, 481, 424, 172 } },
+                .{ .base = .{ .level = 35, .species = 65 }, .moves = .{ 60, 93, 357, 115 } },
+                .{ .base = .{ .level = 40, .species = 3 }, .moves = .{ 80, 38, 36, 75 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 47, .species = 18 }, .moves = .{ 17, 33, 16, 98 } },
+                .{ .base = .{ .level = 45, .species = 111 }, .moves = .{ 529, 523, 36, 498 } },
+                .{ .base = .{ .level = 45, .species = 130 }, .moves = .{ 56, 401, 37, 423 } },
+                .{ .base = .{ .level = 47, .species = 58 }, .moves = .{ 394, 257, 53, 200 } },
+                .{ .base = .{ .level = 50, .species = 65 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 53, .species = 3 }, .moves = .{ 80, 76, 38, 36 } },
+            }),
+            .init(.moves, &.{
+                .{ .base = .{ .level = 61, .species = 18 }, .moves = .{ 17, 33, 16, 98 } },
+                .{ .base = .{ .level = 59, .species = 65 }, .moves = .{ 248, 94, 427, 60 } },
+                .{ .base = .{ .level = 61, .species = 112 }, .moves = .{ 444, 529, 359, 523 } },
+                .{ .base = .{ .level = 61, .species = 130 }, .moves = .{ 56, 63, 401, 37 } },
+                .{ .base = .{ .level = 63, .species = 59 }, .moves = .{ 424, 245, 422, 44 } },
+                .{ .base = .{ .level = 65, .species = 3 }, .moves = .{ 80, 76, 38, 36 } },
             }),
         };
         break :blk res;
@@ -576,9 +746,9 @@ fn randomizeParty(
     const wants_moves = switch (options.moves) {
         .unchanged => party.type.haveMoves(),
         .none => false,
-        .best,
-        .best_for_level,
-        .random_learnable,
+        .highest_power_level_up_learnable,
+        .highest_power_level_up_learnable_for_level,
+        .random_level_up_learnable,
         .random,
         => true,
     };
@@ -650,10 +820,10 @@ fn randomizeParty(
 
         switch (options.moves) {
             .none, .unchanged => {},
-            .best, .best_for_level => {
+            .highest_power_level_up_learnable, .highest_power_level_up_learnable_for_level => {
                 const level = switch (options.moves) {
-                    .best => std.math.maxInt(u8),
-                    .best_for_level => member.base.level,
+                    .highest_power_level_up_learnable => std.math.maxInt(u8),
+                    .highest_power_level_up_learnable_for_level => member.base.level,
                     else => unreachable,
                 };
                 try fillWithBestMovesForLevel(
@@ -663,7 +833,7 @@ fn randomizeParty(
                     &member.moves,
                 );
             },
-            .random_learnable => try metronome.fillWithRandomLevelUpMoves(
+            .random_level_up_learnable => try metronome.fillWithRandomLevelUpMoves(
                 game,
                 member.base.species,
                 &member.moves,
@@ -757,22 +927,20 @@ fn randomizePartyMember(
         for (other_members) |other_member|
             _ = metronome.pick_from_excluded.swapRemove(other_member.base.species);
 
-        // If we end up with 0 things to pick from, then we cannot avoid same. So only use our
-        // newly created set, if it actually has things to pick from.
+        // If we end up with 0 things to pick from, then we cannot avoid duplicates. So only use
+        // our newly created set, if it actually has things to pick from.
         if (metronome.pick_from_excluded.count() != 0)
             pick_from = &metronome.pick_from_excluded;
     }
 
-    // When we have picked a new species for our Pokémon we also need
-    // to fix the ability the Pokémon have, if we're picking Pokémons
-    // based on ability.
+    // When we have picked a new species for our Pokémon we also need to fix the ability the
+    // Pokémon have, if we're picking Pokémons based on ability.
     defer if (new_ability) |ability_to_find| {
         // A valid species should have been picked, so this should never fail
         const pokemon = pokemons.at(member.base.species) catch unreachable;
 
-        // Find the index of the ability we want the party member to
-        // have. If we don't find the ability. The best we can do is
-        // just let the Pokémon keep the ability it already has.
+        // Find the index of the ability we want the party member to have. If we don't find the
+        // ability. The best we can do is just let the Pokémon keep the ability it already has.
         for (pokemon.abilities, 0..) |ability, ability_i| {
             if (ability == ability_to_find) {
                 member.setAbility(@intCast(ability_i));
@@ -857,21 +1025,34 @@ fn fillWithBestMovesForLevel(
         const this_move = try all_moves.at(lvl_up_move.id);
         const this_move_r = RelativeMove.from(pokemon, this_move);
 
-        for (moves) |*move| {
-            const prev_move = all_moves.at(move.*) catch {
-                // Could not find info about this move. Assume it's and invalid or bad
-                // move and replace it.
-                move.* = lvl_up_move.id;
-                break;
-            };
+        // We keep the moves sorted so the worst move is always the last move
+        const worst_move_index = moves.len - 1;
+        const worst_move = try all_moves.at(moves[worst_move_index]);
+        const worst_move_r = RelativeMove.from(pokemon, worst_move);
 
-            const prev_move_r = RelativeMove.from(pokemon, prev_move);
-            if (!this_move_r.lessThan(prev_move_r)) {
-                // We found a move that is better what the Pokémon already have!
-                move.* = lvl_up_move.id;
-                break;
+        if (this_move_r.lessThan(worst_move_r))
+            continue;
+
+        moves[worst_move_index] = lvl_up_move.id;
+
+        const Context = struct {
+            pokemon: @TypeOf(pokemon),
+            all_moves: @TypeOf(all_moves),
+
+            fn lessThan(ctx: @This(), a: u16, b: u16) bool {
+                const a_move = ctx.all_moves.at(a) catch return true;
+                const b_move = ctx.all_moves.at(b) catch return false;
+                const a_move_r = RelativeMove.from(ctx.pokemon, a_move);
+                const b_move_r = RelativeMove.from(ctx.pokemon, b_move);
+                return b_move_r.lessThan(a_move_r);
             }
-        }
+        };
+
+        // We keep the moves sorted so the worst move is always the last move
+        std.sort.insertion(u16, moves, Context{
+            .pokemon = pokemon,
+            .all_moves = all_moves,
+        }, Context.lessThan);
     }
 }
 
@@ -1817,11 +1998,11 @@ fn testCommand(
     // Avoid large error trace by not using `catch` or `try` here
     const is_err = if (std.testing.expectEqualDeep(expected_game.m, actual_game.m)) false else |_| true;
     if (is_err) {
-        const from_str = try std.fmt.allocPrint(arena, "{}", .{actual_game});
-        const to_str = try std.fmt.allocPrint(arena, "{}", .{expected_game});
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/from.json", .data = from_str });
-        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/to.json", .data = to_str });
-        return std.testing.expectEqualStrings(to_str, from_str);
+        const actual_str = try std.fmt.allocPrint(arena, "{}", .{actual_game});
+        const expected_str = try std.fmt.allocPrint(arena, "{}", .{expected_game});
+        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/actual.json", .data = actual_str });
+        try std.fs.cwd().writeFile(.{ .sub_path = ".zig-cache/expected.json", .data = expected_str });
+        return std.testing.expectEqualStrings(expected_str, actual_str);
     }
 }
 

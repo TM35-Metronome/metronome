@@ -71,6 +71,21 @@ pub fn main() !void {
     var game = try core.Game.fromFile(input_file, gpa);
     defer game.deinit();
 
+    switch (game) {
+        .gen5 => |g| {
+            var moves = try g.moves();
+            var i: usize = 0;
+            while (i < moves.len()) : (i += 1) {
+                const move = try moves.at(i);
+                const stdout = std.io.getStdOut();
+                const writer = stdout.writer();
+
+                try writer.print(".{{ .power = {}, .type = {}, .accuracy = {}, .pp = {} }},\n", .{ move.power, move.type, move.accuracy, move.pp });
+            }
+        },
+        else => {},
+    }
+
     var random = std.Random.DefaultPrng.init(seed orelse std.crypto.random.int(u64));
     var metronome = try Metronome.init(gpa, arena, random.random());
     switch (game) {

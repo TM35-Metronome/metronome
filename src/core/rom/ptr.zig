@@ -53,7 +53,7 @@ pub fn RelativePointer(
                 return error.InvalidPointer;
 
             const res = std.math.add(Int, i, offset) //
-            catch return error.InvalidPointer;
+                catch return error.InvalidPointer;
             return @This(){ .inner = res };
         }
 

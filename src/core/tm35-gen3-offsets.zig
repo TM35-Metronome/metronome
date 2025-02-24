@@ -836,21 +836,21 @@ const first_moves = [_]gen3.Move{
 };
 
 const last_moves = [_]gen3.Move{
-// Psycho Boost
-gen3.Move{
-    .effect = 204,
-    .power = 140,
-    .type = 14,
-    .accuracy = 90,
-    .pp = 5,
-    .side_effect_chance = 100,
-    .target = 0,
-    .priority = 0,
-    .flags0 = 0x32,
-    .flags1 = 0,
-    .flags2 = 0,
-    .category = .physical,
-}};
+    // Psycho Boost
+    gen3.Move{
+        .effect = 204,
+        .power = 140,
+        .type = 14,
+        .accuracy = 90,
+        .pp = 5,
+        .side_effect_chance = 100,
+        .target = 0,
+        .priority = 0,
+        .flags0 = 0x32,
+        .flags1 = 0,
+        .flags2 = 0,
+        .category = .physical,
+    }};
 
 const first_machine_learnsets = [_]u64{
     0x0000000000000000, // Dummy Pokemon
@@ -920,40 +920,40 @@ const first_pokemons = [_]gen3.Pokemon{
 };
 
 const last_pokemons = [_]gen3.Pokemon{
-// Chimecho
-gen3.Pokemon{
-    .stats = common.Stats{
-        .hp = 65,
-        .attack = 50,
-        .defense = 70,
-        .speed = 65,
-        .sp_attack = 95,
-        .sp_defense = 80,
-    },
+    // Chimecho
+    gen3.Pokemon{
+        .stats = common.Stats{
+            .hp = 65,
+            .attack = 50,
+            .defense = 70,
+            .speed = 65,
+            .sp_attack = 95,
+            .sp_defense = 80,
+        },
 
-    .types = [_]u8{ 14, 14 },
+        .types = [_]u8{ 14, 14 },
 
-    .catch_rate = 45,
-    .base_exp_yield = 147,
+        .catch_rate = 45,
+        .base_exp_yield = 147,
 
-    .ev = undefined,
+        .ev = undefined,
 
-    .items = [_]u16{ 0, 0 },
+        .items = [_]u16{ 0, 0 },
 
-    .gender_ratio = percentFemale(50),
-    .egg_cycles = 25,
-    .base_friendship = 70,
+        .gender_ratio = percentFemale(50),
+        .egg_cycles = 25,
+        .base_friendship = 70,
 
-    .growth_rate = .fast,
-    .egg_groups = [_]common.EggGroup{ .amorphous, .amorphous },
+        .growth_rate = .fast,
+        .egg_groups = [_]common.EggGroup{ .amorphous, .amorphous },
 
-    .abilities = [_]u8{ 26, 0 },
-    .safari_zone_rate = 0,
+        .abilities = [_]u8{ 26, 0 },
+        .safari_zone_rate = 0,
 
-    .color = .blue,
+        .color = .blue,
 
-    .padding = undefined,
-}};
+        .padding = undefined,
+    }};
 
 pub const species_to_national_dex_start = [_]u16{
     1,
@@ -1453,12 +1453,12 @@ const first_levelup_learnsets = [_][]const u8{
 };
 
 const last_levelup_learnsets = [_][]const u8{
-// TODO: Figure out if only having Chimechos level up learnset is enough.
-// Chimecho
-&[_]u8{
-    0x23, 0x02, 0x2D, 0x0C, 0x36, 0x13, 0x5D, 0x1C, 0x24, 0x22, 0xFD, 0x2C, 0x19,
-    0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
-}};
+    // TODO: Figure out if only having Chimechos level up learnset is enough.
+    // Chimecho
+    &[_]u8{
+        0x23, 0x02, 0x2D, 0x0C, 0x36, 0x13, 0x5D, 0x1C, 0x24, 0x22, 0xFD, 0x2C, 0x19,
+        0x33, 0x95, 0x3C, 0x26, 0x42, 0xD7, 0x4C, 0xDB, 0x52, 0x5E, 0x5C, 0xFF, 0xFF,
+    }};
 
 const hms = [_]u16{
     0x000f,
@@ -1815,154 +1815,154 @@ const frlg_last_wild_mon_headers = [_]gen3.WildPokemonHeader{
 };
 
 const em_first_map_headers = [_]gen3.MapHeader{
-// Petalburg City
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 362,
-    .map_data_id = 1,
-    .map_sec = 0x07,
-    .cave = 0,
-    .weather = 2,
-    .map_type = 2,
-    .pad = undefined,
-    .escape_rope = 0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = true,
-        .allow_escaping = false,
-        .allow_running = true,
-        .show_map_name = true,
-        .unused = 0,
-    },
-    .map_battle_scene = 0,
-}};
+    // Petalburg City
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 362,
+        .map_data_id = 1,
+        .map_sec = 0x07,
+        .cave = 0,
+        .weather = 2,
+        .map_type = 2,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = true,
+            .allow_escaping = false,
+            .allow_running = true,
+            .show_map_name = true,
+            .unused = 0,
+        },
+        .map_battle_scene = 0,
+    }};
 
 const em_last_map_headers = [_]gen3.MapHeader{
-// Route 124 - Diving Treasure Hunters House
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 408,
-    .map_data_id = 301,
-    .map_sec = 0x27,
-    .cave = 0,
-    .weather = 0,
-    .map_type = 8,
-    .pad = undefined,
-    .escape_rope = 0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = false,
-        .allow_escaping = false,
-        .allow_running = false,
-        .show_map_name = false,
-        .unused = 0,
-    },
-    .map_battle_scene = 0,
-}};
+    // Route 124 - Diving Treasure Hunters House
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 408,
+        .map_data_id = 301,
+        .map_sec = 0x27,
+        .cave = 0,
+        .weather = 0,
+        .map_type = 8,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = false,
+            .allow_escaping = false,
+            .allow_running = false,
+            .show_map_name = false,
+            .unused = 0,
+        },
+        .map_battle_scene = 0,
+    }};
 
 const rs_first_map_headers = [_]gen3.MapHeader{
-// Petalburg City
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 362,
-    .map_data_id = 1,
-    .map_sec = 0x07,
-    .cave = 0,
-    .weather = 2,
-    .map_type = 2,
-    .pad = undefined,
-    .escape_rope = 0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = true,
-        .allow_escaping = false,
-        .allow_running = false,
-        .show_map_name = false,
-        .unused = 0,
-    },
-    .map_battle_scene = 0,
-}};
+    // Petalburg City
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 362,
+        .map_data_id = 1,
+        .map_sec = 0x07,
+        .cave = 0,
+        .weather = 2,
+        .map_type = 2,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = true,
+            .allow_escaping = false,
+            .allow_running = false,
+            .show_map_name = false,
+            .unused = 0,
+        },
+        .map_battle_scene = 0,
+    }};
 
 const rs_last_map_headers = [_]gen3.MapHeader{
-// Route 124 - Diving Treasure Hunters House
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 408,
-    .map_data_id = 302,
-    .map_sec = 0x27,
-    .cave = 0,
-    .weather = 0,
-    .map_type = 8,
-    .pad = undefined,
-    .escape_rope = 0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = false,
-        .allow_escaping = false,
-        .allow_running = false,
-        .show_map_name = false,
-        .unused = 0,
-    },
-    .map_battle_scene = 0,
-}};
+    // Route 124 - Diving Treasure Hunters House
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 408,
+        .map_data_id = 302,
+        .map_sec = 0x27,
+        .cave = 0,
+        .weather = 0,
+        .map_type = 8,
+        .pad = undefined,
+        .escape_rope = 0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = false,
+            .allow_escaping = false,
+            .allow_running = false,
+            .show_map_name = false,
+            .unused = 0,
+        },
+        .map_battle_scene = 0,
+    }};
 
 const frlg_first_map_headers = [_]gen3.MapHeader{
-// ???
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 0x12F,
-    .map_data_id = 0x2F,
-    .map_sec = 0xC4,
-    .cave = 0x0,
-    .weather = 0x0,
-    .map_type = 0x8,
-    .pad = undefined,
-    .escape_rope = 0x0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = false,
-        .allow_escaping = false,
-        .allow_running = false,
-        .show_map_name = false,
-        .unused = 0,
-    },
-    .map_battle_scene = 0x8,
-}};
+    // ???
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 0x12F,
+        .map_data_id = 0x2F,
+        .map_sec = 0xC4,
+        .cave = 0x0,
+        .weather = 0x0,
+        .map_type = 0x8,
+        .pad = undefined,
+        .escape_rope = 0x0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = false,
+            .allow_escaping = false,
+            .allow_running = false,
+            .show_map_name = false,
+            .unused = 0,
+        },
+        .map_battle_scene = 0x8,
+    }};
 
 const frlg_last_map_headers = [_]gen3.MapHeader{
-// ???
-gen3.MapHeader{
-    .map_layout = undefined,
-    .map_events = undefined,
-    .map_scripts = undefined,
-    .map_connections = undefined,
-    .music = 0x151,
-    .map_data_id = 0xB,
-    .map_sec = 0xA9,
-    .cave = 0x0,
-    .weather = 0x0,
-    .map_type = 0x8,
-    .pad = undefined,
-    .escape_rope = 0x0,
-    .flags = gen3.MapHeader.Flags{
-        .allow_cycling = false,
-        .allow_escaping = false,
-        .allow_running = false,
-        .show_map_name = false,
-        .unused = 0,
-    },
-    .map_battle_scene = 0x0,
-}};
+    // ???
+    gen3.MapHeader{
+        .map_layout = undefined,
+        .map_events = undefined,
+        .map_scripts = undefined,
+        .map_connections = undefined,
+        .music = 0x151,
+        .map_data_id = 0xB,
+        .map_sec = 0xA9,
+        .cave = 0x0,
+        .weather = 0x0,
+        .map_type = 0x8,
+        .pad = undefined,
+        .escape_rope = 0x0,
+        .flags = gen3.MapHeader.Flags{
+            .allow_cycling = false,
+            .allow_escaping = false,
+            .allow_running = false,
+            .show_map_name = false,
+            .unused = 0,
+        },
+        .map_battle_scene = 0x0,
+    }};
 
 fn __(comptime len: usize, lang: gen3.Language, str: []const u8) [len]u8 {
     _ = lang;

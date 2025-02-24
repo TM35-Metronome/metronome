@@ -1062,6 +1062,7 @@ pub const Game = struct {
         game.allocator.free(game.given_pokemons);
         game.allocator.free(game.pokeball_items);
         game.allocator.free(game.trainer_parties);
+        game.allocator.free(game.text);
     }
 };
 

@@ -1521,7 +1521,7 @@ fn applyGen5(game: gen5.Game, parsed: format.Game) !void {
             const file = nds.fs.File{ .i = pokemons.index };
             const wilds: []align(1) gen5.WildPokemons =
                 game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
-                try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
+                    try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
 
             switch (pokemons.value) {
                 .grass_0 => |area| try applyGen5Area(area, "grass", 0, 0, wilds),

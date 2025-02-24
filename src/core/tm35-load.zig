@@ -909,7 +909,7 @@ fn outputGen5Data(game: gen5.Game, writer: anytype) !void {
         const file = nds.fs.File{ .i = @intCast(i) };
         const wilds: []align(1) gen5.WildPokemons =
             game.ptrs.wild_pokemons.fileAs(file, [4]gen5.WildPokemons) catch
-            try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
+                try game.ptrs.wild_pokemons.fileAs(file, [1]gen5.WildPokemons);
 
         for (wilds, 0..) |wild_mons, wild_i| {
             inline for ([_][]const u8{
