@@ -836,11 +836,13 @@ pub const Game = struct {
             try allocator.dupe(u8, nds_rom.arm9());
         errdefer allocator.free(arm9);
 
-        const file_system = nds_rom.fileSystem();
+        const file_system = try nds_rom.fileSystem();
 
         const all_trainers = (try file_system.openNarc(rom.nds.fs.root, info.trainers)).indexable(Trainer);
         const trainer_parties_narc = try file_system.openNarc(rom.nds.fs.root, info.parties);
         const trainer_parties = try allocator.alloc(Party, trainer_parties_narc.fat.len);
+        errdefer allocator.free(trainer_parties);
+
         @memset(trainer_parties, Party{});
 
         for (trainer_parties, 0..) |*party, i| {
@@ -906,7 +908,7 @@ pub const Game = struct {
         info: offsets.Info,
         owned: Owned,
     ) !Game {
-        const file_system = nds_rom.fileSystem();
+        const file_system = try nds_rom.fileSystem();
 
         const hm_tm_prefix_index = std.mem.indexOf(u8, owned.arm9, info.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + info.hm_tm_prefix.len;
@@ -978,27 +980,27 @@ pub const Game = struct {
     }
 
     pub fn pokemons(game: Game) !Pokemons {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
     }
 
     pub fn evolutions(game: Game) !Evolutions {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.pokemons) };
     }
 
     pub fn levelUpMoves(game: Game) !LevelUpMoves {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.level_up_moves) };
     }
 
     pub fn moves(game: Game) !Moves {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.moves) };
     }
 
     pub fn trainers(game: Game) !Trainers {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.trainers) };
     }
 
@@ -1007,12 +1009,12 @@ pub const Game = struct {
     }
 
     pub fn items(game: Game) !Items {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.items) };
     }
 
     pub fn wildAreas(game: Game) !WildAreas {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{
             .version = switch (game.info.version) {
                 .heart_gold, .soul_silver => .hgss,
@@ -1091,7 +1093,7 @@ pub const Game = struct {
         info: offsets.Info,
         owned: Owned,
     ) ![3]*align(1) u16 {
-        const file_system = nds_rom.fileSystem();
+        const file_system = try nds_rom.fileSystem();
         const arm9_overlay_table = nds_rom.arm9OverlayTable();
         switch (info.starters) {
             .arm9 => |offset| {
@@ -1118,7 +1120,7 @@ pub const Game = struct {
     }
 
     fn applyTrainerParties(game: Game) !void {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(rom.nds.fs.root, game.info.parties);
         const trainer_parties = game.owned.trainer_parties;
 
@@ -1188,7 +1190,7 @@ pub const Game = struct {
         // First, we construct an array of all tables we have decrypted. We do
         // this to avoid code duplication in many cases. This table type erases
         // the tables.
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         const old_text_bytes = try file_system.openFileData(rom.nds.fs.root, game.info.text);
 
         const old_text = try rom.nds.fs.Fs.fromNarc(old_text_bytes);

@@ -74,23 +74,49 @@ fn fuzzFromFile(_: void, input: []const u8) !void {
     try input_file.writeAll(input);
     try input_file.seekTo(0);
 
-    const game = Game.fromFile(input_file, std.testing.allocator) catch return;
+    var game = Game.fromFile(input_file, std.testing.allocator) catch return;
     defer game.deinit();
 
+    try game.apply();
     try game.write(output_file.writer());
 }
 
 test "Game.fromFile fuzz" {
-    try std.testing.fuzz({}, fuzzFromFile, .{});
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    const arena = arena_state.allocator();
+    defer arena_state.deinit();
+
+    var corpus = std.ArrayList([]const u8).init(arena);
+    if (build_options.rom_directory) |rom_directory| {
+        const cwd = std.fs.cwd();
+        var dir = try cwd.openDir(rom_directory, .{ .iterate = true });
+        defer dir.close();
+
+        var it = dir.iterate();
+        while (try it.next()) |entry| {
+            const is_gba = std.mem.endsWith(u8, entry.name, ".gba");
+            const is_nds = std.mem.endsWith(u8, entry.name, ".nds");
+            if (!is_gba and !is_nds)
+                continue;
+
+            try corpus.append(try dir.readFileAlloc(arena, entry.name, std.math.maxInt(usize)));
+        }
+    }
+
+    try std.testing.fuzz({}, fuzzFromFile, .{
+        .corpus = corpus.items,
+    });
 }
 
 test {
+    _ = build_options;
     _ = gen3;
     _ = gen4;
     _ = gen5;
     _ = rom;
 }
 
+const build_options = @import("build_options");
 const gen3 = @import("gen3.zig");
 const gen4 = @import("gen4.zig");
 const gen5 = @import("gen5.zig");

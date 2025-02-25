@@ -112,24 +112,24 @@ pub const Fs = struct {
         return std.mem.bytesAsSlice(T, fs.data[start..end]);
     }
 
-    pub fn fromFnt(fnt: []u8, fat: []nds.Range, data: []u8) Fs {
+    pub fn fromFnt(fnt: []u8, fat: []nds.Range, data: []u8) !Fs {
         return Fs{
-            .fnt_main = fntMainTable(fnt),
+            .fnt_main = try fntMainTable(fnt),
             .fnt = fnt,
             .fat = fat,
             .data = data,
         };
     }
 
-    fn fntMainTable(fnt: []u8) []align(1) FntMainEntry {
+    fn fntMainTable(fnt: []u8) ![]align(1) FntMainEntry {
         const rem = fnt.len % @sizeOf(FntMainEntry);
         const fnt_mains = std.mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
         const len = fnt_mains[0].parent_id;
 
-        // TODO: We have no control over if roms we load are structured correctly, so this should
-        //       not be an assert but an error.
-        std.debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
-        return fnt_mains[0..len];
+        if (fnt_mains.len >= len and len <= 4096 and len != 0)
+            return fnt_mains[0..len];
+
+        return error.InvalidFnt;
     }
 
     /// Get a file system from a narc file. This function can failed if the

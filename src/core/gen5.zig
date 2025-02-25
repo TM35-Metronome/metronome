@@ -982,7 +982,7 @@ pub const Game = struct {
     }
 
     pub fn fromRom(allocator: std.mem.Allocator, nds_rom: *rom.nds.Rom) !Game {
-        const file_system = nds_rom.fileSystem();
+        const file_system = try nds_rom.fileSystem();
         var fbs = std.io.fixedBufferStream(nds_rom.data.items);
         const info = try identify(fbs.reader());
         const arm9 = try rom.nds.blz.decode(allocator, nds_rom.arm9());
@@ -1078,7 +1078,7 @@ pub const Game = struct {
         owned: Owned,
     ) !Game {
         const arm9 = owned.arm9;
-        const file_system = nds_rom.fileSystem();
+        const file_system = try nds_rom.fileSystem();
 
         const hm_tm_prefix_index = std.mem.indexOf(u8, arm9, offsets.hm_tm_prefix) orelse return error.CouldNotFindTmsOrHms;
         const hm_tm_index = hm_tm_prefix_index + offsets.hm_tm_prefix.len;
@@ -1137,27 +1137,27 @@ pub const Game = struct {
     }
 
     pub fn pokemons(game: Game) !Pokemons {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.pokemons) };
     }
 
     pub fn evolutions(game: Game) !Evolutions {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.evolutions) };
     }
 
     pub fn levelUpMoves(game: Game) !LevelUpMoves {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.level_up_moves) };
     }
 
     pub fn moves(game: Game) !Moves {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.moves) };
     }
 
     pub fn trainers(game: Game) !Trainers {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.trainers) };
     }
 
@@ -1166,12 +1166,12 @@ pub const Game = struct {
     }
 
     pub fn items(game: Game) !Items {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.items) };
     }
 
     pub fn wildAreas(game: Game) !WildAreas {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         return .{ .fs = try file_system.openNarc(rom.nds.fs.root, game.info.wild_pokemons) };
     }
 
@@ -1208,7 +1208,7 @@ pub const Game = struct {
     }
 
     fn applyStarters(game: Game) !void {
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         const scripts = try file_system.openNarc(rom.nds.fs.root, game.info.scripts);
         for (game.info.starters, game.ptrs.starters) |offs, starter| {
             for (offs) |offset| {
@@ -1259,7 +1259,7 @@ pub const Game = struct {
         const PItem = PartyMemberItem;
         const PMoves = PartyMemberMoves;
 
-        const file_system = game.rom.fileSystem();
+        const file_system = try game.rom.fileSystem();
         const trainer_parties_narc = try file_system.openFileData(rom.nds.fs.root, game.info.parties);
         const trainer_parties = game.owned.trainer_parties;
 
@@ -1321,7 +1321,7 @@ pub const Game = struct {
     /// Applies all decrypted strings to the game.
     fn applyStrings(game: Game, strings: []const StringTable, string_file: []const u8) !void {
         const buf = blk: {
-            const file_system = game.rom.fileSystem();
+            const file_system = try game.rom.fileSystem();
             const text_bytes = try file_system.openFileData(rom.nds.fs.root, string_file);
             const text = try rom.nds.fs.Fs.fromNarc(text_bytes);
 

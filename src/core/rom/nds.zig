@@ -192,7 +192,7 @@ pub const Rom = struct {
         return @alignCast(result);
     }
 
-    pub fn fileSystem(rom: Rom) fs.Fs {
+    pub fn fileSystem(rom: Rom) !fs.Fs {
         const h = rom.header();
         const fnt_bytes = h.fnt.slice(rom.data.items);
         const fat_bytes = h.fat.slice(rom.data.items);
@@ -409,7 +409,7 @@ pub const Rom = struct {
     fn buildSectionTable(rom: Rom, allocator: std.mem.Allocator) ![]Section {
         const h = rom.header();
 
-        const file_system = rom.fileSystem();
+        const file_system = try rom.fileSystem();
         const fat = file_system.fat;
 
         var sections = std.ArrayList(Section).init(allocator);

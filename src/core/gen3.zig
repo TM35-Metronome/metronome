@@ -81,12 +81,12 @@ pub const Trainer = extern struct {
         };
     }
 
-    pub fn partyLen(trainer: Trainer) u8 {
+    pub fn partyLen(trainer: Trainer) u32 {
         return switch (trainer.party_type) {
-            .none => @intCast(trainer.party.none.len()),
-            .item => @intCast(trainer.party.item.len()),
-            .moves => @intCast(trainer.party.moves.len()),
-            .both => @intCast(trainer.party.both.len()),
+            .none => trainer.party.none.len(),
+            .item => trainer.party.item.len(),
+            .moves => trainer.party.moves.len(),
+            .both => trainer.party.both.len(),
         };
     }
 
@@ -99,7 +99,7 @@ pub const Trainer = extern struct {
         };
     }
 
-    pub fn setPartyLen(trainer: *Trainer, len: u8) void {
+    pub fn setPartyLen(trainer: *Trainer, len: u32) void {
         return switch (trainer.party_type) {
             .none => trainer.party.none.inner.len = len,
             .item => trainer.party.item.inner.len = len,
@@ -787,11 +787,13 @@ pub const Game = struct {
 
         const all_trainers = info.trainers.slice(gba_rom);
         const trainer_parties = try allocator.alloc(Party, all_trainers.len);
+        errdefer allocator.free(trainer_parties);
+
         @memset(trainer_parties, Party{});
 
         for (trainer_parties, all_trainers) |*party, trainer| {
             party.type = trainer.party_type;
-            party.size = trainer.partyLen();
+            party.size = @min(6, trainer.partyLen());
 
             for (party.members[0..party.size], 0..) |*member, i| {
                 const base = try trainer.partyAt(i, gba_rom);
