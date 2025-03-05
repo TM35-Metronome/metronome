@@ -62,14 +62,28 @@ pub const Game = union(enum) {
     }
 };
 
+pub fn fuzzCorpus(allocator: std.mem.Allocator) !std.ArrayList([]const u8) {
+    var corpus = std.ArrayList([]const u8).init(allocator);
+    errdefer corpus.deinit();
+
+    const test_rom = (try readTestRom(allocator)) orelse return corpus;
+    errdefer allocator.free(test_rom);
+
+    try corpus.append(test_rom);
+    return corpus;
+}
+
+pub fn readTestRom(allocator: std.mem.Allocator) !?[]u8 {
+    const rom_path = build_options.rom_path orelse return null;
+    return try std.fs.cwd().readFileAlloc(allocator, rom_path, std.math.maxInt(usize));
+}
+
 fn fuzzFromFile(_: void, input: []const u8) !void {
     const cwd = std.fs.cwd();
     const input_file = try cwd.createFile(".zig-cache/fuzz_game_from_file.input", .{
         .read = true,
     });
     defer input_file.close();
-    const output_file = try cwd.createFile(".zig-cache/fuzz_game_from_file.output", .{});
-    defer output_file.close();
 
     try input_file.writeAll(input);
     try input_file.seekTo(0);
@@ -78,33 +92,14 @@ fn fuzzFromFile(_: void, input: []const u8) !void {
     defer game.deinit();
 
     try game.apply();
-    try game.write(output_file.writer());
+    try game.write(std.io.null_writer);
 }
 
 test "Game.fromFile fuzz" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    const arena = arena_state.allocator();
-    defer arena_state.deinit();
-
-    var corpus = std.ArrayList([]const u8).init(arena);
-    if (build_options.rom_directory) |rom_directory| {
-        const cwd = std.fs.cwd();
-        var dir = try cwd.openDir(rom_directory, .{ .iterate = true });
-        defer dir.close();
-
-        var it = dir.iterate();
-        while (try it.next()) |entry| {
-            const is_gba = std.mem.endsWith(u8, entry.name, ".gba");
-            const is_nds = std.mem.endsWith(u8, entry.name, ".nds");
-            if (!is_gba and !is_nds)
-                continue;
-
-            try corpus.append(try dir.readFileAlloc(arena, entry.name, std.math.maxInt(usize)));
-        }
-    }
-
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     try std.testing.fuzz({}, fuzzFromFile, .{
-        .corpus = corpus.items,
+        .corpus = (try fuzzCorpus(arena.allocator())).items,
     });
 }
 

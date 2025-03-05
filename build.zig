@@ -1,10 +1,10 @@
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const rom_directory = b.option(
+    const rom_path = b.option(
         []const u8,
-        "rom-directory",
-        "Path to directory containing rom files",
+        "rom",
+        "Path to a valid Pokémon rom. Used for testing",
     );
 
     std.debug.assert(target.result.cpu.arch.endian() == .little);
@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const test_options = b.addOptions();
-    test_options.addOption(?[]const u8, "rom_directory", rom_directory);
+    test_options.addOption(?[]const u8, "rom_path", rom_path);
 
     const test_exe = b.addTest(.{
         .name = "metronome-test",
