@@ -190,7 +190,7 @@ pub const PartyMemberBoth = extern struct {
 pub const Party = struct {
     type: common.PartyType = .none,
     size: u8 = 0,
-    members: [6]PartyMemberBoth = .{.{}} ** 6,
+    members: [6]PartyMemberBoth = @splat(.{}),
 };
 
 pub const Move = extern struct {

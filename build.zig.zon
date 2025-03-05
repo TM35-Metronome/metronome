@@ -1,0 +1,7 @@
+.{
+    .name = .metronome,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.14.0",
+    .fingerprint = 0xe378e8fca87fc264,
+    .paths = .{"."},
+}

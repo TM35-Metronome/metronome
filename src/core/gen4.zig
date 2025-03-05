@@ -118,7 +118,7 @@ pub const PartyMemberBoth = extern struct {
 pub const Party = struct {
     type: common.PartyType = .none,
     size: u8 = 0,
-    members: [6]PartyMemberBoth = .{.{}} ** 6,
+    members: [6]PartyMemberBoth = @splat(.{}),
 };
 
 /// In HG/SS/Plat, this struct is always padded with a u16 at the end, no matter the party_type
