@@ -77,6 +77,10 @@ pub fn SortedGroupBy(comptime K: type, comptime V: type) type {
             group_by.groups.deinit(gpa);
         }
 
+        pub fn keys(group_by: @This()) []const K {
+            return group_by.groups.keys();
+        }
+
         pub fn get(group_by: @This(), key: K) ?[]const V {
             const span = group_by.groups.get(key) orelse return null;
             return group_by.items[span.off..][0..span.len];
@@ -102,7 +106,7 @@ fn testSortedGroupBy(options: struct {
     defer grouped_by.deinit(std.testing.allocator);
 
     try std.testing.expect(std.sort.isSorted(u8, grouped_by.items, Context{}, Context.lessThan));
-    try std.testing.expectEqualSlices(u8, options.expected_groups_keys, grouped_by.groups.keys());
+    try std.testing.expectEqualSlices(u8, options.expected_groups_keys, grouped_by.keys());
     try std.testing.expectEqualSlices(Span, options.expected_groups_values, grouped_by.groups.values());
 
     for (options.expected_groups_keys) |key| {
