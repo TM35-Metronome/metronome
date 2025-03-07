@@ -1,27 +1,19 @@
-const std = @import("std");
-
-const int = @import("../int.zig");
-const nds = @import("../nds.zig");
-
-const lu16 = int.lu16;
-const lu32 = int.lu32;
-
 pub const Header = extern struct {
     chunk_name: [4]u8,
-    byte_order: lu16,
-    version: lu16,
-    file_size: lu32,
-    chunk_size: lu16,
-    following_chunks: lu16,
+    byte_order: u16,
+    version: u16,
+    file_size: u32,
+    chunk_size: u16,
+    following_chunks: u16,
 
     pub fn narc(file_size: u32) Header {
         return Header{
             .chunk_name = Chunk.names.narc.*,
-            .byte_order = lu16.init(0xFFFE),
-            .version = lu16.init(0x0100),
-            .file_size = lu32.init(file_size),
-            .chunk_size = lu16.init(@sizeOf(Header)),
-            .following_chunks = lu16.init(0x0003),
+            .byte_order = 0xFFFE,
+            .version = 0x0100,
+            .file_size = file_size,
+            .chunk_size = @sizeOf(Header),
+            .following_chunks = 0x0003,
         };
     }
 
@@ -32,7 +24,7 @@ pub const Header = extern struct {
 
 pub const Chunk = extern struct {
     name: [4]u8,
-    size: lu32,
+    size: u32,
 
     pub const names = struct {
         pub const narc = "NARC";
@@ -48,18 +40,16 @@ pub const Chunk = extern struct {
 
 pub const FatChunk = extern struct {
     header: Chunk,
-    file_count: lu16,
-    reserved: lu16 = lu16.init(0),
+    file_count: u16,
+    reserved: u16 = 0,
 
     pub fn init(file_count: u16) FatChunk {
         return .{
             .header = .{
                 .name = Chunk.names.fat.*,
-                .size = lu32.init(
-                    @intCast(@sizeOf(FatChunk) + @sizeOf(nds.Range) * file_count),
-                ),
+                .size = @intCast(@sizeOf(FatChunk) + @sizeOf(nds.Range) * file_count),
             },
-            .file_count = lu16.init(file_count),
+            .file_count = file_count,
         };
     }
 
@@ -67,3 +57,10 @@ pub const FatChunk = extern struct {
         std.debug.assert(@sizeOf(@This()) == 12);
     }
 };
+
+test {
+    _ = nds;
+}
+
+const nds = @import("../nds.zig");
+const std = @import("std");

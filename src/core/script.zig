@@ -1,40 +1,31 @@
-const builtin = @import("builtin");
-const std = @import("std");
-
-const math = std.math;
-const mem = std.mem;
-const meta = std.meta;
-const testing = std.testing;
-const trait = meta.trait;
-
 /// Calculates the packed size of 'value'. The packed size is the size 'value'
 /// would have if unions did not have to have the size of their biggest field.
 pub fn packedLength(value: anytype) error{InvalidTag}!usize {
     @setEvalBranchQuota(10000000);
     const T = @TypeOf(value);
     switch (@typeInfo(T)) {
-        .Void => return 0,
-        .Int => |i| {
+        .void => return 0,
+        .int => |i| {
             if (i.bits % 8 != 0)
                 @compileError("Does not support none power of two integers");
             return @as(usize, i.bits / 8);
         },
-        .Enum => return packedLength(@intFromEnum(value)) catch unreachable,
-        .Array => {
+        .@"enum" => return packedLength(@intFromEnum(value)) catch unreachable,
+        .array => {
             var res: usize = 0;
             for (value) |item|
                 res += try packedLength(item);
 
             return res;
         },
-        .Struct => |s| {
+        .@"struct" => |s| {
             var res: usize = 0;
             inline for (s.fields) |struct_field|
                 res += try packedLength(@field(value, struct_field.name));
             return res;
         },
-        .Union => |u| {
-            if (u.layout != .Packed and u.layout != .Extern)
+        .@"union" => |u| {
+            if (u.layout != .@"packed" and u.layout != .@"extern")
                 @compileError(@typeName(T) ++ " is not packed or extern");
             if (u.tag_type != null)
                 @compileError(@typeName(T) ++ " cannot have a tag.");
@@ -43,7 +34,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
             const tag_field = u.fields[0];
             const tag = @field(value, tag_field.name);
             const TagEnum = @TypeOf(tag);
-            if (@typeInfo(TagEnum) != .Enum)
+            if (@typeInfo(TagEnum) != .@"enum")
                 @compileError(@typeName(T) ++ " tag is not enum: " ++ @typeName(TagEnum));
 
             // Switch over all tags. 'TagEnum' have the same field names as
@@ -51,7 +42,7 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
             // we can add the size of ''@field(union, tag_name)' to res and
             // break out.
             var res: ?usize = null;
-            inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+            inline for (@typeInfo(TagEnum).@"enum".fields) |enum_field| {
                 if (@field(TagEnum, enum_field.name) == tag) {
                     const union_field = @field(value, enum_field.name);
                     res = try packedLength(union_field);
@@ -70,10 +61,10 @@ pub fn packedLength(value: anytype) error{InvalidTag}!usize {
 fn testPackedLength(value: anytype, expect: error{InvalidTag}!usize) !void {
     if (packedLength(value)) |size| {
         const expected_size = expect catch unreachable;
-        try testing.expectEqual(expected_size, size);
+        try std.testing.expectEqual(expected_size, size);
     } else |err| {
         const expected_err = if (expect) |_| unreachable else |e| e;
-        try testing.expectEqual(expected_err, err);
+        try std.testing.expectEqual(expected_err, err);
     }
 }
 
@@ -123,9 +114,9 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
             // encoded commands can be smaller that @sizeOf(Command).
             // If the command we are trying to decode is invalid this
             // will be caught by the calculation of the commands length.
-            mem.copy(u8, &buf, bytes[0..len]);
+            @memcpy(buf[0..len], bytes[0..len]);
 
-            const command = mem.bytesAsSlice(Command, buf[0..])[0];
+            const command = std.mem.bytesAsSlice(Command, buf[0..])[0];
             const command_len = try packedLength(command);
             if (decoder.bytes.len - decoder.i < command_len)
                 return error.InvalidCommand;
@@ -142,31 +133,31 @@ pub fn CommandDecoder(comptime Command: type, comptime isEnd: fn (Command) bool)
 /// Return true if the type in runtime memory is guaranteed to have no padding.
 pub fn isPacked(comptime T: type) bool {
     switch (@typeInfo(T)) {
-        .AnyFrame,
-        .ComptimeFloat,
-        .ComptimeInt,
-        .EnumLiteral,
-        .ErrorUnion,
-        .Fn,
-        .Frame,
-        .NoReturn,
-        .Opaque,
-        .Optional,
-        .Type,
-        .Undefined,
+        .@"anyframe",
+        .frame,
+        .comptime_float,
+        .comptime_int,
+        .enum_literal,
+        .error_union,
+        .@"fn",
+        .noreturn,
+        .@"opaque",
+        .optional,
+        .type,
+        .undefined,
         => return false,
-        .Bool,
-        .Enum,
-        .ErrorSet,
-        .Float,
-        .Int,
-        .Null,
-        .Void,
+        .bool,
+        .@"enum",
+        .error_set,
+        .float,
+        .int,
+        .null,
+        .void,
         => return true,
-        .Struct => |info| switch (info.layout) {
-            .Auto => return false,
-            .Packed,
-            .Extern,
+        .@"struct" => |info| switch (info.layout) {
+            .auto => return false,
+            .@"packed",
+            .@"extern",
             => {
                 var expected_size: usize = 0;
                 inline for (info.fields) |field| {
@@ -178,21 +169,21 @@ pub fn isPacked(comptime T: type) bool {
                 return expected_size == @sizeOf(T);
             },
         },
-        .Vector => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
+        .vector => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
             isPacked(info.child),
-        .Array => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
+        .array => |info| return @sizeOf(info.child) * info.len == @sizeOf(T) and
             isPacked(info.child),
-        .Pointer => |info| switch (info.size) {
-            .One,
+        .pointer => |info| switch (info.size) {
+            .one,
             .Many,
             .C,
             => return true,
-            .Slice => return false,
+            .slice => return false,
         },
-        .Union => |info| switch (info.layout) {
-            .Auto => return false,
-            .Packed,
-            .Extern,
+        .@"union" => |info| switch (info.layout) {
+            .auto => return false,
+            .@"packed",
+            .@"extern",
             => {
                 inline for (info.fields) |field| {
                     if (!isPacked(field.type))
@@ -206,32 +197,35 @@ pub fn isPacked(comptime T: type) bool {
 }
 
 test "isPacked" {
-    try testing.expect(!isPacked(comptime_float));
-    try testing.expect(!isPacked(comptime_int));
-    try testing.expect(!isPacked(error{}!u8));
-    try testing.expect(!isPacked(fn () u8));
-    try testing.expect(!isPacked(anyopaque));
-    try testing.expect(!isPacked(?u8));
-    try testing.expect(!isPacked(type));
-    try testing.expect(isPacked(u8));
-    try testing.expect(isPacked(bool));
-    try testing.expect(isPacked(enum { a }));
-    try testing.expect(isPacked(error{a}));
-    try testing.expect(isPacked(void));
-    try testing.expect(!isPacked(struct {}));
-    try testing.expect(isPacked(extern struct {}));
-    try testing.expect(isPacked(packed struct {}));
-    try testing.expect(!isPacked(union { a: void }));
-    try testing.expect(isPacked(extern union { a: void }));
-    try testing.expect(isPacked(packed union { a: void }));
+    try std.testing.expect(!isPacked(comptime_float));
+    try std.testing.expect(!isPacked(comptime_int));
+    try std.testing.expect(!isPacked(error{}!u8));
+    try std.testing.expect(!isPacked(fn () u8));
+    try std.testing.expect(!isPacked(anyopaque));
+    try std.testing.expect(!isPacked(?u8));
+    try std.testing.expect(!isPacked(type));
+    try std.testing.expect(isPacked(u8));
+    try std.testing.expect(isPacked(bool));
+    try std.testing.expect(isPacked(enum { a }));
+    try std.testing.expect(isPacked(error{a}));
+    try std.testing.expect(isPacked(void));
+    try std.testing.expect(!isPacked(struct {}));
+    try std.testing.expect(isPacked(extern struct {}));
+    try std.testing.expect(isPacked(packed struct {}));
+    try std.testing.expect(!isPacked(union { a: void }));
+    try std.testing.expect(isPacked(extern union { a: void }));
+    try std.testing.expect(isPacked(packed union { a: void }));
 
-    try testing.expect(isPacked(extern struct { a: u8, b: u8 }));
-    try testing.expect(isPacked(extern struct { a: u16, b: u16 }));
-    try testing.expect(!isPacked(extern struct { a: u8, b: u16 }));
-    try testing.expect(!isPacked(extern struct { a: u16, b: u8 }));
+    try std.testing.expect(isPacked(extern struct { a: u8, b: u8 }));
+    try std.testing.expect(isPacked(extern struct { a: u16, b: u16 }));
+    try std.testing.expect(!isPacked(extern struct { a: u8, b: u16 }));
+    try std.testing.expect(!isPacked(extern struct { a: u16, b: u8 }));
 
-    try testing.expect(isPacked(extern union { a: extern struct { a: u8, b: u8 } }));
-    try testing.expect(isPacked(extern union { a: extern struct { a: u16, b: u16 } }));
-    try testing.expect(!isPacked(extern union { a: extern struct { a: u8, b: u16 } }));
-    try testing.expect(!isPacked(extern union { a: extern struct { a: u16, b: u8 } }));
+    try std.testing.expect(isPacked(extern union { a: extern struct { a: u8, b: u8 } }));
+    try std.testing.expect(isPacked(extern union { a: extern struct { a: u16, b: u16 } }));
+    try std.testing.expect(!isPacked(extern union { a: extern struct { a: u8, b: u16 } }));
+    try std.testing.expect(!isPacked(extern union { a: extern struct { a: u16, b: u8 } }));
 }
+
+const builtin = @import("builtin");
+const std = @import("std");

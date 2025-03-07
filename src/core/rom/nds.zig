@@ -1,52 +1,31 @@
-const std = @import("std");
-
-const int = @import("int.zig");
-pub const blz = @import("nds/blz.zig");
-
-const debug = std.debug;
-const heap = std.heap;
-const io = std.io;
-const math = std.math;
-const mem = std.mem;
-const os = std.os;
-const testing = std.testing;
-
-const lu16 = int.lu16;
-const lu32 = int.lu32;
-
-pub const formats = @import("nds/formats.zig");
-pub const fs = @import("nds/fs.zig");
-
-pub const Banner = @import("nds/banner.zig").Banner;
-pub const Header = @import("nds/header.zig").Header;
-
 pub const Range = extern struct {
-    start: lu32,
-    end: lu32,
+    start: u32 align(1),
+    end: u32 align(1),
 
     pub fn init(start: usize, end: usize) Range {
         return .{
-            .start = lu32.init(@intCast(start)),
-            .end = lu32.init(@intCast(end)),
+            .start = @intCast(start),
+            .end = @intCast(end),
         };
     }
 
     pub fn len(r: Range) u32 {
-        return r.end.value() - r.start.value();
+        return r.end - r.start;
     }
 
     pub fn slice(r: Range, s: []u8) []u8 {
-        return s[r.start.value()..r.end.value()];
+        return s[r.start..r.end];
     }
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
+        std.debug.assert(@alignOf(@This()) == 1);
     }
 };
 
 pub const Slice = extern struct {
-    start: lu32,
-    len: lu32,
+    start: u32,
+    len: u32,
 
     pub fn fromSlice(data: []const u8, s: []const u8) Slice {
         const start = @intFromPtr(s.ptr) - @intFromPtr(data.ptr);
@@ -55,17 +34,17 @@ pub const Slice = extern struct {
 
     pub fn init(start: usize, len: usize) Slice {
         return .{
-            .start = lu32.init(@intCast(start)),
-            .len = lu32.init(@intCast(len)),
+            .start = @intCast(start),
+            .len = @intCast(len),
         };
     }
 
     pub fn end(s: Slice) u32 {
-        return s.start.value() + s.len.value();
+        return s.start + s.len;
     }
 
     pub fn slice(sl: Slice, s: []u8) []u8 {
-        return s[sl.start.value()..sl.end()];
+        return s[sl.start..sl.end()];
     }
 
     comptime {
@@ -74,13 +53,13 @@ pub const Slice = extern struct {
 };
 
 pub const Overlay = extern struct {
-    overlay_id: lu32,
-    ram_address: lu32,
-    ram_size: lu32,
-    bss_size: lu32,
-    static_initialiser_start_address: lu32,
-    static_initialiser_end_address: lu32,
-    file_id: lu32,
+    overlay_id: u32,
+    ram_address: u32,
+    ram_size: u32,
+    bss_size: u32,
+    static_initialiser_start_address: u32,
+    static_initialiser_end_address: u32,
+    file_id: u32,
     reserved: [4]u8,
 
     comptime {
@@ -91,7 +70,7 @@ pub const Overlay = extern struct {
 pub const Rom = struct {
     data: std.ArrayListAligned(u8, 8),
 
-    // pub fn new(allocator: mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
+    // pub fn new(allocator: std.mem.Allocator, game_title: []const u8, gamecode: []const u8, opts: struct {
     //     arm9_size: u32 = 0,
     //     arm7_size: u32 = 0,
     //     files: u32 = 0,
@@ -100,38 +79,38 @@ pub const Rom = struct {
     //     var writer = res.data.writer();
     //     errdefer res.deinit();
 
-    //     var h = mem.zeroes(Header);
-    //     mem.copy(u8, &h.game_title, game_title);
-    //     mem.copy(u8, &h.gamecode, gamecode);
-    //     h.secure_area_delay = lu16.init(0x051E);
-    //     h.rom_header_size = lu32.init(0x4000);
-    //     h.digest_ntr_region_offset = lu32.init(0x4000);
+    //     var h = std.mem.zeroes(Header);
+    //     @memcpy(&h.game_title, game_title);
+    //     @memcpy(&h.gamecode, gamecode);
+    //     h.secure_area_delay = u16.init(0x051E);
+    //     h.rom_header_size = u32.init(0x4000);
+    //     h.digest_ntr_region_offset = u32.init(0x4000);
     //     h.title_id_rest = "\x00\x03\x00".*;
 
-    //     try writer.writeAll(mem.asBytes(&h));
+    //     try writer.writeAll(std.mem.asBytes(&h));
     //     try writer.writeAll("\x00" ** (0x4000 - @sizeOf(Header)));
 
-    //     h.arm9.entry_address = lu32.init(0x2000000);
-    //     h.arm9.ram_address = lu32.init(0x2000000);
-    //     h.arm9.offset = lu32.init(@intCast(u32, res.data.len));
-    //     h.arm9.size = lu32.init(opts.arm9_size);
-    //     try writer.writeByteNTimes(0, h.arm9.size.value());
+    //     h.arm9.entry_address = u32.init(0x2000000);
+    //     h.arm9.ram_address = u32.init(0x2000000);
+    //     h.arm9.offset = u32.init(@intCast(u32, res.data.len));
+    //     h.arm9.size = u32.init(opts.arm9_size);
+    //     try writer.writeByteNTimes(0, h.arm9.size);
     //     try writer.writeByteNTimes(0, 0x8000 -| res.data.len);
 
-    //     h.arm7.ram_address = lu32.init(0x2000000);
-    //     h.arm7.entry_address = lu32.init(0x2000000);
-    //     h.arm7.offset = lu32.init(@intCast(u32, res.data.len));
-    //     h.arm7.size = lu32.init(opts.arm7_size);
-    //     try writer.writeByteNTimes(0, h.arm7.size.value());
+    //     h.arm7.ram_address = u32.init(0x2000000);
+    //     h.arm7.entry_address = u32.init(0x2000000);
+    //     h.arm7.offset = u32.init(@intCast(u32, res.data.len));
+    //     h.arm7.size = u32.init(opts.arm7_size);
+    //     try writer.writeByteNTimes(0, h.arm7.size);
 
-    //     h.fat.start = lu32.init(@intCast(u32, res.data.len));
-    //     h.fat.len = lu32.init(opts.files * @sizeOf(Range));
-    //     try writer.writeByteNTimes(0, h.fat.len.value());
+    //     h.fat.start = u32.init(@intCast(u32, res.data.len));
+    //     h.fat.len = u32.init(opts.files * @sizeOf(Range));
+    //     try writer.writeByteNTimes(0, h.fat.len);
 
     //     return res;
     // }
 
-    pub fn fromFile(file: std.fs.File, allocator: mem.Allocator) !Rom {
+    pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Rom {
         const reader = file.reader();
         const size = try file.getEndPos();
         try file.seekTo(0);
@@ -161,12 +140,12 @@ pub const Rom = struct {
 
     pub fn banner(rom: Rom) ?*Banner {
         const h = rom.header();
-        const offset = h.banner_offset.value();
+        const offset = h.banner_offset;
         if (offset == 0)
             return null;
 
         const bytes = rom.data.items[offset..][0..@sizeOf(Banner)];
-        const result = mem.bytesAsValue(Banner, bytes);
+        const result = std.mem.bytesAsValue(Banner, bytes);
 
         // This is safe because we check that the `banner_offset` is aligned in `Header.validate`
         return @alignCast(result);
@@ -176,29 +155,29 @@ pub const Rom = struct {
     /// be encoded and therefore not very useful.
     pub fn arm9(rom: Rom) []u8 {
         const h = rom.header();
-        const offset = h.arm9.offset.value();
-        return rom.data.items[offset..][0..h.arm9.size.value()];
+        const offset = h.arm9.offset;
+        return rom.data.items[offset..][0..h.arm9.size];
     }
 
     // pub fn nitroFooter(rom: Rom) []u8 {
     //     const h = rom.header();
-    //     const offset = h.arm9.offset.value() + h.arm9.size.value();
+    //     const offset = h.arm9.offset + h.arm9.size;
     //     const footer = rom.data.items[offset..][0..12];
-    //     if (@bitCast(lu32, footer[0..4].*).value() != 0xDEC00621)
+    //     if (@bitCast(u32, footer[0..4].*) != 0xDEC00621)
     //         return footer[0..0];
     //     return footer;
     // }
 
     pub fn arm7(rom: Rom) []u8 {
         const h = rom.header();
-        const offset = h.arm7.offset.value();
-        return rom.data.items[offset..][0..h.arm7.size.value()];
+        const offset = h.arm7.offset;
+        return rom.data.items[offset..][0..h.arm7.size];
     }
 
     pub fn arm9OverlayTable(rom: Rom) []Overlay {
         const h = rom.header();
         const bytes = h.arm9_overlay.slice(rom.data.items);
-        const result = mem.bytesAsSlice(Overlay, bytes);
+        const result = std.mem.bytesAsSlice(Overlay, bytes);
 
         // This is safe because we check that the `arm9_overlay` is aligned in `Header.validate`
         return @alignCast(result);
@@ -207,19 +186,19 @@ pub const Rom = struct {
     pub fn arm7OverlayTable(rom: Rom) []align(1) Overlay {
         const h = rom.header();
         const bytes = h.arm7_overlay.slice(rom.data.items);
-        const result = mem.bytesAsSlice(Overlay, bytes);
+        const result = std.mem.bytesAsSlice(Overlay, bytes);
 
         // This is safe because we check that the `arm7_overlay` is aligned in `Header.validate`
         return @alignCast(result);
     }
 
-    pub fn fileSystem(rom: Rom) fs.Fs {
+    pub fn fileSystem(rom: Rom) !fs.Fs {
         const h = rom.header();
         const fnt_bytes = h.fnt.slice(rom.data.items);
         const fat_bytes = h.fat.slice(rom.data.items);
         return fs.Fs.fromFnt(
             fnt_bytes,
-            mem.bytesAsSlice(Range, fat_bytes),
+            std.mem.bytesAsSlice(Range, fat_bytes),
             rom.data.items,
         );
     }
@@ -231,20 +210,20 @@ pub const Rom = struct {
         const sections = try rom.buildSectionTable(fba.allocator());
 
         const old_slice = Slice.fromSlice(data.items, old);
-        const old_start = old_slice.start.value();
-        const old_len = old_slice.len.value();
+        const old_start = old_slice.start;
+        const old_len = old_slice.len;
 
         const section_index = for (sections, 0..) |s, i| {
             const slice = s.toSlice(data.items);
-            if (slice.start.value() == old_start and slice.len.value() == old_len)
+            if (slice.start == old_start and slice.len == old_len)
                 break i;
         } else unreachable;
 
         const is_last_section = section_index == sections.len - 1;
         const following_section_start = if (is_last_section)
-            math.maxInt(u32)
+            std.math.maxInt(u32)
         else
-            sections[section_index + 1].toSlice(data.items).start.value();
+            sections[section_index + 1].toSlice(data.items).start;
 
         const potential_new_end = old_start + new_size;
         const can_perform_in_place_resize = potential_new_end <= following_section_start;
@@ -255,7 +234,7 @@ pub const Rom = struct {
             section.set(data.items, Slice.init(old_start, new_size));
 
             const h = rom.header();
-            h.header_checksum = lu16.init(h.calcChecksum());
+            h.header_checksum = h.calcChecksum();
 
             return data.items[old_start..][0..new_size];
         }
@@ -271,7 +250,7 @@ pub const Rom = struct {
             const last_section = sections[sections.len - 1].toSlice(data.items);
             const last_section_end = last_section.end();
 
-            const new_start = mem.alignForward(usize, last_section_end, 128);
+            const new_start = std.mem.alignForward(usize, last_section_end, 128);
             const section = sections[section_index];
             section.set(data.items, Slice.init(new_start, new_size));
             end = section.toSlice(data.items).end();
@@ -279,12 +258,7 @@ pub const Rom = struct {
             if (new_start + new_size > data.items.len)
                 try data.resize(data.items.len * 2);
 
-            mem.copy(
-                u8,
-                data.items[new_start..][0..new_size],
-                data.items[old_start..][0..old.len],
-            );
-
+            @memcpy(data.items[new_start..][0..old.len], data.items[old_start..][0..old.len]);
             break :blk new_start;
         } else blk: {
             // Some sections (arm9) are not allowed to be moved, so we have to make room
@@ -297,8 +271,8 @@ pub const Rom = struct {
             for (sections[section_index + 1 ..]) |section| {
                 const section_slice = section.toSlice(data.items);
                 section.set(data.items, Slice.init(
-                    section_slice.start.value() + extra_bytes,
-                    section_slice.len.value(),
+                    section_slice.start + extra_bytes,
+                    section_slice.len,
                 ));
             }
 
@@ -309,7 +283,7 @@ pub const Rom = struct {
             if (end > data.items.len)
                 try data.resize(data.items.len * 2);
 
-            mem.copyBackwards(
+            std.mem.copyBackwards(
                 u8,
                 data.items[old_sec_end + extra_bytes ..],
                 data.items[old_sec_end..old_rom_end],
@@ -319,7 +293,7 @@ pub const Rom = struct {
 
         // Update header after resize
         const h = rom.header();
-        h.total_used_rom_size = lu32.init(@intCast(end));
+        h.total_used_rom_size = @intCast(end);
         h.device_capacity = blk: {
             // Devicecapacity (Chipsize = 128KB SHL nn) (eg. 7 = 16MB)
             const size = data.items.len;
@@ -329,7 +303,7 @@ pub const Rom = struct {
             break :blk device_cap;
         };
 
-        h.header_checksum = lu16.init(h.calcChecksum());
+        h.header_checksum = h.calcChecksum();
         return data.items[new_start..][0..new_size];
     }
 
@@ -363,16 +337,16 @@ pub const Rom = struct {
 
         fn fromStartEnd(
             data: []const u8,
-            start: *align(1) const lu32,
-            end: *align(1) const lu32,
+            start: *align(1) const u32,
+            end: *align(1) const u32,
         ) Section {
             return fromAny(data, .range, start, end);
         }
 
         fn fromStartLen(
             data: []const u8,
-            start: *align(1) const lu32,
-            len: *align(1) const lu32,
+            start: *align(1) const u32,
+            len: *align(1) const u32,
         ) Section {
             return fromAny(data, .slice, start, len);
         }
@@ -380,15 +354,15 @@ pub const Rom = struct {
         fn fromAny(
             data: []const u8,
             kind: Kind,
-            start: *align(1) const lu32,
-            other: *align(1) const lu32,
+            start: *align(1) const u32,
+            other: *align(1) const u32,
         ) Section {
             const data_end = @intFromPtr(data.ptr) + data.len;
             const start_index = @intFromPtr(start) - @intFromPtr(data.ptr);
             const other_index = @intFromPtr(other) - @intFromPtr(data.ptr);
-            debug.assert(start_index + @sizeOf(lu32) <= data_end);
-            debug.assert(other_index + @sizeOf(lu32) <= data_end);
-            debug.assert(kind == .slice or start.value() <= other.value());
+            std.debug.assert(start_index + @sizeOf(u32) <= data_end);
+            std.debug.assert(other_index + @sizeOf(u32) <= data_end);
+            std.debug.assert(kind == .slice or start.* <= other.*);
             return .{
                 .start_index = @intCast(start_index),
                 .other_index = @intCast(other_index),
@@ -402,40 +376,40 @@ pub const Rom = struct {
             // it can return one. We don't modify the pointee, so there
             // is nothing unsafe about this discard.
             const const_discarded = @as([*]u8, @ptrFromInt(@intFromPtr(data.ptr)))[0..data.len];
-            const start = section.getPtr(const_discarded, .start).value();
-            const other = section.getPtr(const_discarded, .other).value();
-            const len = other - start * @intFromBool(section.kind == .range);
-            return Slice.init(start, len);
+            const start = section.getPtr(const_discarded, .start);
+            const other = section.getPtr(const_discarded, .other);
+            const len = other.* - start.* * @intFromBool(section.kind == .range);
+            return Slice.init(start.*, len);
         }
 
-        fn getPtr(section: Section, data: []u8, field: enum { start, other }) *align(1) lu32 {
+        fn getPtr(section: Section, data: []u8, field: enum { start, other }) *align(1) u32 {
             const index = switch (field) {
                 .start => section.start_index,
                 .other => section.other_index,
             };
-            const bytes = data[index..][0..@sizeOf(lu32)];
-            return mem.bytesAsValue(lu32, bytes);
+            const bytes = data[index..][0..@sizeOf(u32)];
+            return std.mem.bytesAsValue(u32, bytes);
         }
 
         fn set(section: Section, data: []u8, slice: Slice) void {
             section.getPtr(data, .start).* = slice.start;
             switch (section.kind) {
                 .slice => section.getPtr(data, .other).* = slice.len,
-                .range => section.getPtr(data, .other).* = lu32.init(slice.end()),
+                .range => section.getPtr(data, .other).* = slice.end(),
             }
         }
 
         fn before(data: []const u8, a: Section, b: Section) bool {
             const a_slice = a.toSlice(data);
             const b_slice = b.toSlice(data);
-            return a_slice.start.value() < b_slice.start.value();
+            return a_slice.start < b_slice.start;
         }
     };
 
-    fn buildSectionTable(rom: Rom, allocator: mem.Allocator) ![]Section {
+    fn buildSectionTable(rom: Rom, allocator: std.mem.Allocator) ![]Section {
         const h = rom.header();
 
-        const file_system = rom.fileSystem();
+        const file_system = try rom.fileSystem();
         const fat = file_system.fat;
 
         var sections = std.ArrayList(Section).init(allocator);
@@ -457,7 +431,7 @@ pub const Rom = struct {
             sections.appendAssumeCapacity(Section.fromRange(data.items, f));
 
         // Sort sections by where they appear in the rom.
-        mem.sort(Section, sections.items, data.items, Section.before);
+        std.mem.sort(Section, sections.items, data.items, Section.before);
         return sections.toOwnedSlice();
     }
 
@@ -473,3 +447,20 @@ pub const Rom = struct {
         rom.data.deinit();
     }
 };
+
+test {
+    _ = Banner;
+    _ = Header;
+    _ = blz;
+    _ = formats;
+    _ = fs;
+}
+
+pub const Banner = @import("nds/banner.zig").Banner;
+pub const Header = @import("nds/header.zig").Header;
+
+pub const blz = @import("nds/blz.zig");
+pub const formats = @import("nds/formats.zig");
+pub const fs = @import("nds/fs.zig");
+
+const std = @import("std");

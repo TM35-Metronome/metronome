@@ -1,9 +1,4 @@
-const std = @import("std");
-
-const math = std.math;
-const testing = std.testing;
-
-pub fn setTo(comptime Int: type, num: Int, bit: math.Log2Int(Int), value: bool) Int {
+pub fn setTo(comptime Int: type, num: Int, bit: std.math.Log2Int(Int), value: bool) Int {
     return switch (value) {
         true => set(Int, num, bit),
         false => clear(Int, num, bit),
@@ -12,48 +7,48 @@ pub fn setTo(comptime Int: type, num: Int, bit: math.Log2Int(Int), value: bool) 
 
 test "setTo" {
     const v = @as(u8, 0b10);
-    try testing.expectEqual(@as(u8, 0b11), setTo(u8, v, 0, true));
-    try testing.expectEqual(@as(u8, 0b00), setTo(u8, v, 1, false));
+    try std.testing.expectEqual(@as(u8, 0b11), setTo(u8, v, 0, true));
+    try std.testing.expectEqual(@as(u8, 0b00), setTo(u8, v, 1, false));
 }
 
-pub fn set(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
+pub fn set(comptime Int: type, num: Int, bit: std.math.Log2Int(Int)) Int {
     return num | (@as(Int, 1) << bit);
 }
 
 test "set" {
     const v = @as(u8, 0b10);
-    try testing.expectEqual(@as(u8, 0b11), set(u8, v, 0));
-    try testing.expectEqual(@as(u8, 0b10), set(u8, v, 1));
+    try std.testing.expectEqual(@as(u8, 0b11), set(u8, v, 0));
+    try std.testing.expectEqual(@as(u8, 0b10), set(u8, v, 1));
 }
 
-pub fn clear(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
+pub fn clear(comptime Int: type, num: Int, bit: std.math.Log2Int(Int)) Int {
     return num & ~(@as(Int, 1) << bit);
 }
 
 test "clear" {
     const v = @as(u8, 0b10);
-    try testing.expectEqual(@as(u8, 0b10), clear(u8, v, 0));
-    try testing.expectEqual(@as(u8, 0b00), clear(u8, v, 1));
+    try std.testing.expectEqual(@as(u8, 0b10), clear(u8, v, 0));
+    try std.testing.expectEqual(@as(u8, 0b00), clear(u8, v, 1));
 }
 
-pub fn isSet(comptime Int: type, num: Int, bit: math.Log2Int(Int)) bool {
+pub fn isSet(comptime Int: type, num: Int, bit: std.math.Log2Int(Int)) bool {
     return ((num >> bit) & 1) != 0;
 }
 
 test "isSet" {
     const v = @as(u8, 0b10);
-    try testing.expect(!isSet(u8, v, 0));
-    try testing.expect(isSet(u8, v, 1));
+    try std.testing.expect(!isSet(u8, v, 0));
+    try std.testing.expect(isSet(u8, v, 1));
 }
 
-pub fn toggle(comptime Int: type, num: Int, bit: math.Log2Int(Int)) Int {
+pub fn toggle(comptime Int: type, num: Int, bit: std.math.Log2Int(Int)) Int {
     return num ^ (@as(Int, 1) << bit);
 }
 
 test "toggle" {
     const v = @as(u8, 0b10);
-    try testing.expectEqual(@as(u8, 0b11), toggle(u8, v, 0));
-    try testing.expectEqual(@as(u8, 0b00), toggle(u8, v, 1));
+    try std.testing.expectEqual(@as(u8, 0b11), toggle(u8, v, 0));
+    try std.testing.expectEqual(@as(u8, 0b00), toggle(u8, v, 1));
 }
 
 pub fn count(comptime Int: type, num: Int) usize {
@@ -66,8 +61,10 @@ pub fn count(comptime Int: type, num: Int) usize {
 }
 
 test "count" {
-    try testing.expectEqual(@as(usize, 0), count(u8, 0b0));
-    try testing.expectEqual(@as(usize, 1), count(u8, 0b1));
-    try testing.expectEqual(@as(usize, 2), count(u8, 0b101));
-    try testing.expectEqual(@as(usize, 4), count(u8, 0b11011));
+    try std.testing.expectEqual(@as(usize, 0), count(u8, 0b0));
+    try std.testing.expectEqual(@as(usize, 1), count(u8, 0b1));
+    try std.testing.expectEqual(@as(usize, 2), count(u8, 0b101));
+    try std.testing.expectEqual(@as(usize, 4), count(u8, 0b11011));
 }
+
+const std = @import("std");

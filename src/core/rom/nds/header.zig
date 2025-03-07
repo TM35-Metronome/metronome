@@ -1,32 +1,13 @@
-const crc = @import("crc");
-const std = @import("std");
-const util = @import("util");
+pub const CrcModbus = std.hash.crc.Crc(u16, .{
+    .polynomial = 0x8005,
+    .initial = 0xFFFF,
+    .xor_output = 0x0000,
+    .reflect_input = true,
+    .reflect_output = true,
+});
 
-const int = @import("../int.zig");
-const nds = @import("../nds.zig");
-
-const ascii = std.ascii;
-const debug = std.debug;
-const io = std.io;
-const mem = std.mem;
-
-const lu16 = int.lu16;
-const lu32 = int.lu32;
-const lu64 = int.lu64;
-
-pub const crc_modbus = blk: {
-    @setEvalBranchQuota(crc.crcspec_init_backward_cycles);
-    break :blk crc.Spec(u16).init(.{
-        .polynomial = 0x8005,
-        .initial_value = 0xFFFF,
-        .xor_value = 0x0000,
-        .reflect_data = true,
-        .reflect_remainder = true,
-    });
-};
-
-test "nds.crc_modbus" {
-    debug.assert(crc_modbus.checksum("123456789") == 0x4B37);
+test CrcModbus {
+    std.debug.assert(CrcModbus.hash("123456789") == 0x4B37);
 }
 
 // http://problemkaputt.de/gbatek.htm#dscartridgeheader
@@ -57,28 +38,28 @@ pub const Header = extern struct {
     port_40001a4h_setting_for_normal_commands: [4]u8,
     port_40001a4h_setting_for_key1_commands: [4]u8,
 
-    banner_offset: lu32,
+    banner_offset: u32,
 
-    secure_area_checksum: lu16,
-    secure_area_delay: lu16,
+    secure_area_checksum: u16,
+    secure_area_delay: u16,
 
-    arm9_auto_load_list_ram_address: lu32,
-    arm7_auto_load_list_ram_address: lu32,
+    arm9_auto_load_list_ram_address: u32,
+    arm7_auto_load_list_ram_address: u32,
 
-    secure_area_disable: lu64,
-    total_used_rom_size: lu32,
-    rom_header_size: lu32,
+    secure_area_disable: u64,
+    total_used_rom_size: u32,
+    rom_header_size: u32,
 
     reserved3: [0x38]u8,
 
     nintendo_logo: [0x9C]u8,
-    nintendo_logo_checksum: lu16,
+    nintendo_logo_checksum: u16,
 
-    header_checksum: lu16,
+    header_checksum: u16,
 
-    debug_rom_offset: lu32,
-    debug_size: lu32,
-    debug_ram_address: lu32,
+    debug_rom_offset: u32,
+    debug_size: u32,
+    debug_ram_address: u32,
 
     reserved4: [4]u8,
     reserved5: [0x10]u8,
@@ -106,44 +87,44 @@ pub const Header = extern struct {
     //         bit2: Custom Icon  (0=No/Normal, 1=Use banner.save)
     unknown_flags: u8,
 
-    arm9i_rom_offset: lu32,
+    arm9i_rom_offset: u32,
 
     reserved7: [4]u8,
 
-    arm9i_ram_load_address: lu32,
-    arm9i_size: lu32,
-    arm7i_rom_offset: lu32,
+    arm9i_ram_load_address: u32,
+    arm9i_size: u32,
+    arm7i_rom_offset: u32,
 
-    device_list_arm7_ram_addr: lu32,
+    device_list_arm7_ram_addr: u32,
 
-    arm7i_ram_load_address: lu32,
-    arm7i_size: lu32,
+    arm7i_ram_load_address: u32,
+    arm7i_size: u32,
 
-    digest_ntr_region_offset: lu32,
-    digest_ntr_region_length: lu32,
-    digest_twl_region_offset: lu32,
-    digest_twl_region_length: lu32,
-    digest_sector_hashtable_offset: lu32,
-    digest_sector_hashtable_length: lu32,
-    digest_block_hashtable_offset: lu32,
-    digest_block_hashtable_length: lu32,
-    digest_sector_size: lu32,
-    digest_block_sectorcount: lu32,
+    digest_ntr_region_offset: u32,
+    digest_ntr_region_length: u32,
+    digest_twl_region_offset: u32,
+    digest_twl_region_length: u32,
+    digest_sector_hashtable_offset: u32,
+    digest_sector_hashtable_length: u32,
+    digest_block_hashtable_offset: u32,
+    digest_block_hashtable_length: u32,
+    digest_sector_size: u32,
+    digest_block_sectorcount: u32,
 
-    banner_size: lu32,
+    banner_size: u32,
 
     reserved8: [4]u8,
 
-    total_used_rom_size_including_dsi_area: lu32,
+    total_used_rom_size_including_dsi_area: u32,
 
     reserved9: [4]u8,
     reserved10: [4]u8,
     reserved11: [4]u8,
 
-    modcrypt_area_1_offset: lu32,
-    modcrypt_area_1_size: lu32,
-    modcrypt_area_2_offset: lu32,
-    modcrypt_area_2_size: lu32,
+    modcrypt_area_1_offset: u32,
+    modcrypt_area_1_size: u32,
+    modcrypt_area_2_offset: u32,
+    modcrypt_area_2_size: u32,
 
     title_id_emagcode: [4]u8,
     title_id_filetype: u8,
@@ -153,8 +134,8 @@ pub const Header = extern struct {
     // 237h 1    Title ID, Zero     (00h=Normal)
     title_id_rest: [3]u8,
 
-    public_sav_filesize: lu32,
-    private_sav_filesize: lu32,
+    public_sav_filesize: u32,
+    private_sav_filesize: u32,
 
     reserved12: [176]u8,
 
@@ -194,14 +175,14 @@ pub const Header = extern struct {
     signature_across_header_entries: [0x80]u8,
 
     comptime {
-        debug.assert(@sizeOf(Header) == 4096);
+        std.debug.assert(@sizeOf(Header) == 4096);
     }
 
     pub const Arm = extern struct {
-        offset: lu32,
-        entry_address: lu32,
-        ram_address: lu32,
-        size: lu32,
+        offset: u32,
+        entry_address: u32,
+        ram_address: u32,
+        size: u32,
     };
 
     pub fn isDsi(header: Header) bool {
@@ -209,26 +190,26 @@ pub const Header = extern struct {
     }
 
     pub fn calcChecksum(header: Header) u16 {
-        return crc_modbus.checksum(mem.toBytes(header)[0..0x15E]);
+        return CrcModbus.hash(std.mem.toBytes(header)[0..0x15E]);
     }
 
     pub fn validate(header: Header) !void {
-        if (header.header_checksum.value() != header.calcChecksum())
+        if (header.header_checksum != header.calcChecksum())
             return error.InvalidHeaderChecksum;
 
         for (header.game_title.slice()) |item| {
-            if (ascii.isLower(item))
+            if (std.ascii.isLower(item))
                 return error.InvalidGameTitle;
         }
         for (header.gamecode) |item| {
-            if (!ascii.isUpper(item))
+            if (!std.ascii.isUpper(item))
                 return error.InvalidGamecode;
         }
 
         // TODO: Docs says that makercode is uber ascii, but for Pokemon games, it is
         //       ascii numbers.
-        //const makercode = ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
-        //if (!it.all(makercode, ascii.isUpper))
+        //const makercode = std.ascii.asAsciiConst(header.makercode) catch return error.InvalidMakercode;
+        //if (!it.all(makercode, std.ascii.isUpper))
         //    return error.InvalidMakercode;
 
         if (header.unitcode > 0x03)
@@ -241,40 +222,40 @@ pub const Header = extern struct {
 
         // It seems that arm9 (secure area) is always at 0x4000
         // http://problemkaputt.de/gbatek.htm#dscartridgesecurearea
-        if (header.arm9.offset.value() != 0x4000)
+        if (header.arm9.offset != 0x4000)
             return error.InvalidArm9RomOffset;
-        if (header.arm9.entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm9.entry_address.value())
+        if (header.arm9.entry_address < 0x2000000 or 0x23BFE00 < header.arm9.entry_address)
             return error.InvalidArm9EntryAddress;
-        if (header.arm9.ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm9.ram_address.value())
+        if (header.arm9.ram_address < 0x2000000 or 0x23BFE00 < header.arm9.ram_address)
             return error.InvalidArm9RamAddress;
-        if (header.arm9.size.value() > 0x3BFE00)
+        if (header.arm9.size > 0x3BFE00)
             return error.InvalidArm9Size;
 
-        if (header.arm7.offset.value() < 0x8000)
+        if (header.arm7.offset < 0x8000)
             return error.InvalidArm7RomOffset;
-        if ((header.arm7.entry_address.value() < 0x2000000 or 0x23BFE00 < header.arm7.entry_address.value()) and
-            (header.arm7.entry_address.value() < 0x37F8000 or 0x3807E00 < header.arm7.entry_address.value()))
+        if ((header.arm7.entry_address < 0x2000000 or 0x23BFE00 < header.arm7.entry_address) and
+            (header.arm7.entry_address < 0x37F8000 or 0x3807E00 < header.arm7.entry_address))
             return error.InvalidArm7EntryAddress;
-        if ((header.arm7.ram_address.value() < 0x2000000 or 0x23BFE00 < header.arm7.ram_address.value()) and
-            (header.arm7.ram_address.value() < 0x37F8000 or 0x3807E00 < header.arm7.ram_address.value()))
+        if ((header.arm7.ram_address < 0x2000000 or 0x23BFE00 < header.arm7.ram_address) and
+            (header.arm7.ram_address < 0x37F8000 or 0x3807E00 < header.arm7.ram_address))
             return error.InvalidArm7RamAddress;
-        if (header.arm7.size.value() > 0x3BFE00)
+        if (header.arm7.size > 0x3BFE00)
             return error.InvalidArm7Size;
 
-        if (header.arm9_overlay.start.value() % @alignOf(nds.Overlay) != 0)
+        if (header.arm9_overlay.start % @alignOf(nds.Overlay) != 0)
             return error.InvalidArm9OverlayOffset;
-        if (header.arm7_overlay.start.value() % @alignOf(nds.Overlay) != 0)
+        if (header.arm7_overlay.start % @alignOf(nds.Overlay) != 0)
             return error.InvalidArm7OverlayOffset;
 
-        if (header.banner_offset.value() != 0 and header.banner_offset.value() < 0x8000)
+        if (header.banner_offset != 0 and header.banner_offset < 0x8000)
             return error.InvalidIconTitleOffset;
-        if (header.banner_offset.value() % @alignOf(nds.Banner) != 0)
+        if (header.banner_offset % @alignOf(nds.Banner) != 0)
             return error.InvalidIconTitleOffset;
 
-        if (header.secure_area_delay.value() != 0x051E and header.secure_area_delay.value() != 0x0D7E)
+        if (header.secure_area_delay != 0x051E and header.secure_area_delay != 0x0D7E)
             return error.InvalidSecureAreaDelay;
 
-        if (header.rom_header_size.value() != 0x4000)
+        if (header.rom_header_size != 0x4000)
             return error.InvalidRomHeaderSize;
 
         //if (!it.all(header.reserved3, isZero))
@@ -292,13 +273,13 @@ pub const Header = extern struct {
 
             // TODO: (usually same as ARM9 rom offs, 0004000h)
             //       Does that mean that it also always 0x4000?
-            if (header.digest_ntr_region_offset.value() != 0x4000)
+            if (header.digest_ntr_region_offset != 0x4000)
                 return error.InvalidDigestNtrRegionOffset;
-            //if (!mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
+            //if (!std.mem.eql(u8, header.reserved8, [_]u8{ 0x00, 0x00, 0x01, 0x00 }))
             //    return error.InvalidReserved8;
             //if (!it.all(header.reserved9, isZero))
             //    return error.InvalidReserved9;
-            if (!mem.eql(u8, &header.title_id_rest, "\x00\x03\x00"))
+            if (!std.mem.eql(u8, &header.title_id_rest, "\x00\x03\x00"))
                 return error.InvalidTitleIdRest;
             //if (!it.all(header.reserved12, isZero))
             //    return error.InvalidReserved12;
@@ -315,3 +296,12 @@ pub const Header = extern struct {
         return b == 0;
     }
 };
+
+test {
+    _ = nds;
+    _ = util;
+}
+
+const nds = @import("../nds.zig");
+const std = @import("std");
+const util = @import("../../../util.zig");

@@ -1,21 +1,3 @@
-const std = @import("std");
-
-const formats = @import("formats.zig");
-const int = @import("../int.zig");
-const nds = @import("../nds.zig");
-
-const debug = std.debug;
-const fmt = std.fmt;
-const heap = std.heap;
-const io = std.io;
-const math = std.math;
-const mem = std.mem;
-const os = std.os;
-const testing = std.testing;
-
-const lu16 = int.lu16;
-const lu32 = int.lu32;
-
 pub const Dir = struct { i: u16 };
 pub const File = struct { i: u32 };
 pub const Handle = union(enum) {
@@ -28,7 +10,7 @@ pub const root = Dir{ .i = 0 };
 pub const Fs = struct {
     fnt_main: []align(1) FntMainEntry,
     fnt: []u8,
-    fat: []align(1) nds.Range,
+    fat: []nds.Range,
     data: []u8,
 
     pub fn openNarc(fs: nds.fs.Fs, dir: Dir, path: []const u8) !nds.fs.Fs {
@@ -57,12 +39,12 @@ pub const Fs = struct {
 
     pub fn open(fs: Fs, dir: Dir, path: []const u8) !Handle {
         var handle = Handle{ .dir = dir };
-        const relative = if (mem.startsWith(u8, path, "/")) blk: {
+        const relative = if (std.mem.startsWith(u8, path, "/")) blk: {
             handle.dir = root; // Set handle to root
             break :blk path[1..];
         } else path;
 
-        var split = mem.split(u8, relative, "/");
+        var split = std.mem.splitScalar(u8, relative, '/');
         while (split.next()) |name| {
             switch (handle) {
                 .file => return error.DoesntExist,
@@ -76,11 +58,15 @@ pub const Fs = struct {
         return handle;
     }
 
+    pub fn indexable(fs: Fs, comptime T: type) Indexable(T) {
+        return .{ .fs = fs };
+    }
+
     pub fn iterate(fs: Fs, dir: Dir) Iterator {
         const fnt_entry = fs.fnt_main[dir.i];
-        const file_handle = fnt_entry.first_file_handle.value();
-        const offset = fnt_entry.offset_to_subtable.value();
-        debug.assert(fs.fnt.len >= offset);
+        const file_handle = fnt_entry.first_file_handle;
+        const offset = fnt_entry.offset_to_subtable;
+        std.debug.assert(fs.fnt.len >= offset);
 
         return Iterator{
             .file_handle = file_handle,
@@ -89,15 +75,17 @@ pub const Fs = struct {
     }
 
     pub fn fileAs(fs: Fs, file: File, comptime T: type) !*align(1) T {
-        const data = fs.fileData(file);
+        const data = try fs.fileData(file);
         if (@sizeOf(T) > data.len)
             return error.FileToSmall;
         return @ptrCast(data.ptr);
     }
 
-    pub fn fileData(fs: Fs, file: File) []u8 {
+    pub fn fileData(fs: Fs, file: File) ![]u8 {
+        if (fs.fat.len <= file.i)
+            return error.FileDoesNotExist;
         const f = fs.fat[file.i];
-        return fs.data[f.start.value()..f.end.value()];
+        return fs.data[f.start..f.end];
     }
 
     /// Reinterprets the file system as a slice of T. This can only be
@@ -112,78 +100,92 @@ pub const Fs = struct {
         if (fs.fat.len == first)
             return &[0]T{};
 
-        const start = fs.fat[first].start.value();
+        const start = fs.fat[first].start;
         var end = start;
         for (fs.fat[first..]) |fat| {
-            const fat_start = fat.start.value();
+            const fat_start = fat.start;
             if (fat_start != end)
                 return error.FsIsNotSequential;
             end += @sizeOf(T);
         }
 
-        return mem.bytesAsSlice(T, fs.data[start..end]);
+        return std.mem.bytesAsSlice(T, fs.data[start..end]);
     }
 
-    pub fn fromFnt(fnt: []u8, fat: []align(1) nds.Range, data: []u8) Fs {
+    pub fn fromFnt(fnt: []u8, fat: []nds.Range, data: []u8) !Fs {
         return Fs{
-            .fnt_main = fntMainTable(fnt),
+            .fnt_main = try fntMainTable(fnt),
             .fnt = fnt,
             .fat = fat,
             .data = data,
         };
     }
 
-    fn fntMainTable(fnt: []u8) []align(1) FntMainEntry {
+    fn fntMainTable(fnt: []u8) ![]align(1) FntMainEntry {
         const rem = fnt.len % @sizeOf(FntMainEntry);
-        const fnt_mains = mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
-        const len = fnt_mains[0].parent_id.value();
+        const fnt_mains = std.mem.bytesAsSlice(FntMainEntry, fnt[0 .. fnt.len - rem]);
+        const len = fnt_mains[0].parent_id;
 
-        // TODO: We have no control over if roms we load are structured correctly, so this should
-        //       not be an assert but an error.
-        debug.assert(fnt_mains.len >= len and len <= 4096 and len != 0);
-        return fnt_mains[0..len];
+        if (fnt_mains.len >= len and len <= 4096 and len != 0)
+            return fnt_mains[0..len];
+
+        return error.InvalidFnt;
     }
 
     /// Get a file system from a narc file. This function can failed if the
     /// bytes are not a valid narc.
     pub fn fromNarc(data: []u8) !Fs {
-        var fbs = io.fixedBufferStream(data);
+        var fbs = std.io.fixedBufferStream(data);
         const reader = fbs.reader();
         const names = formats.Chunk.names;
 
         const header = try reader.readStruct(formats.Header);
-        if (!mem.eql(u8, &header.chunk_name, names.narc))
+        if (!std.mem.eql(u8, &header.chunk_name, names.narc))
             return error.InvalidNarcHeader;
-        if (header.byte_order.value() != 0xFFFE)
+        if (header.byte_order != 0xFFFE)
             return error.InvalidNarcHeader;
-        if (header.chunk_size.value() != 0x0010)
+        if (header.chunk_size != 0x0010)
             return error.InvalidNarcHeader;
-        if (header.following_chunks.value() != 0x0003)
+        if (header.following_chunks != 0x0003)
             return error.InvalidNarcHeader;
 
         const fat_header = try reader.readStruct(formats.FatChunk);
-        if (!mem.eql(u8, &fat_header.header.name, names.fat))
+        if (!std.mem.eql(u8, &fat_header.header.name, names.fat))
             return error.InvalidNarcHeader;
 
-        const fat_size = fat_header.header.size.value() - @sizeOf(formats.FatChunk);
-        const fat = mem.bytesAsSlice(nds.Range, data[fbs.pos..][0..fat_size]);
+        const fat_size = fat_header.header.size - @sizeOf(formats.FatChunk);
+        const fat = std.mem.bytesAsSlice(nds.Range, data[fbs.pos..][0..fat_size]);
         fbs.pos += fat_size;
 
         const fnt_header = try reader.readStruct(formats.Chunk);
-        const fnt_size = fnt_header.size.value() - @sizeOf(formats.Chunk);
-        if (!mem.eql(u8, &fnt_header.name, names.fnt))
+        const fnt_size = fnt_header.size - @sizeOf(formats.Chunk);
+        if (!std.mem.eql(u8, &fnt_header.name, names.fnt))
             return error.InvalidNarcHeader;
 
         const fnt = data[fbs.pos..][0..fnt_size];
         fbs.pos += fnt_size;
 
         const file_data_header = try reader.readStruct(formats.Chunk);
-        if (!mem.eql(u8, &file_data_header.name, names.file_data))
+        if (!std.mem.eql(u8, &file_data_header.name, names.file_data))
             return error.InvalidNarcHeader;
 
         return Fs.fromFnt(fnt, fat, data[fbs.pos..]);
     }
 };
+
+pub fn Indexable(comptime T: type) type {
+    return struct {
+        fs: nds.fs.Fs,
+
+        pub fn at(fs: @This(), i: usize) !*align(1) T {
+            return fs.fs.fileAs(.{ .i = @intCast(i) }, T);
+        }
+
+        pub fn len(fs: @This()) usize {
+            return fs.fs.fat.len;
+        }
+    };
+}
 
 pub const Iterator = struct {
     file_handle: u32,
@@ -195,7 +197,7 @@ pub const Iterator = struct {
     };
 
     pub fn next(it: *Iterator) ?Result {
-        var fbs = io.fixedBufferStream(it.fnt_sub_table);
+        var fbs = std.io.fixedBufferStream(it.fnt_sub_table);
 
         const reader = fbs.reader();
         const type_length = reader.readByte() catch return null;
@@ -209,7 +211,7 @@ pub const Iterator = struct {
 
         const handle = if (is_folder) blk: {
             const read_id = reader.readInt(u16, .little) catch return null;
-            debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
+            std.debug.assert(read_id >= 0xF001 and read_id <= 0xFFFF);
             break :blk read_id & 0x0FFF;
         } else blk: {
             defer it.file_handle += 1;
@@ -228,7 +230,7 @@ pub const Iterator = struct {
 
     pub fn find(it: *Iterator, name: []const u8) ?Handle {
         while (it.next()) |entry| {
-            if (mem.eql(u8, entry.name, name))
+            if (std.mem.eql(u8, entry.name, name))
                 return entry.handle;
         }
         return null;
@@ -236,16 +238,17 @@ pub const Iterator = struct {
 };
 
 pub const FntMainEntry = extern struct {
-    offset_to_subtable: lu32,
-    first_file_handle: lu16,
+    offset_to_subtable: u32 align(1),
+    first_file_handle: u16 align(1),
 
     // For the first entry in main-table, the parent id is actually,
     // the total number of directories (See FNT Directory Main-Table):
     // http://problemkaputt.de/gbatek.htm#dscartridgenitroromandnitroarcfilesystems
-    parent_id: lu16,
+    parent_id: u16 align(1),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 8);
+        std.debug.assert(@alignOf(@This()) == 1);
     }
 };
 
@@ -259,26 +262,26 @@ pub fn narcSize(file_count: usize, data_size: usize) usize {
 }
 
 pub const SimpleNarcBuilder = struct {
-    stream: io.FixedBufferStream([]u8),
+    stream: std.io.FixedBufferStream([]u8),
 
     pub fn init(buf: []u8, file_count: usize) SimpleNarcBuilder {
-        var fbs = io.fixedBufferStream(buf);
+        var fbs = std.io.fixedBufferStream(buf);
         const writer = fbs.writer();
-        writer.writeAll(&mem.toBytes(formats.Header.narc(0))) catch unreachable;
-        writer.writeAll(&mem.toBytes(formats.FatChunk.init(@intCast(file_count)))) catch unreachable;
+        writer.writeAll(&std.mem.toBytes(formats.Header.narc(0))) catch unreachable;
+        writer.writeAll(&std.mem.toBytes(formats.FatChunk.init(@intCast(file_count)))) catch unreachable;
         writer.context.pos += file_count * @sizeOf(nds.Range);
-        writer.writeAll(&mem.toBytes(formats.Chunk{
+        writer.writeAll(&std.mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.fnt.*,
-            .size = lu32.init(@sizeOf(formats.Chunk) + @sizeOf(FntMainEntry)),
+            .size = @sizeOf(formats.Chunk) + @sizeOf(FntMainEntry),
         })) catch unreachable;
-        writer.writeAll(&mem.toBytes(FntMainEntry{
-            .offset_to_subtable = lu32.init(0),
-            .first_file_handle = lu16.init(0),
-            .parent_id = lu16.init(1),
+        writer.writeAll(&std.mem.toBytes(FntMainEntry{
+            .offset_to_subtable = 0,
+            .first_file_handle = 0,
+            .parent_id = 1,
         })) catch unreachable;
-        writer.writeAll(&mem.toBytes(formats.Chunk{
+        writer.writeAll(&std.mem.toBytes(formats.Chunk{
             .name = formats.Chunk.names.file_data.*,
-            .size = lu32.init(0),
+            .size = 0,
         })) catch unreachable;
 
         return SimpleNarcBuilder{ .stream = writer.context.* };
@@ -287,13 +290,13 @@ pub const SimpleNarcBuilder = struct {
     pub fn fat(builder: SimpleNarcBuilder) []align(1) nds.Range {
         const res = builder.stream.buffer;
         const off = @sizeOf(formats.Header);
-        const fat_header = mem.bytesAsValue(
+        const fat_header = std.mem.bytesAsValue(
             formats.FatChunk,
             res[off..][0..@sizeOf(formats.FatChunk)],
         );
 
-        const size = fat_header.header.size.value();
-        return mem.bytesAsSlice(
+        const size = fat_header.header.size;
+        return std.mem.bytesAsSlice(
             nds.Range,
             res[off..][0..size][@sizeOf(formats.FatChunk)..],
         );
@@ -302,31 +305,31 @@ pub const SimpleNarcBuilder = struct {
     pub fn finish(builder: *SimpleNarcBuilder) []u8 {
         const res = builder.stream.buffer;
         var off: usize = 0;
-        const header = mem.bytesAsValue(
+        const header = std.mem.bytesAsValue(
             formats.Header,
             res[0..@sizeOf(formats.Header)],
         );
 
         off += @sizeOf(formats.Header);
-        const fat_header = mem.bytesAsValue(
+        const fat_header = std.mem.bytesAsValue(
             formats.FatChunk,
             res[off..][0..@sizeOf(formats.FatChunk)],
         );
 
-        off += fat_header.header.size.value();
-        const fnt_header = mem.bytesAsValue(
+        off += fat_header.header.size;
+        const fnt_header = std.mem.bytesAsValue(
             formats.Chunk,
             res[off..][0..@sizeOf(formats.Chunk)],
         );
 
-        off += fnt_header.size.value();
-        const file_header = mem.bytesAsValue(
+        off += fnt_header.size;
+        const file_header = std.mem.bytesAsValue(
             formats.Chunk,
             res[off..][0..@sizeOf(formats.Chunk)],
         );
 
-        header.file_size = lu32.init(@intCast(res.len));
-        file_header.size = lu32.init(@intCast(res.len - off));
+        header.file_size = @intCast(res.len);
+        file_header.size = @intCast(res.len - off);
         return res;
     }
 };
@@ -337,16 +340,16 @@ pub const Builder = struct {
     fat: std.ArrayList(nds.Range),
     file_bytes: u32,
 
-    pub fn init(allocator: mem.Allocator) !Builder {
+    pub fn init(allocator: std.mem.Allocator) !Builder {
         var fnt_main = std.ArrayList(FntMainEntry).init(allocator);
         var fnt_sub = std.ArrayList(u8).init(allocator);
         errdefer fnt_main.deinit();
         errdefer fnt_sub.deinit();
 
         try fnt_main.append(.{
-            .offset_to_subtable = lu32.init(0),
-            .first_file_handle = lu16.init(0),
-            .parent_id = lu16.init(1),
+            .offset_to_subtable = 0,
+            .first_file_handle = 0,
+            .parent_id = 1,
         });
         try fnt_sub.append(0);
 
@@ -360,12 +363,12 @@ pub const Builder = struct {
 
     pub fn createTree(b: *Builder, dir: Dir, path: []const u8) !Dir {
         var curr = dir;
-        const relative = if (mem.startsWith(u8, path, "/")) blk: {
+        const relative = if (std.mem.startsWith(u8, path, "/")) blk: {
             curr = root; // Set handle to root
             break :blk path[1..];
         } else path;
 
-        var split = mem.split(u8, relative, "/");
+        var split = std.mem.splitScalar(u8, relative, '/');
         while (split.next()) |name|
             curr = try b.createDir(curr, name);
 
@@ -387,17 +390,17 @@ pub const Builder = struct {
         }
 
         const parent_entry = b.fnt_main.items[parent.i];
-        const parent_offset = parent_entry.offset_to_subtable.value();
+        const parent_offset = parent_entry.offset_to_subtable;
         const handle: u16 = @intCast(b.fnt_main.items.len);
 
         var buf: [1024]u8 = undefined;
-        var fbs = io.fixedBufferStream(&buf);
+        var fbs = std.io.fixedBufferStream(&buf);
         const len: u7 = @intCast(dir_name.len);
         const kind = @as(u8, @intFromBool(true)) << 7;
         const id: u16 = @intCast(0xF000 | b.fnt_main.items.len);
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(dir_name);
-        try fbs.writer().writeIntLittle(u16, id);
+        try fbs.writer().writeInt(u16, id, .little);
 
         const written = fbs.getWritten();
         try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len + 1);
@@ -407,16 +410,16 @@ pub const Builder = struct {
         b.fnt_sub.appendAssumeCapacity(0);
 
         for (b.fnt_main.items) |*entry| {
-            const old_offset = entry.offset_to_subtable.value();
+            const old_offset = entry.offset_to_subtable;
             const new_offset = old_offset + written.len;
             if (old_offset > parent_offset)
-                entry.offset_to_subtable = lu32.init(@intCast(new_offset));
+                entry.offset_to_subtable = @intCast(new_offset);
         }
 
         try b.fnt_main.append(.{
-            .offset_to_subtable = lu32.init(offset),
+            .offset_to_subtable = offset,
             .first_file_handle = parent_entry.first_file_handle,
-            .parent_id = lu16.init(parent.i),
+            .parent_id = parent.i,
         });
         return Dir{ .i = handle };
     }
@@ -436,33 +439,34 @@ pub const Builder = struct {
         }
 
         const parent_entry = b.fnt_main.items[parent.i];
-        const parent_offset = parent_entry.offset_to_subtable.value();
-        const handle = parent_entry.first_file_handle.value();
+        const parent_offset = parent_entry.offset_to_subtable;
+        const handle = parent_entry.first_file_handle;
 
         var buf: [1024]u8 = undefined;
-        var fbs = io.fixedBufferStream(&buf);
+        var fbs = std.io.fixedBufferStream(&buf);
         const len: u7 = @intCast(file_name.len);
         const kind = @as(u8, @intFromBool(false)) << 7;
         try fbs.writer().writeByte(kind | len);
         try fbs.writer().writeAll(file_name);
 
         const written = fbs.getWritten();
-        try b.fnt_sub.ensureTotalCapacity(b.fnt_sub.items.len + written.len);
+        try b.fnt_sub.ensureUnusedCapacity(written.len);
+        try b.fat.ensureUnusedCapacity(1);
         b.fnt_sub.insertSlice(parent_offset, written) catch unreachable;
 
         for (b.fnt_main.items, 0..) |*entry, i| {
-            const old_offset = entry.offset_to_subtable.value();
+            const old_offset = entry.offset_to_subtable;
             const new_offset = old_offset + written.len;
             if (old_offset > parent_offset)
-                entry.offset_to_subtable = lu32.init(@intCast(new_offset));
-            const old_file_handle = entry.first_file_handle.value();
+                entry.offset_to_subtable = @intCast(new_offset);
+            const old_file_handle = entry.first_file_handle;
             const new_file_handle = old_file_handle + 1;
             if (old_file_handle >= handle and parent.i != i)
-                entry.first_file_handle = lu16.init(@intCast(new_file_handle));
+                entry.first_file_handle = @intCast(new_file_handle);
         }
 
         const start = b.file_bytes;
-        try b.fat.insert(handle, nds.Range.init(start, start + size));
+        b.fat.insertAssumeCapacity(handle, nds.Range.init(start, start + size));
 
         b.file_bytes += size;
         return File{ .i = handle };
@@ -482,11 +486,11 @@ pub const Builder = struct {
     pub fn finish(builder: *Builder) !Fs {
         const sub_table_offset = builder.fnt_main.items.len * @sizeOf(FntMainEntry);
         for (builder.fnt_main.items) |*entry| {
-            const new_offset = entry.offset_to_subtable.value() + sub_table_offset;
-            entry.offset_to_subtable = lu32.init(@intCast(new_offset));
+            const new_offset = entry.offset_to_subtable + sub_table_offset;
+            entry.offset_to_subtable = @intCast(new_offset);
         }
 
-        const fnt_main_bytes = mem.sliceAsBytes(builder.fnt_main.items);
+        const fnt_main_bytes = std.mem.sliceAsBytes(builder.fnt_main.items);
         try builder.fnt_sub.insertSlice(0, fnt_main_bytes);
         return Fs{
             .fnt_main = try builder.fnt_main.toOwnedSlice(),
@@ -511,7 +515,7 @@ test "Builder" {
         "b",
         "d/a",
     };
-    var b = try Builder.init(testing.allocator);
+    var b = try Builder.init(std.testing.allocator);
     defer b.deinit();
 
     for (paths) |path| {
@@ -521,13 +525,22 @@ test "Builder" {
     }
 
     const fs = try b.finish();
-    defer testing.allocator.free(fs.fnt_main);
-    defer testing.allocator.free(fs.fnt);
-    defer testing.allocator.free(fs.fat);
+    defer std.testing.allocator.free(fs.fnt_main);
+    defer std.testing.allocator.free(fs.fnt);
+    defer std.testing.allocator.free(fs.fat);
 
     for (paths) |path|
         _ = try fs.openFile(root, path);
-    try testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
-    try testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
-    try testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
+    try std.testing.expectError(error.DoesntExist, fs.openFile(root, "a"));
+    try std.testing.expectError(error.DoesntExist, fs.openFile(root, "a/c"));
+    try std.testing.expectError(error.DoesntExist, fs.openFile(root, "a/c/b"));
 }
+
+test {
+    _ = formats;
+    _ = nds;
+}
+
+const formats = @import("formats.zig");
+const nds = @import("../nds.zig");
+const std = @import("std");

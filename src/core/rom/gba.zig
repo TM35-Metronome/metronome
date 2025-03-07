@@ -1,15 +1,7 @@
-const std = @import("std");
-const util = @import("util");
-
-const ascii = std.ascii;
-const debug = std.debug;
-const io = std.io;
-const mem = std.mem;
-
 pub const Header = extern struct {
     rom_entry_point: [4]u8,
     nintendo_logo: [156]u8,
-    game_title: util.TerminatedArray(12, u8, 0),
+    game_title: [12]u8,
     gamecode: [4]u8,
     makercode: [2]u8,
 
@@ -29,12 +21,12 @@ pub const Header = extern struct {
     }
 
     pub fn validate(header: *const Header) !void {
-        for (header.game_title.slice()) |item| {
-            if (ascii.isLower(item))
+        for (header.game_title) |item| {
+            if (std.ascii.isLower(item))
                 return error.InvalidGameTitle;
         }
         for (header.gamecode) |item| {
-            if (!ascii.isUpper(item))
+            if (!std.ascii.isUpper(item))
                 return error.InvalidGamecode;
         }
 
@@ -56,3 +48,10 @@ pub const Header = extern struct {
         }
     }
 };
+
+test {
+    _ = util;
+}
+
+const std = @import("std");
+const util = @import("../../util.zig");

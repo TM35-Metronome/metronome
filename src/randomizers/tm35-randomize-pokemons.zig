@@ -190,12 +190,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
             switch (pokemons.value) {
                 .tms => |tms| {
-                    pokemon.tms_occupied.set(tms.index, true);
-                    pokemon.tms_learned.set(tms.index, tms.value);
+                    pokemon.tms_occupied.setValue(tms.index, true);
+                    pokemon.tms_learned.setValue(tms.index, tms.value);
                 },
                 .hms => |hms| {
-                    pokemon.hms_occupied.set(hms.index, true);
-                    pokemon.hms_learned.set(hms.index, hms.value);
+                    pokemon.hms_occupied.setValue(hms.index, true);
+                    pokemon.hms_learned.setValue(hms.index, hms.value);
                 },
                 .stats => |stats| pokemon.stats.put(stats, stats.value()),
                 .types => |types| _ = try pokemon.types.put(allocator, types.index, types.value),
@@ -472,7 +472,7 @@ const Moves = std.AutoArrayHashMapUnmanaged(u16, Move);
 const Pokemons = std.AutoArrayHashMapUnmanaged(u16, Pokemon);
 const Set = std.AutoArrayHashMapUnmanaged(u16, void);
 
-const MachinesLearned = std.PackedIntArray(bool, math.maxInt(u7) + 1);
+const MachinesLearned = std.StaticBitSet(math.maxInt(u7) + 1);
 const Stats = std.EnumMap(meta.Tag(format.Stats(u8)), u8);
 
 const Pokemon = struct {

@@ -1,189 +1,36 @@
-const std = @import("std");
-
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const rom_path = b.option(
+        []const u8,
+        "rom",
+        "Path to a valid Pokémon rom. Used for testing",
+    );
 
-    const strip = b.option(bool, "strip", "") orelse false;
-    const clap_module = b.createModule(.{
-        .source_file = .{ .path = "lib/zig-clap/clap.zig" },
-    });
-    const crc_module = b.createModule(.{
-        .source_file = .{ .path = "lib/zig-crc/crc.zig" },
-    });
-    const folders_module = b.createModule(.{
-        .source_file = .{ .path = "lib/known-folders/known-folders.zig" },
-    });
-    const ston_module = b.createModule(.{
-        .source_file = .{ .path = "lib/ston/ston.zig" },
-    });
-    const ziter_module = b.createModule(.{
-        .source_file = .{ .path = "lib/ziter/ziter.zig" },
-    });
-    const util_module = b.createModule(.{
-        .source_file = .{ .path = "src/util.zig" },
-        .dependencies = &.{
-            .{ .name = "clap", .module = clap_module },
-            .{ .name = "folders", .module = folders_module },
-        },
-    });
-    const core_module = b.createModule(.{
-        .source_file = .{ .path = "src/core.zig" },
-        .dependencies = &.{
-            .{ .name = "ston", .module = ston_module },
-            .{ .name = "util", .module = util_module },
-            .{ .name = "crc", .module = crc_module },
-        },
-    });
+    std.debug.assert(target.result.cpu.arch.endian() == .little);
 
-    const modules = [_]std.Build.ModuleDependency{
-        .{ .name = "clap", .module = clap_module },
-        .{ .name = "folders", .module = folders_module },
-        .{ .name = "ston", .module = ston_module },
-        .{ .name = "ziter", .module = ziter_module },
-
-        .{ .name = "core", .module = core_module },
-
-        .{ .name = "util", .module = util_module },
-    };
-
-    const exes = [_][]const u8{
-        "src/core/tm35-apply.zig",
-        "src/core/tm35-disassemble-scripts.zig",
-        "src/core/tm35-gen3-offsets.zig",
-        "src/core/tm35-identify.zig",
-        "src/core/tm35-load.zig",
-        "src/core/tm35-nds-extract.zig",
-
-        "src/randomizers/tm35-randomize-field-items.zig",
-        "src/randomizers/tm35-randomize-machines.zig",
-        "src/randomizers/tm35-randomize-names.zig",
-        "src/randomizers/tm35-randomize-pokemons.zig",
-        "src/randomizers/tm35-randomize-starters.zig",
-        "src/randomizers/tm35-randomize-static-encounters.zig",
-        "src/randomizers/tm35-randomize-trainers.zig",
-        "src/randomizers/tm35-randomize-wild-encounters.zig",
-        "src/randomizers/tm35-random-stones.zig",
-
-        "src/other/tm35-balance-pokemons.zig",
-        "src/other/tm35-generate-site.zig",
-        "src/other/tm35-misc.zig",
-        "src/other/tm35-noop.zig",
-        "src/other/tm35-no-trade-evolutions.zig",
-
-        "src/gui/tm35-randomizer.zig",
-    };
-
-    const test_step = b.step("test", "Run all tests");
-    for (exes) |path| {
-        const basename = std.fs.path.basename(path);
-        const name = basename[0 .. basename.len - 4]; // Remove `.zig`
-        const test_name = b.fmt("test-{s}", .{name});
-
-        const step = b.step(name, b.fmt("Build and install {s}", .{name}));
-        const exe_test_step = b.step(test_name, b.fmt("Test {s}", .{name}));
-        const exe = b.addExecutable(.{
-            .name = name,
-            .root_source_file = .{ .path = path },
-            .optimize = optimize,
-            .target = target,
-        });
-        const test_exe = b.addTest(.{
-            .name = test_name,
-            .root_source_file = .{ .path = path },
-            .optimize = optimize,
-            .target = target,
-        });
-        const run_test = b.addRunArtifact(test_exe);
-
-        step.dependOn(&b.addInstallArtifact(exe, .{}).step);
-        step.dependOn(&exe.step);
-        b.default_step.dependOn(step);
-        exe_test_step.dependOn(&run_test.step);
-        test_step.dependOn(exe_test_step);
-
-        if (std.mem.startsWith(u8, path, "src/gui/")) {
-            buildAndLinkMd4c(exe);
-            buildAndLinkNativeFileDialog(exe, target);
-            buildAndLinkWebview(exe, target);
-            exe.linkLibC();
-            exe.linkLibCpp();
-            exe.linkSystemLibrary("m");
-        }
-
-        for ([_]*std.Build.CompileStep{ exe, test_exe }) |comp| {
-            comp.strip = strip;
-            for (modules) |module|
-                comp.addModule(module.name, module.module);
-        }
-    }
-
-    const test_util = b.addTest(.{
-        .name = "test-util",
-        .root_source_file = .{ .path = "src/util.zig" },
+    const exe = b.addExecutable(.{
+        .name = "metronome",
+        .root_source_file = b.path("src/metronome-cli.zig"),
         .optimize = optimize,
         .target = target,
     });
-    const test_core = b.addTest(.{
-        .name = "test-core",
-        .root_source_file = .{ .path = "src/core.zig" },
+    b.installArtifact(exe);
+
+    const test_options = b.addOptions();
+    test_options.addOption(?[]const u8, "rom_path", rom_path);
+
+    const test_exe = b.addTest(.{
+        .name = "metronome-test",
+        .root_source_file = b.path("src/metronome-cli.zig"),
         .optimize = optimize,
         .target = target,
     });
-    for (modules) |module| {
-        test_util.addModule(module.name, module.module);
-        test_core.addModule(module.name, module.module);
-    }
-    const run_test_util = b.addRunArtifact(test_util);
-    const run_test_core = b.addRunArtifact(test_core);
+    test_exe.root_module.addOptions("build_options", test_options);
 
-    test_step.dependOn(&run_test_util.step);
-    test_step.dependOn(&run_test_core.step);
+    const test_step = b.step("test", "Run unit tests");
+    const run_test_exe = b.addRunArtifact(test_exe);
+    test_step.dependOn(&run_test_exe.step);
 }
 
-fn buildAndLinkWebview(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
-    exe.addIncludePath(.{ .path = "lib/webview" });
-    exe.addCSourceFiles(.{
-        .files = &.{"lib/webview/webview.cc"},
-        .flags = &.{ "-std=c++17", "-DWEBVIEW_STATIC" },
-    });
-    switch (target.getOsTag()) {
-        .windows => {
-            exe.addIncludePath(.{ .path = "lib/webview-c/ms.webview2/include" });
-            exe.linkSystemLibrary("advapi32");
-            exe.linkSystemLibrary("shlwapi");
-            exe.linkSystemLibrary("version");
-        },
-        .linux => {
-            exe.linkSystemLibrary("webkit2gtk-4.0");
-        },
-        else => unreachable, // TODO: More os support
-    }
-}
-
-fn buildAndLinkMd4c(exe: *std.Build.CompileStep) void {
-    exe.addCSourceFiles(.{
-        .files = &.{
-            "lib/md4c/src/entity.c",
-            "lib/md4c/src/md4c.c",
-            "lib/md4c/src/md4c-html.c",
-        },
-    });
-    exe.addIncludePath(.{ .path = "lib/md4c/src" });
-}
-
-fn buildAndLinkNativeFileDialog(exe: *std.Build.CompileStep, target: std.zig.CrossTarget) void {
-    exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_common.c"} });
-    exe.addIncludePath(.{ .path = "lib/nativefiledialog/src/include" });
-    switch (target.getOsTag()) {
-        .windows => {
-            exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_win.cpp"} });
-            exe.linkSystemLibrary("uuid");
-        },
-        .linux => {
-            exe.addCSourceFiles(.{ .files = &.{"lib/nativefiledialog/src/nfd_zenity.c"} });
-            exe.linkSystemLibrary("webkit2gtk-4.0");
-        },
-        else => unreachable, // TODO: More os support
-    }
-}
+const std = @import("std");

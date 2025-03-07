@@ -1,12 +1,3 @@
-const gen3 = @import("../gen3.zig");
-const rom = @import("../rom.zig");
-const std = @import("std");
-
-const io = std.io;
-const mem = std.mem;
-
-// TODO: Replace with Replacing/Escaping streams
-
 pub const en_us = [_]rom.encoding.Char{
     .{ " ", "\x00" },
     .{ "À", "\x01" },
@@ -194,7 +185,7 @@ pub fn encode(lang: gen3.Language, reader: anytype, out: []u8) !void {
         .en_us => &en_us,
     };
 
-    var fos = io.fixedBufferStream(out);
+    var fos = std.io.fixedBufferStream(out);
     try rom.encoding.encodeEx(map, 0, reader, fos.writer());
     try fos.writer().writeByte(0xff);
 }
@@ -204,6 +195,15 @@ pub fn decode(lang: gen3.Language, str: []const u8, writer: anytype) !void {
         .en_us => &en_us,
     };
 
-    const end = mem.indexOfScalar(u8, str, 0xff) orelse str.len;
+    const end = std.mem.indexOfScalar(u8, str, 0xff) orelse str.len;
     try rom.encoding.encode(map, 1, str[0..end], writer);
 }
+
+test {
+    _ = gen3;
+    _ = rom;
+}
+
+const gen3 = @import("../gen3.zig");
+const rom = @import("../rom.zig");
+const std = @import("std");

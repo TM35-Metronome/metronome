@@ -13,7 +13,6 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const rand = std.rand;
 const testing = std.testing;
 const unicode = std.unicode;
 
@@ -181,7 +180,7 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    var default_random = rand.DefaultPrng.init(program.options.seed);
+    var default_random = std.Random.DefaultPrng.init(program.options.seed);
     const random = default_random.random();
 
     const pick_from = try program.getValidMoves();
@@ -228,7 +227,7 @@ fn randomize(program: *Program) !void {
 }
 
 fn randomizeMachines(
-    random: rand.Random,
+    random: std.Random,
     pick_from: []const u16,
     machines: []u16,
 ) void {

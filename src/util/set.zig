@@ -1,11 +1,5 @@
-const std = @import("std");
-
-const debug = std.debug;
-const mem = std.mem;
-const testing = std.testing;
-
 /// Returns a set of type `Out` which contains the intersection of `a` and `b`.
-pub fn intersect(comptime Out: type, allocator: mem.Allocator, a: anytype, b: anytype) !Out {
+pub fn intersect(comptime Out: type, allocator: std.mem.Allocator, a: anytype, b: anytype) !Out {
     var res = Out.init(allocator);
     try intersectInline(&res, a, b);
     return res;
@@ -13,10 +7,11 @@ pub fn intersect(comptime Out: type, allocator: mem.Allocator, a: anytype, b: an
 
 /// Stores the intersection of `a` and `b` in `out`.
 pub fn intersectInline(out: anytype, a: anytype, b: anytype) !void {
+    try out.ensureUnusedCapacity(@min(a.count(), b.count()));
     var it = a.iterator();
     while (it.next()) |entry| {
         if (b.get(entry.key_ptr.*) != null)
-            _ = try out.put(entry.key_ptr.*, {});
+            _ = out.putAssumeCapacity(entry.key_ptr.*, {});
     }
 }
 
@@ -28,16 +23,16 @@ test "intersect" {
         .{ "abc", "bcd", "bc" },
         .{ "abc", "def", "" },
     }) |test_case| {
-        var a = try initWithMembers(Set, testing.allocator, test_case[0]);
+        var a = try initWithMembers(Set, std.testing.allocator, test_case[0]);
         defer a.deinit();
-        var b = try initWithMembers(Set, testing.allocator, test_case[1]);
+        var b = try initWithMembers(Set, std.testing.allocator, test_case[1]);
         defer b.deinit();
-        var expect = try initWithMembers(Set, testing.allocator, test_case[2]);
+        var expect = try initWithMembers(Set, std.testing.allocator, test_case[2]);
         defer expect.deinit();
 
-        var res_a = try intersect(Set, testing.allocator, a, b);
+        var res_a = try intersect(Set, std.testing.allocator, a, b);
         defer res_a.deinit();
-        var res_b = try intersect(Set, testing.allocator, b, a);
+        var res_b = try intersect(Set, std.testing.allocator, b, a);
         defer res_b.deinit();
         try expectEqual(expect, res_a);
         try expectEqual(expect, res_b);
@@ -52,7 +47,7 @@ pub fn putMany(set: anytype, members: anytype) !void {
 
 /// Initializes a set of type `Set` with the members contained in the array/slice
 /// `members`.
-pub fn initWithMembers(comptime Set: type, allocator: mem.Allocator, members: anytype) !Set {
+pub fn initWithMembers(comptime Set: type, allocator: std.mem.Allocator, members: anytype) !Set {
     var set = Set.init(allocator);
     errdefer set.deinit();
     try putMany(&set, members);
@@ -77,5 +72,7 @@ pub fn eql(a: anytype, b: anytype) bool {
 
 /// Tests that the set `actual` is equal to the set `expect`.
 pub fn expectEqual(expect: anytype, actual: anytype) !void {
-    try testing.expect(eql(expect, actual));
+    try std.testing.expect(eql(expect, actual));
 }
+
+const std = @import("std");

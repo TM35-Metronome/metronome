@@ -586,19 +586,19 @@ fn generate(writer: anytype, game: Game) !void {
 }
 
 pub fn printSimpleFields(writer: anytype, value: anytype, comptime blacklist: []const []const u8) !void {
-    inline for (@typeInfo(@TypeOf(value)).Struct.fields) |field| outer: {
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| outer: {
         comptime for (blacklist) |blacklist_item| {
             if (mem.eql(u8, field.name, blacklist_item))
                 break :outer;
         };
         switch (@typeInfo(field.type)) {
-            .Int => {
+            .int => {
                 try writer.print(
                     "<tr><td>{}:</td><td>{}</td></tr>\n",
                     .{ humanize(field.name), @field(value, field.name) },
                 );
             },
-            .Enum => {
+            .@"enum" => {
                 try writer.print(
                     "<tr><td>{}:</td><td>{}</td></tr>\n",
                     .{ humanize(field.name), humanize(@tagName(@field(value, field.name))) },

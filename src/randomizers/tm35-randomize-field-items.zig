@@ -13,7 +13,6 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const rand = std.rand;
 const testing = std.testing;
 
 const format = core.format;
@@ -164,13 +163,12 @@ fn useGame(program: *Program, parsed: format.Game) !void {
 
 fn randomize(program: *Program) !void {
     const allocator = program.allocator;
-    var default_random = rand.DefaultPrng.init(program.options.seed);
+    var default_random = std.Random.DefaultPrng.init(program.options.seed);
     const random = default_random.random();
 
-    var z: usize = 0;
     var excluded_pockets_buffer: [2]format.Pocket = undefined;
     var excluded_pockets = std.ArrayListUnmanaged(format.Pocket){
-        .items = excluded_pockets_buffer[z..z],
+        .items = excluded_pockets_buffer[0..0],
         .capacity = excluded_pockets_buffer.len,
     };
     if (!program.options.include_tms_hms)

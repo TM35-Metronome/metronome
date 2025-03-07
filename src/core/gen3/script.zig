@@ -1,14 +1,3 @@
-const std = @import("std");
-
-const gen3 = @import("../gen3.zig");
-const rom = @import("../rom.zig");
-const script = @import("../script.zig");
-
-const mem = std.mem;
-
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
-
 pub const CommandDecoder = script.CommandDecoder(Command, struct {
     fn isEnd(cmd: Command) bool {
         switch (cmd.kind) {
@@ -77,28 +66,28 @@ pub const Command = extern union {
     killscript: Arg0,
 
     // Sets some status related to Mystery Event.
-    setmysteryeventstatus: setmysteryeventstatus,
+    setmysteryeventstatus: SetMysteryEventStatus,
 
     // Sets the specified script bank to value.
-    loadword: loadword,
+    loadword: LoadWord,
 
     // Sets the specified script bank to value.
-    loadbyte: loadbyte,
+    loadbyte: LoadByte,
 
     // Sets the byte at offset to value.
-    writebytetoaddr: writebytetoaddr,
+    writebytetoaddr: WriteByteToAddr,
 
     // Copies the byte value at source into the specified script bank.
-    loadbytefromaddr: DestSrc(u8, lu32),
+    loadbytefromaddr: DestSrc(u8, u32),
 
     // Not sure. Judging from XSE's description I think it takes the least-significant byte in bank source and writes it to destination.
-    setptrbyte: setptrbyte,
+    setptrbyte: SetPtrByte,
 
     // Copies the contents of bank source into bank destination.
     copylocal: DestSrc(u8, u8),
 
     // Copies the byte at source to destination, replacing whatever byte was previously there.
-    copybyte: DestSrc(lu32, lu32),
+    copybyte: DestSrc(u32, u32),
 
     // Changes the value of destination to value.
     setvar: DestVal,
@@ -110,10 +99,10 @@ pub const Command = extern union {
     subvar: DestVal,
 
     // Copies the value of source into destination.
-    copyvar: DestSrc(lu16, lu16),
+    copyvar: DestSrc(u16, u16),
 
     // If source is not a variable, then this function acts like setvar. Otherwise, it acts like copyvar.
-    setorcopyvar: DestSrc(lu16, lu16),
+    setorcopyvar: DestSrc(u16, u16),
 
     // Compares the values of script banks a and b, after forcing the values to bytes.
     compare_local_to_local: AB(u8, u8),
@@ -122,40 +111,40 @@ pub const Command = extern union {
     compare_local_to_value: AB(u8, u8),
 
     // Compares the least-significant byte of the value of script bank a to the byte located at offset b.
-    compare_local_to_addr: AB(u8, lu32),
+    compare_local_to_addr: AB(u8, u32),
 
     // Compares the byte located at offset a to the least-significant byte of the value of script bank b.
-    compare_addr_to_local: AB(lu32, u8),
+    compare_addr_to_local: AB(u32, u8),
 
     // Compares the byte located at offset a to a fixed byte value (b).
-    compare_addr_to_value: AB(lu32, u8),
+    compare_addr_to_value: AB(u32, u8),
 
     // Compares the byte located at offset a to the byte located at offset b.
-    compare_addr_to_addr: AB(lu32, lu32),
+    compare_addr_to_addr: AB(u32, u32),
 
     // Compares the value of `var` to a fixed word value (b).
-    compare_var_to_value: compare_var_to_value,
+    compare_var_to_value: CompareVarToValue,
 
     // Compares the value of `var1` to the value of `var2`.
-    compare_var_to_var: compare_var_to_var,
+    compare_var_to_var: CompareVarToVar,
 
     // Calls the native C function stored at `func`.
-    callnative: Func(lu32),
+    callnative: Func(u32),
 
     // Replaces the script with the function stored at `func`. Execution returns to the bytecode script when func returns TRUE.
-    gotonative: Func(lu32),
+    gotonative: Func(u32),
 
     // Calls a special function; that is, a function designed for use by scripts and listed in a table of pointers.
-    special: Func(lu16),
+    special: Func(u16),
 
     // Calls a special function. That function's output (if any) will be written to the variable you specify.
-    specialvar: specialvar,
+    specialvar: SpecialVar,
 
     // Blocks script execution until a command or ASM code manually unblocks it. Generally used with specific commands and specials. If this command runs, and a subsequent command or piece of ASM does not unblock state, the script will remain blocked indefinitely (essentially a hang).
     waitstate: Arg0,
 
     // Blocks script execution for time (frames? milliseconds?).
-    delay: delay,
+    delay: Delay,
 
     // Sets arg to 1.
     setflag: Arg1,
@@ -167,7 +156,7 @@ pub const Command = extern union {
     checkflag: Arg1,
 
     // Initializes the RTC`s local time offset to the given hour and minute. In FireRed, this command is a nop.
-    initclock: initclock,
+    initclock: InitClock,
 
     // Runs time based events. In FireRed, this command is a nop.
     dodailyevents: Arg0,
@@ -188,7 +177,7 @@ pub const Command = extern union {
     waitfanfare: Arg0,
 
     // Plays the specified (song_number) song. The byte is apparently supposed to be 0x00.
-    playbgm: playbgm,
+    playbgm: PlayBgm,
 
     // Saves the specified (song_number) song to be played later.
     savebgm: Song,
@@ -215,7 +204,7 @@ pub const Command = extern union {
     warpdoor: Warp,
 
     // Warps the player to another map using a hole animation.
-    warphole: warphole,
+    warphole: WarpHole,
 
     // Clone of warp that uses a teleport effect. It is apparently only used in R/S/E.
     warpteleport: Warp,
@@ -233,77 +222,77 @@ pub const Command = extern union {
     setholewarp: Warp,
 
     // Retrieves the player's zero-indexed X- and Y-coordinates in the map, and stores them in the specified variables.
-    getplayerxy: getplayerxy,
+    getplayerxy: GetPlayerXy,
 
     // Retrieves the number of Pokemon in the player's party, and stores that number in variable 0x800D (LASTRESULT).
     getpartysize: Arg0,
 
     // Attempts to add quantity of item index to the player's Bag. If the player has enough room, the item will be added and variable 0x800D (LASTRESULT) will be set to 0x0001; otherwise, LASTRESULT is set to 0x0000.
-    additem: additem,
+    additem: AddItem,
 
     // Removes quantity of item index from the player's Bag.
-    removeitem: removeitem,
+    removeitem: RemoveItem,
 
     // Checks if the player has enough space in their Bag to hold quantity more of item index. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room.
-    checkitemspace: checkitemspace,
+    checkitemspace: CheckiIemSpace,
 
     // Checks if the player has quantity or more of item index in their Bag. Sets variable 0x800D (LASTRESULT) to 0x0001 if the player has enough of the item, or 0x0000 if they have fewer than quantity of the item.
-    checkitem: checkitem,
+    checkitem: CheckItem,
 
     // Checks which Bag pocket the specified (index) item belongs in, and writes the value to variable 0x800D (LASTRESULT). This script is used to show the name of the proper Bag pocket when the player receives an item via callstd (simplified to giveitem in XSE).
-    checkitemtype: checkitemtype,
+    checkitemtype: CheckItemType,
 
     // Adds a quantity amount of item index to the player's PC. Both arguments can be variables.
-    givepcitem: givepcitem,
+    givepcitem: GivePcItem,
 
     // Checks for quantity amount of item index in the player's PC. Both arguments can be variables.
-    checkpcitem: checkpcitem,
+    checkpcitem: CheckPcItem,
 
     // Adds decoration to the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-    givedecoration: givedecoration,
+    givedecoration: GiveDecoration,
 
     // Removes a decoration from the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-    takedecoration: takedecoration,
+    takedecoration: TakeDecoration,
 
     // Checks for decoration in the player's PC. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-    checkdecor: checkdecor,
+    checkdecor: CheckDecor,
 
     // Checks if the player has enough space in their PC to hold decoration. Sets variable 0x800D (LASTRESULT) to 0x0001 if there is room, or 0x0000 is there is no room. In FireRed, this command is a nop. (The argument is read, but not used for anything.)
-    checkdecorspace: checkdecorspace,
+    checkdecorspace: CheckDecorSpace,
 
     // Applies the movement data at movements to the specified (index) Object. Also closes any standard message boxes that are still open.
     // If no map is specified, then the current map is used.
-    applymovement: applymovement,
+    applymovement: ApplyMovement,
 
     // Really only useful if the object has followed from one map to another (e.g. Wally during the catching event).
-    applymovementmap: applymovementmap,
+    applymovementmap: ApplyMovementMap,
 
     // Blocks script execution until the movements being applied to the specified (index) Object finish. If the specified Object is 0x0000, then the command will block script execution until all Objects affected by applymovement finish their movements. If the specified Object is not currently being manipulated with applymovement, then this command does nothing.
     // If no map is specified, then the current map is used.
-    waitmovement: waitmovement,
-    waitmovementmap: waitmovementmap,
+    waitmovement: WaitMovement,
+    waitmovementmap: WaitMovementMap,
 
     // Attempts to hide the specified (index) Object on the specified (map_group, map_num) map, by setting its visibility flag if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
     // If no map is specified, then the current map is used.
-    removeobject: removeobject,
-    removeobjectmap: removeobjectmap,
+    removeobject: RemoveObject,
+    removeobjectmap: RemoveObjectMap,
 
     // Unsets the specified (index) Object's visibility flag on the specified (map_group, map_num) map if it has a valid one. If the Object does not have a valid visibility flag, this command does nothing.
     // If no map is specified, then the current map is used.
-    addobject: addobject,
-    addobjectmap: addobjectmap,
+    addobject: AddObject,
+    addobjectmap: AddObjectMap,
 
     // Sets the specified (index) Object's position on the current map.
-    setobjectxy: setobjectxy,
-    showobjectat: showobjectat,
-    hideobjectat: hideobjectat,
+    setobjectxy: SetObjectXY,
+    showobjectat: ShowObjectAt,
+    hideobjectat: HideObjectAt,
 
     // If the script was called by an Object, then that Object will turn to face toward the metatile that the player is standing on.
     faceplayer: Arg0,
-    turnobject: turnobject,
+    turnobject: TurnObject,
 
     // If the Trainer flag for Trainer index is not set, this command does absolutely nothing.
-    trainerbattle: trainerbattle,
+    trainerbattle: TrainerBattle,
 
     // Starts a trainer battle using the battle information stored in RAM (usually by trainerbattle, which actually calls this command behind-the-scenes), and blocks script execution until the battle finishes.
     trainerbattlebegin: Arg0,
@@ -322,15 +311,15 @@ pub const Command = extern union {
 
     // Clears Flag (trainer + 0x500).
     cleartrainerflag: Trainer,
-    setobjectxyperm: setobjectxyperm,
-    moveobjectoffscreen: moveobjectoffscreen,
-    setobjectmovementtype: setobjectmovementtype,
+    setobjectxyperm: SetObjectXYPerm,
+    moveobjectoffscreen: MoveObjectOffScreen,
+    setobjectmovementtype: SetObjectMovementType,
 
     // If a standard message box (or its text) is being drawn on-screen, this command blocks script execution until the box and its text have been fully drawn.
     waitmessage: Arg0,
 
     // Starts displaying a standard message box containing the specified text. If text is a pointer, then the string at that offset will be loaded and used. If text is script bank 0, then the value of script bank 0 will be treated as a pointer to the text. (You can use loadpointer to place a string pointer in a script bank.)
-    message: message,
+    message: Message,
 
     // Closes the current message box.
     closemessage: Arg0,
@@ -351,87 +340,87 @@ pub const Command = extern union {
     waitbuttonpress: Arg0,
 
     // Displays a YES/NO multichoice box at the specified coordinates, and blocks script execution until the user makes a selection. Their selection is stored in variable 0x800D (LASTRESULT); 0x0000 for "NO" or if the user pressed B, and 0x0001 for "YES".
-    yesnobox: yesnobox,
+    yesnobox: YesNoBox,
 
     // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
-    multichoice: multichoice,
+    multichoice: MultiChoice,
 
     // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The default argument determines the initial position of the cursor when the box is first opened; it is zero-indexed, and if it is too large, it is treated as 0x00. If b is set to a non-zero value, then the user will not be allowed to back out of the multichoice with the B button.
-    multichoicedefault: multichoicedefault,
+    multichoicedefault: MultiChoiceDefault,
 
     // Displays a multichoice box from which the user can choose a selection, and blocks script execution until a selection is made. Lists of options are predefined and the one to be used is specified with list. The per_row argument determines how many list items will be shown on a single row of the box.
-    multichoicegrid: multichoicegrid,
+    multichoicegrid: MultiChoiceGrid,
 
     // Nopped in Emerald.
     drawbox: Arg0,
 
     // Nopped in Emerald, but still consumes parameters.
-    erasebox: erasebox,
+    erasebox: EraseBox,
 
     // Nopped in Emerald, but still consumes parameters.
-    drawboxtext: drawboxtext,
+    drawboxtext: DrawBoxText,
 
     // Displays a box containing the front sprite for the specified (species) Pokemon species.
-    drawmonpic: drawmonpic,
+    drawmonpic: DrawMonPic,
 
     // Hides all boxes displayed with drawmonpic.
     erasemonpic: Arg0,
 
     // Draws an image of the winner of the contest. In FireRed, this command is a nop. (The argument is discarded.)
-    drawcontestwinner: drawcontestwinner,
+    drawcontestwinner: DrawContestWinner,
 
     // Displays the string at pointer as braille text in a standard message box. The string must be formatted to use braille characters and needs to provide six extra starting characters that are skipped (in RS, these characters determined the box's size and position, but in Emerald these are calculated automatically).
-    braillemessage: braillemessage,
+    braillemessage: BrailleMessage,
 
     // Gives the player one of the specified (species) Pokemon at level level holding item. The unknown arguments should all be zeroes.
-    givemon: givemon,
-    giveegg: giveegg,
-    setmonmove: setmonmove,
+    givemon: GiveMon,
+    giveegg: GiveEgg,
+    setmonmove: SetMonMove,
 
     // Checks if at least one Pokemon in the player's party knows the specified (index) attack. If so, variable 0x800D (LASTRESULT) is set to the (zero-indexed) slot number of the first Pokemon that knows the move. If not, LASTRESULT is set to 0x0006. Variable 0x8004 is also set to this Pokemon's species.
-    checkpartymove: checkpartymove,
+    checkpartymove: CheckPartyMove,
 
     // Writes the name of the Pokemon at index species to the specified buffer.
-    bufferspeciesname: bufferspeciesname,
+    bufferspeciesname: BufferSpeciesName,
 
     // Writes the name of the species of the first Pokemon in the player's party to the specified buffer.
-    bufferleadmonspeciesname: bufferleadmonspeciesname,
+    bufferleadmonspeciesname: BufferLeadMonSpeciesName,
 
     // Writes the nickname of the Pokemon in slot slot (zero-indexed) of the player's party to the specified buffer. If an empty or invalid slot is specified, ten spaces ("") are written to the buffer.
-    bufferpartymonnick: bufferpartymonnick,
+    bufferpartymonnick: BufferPartyMonNick,
 
     // Writes the name of the item at index item to the specified buffer. If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
-    bufferitemname: bufferitemname,
+    bufferitemname: BufferItemName,
 
     // Writes the name of the decoration at index decoration to the specified buffer. In FireRed, this command is a nop.
-    bufferdecorationname: bufferdecorationname,
+    bufferdecorationname: BufferDecorationName,
 
     // Writes the name of the move at index move to the specified buffer.
-    buffermovename: buffermovename,
+    buffermovename: BufferMoveName,
 
     // Converts the value of input to a decimal string, and writes that string to the specified buffer.
-    buffernumberstring: buffernumberstring,
+    buffernumberstring: BufferNumberString,
 
     // Writes the standard string identified by index to the specified buffer. This command has no protections in place at all, so specifying an invalid standard string (e.x. 0x2B) can and usually will cause data corruption.
-    bufferstdstring: bufferstdstring,
+    bufferstdstring: BufferStdString,
 
     // Copies the string at offset to the specified buffer.
-    bufferstring: bufferstring,
+    bufferstring: BufferString,
 
     // Opens the Pokemart system, offering the specified products for sale.
-    pokemart: pokemart,
+    pokemart: PokeMart,
 
     // Opens the Pokemart system and treats the list of items as decorations.
-    pokemartdecoration: pokemartdecoration,
+    pokemartdecoration: PokeMartDecoration,
 
     // Apparent clone of pokemartdecoration.
-    pokemartdecoration2: pokemartdecoration2,
+    pokemartdecoration2: PokeMartDecoration2,
 
     // Starts up the slot machine minigame.
-    playslotmachine: playslotmachine,
+    playslotmachine: Playslotmachine,
 
     // Sets a berry tree's specific berry and growth stage. In FireRed, this command is a nop.
-    setberrytree: setberrytree,
+    setberrytree: Setberrytree,
 
     // This allows you to choose a Pokemon to use in a contest. In FireRed, this command sets the byte at 0x03000EA8 to 0x01.
     choosecontestmon: Arg0,
@@ -446,102 +435,102 @@ pub const Command = extern union {
     contestlinktransfer: Arg0,
 
     // Stores a random integer between 0 and limit in variable 0x800D (LASTRESULT).
-    random: random,
+    random: Random,
 
     // If check is 0x00, this command adds value to the player's money.
-    givemoney: givemoney,
+    givemoney: Givemoney,
 
     // If check is 0x00, this command subtracts value from the player's money.
-    takemoney: takemoney,
+    takemoney: Takemoney,
 
     // If check is 0x00, this command will check if the player has value or more money; script variable 0x800D (LASTRESULT) is set to 0x0001 if the player has enough money, or 0x0000 if the do not.
-    checkmoney: checkmoney,
+    checkmoney: Checkmoney,
 
     // Spawns a secondary box showing how much money the player has.
-    showmoneybox: showmoneybox,
+    showmoneybox: Showmoneybox,
 
     // Hides the secondary box spawned by showmoney.
     hidemoneybox: Arg0,
 
     // Updates the secondary box spawned by showmoney. Consumes but does not use arguments.
-    updatemoneybox: updatemoneybox,
+    updatemoneybox: Updatemoneybox,
 
     // Gets the price reduction for the index given. In FireRed, this command is a nop.
-    getpricereduction: getpricereduction,
+    getpricereduction: Getpricereduction,
 
     // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white.
-    fadescreen: fadescreen,
+    fadescreen: Fadescreen,
 
     // Fades the screen to and from black and white. Mode 0x00 fades from black, mode 0x01 fades out to black, mode 0x2 fades in from white, and mode 0x3 fades out to white. Other modes may exist.
-    fadescreenspeed: fadescreenspeed,
-    setflashradius: setflashradius,
-    animateflash: animateflash,
+    fadescreenspeed: Fadescreenspeed,
+    setflashradius: Setflashradius,
+    animateflash: Animateflash,
     messageautoscroll: Pointer,
 
     // Executes the specified field move animation.
-    dofieldeffect: dofieldeffect,
+    dofieldeffect: Dofieldeffect,
 
     // Sets up the field effect argument argument with the value value.
-    setfieldeffectargument: setfieldeffectargument,
+    setfieldeffectargument: Setfieldeffectargument,
 
     // Blocks script execution until all playing field move animations complete.
-    waitfieldeffect: waitfieldeffect,
+    waitfieldeffect: Waitfieldeffect,
 
     // Sets which healing place the player will return to if all of the Pokemon in their party faint.
-    setrespawn: setrespawn,
+    setrespawn: Setrespawn,
 
     // Checks the player's gender. If male, then 0x0000 is stored in variable 0x800D (LASTRESULT). If female, then 0x0001 is stored in LASTRESULT.
     checkplayergender: Arg0,
 
     // Plays the specified (species) Pokemon's cry. You can use waitcry to block script execution until the sound finishes.
-    playmoncry: playmoncry,
+    playmoncry: Playmoncry,
 
     // Changes the metatile at (x, y) on the current map.
-    setmetatile: setmetatile,
+    setmetatile: Setmetatile,
 
     // Queues a weather change to the default weather for the map.
     resetweather: Arg0,
 
     // Queues a weather change to type weather.
-    setweather: setweather,
+    setweather: Setweather,
 
     // Executes the weather change queued with resetweather or setweather. The current weather will smoothly fade into the queued weather.
     doweather: Arg0,
 
     // This command manages cases in which maps have tiles that change state when stepped on (specifically, cracked/breakable floors).
-    setstepcallback: setstepcallback,
-    setmaplayoutindex: setmaplayoutindex,
-    setobjectpriority: setobjectpriority,
-    resetobjectpriority: resetobjectpriority,
-    createvobject: createvobject,
-    turnvobject: turnvobject,
+    setstepcallback: Setstepcallback,
+    setmaplayoutindex: Setmaplayoutindex,
+    setobjectpriority: Setobjectpriority,
+    resetobjectpriority: Resetobjectpriority,
+    createvobject: Createvobject,
+    turnvobject: Turnvobject,
 
     // Opens the door metatile at (X, Y) with an animation.
-    opendoor: opendoor,
+    opendoor: Opendoor,
 
     // Closes the door metatile at (X, Y) with an animation.
-    closedoor: closedoor,
+    closedoor: Closedoor,
 
     // Waits for the door animation started with opendoor or closedoor to finish.
     waitdooranim: Arg0,
 
     // Sets the door tile at (x, y) to be open without an animation.
-    setdooropen: setdooropen,
+    setdooropen: Setdooropen,
 
     // Sets the door tile at (x, y) to be closed without an animation.
-    setdoorclosed: setdoorclosed,
+    setdoorclosed: Setdoorclosed,
 
     // In Emerald, this command consumes its parameters and does nothing. In FireRed, this command is a nop.
-    addelevmenuitem: addelevmenuitem,
+    addelevmenuitem: Addelevmenuitem,
 
     // In FireRed and Emerald, this command is a nop.
     showelevmenu: Arg0,
-    checkcoins: checkcoins,
-    givecoins: givecoins,
-    takecoins: takecoins,
+    checkcoins: Checkcoins,
+    givecoins: Givecoins,
+    takecoins: Takecoins,
 
     // Prepares to start a wild battle against a species at Level level holding item. Running this command will not affect normal wild battles. You start the prepared battle with dowildbattle.
-    setwildbattle: setwildbattle,
+    setwildbattle: Setwildbattle,
 
     // Starts a wild battle against the Pokemon generated by setwildbattle. Blocks script execution until the battle finishes.
     dowildbattle: Arg0,
@@ -564,7 +553,7 @@ pub const Command = extern union {
     updatecoinsbox: Coord,
 
     // Increases the value of the specified game stat by 1. The stat's value will not be allowed to exceed 0x00FFFFFF.
-    incrementgamestat: incrementgamestat,
+    incrementgamestat: Incrementgamestat,
 
     // Sets the destination that using an Escape Rope or Dig will take the player to.
     setescapewarp: Warp,
@@ -573,10 +562,10 @@ pub const Command = extern union {
     waitmoncry: Arg0,
 
     // Writes the name of the specified (box) PC box to the specified buffer.
-    bufferboxname: bufferboxname,
+    bufferboxname: Bufferboxname,
 
     // Sets the color of the text in standard message boxes. 0x00 produces blue (male) text, 0x01 produces red (female) text, 0xFF resets the color to the default for the current OW's gender, and all other values produce black text.
-    textcolor: textcolor,
+    textcolor: Textcolor,
 
     // The exact purpose of this command is unknown, but it is related to the blue help-text box that appears on the bottom of the screen when the Main Menu is opened.
     loadhelp: Pointer,
@@ -591,7 +580,7 @@ pub const Command = extern union {
     normalmsg: Arg0,
 
     // Compares the value of a hidden variable to a dword.
-    comparehiddenvar: comparehiddenvar,
+    comparehiddenvar: Comparehiddenvar,
 
     // Makes the Pokemon in the specified slot of the player's party obedient. It will not randomly disobey orders in battle.
     setmonobedient: Slot,
@@ -603,33 +592,33 @@ pub const Command = extern union {
     execram: Arg0,
 
     // Sets worldmapflag to 1. This allows the player to Fly to the corresponding map, if that map has a flightspot.
-    setworldmapflag: setworldmapflag,
+    setworldmapflag: Setworldmapflag,
 
     // Clone of warpteleport? It is apparently only used in FR/LG, and only with specials.[source]
     warpteleport2: Warp,
 
     // Changes the location where the player caught the Pokemon in the specified slot of their party.
-    setmonmetlocation: setmonmetlocation,
-    mossdeepgym1: mossdeepgym1,
+    setmonmetlocation: Setmonmetlocation,
+    mossdeepgym1: Mossdeepgym1,
     mossdeepgym2: Arg0,
 
     // In FireRed, this command is a nop.
-    mossdeepgym3: mossdeepgym3,
+    mossdeepgym3: Mossdeepgym3,
     mossdeepgym4: Arg0,
-    warp7: warp7,
+    warp7: Warp7,
     cmd_d8: Arg0,
     cmd_d9: Arg0,
     hidebox2: Arg0,
     message3: Pointer,
-    fadescreenswapbuffers: fadescreenswapbuffers,
-    buffertrainerclassname: buffertrainerclassname,
-    buffertrainername: buffertrainername,
+    fadescreenswapbuffers: Fadescreenswapbuffers,
+    buffertrainerclassname: BufferTrainerClassName,
+    buffertrainername: BufferTrainerName,
     pokenavcall: Pointer,
-    warp8: warp8,
-    buffercontesttypestring: buffercontesttypestring,
+    warp8: Warp8,
+    buffercontesttypestring: BufferContestTypeString,
 
     // Writes the name of the specified (item) item to the specified buffer. If the specified item is a Berry (0x85 - 0xAE) or Poke Ball (0x4) and if the quantity is 2 or more, the buffered string will be pluralized ("IES" or "S" appended). If the specified item is the Enigma Berry, I have no idea what this command does (but testing showed no pluralization). If the specified index is larger than the number of items in the game (0x176), the name of item 0 ("????????") is buffered instead.
-    bufferitemnameplural: bufferitemnameplural,
+    bufferitemnameplural: BufferItemNamePlural,
 
     pub const Kind = enum(u8) {
         nop = 0x00,
@@ -866,12 +855,12 @@ pub const Command = extern union {
     };
     pub const Jump = extern struct {
         kind: Kind align(1),
-        destination: lu32 align(1),
+        destination: u32 align(1),
     };
     pub const CondJump = extern struct {
         kind: Kind align(1),
         condition: u8 align(1),
-        destination: lu32 align(1),
+        destination: u32 align(1),
     };
     pub fn Func(comptime T: type) type {
         return extern struct {
@@ -884,24 +873,24 @@ pub const Command = extern union {
         condition: u8 align(1),
         function: u8 align(1),
     };
-    pub const setmysteryeventstatus = extern struct {
+    pub const SetMysteryEventStatus = extern struct {
         kind: Kind align(1),
         value: u8 align(1),
     };
-    pub const loadword = extern struct {
+    pub const LoadWord = extern struct {
         kind: Kind align(1),
         destination: u8 align(1),
         value: gen3.Ptr([*:0xff]u8) align(1),
     };
-    pub const loadbyte = extern struct {
+    pub const LoadByte = extern struct {
         kind: Kind align(1),
         destination: u8 align(1),
         value: u8 align(1),
     };
-    pub const writebytetoaddr = extern struct {
+    pub const WriteByteToAddr = extern struct {
         kind: Kind align(1),
         value: u8 align(1),
-        offset: lu32 align(1),
+        offset: u32 align(1),
     };
     pub fn DestSrc(comptime Dst: type, comptime Src: type) type {
         return extern struct {
@@ -910,15 +899,15 @@ pub const Command = extern union {
             src: Src align(1),
         };
     }
-    pub const setptrbyte = extern struct {
+    pub const SetPtrByte = extern struct {
         kind: Kind align(1),
         source: u8 align(1),
-        destination: lu32 align(1),
+        destination: u32 align(1),
     };
     pub const DestVal = extern struct {
         kind: Kind align(1),
-        destination: lu16 align(1),
-        value: lu16 align(1),
+        destination: u16 align(1),
+        value: u16 align(1),
     };
     pub fn AB(comptime A: type, comptime B: type) type {
         return extern struct {
@@ -927,42 +916,42 @@ pub const Command = extern union {
             b: B align(1),
         };
     }
-    pub const compare_var_to_value = extern struct {
+    pub const CompareVarToValue = extern struct {
         kind: Kind align(1),
-        @"var": lu16 align(1),
-        value: lu16 align(1),
+        @"var": u16 align(1),
+        value: u16 align(1),
     };
-    pub const compare_var_to_var = extern struct {
+    pub const CompareVarToVar = extern struct {
         kind: Kind align(1),
-        var1: lu16 align(1),
-        var2: lu16 align(1),
+        var1: u16 align(1),
+        var2: u16 align(1),
     };
-    pub const specialvar = extern struct {
+    pub const SpecialVar = extern struct {
         kind: Kind align(1),
-        output: lu16 align(1),
-        special_function: lu16 align(1),
+        output: u16 align(1),
+        special_function: u16 align(1),
     };
-    pub const delay = extern struct {
+    pub const Delay = extern struct {
         kind: Kind align(1),
-        time: lu16 align(1),
+        time: u16 align(1),
     };
     pub const Arg1 = extern struct {
         kind: Kind align(1),
-        arg: lu16 align(1),
+        arg: u16 align(1),
     };
-    pub const initclock = extern struct {
+    pub const InitClock = extern struct {
         kind: Kind align(1),
-        hour: lu16 align(1),
-        minute: lu16 align(1),
+        hour: u16 align(1),
+        minute: u16 align(1),
     };
-    pub const playbgm = extern struct {
+    pub const PlayBgm = extern struct {
         kind: Kind align(1),
-        song_number: lu16 align(1),
+        song_number: u16 align(1),
         unknown: u8 align(1),
     };
     pub const Song = extern struct {
         kind: Kind align(1),
-        song_number: lu16 align(1),
+        song_number: u16 align(1),
     };
     pub const Speed = extern struct {
         kind: Kind align(1),
@@ -970,127 +959,127 @@ pub const Command = extern union {
     };
     pub const Warp = extern struct {
         kind: Kind align(1),
-        map: lu16 align(1),
+        map: u16 align(1),
         warp: u8 align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const warphole = extern struct {
+    pub const WarpHole = extern struct {
         kind: Kind align(1),
-        map: lu16 align(1),
+        map: u16 align(1),
     };
-    pub const getplayerxy = extern struct {
+    pub const GetPlayerXy = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const additem = extern struct {
+    pub const AddItem = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const removeitem = extern struct {
+    pub const RemoveItem = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const checkitemspace = extern struct {
+    pub const CheckiIemSpace = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const checkitem = extern struct {
+    pub const CheckItem = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const checkitemtype = extern struct {
+    pub const CheckItemType = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const givepcitem = extern struct {
+    pub const GivePcItem = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const checkpcitem = extern struct {
+    pub const CheckPcItem = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        quantity: lu16 align(1),
+        index: u16 align(1),
+        quantity: u16 align(1),
     };
-    pub const givedecoration = extern struct {
+    pub const GiveDecoration = extern struct {
         kind: Kind align(1),
-        decoration: lu16 align(1),
+        decoration: u16 align(1),
     };
-    pub const takedecoration = extern struct {
+    pub const TakeDecoration = extern struct {
         kind: Kind align(1),
-        decoration: lu16 align(1),
+        decoration: u16 align(1),
     };
-    pub const checkdecor = extern struct {
+    pub const CheckDecor = extern struct {
         kind: Kind align(1),
-        decoration: lu16 align(1),
+        decoration: u16 align(1),
     };
-    pub const checkdecorspace = extern struct {
+    pub const CheckDecorSpace = extern struct {
         kind: Kind align(1),
-        decoration: lu16 align(1),
+        decoration: u16 align(1),
     };
-    pub const applymovement = extern struct {
+    pub const ApplyMovement = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        movements: lu32 align(1),
+        index: u16 align(1),
+        movements: u32 align(1),
     };
-    pub const applymovementmap = extern struct {
+    pub const ApplyMovementMap = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        movements: lu32 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        movements: u32 align(1),
+        map: u16 align(1),
     };
-    pub const waitmovement = extern struct {
+    pub const WaitMovement = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const waitmovementmap = extern struct {
+    pub const WaitMovementMap = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const removeobject = extern struct {
+    pub const RemoveObject = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const removeobjectmap = extern struct {
+    pub const RemoveObjectMap = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const addobject = extern struct {
+    pub const AddObject = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const addobjectmap = extern struct {
+    pub const AddObjectMap = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const setobjectxy = extern struct {
+    pub const SetObjectXY = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        index: u16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const showobjectat = extern struct {
+    pub const ShowObjectAt = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const hideobjectat = extern struct {
+    pub const HideObjectAt = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const turnobject = extern struct {
+    pub const TurnObject = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
         direction: u8 align(1),
     };
 
@@ -1110,146 +1099,146 @@ pub const Command = extern union {
         trainer_battle12 = 12,
     };
 
-    pub const trainerbattle = extern struct {
+    pub const TrainerBattle = extern struct {
         kind: Kind align(1),
         pointers: extern union {
             type: TrainerBattleType,
             trainer_battle_single: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
             trainer_battle_continue_script_no_music: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // event script
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // event script
             },
             trainer_battle_continue_script: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // event script
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // event script
             },
             trainer_battle_single_no_intro_text: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
             },
             trainer_battle_double: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // text
             },
             trainer_battle_rematch: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
             trainer_battle_continue_script_double: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // text
-                pointer4: lu32 align(1), // event script
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // text
+                pointer4: u32 align(1), // event script
             },
             trainer_battle_rematch_double: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // text
             },
             trainer_battle_continue_script_double_no_music: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
-                pointer3: lu32 align(1), // text
-                pointer4: lu32 align(1), // event script
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
+                pointer3: u32 align(1), // text
+                pointer4: u32 align(1), // event script
             },
             trainer_battle_pyramid: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
             trainer_battle_set_trainer_a: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
             trainer_battle_set_trainer_b: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
             trainer_battle12: extern struct {
                 type: TrainerBattleType align(1),
-                trainer: lu16 align(1),
-                local_id: lu16 align(1),
-                pointer1: lu32 align(1), // text
-                pointer2: lu32 align(1), // text
+                trainer: u16 align(1),
+                local_id: u16 align(1),
+                pointer1: u32 align(1), // text
+                pointer2: u32 align(1), // text
             },
         },
     };
     pub const Trainer = extern struct {
         kind: Kind align(1),
-        trainer: lu16 align(1),
+        trainer: u16 align(1),
     };
-    pub const setobjectxyperm = extern struct {
+    pub const SetObjectXYPerm = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        index: u16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const moveobjectoffscreen = extern struct {
+    pub const MoveObjectOffScreen = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const setobjectmovementtype = extern struct {
+    pub const SetObjectMovementType = extern struct {
         kind: Kind align(1),
-        word: lu16 align(1),
+        word: u16 align(1),
         byte: u8 align(1),
     };
-    pub const message = extern struct {
+    pub const Message = extern struct {
         kind: Kind align(1),
         text: gen3.Ptr([*:0xff]u8) align(1),
     };
-    pub const yesnobox = extern struct {
+    pub const YesNoBox = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
     };
-    pub const multichoice = extern struct {
+    pub const MultiChoice = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
         list: u8 align(1),
         b: u8 align(1),
     };
-    pub const multichoicedefault = extern struct {
+    pub const MultiChoiceDefault = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
@@ -1257,7 +1246,7 @@ pub const Command = extern union {
         default: u8 align(1),
         b: u8 align(1),
     };
-    pub const multichoicegrid = extern struct {
+    pub const MultiChoiceGrid = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
@@ -1265,284 +1254,284 @@ pub const Command = extern union {
         per_row: u8 align(1),
         b: u8 align(1),
     };
-    pub const erasebox = extern struct {
+    pub const EraseBox = extern struct {
         kind: Kind align(1),
         byte1: u8 align(1),
         byte2: u8 align(1),
         byte3: u8 align(1),
         byte4: u8 align(1),
     };
-    pub const drawboxtext = extern struct {
+    pub const DrawBoxText = extern struct {
         kind: Kind align(1),
         byte1: u8 align(1),
         byte2: u8 align(1),
         byte3: u8 align(1),
         byte4: u8 align(1),
     };
-    pub const drawmonpic = extern struct {
+    pub const DrawMonPic = extern struct {
         kind: Kind align(1),
-        species: lu16 align(1),
+        species: u16 align(1),
         x: u8 align(1),
         y: u8 align(1),
     };
-    pub const drawcontestwinner = extern struct {
+    pub const DrawContestWinner = extern struct {
         kind: Kind align(1),
         a: u8 align(1),
     };
-    pub const braillemessage = extern struct {
+    pub const BrailleMessage = extern struct {
         kind: Kind align(1),
-        text: lu32 align(1),
+        text: u32 align(1),
     };
-    pub const givemon = extern struct {
+    pub const GiveMon = extern struct {
         kind: Kind align(1),
-        species: lu16 align(1),
+        species: u16 align(1),
         level: u8 align(1),
-        item: lu16 align(1),
-        unknown1: lu32 align(1),
-        unknown2: lu32 align(1),
+        item: u16 align(1),
+        unknown1: u32 align(1),
+        unknown2: u32 align(1),
         unknown3: u8 align(1),
     };
-    pub const giveegg = extern struct {
+    pub const GiveEgg = extern struct {
         kind: Kind align(1),
-        species: lu16 align(1),
+        species: u16 align(1),
     };
-    pub const setmonmove = extern struct {
+    pub const SetMonMove = extern struct {
         kind: Kind align(1),
         index: u8 align(1),
         slot: u8 align(1),
-        move: lu16 align(1),
+        move: u16 align(1),
     };
-    pub const checkpartymove = extern struct {
+    pub const CheckPartyMove = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const bufferspeciesname = extern struct {
-        kind: Kind align(1),
-        out: u8 align(1),
-        species: lu16 align(1),
-    };
-    pub const bufferleadmonspeciesname = extern struct {
+    pub const BufferSpeciesName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
+        species: u16 align(1),
     };
-    pub const bufferpartymonnick = extern struct {
+    pub const BufferLeadMonSpeciesName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        slot: lu16 align(1),
     };
-    pub const bufferitemname = extern struct {
+    pub const BufferPartyMonNick = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        item: lu16 align(1),
+        slot: u16 align(1),
     };
-    pub const bufferdecorationname = extern struct {
+    pub const BufferItemName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        decoration: lu16 align(1),
+        item: u16 align(1),
     };
-    pub const buffermovename = extern struct {
+    pub const BufferDecorationName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        move: lu16 align(1),
+        decoration: u16 align(1),
     };
-    pub const buffernumberstring = extern struct {
+    pub const BufferMoveName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        input: lu16 align(1),
+        move: u16 align(1),
     };
-    pub const bufferstdstring = extern struct {
+    pub const BufferNumberString = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        index: lu16 align(1),
+        input: u16 align(1),
     };
-    pub const bufferstring = extern struct {
+    pub const BufferStdString = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        offset: lu32 align(1),
+        index: u16 align(1),
     };
-    pub const pokemart = extern struct {
+    pub const BufferString = extern struct {
         kind: Kind align(1),
-        products: lu32 align(1),
+        out: u8 align(1),
+        offset: u32 align(1),
     };
-    pub const pokemartdecoration = extern struct {
+    pub const PokeMart = extern struct {
         kind: Kind align(1),
-        products: lu32 align(1),
+        products: u32 align(1),
     };
-    pub const pokemartdecoration2 = extern struct {
+    pub const PokeMartDecoration = extern struct {
         kind: Kind align(1),
-        products: lu32 align(1),
+        products: u32 align(1),
     };
-    pub const playslotmachine = extern struct {
+    pub const PokeMartDecoration2 = extern struct {
         kind: Kind align(1),
-        word: lu16 align(1),
+        products: u32 align(1),
     };
-    pub const setberrytree = extern struct {
+    pub const Playslotmachine = extern struct {
+        kind: Kind align(1),
+        word: u16 align(1),
+    };
+    pub const Setberrytree = extern struct {
         kind: Kind align(1),
         tree_id: u8 align(1),
         berry: u8 align(1),
         growth_stage: u8 align(1),
     };
-    pub const random = extern struct {
+    pub const Random = extern struct {
         kind: Kind align(1),
-        limit: lu16 align(1),
+        limit: u16 align(1),
     };
-    pub const givemoney = extern struct {
+    pub const Givemoney = extern struct {
         kind: Kind align(1),
-        value: lu32 align(1),
+        value: u32 align(1),
         check: u8 align(1),
     };
-    pub const takemoney = extern struct {
+    pub const Takemoney = extern struct {
         kind: Kind align(1),
-        value: lu32 align(1),
+        value: u32 align(1),
         check: u8 align(1),
     };
-    pub const checkmoney = extern struct {
+    pub const Checkmoney = extern struct {
         kind: Kind align(1),
-        value: lu32 align(1),
+        value: u32 align(1),
         check: u8 align(1),
     };
-    pub const showmoneybox = extern struct {
+    pub const Showmoneybox = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
         check: u8 align(1),
     };
-    pub const updatemoneybox = extern struct {
+    pub const Updatemoneybox = extern struct {
         kind: Kind align(1),
         x: u8 align(1),
         y: u8 align(1),
     };
-    pub const getpricereduction = extern struct {
+    pub const Getpricereduction = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const fadescreen = extern struct {
+    pub const Fadescreen = extern struct {
         kind: Kind align(1),
         effect: u8 align(1),
     };
-    pub const fadescreenspeed = extern struct {
+    pub const Fadescreenspeed = extern struct {
         kind: Kind align(1),
         effect: u8 align(1),
         speed: u8 align(1),
     };
-    pub const setflashradius = extern struct {
+    pub const Setflashradius = extern struct {
         kind: Kind align(1),
-        word: lu16 align(1),
+        word: u16 align(1),
     };
-    pub const animateflash = extern struct {
+    pub const Animateflash = extern struct {
         kind: Kind align(1),
         byte: u8 align(1),
     };
-    pub const dofieldeffect = extern struct {
+    pub const Dofieldeffect = extern struct {
         kind: Kind align(1),
-        animation: lu16 align(1),
+        animation: u16 align(1),
     };
-    pub const setfieldeffectargument = extern struct {
+    pub const Setfieldeffectargument = extern struct {
         kind: Kind align(1),
         argument: u8 align(1),
-        param: lu16 align(1),
+        param: u16 align(1),
     };
-    pub const waitfieldeffect = extern struct {
+    pub const Waitfieldeffect = extern struct {
         kind: Kind align(1),
-        animation: lu16 align(1),
+        animation: u16 align(1),
     };
-    pub const setrespawn = extern struct {
+    pub const Setrespawn = extern struct {
         kind: Kind align(1),
-        heallocation: lu16 align(1),
+        heallocation: u16 align(1),
     };
-    pub const playmoncry = extern struct {
+    pub const Playmoncry = extern struct {
         kind: Kind align(1),
-        species: lu16 align(1),
-        effect: lu16 align(1),
+        species: u16 align(1),
+        effect: u16 align(1),
     };
-    pub const setmetatile = extern struct {
+    pub const Setmetatile = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
-        metatile_number: lu16 align(1),
-        tile_attrib: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
+        metatile_number: u16 align(1),
+        tile_attrib: u16 align(1),
     };
-    pub const setweather = extern struct {
+    pub const Setweather = extern struct {
         kind: Kind align(1),
-        type: lu16 align(1),
+        type: u16 align(1),
     };
-    pub const setstepcallback = extern struct {
+    pub const Setstepcallback = extern struct {
         kind: Kind align(1),
         subroutine: u8 align(1),
     };
-    pub const setmaplayoutindex = extern struct {
+    pub const Setmaplayoutindex = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
+        index: u16 align(1),
     };
-    pub const setobjectpriority = extern struct {
+    pub const Setobjectpriority = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
         priority: u8 align(1),
     };
-    pub const resetobjectpriority = extern struct {
+    pub const Resetobjectpriority = extern struct {
         kind: Kind align(1),
-        index: lu16 align(1),
-        map: lu16 align(1),
+        index: u16 align(1),
+        map: u16 align(1),
     };
-    pub const createvobject = extern struct {
+    pub const Createvobject = extern struct {
         kind: Kind align(1),
         sprite: u8 align(1),
         byte2: u8 align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
         elevation: u8 align(1),
         direction: u8 align(1),
     };
-    pub const turnvobject = extern struct {
+    pub const Turnvobject = extern struct {
         kind: Kind align(1),
         index: u8 align(1),
         direction: u8 align(1),
     };
-    pub const opendoor = extern struct {
+    pub const Opendoor = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const closedoor = extern struct {
+    pub const Closedoor = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const setdooropen = extern struct {
+    pub const Setdooropen = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const setdoorclosed = extern struct {
+    pub const Setdoorclosed = extern struct {
         kind: Kind align(1),
-        x: lu16 align(1),
-        y: lu16 align(1),
+        x: u16 align(1),
+        y: u16 align(1),
     };
-    pub const addelevmenuitem = extern struct {
+    pub const Addelevmenuitem = extern struct {
         kind: Kind align(1),
         a: u8 align(1),
-        b: lu16 align(1),
-        c: lu16 align(1),
-        d: lu16 align(1),
+        b: u16 align(1),
+        c: u16 align(1),
+        d: u16 align(1),
     };
-    pub const checkcoins = extern struct {
+    pub const Checkcoins = extern struct {
         kind: Kind align(1),
-        out: lu16 align(1),
+        out: u16 align(1),
     };
-    pub const givecoins = extern struct {
+    pub const Givecoins = extern struct {
         kind: Kind align(1),
-        count: lu16 align(1),
+        count: u16 align(1),
     };
-    pub const takecoins = extern struct {
+    pub const Takecoins = extern struct {
         kind: Kind align(1),
-        count: lu16 align(1),
+        count: u16 align(1),
     };
-    pub const setwildbattle = extern struct {
+    pub const Setwildbattle = extern struct {
         kind: Kind align(1),
-        species: lu16 align(1),
+        species: u16 align(1),
         level: u8 align(1),
-        item: lu16 align(1),
+        item: u16 align(1),
     };
 
     pub const Coord = extern struct {
@@ -1550,87 +1539,87 @@ pub const Command = extern union {
         x: u8 align(1),
         y: u8 align(1),
     };
-    pub const incrementgamestat = extern struct {
+    pub const Incrementgamestat = extern struct {
         kind: Kind align(1),
         stat: u8 align(1),
     };
-    pub const bufferboxname = extern struct {
+    pub const Bufferboxname = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        box: lu16 align(1),
+        box: u16 align(1),
     };
-    pub const textcolor = extern struct {
+    pub const Textcolor = extern struct {
         kind: Kind align(1),
         color: u8 align(1),
     };
-    pub const comparehiddenvar = extern struct {
+    pub const Comparehiddenvar = extern struct {
         kind: Kind align(1),
         a: u8 align(1),
-        value: lu32 align(1),
+        value: u32 align(1),
     };
     pub const Slot = extern struct {
         kind: Kind align(1),
-        slot: lu16 align(1),
+        slot: u16 align(1),
     };
-    pub const setworldmapflag = extern struct {
+    pub const Setworldmapflag = extern struct {
         kind: Kind align(1),
-        worldmapflag: lu16 align(1),
+        worldmapflag: u16 align(1),
     };
-    pub const setmonmetlocation = extern struct {
+    pub const Setmonmetlocation = extern struct {
         kind: Kind align(1),
-        slot: lu16 align(1),
+        slot: u16 align(1),
         location: u8 align(1),
     };
-    pub const mossdeepgym1 = extern struct {
+    pub const Mossdeepgym1 = extern struct {
         kind: Kind align(1),
-        unknown: lu16 align(1),
+        unknown: u16 align(1),
     };
-    pub const mossdeepgym3 = extern struct {
+    pub const Mossdeepgym3 = extern struct {
         kind: Kind align(1),
-        @"var": lu16 align(1),
+        @"var": u16 align(1),
     };
-    pub const warp7 = extern struct {
+    pub const Warp7 = extern struct {
         kind: Kind align(1),
-        map: lu16 align(1),
+        map: u16 align(1),
         byte: u8 align(1),
-        word1: lu16 align(1),
-        word2: lu16 align(1),
+        word1: u16 align(1),
+        word2: u16 align(1),
     };
-    pub const fadescreenswapbuffers = extern struct {
+    pub const Fadescreenswapbuffers = extern struct {
         kind: Kind align(1),
         byte: u8 align(1),
     };
-    pub const buffertrainerclassname = extern struct {
+    pub const BufferTrainerClassName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        class: lu16 align(1),
+        class: u16 align(1),
     };
-    pub const buffertrainername = extern struct {
+    pub const BufferTrainerName = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        trainer: lu16 align(1),
+        trainer: u16 align(1),
     };
     pub const Pointer = extern struct {
         kind: Kind align(1),
-        pointer: lu32 align(1),
+        pointer: u32 align(1),
     };
-    pub const warp8 = extern struct {
+    pub const Warp8 = extern struct {
         kind: Kind align(1),
-        map: lu16 align(1),
+        map: u16 align(1),
         byte: u8 align(1),
-        word1: lu16 align(1),
-        word2: lu16 align(1),
+        word1: u16 align(1),
+        word2: u16 align(1),
     };
-    pub const buffercontesttypestring = extern struct {
+    pub const BufferContestTypeString = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        word: lu16 align(1),
+        word: u16 align(1),
     };
-    pub const bufferitemnameplural = extern struct {
+    pub const BufferItemNamePlural = extern struct {
         kind: Kind align(1),
         out: u8 align(1),
-        item: lu16 align(1),
-        quantity: lu16 align(1),
+        item: u16 align(1),
+        quantity: u16 align(1),
     };
 
     comptime {
@@ -1638,3 +1627,14 @@ pub const Command = extern union {
         std.debug.assert(script.isPacked(@This()));
     }
 };
+
+test {
+    _ = gen3;
+    _ = rom;
+    _ = script;
+}
+
+const gen3 = @import("../gen3.zig");
+const rom = @import("../rom.zig");
+const script = @import("../script.zig");
+const std = @import("std");

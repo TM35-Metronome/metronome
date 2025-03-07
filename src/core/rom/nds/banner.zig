@@ -1,17 +1,11 @@
-const util = @import("util");
-const int = @import("../int.zig");
-
-const algorithm = util.algorithm;
-const lu16 = int.lu16;
-
 pub const Banner = extern struct {
     version: u8,
     has_animated_dsi_icon: u8,
 
-    crc16_across_0020h_083fh: lu16,
-    crc16_across_0020h_093fh: lu16,
-    crc16_across_0020h_0a3fh: lu16,
-    crc16_across_1240h_23bfh: lu16,
+    crc16_across_0020h_083fh: u16,
+    crc16_across_0020h_093fh: u16,
+    crc16_across_0020h_0a3fh: u16,
+    crc16_across_1240h_23bfh: u16,
 
     reserved1: [0x16]u8,
 
@@ -35,13 +29,13 @@ pub const Banner = extern struct {
     //// animated DSi icons only
     //icon_animation_bitmap: [0x1000]u8,
     //icon_animation_palette: [0x100]u8,
-    //icon_animation_sequence: [0x80]u8, // Should be [0x40]lu16?
+    //icon_animation_sequence: [0x80]u8, // Should be [0x40]u16?
 
     pub fn validate(banner: Banner) !void {
         if (banner.version == 0)
             return error.InvalidVersion;
 
-        if (!algorithm.all(u8, &banner.reserved1, isZero))
+        if (!util.algorithm.all(u8, &banner.reserved1, isZero))
             return error.InvalidReserved1;
 
         //if (!utils.algorithm.all(u8, banner.reserved2, ascii.isZero))
@@ -65,3 +59,5 @@ pub const Banner = extern struct {
         return char == 0xFF;
     }
 };
+
+const util = @import("util");

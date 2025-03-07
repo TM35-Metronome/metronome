@@ -50,8 +50,8 @@ pub const params = clap.parseParamsComptime(
 );
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals;
-    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+    const pos = args.positionals[0];
+    const file_name = pos orelse return error.MissingFile;
 
     const out = args.args.output orelse
         try fmt.allocPrint(allocator, "{s}.output", .{path.basename(file_name)});
@@ -97,15 +97,27 @@ pub fn run(
     var root_dir = try out_dir.openDir("root", .{});
     defer root_dir.close();
 
-    try out_dir.writeFile("arm9", nds_rom.arm9());
+    try out_dir.writeFile(.{
+        .sub_path = "arm9",
+        .data = nds_rom.arm9(),
+    });
     if (rom.nds.blz.decode(allocator, nds_rom.arm9())) |arm9| {
-        try out_dir.writeFile("arm9_decoded", arm9);
+        try out_dir.writeFile(.{
+            .sub_path = "arm9_decoded",
+            .data = arm9,
+        });
     } else |_| {}
 
-    try out_dir.writeFile("arm7", nds_rom.arm7());
+    try out_dir.writeFile(.{
+        .sub_path = "arm7",
+        .data = nds_rom.arm7(),
+    });
     // try out_dir.writeFile("nitro_footer", nds_rom.nitroFooter());
     if (nds_rom.banner()) |banner|
-        try out_dir.writeFile("banner", mem.asBytes(banner));
+        try out_dir.writeFile(.{
+            .sub_path = "banner",
+            .data = mem.asBytes(banner),
+        });
 
     const file_system = nds_rom.fileSystem();
     try writeOverlays(allocator, arm9_overlays_dir, file_system, nds_rom.arm9OverlayTable());
@@ -118,7 +130,10 @@ fn writeFs(dir: fs.Dir, file_system: nds.fs.Fs, folder: nds.fs.Dir) anyerror!voi
     var it = file_system.iterate(folder);
     while (it.next()) |entry| {
         switch (entry.handle) {
-            .file => |file| try dir.writeFile(entry.name, file_system.fileData(file)),
+            .file => |file| try dir.writeFile(.{
+                .sub_path = entry.name,
+                .data = file_system.fileData(file),
+            }),
             .dir => |sub_folder| {
                 try dir.makeDir(entry.name);
                 var sub_dir = try dir.openDir(entry.name, .{});
@@ -136,17 +151,26 @@ fn writeOverlays(
     file_system: nds.fs.Fs,
     overlays: []align(1) const nds.Overlay,
 ) !void {
-    var buf: [fs.MAX_PATH_BYTES]u8 = undefined;
+    var buf: [fs.max_path_bytes]u8 = undefined;
 
     for (overlays, 0..) |*overlay, i| {
-        try dir.writeFile(fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable, mem.asBytes(overlay));
+        try dir.writeFile(.{
+            .sub_path = fmt.bufPrint(&buf, "overlay{}", .{i}) catch unreachable,
+            .data = mem.asBytes(overlay),
+        });
 
-        const data = file_system.fileData(.{ .i = overlay.file_id.value() });
+        const data = file_system.fileData(.{ .i = overlay.file_id });
         if (nds.blz.decode(allocator, data)) |d| {
             std.log.info("Decompressed overlay {}", .{i});
-            try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, d);
+            try dir.writeFile(.{
+                .sub_path = fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable,
+                .data = d,
+            });
         } else |_| {
-            try dir.writeFile(fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable, data);
+            try dir.writeFile(.{
+                .sub_path = fmt.bufPrint(&buf, "file{}", .{i}) catch unreachable,
+                .data = data,
+            });
         }
     }
 }

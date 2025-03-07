@@ -1,7 +1,5 @@
-const common = @import("../common.zig");
-
 pub const NarcOffset = struct {
-    file: usize,
+    file: u32,
     offset: usize,
 };
 
@@ -27,7 +25,7 @@ pub const Info = struct {
     trainers: []const u8,
     parties: []const u8,
     wild_pokemons: []const u8,
-    itemdata: []const u8,
+    items: []const u8,
     hidden_hollows: ?[]const u8,
 
     map_file: []const u8,
@@ -94,7 +92,7 @@ const black2_info = Info{
     .trainers = "/a/0/9/1",
     .parties = "/a/0/9/2",
     .wild_pokemons = "/a/1/2/7",
-    .itemdata = "/a/0/2/4",
+    .items = "/a/0/2/4",
     .hidden_hollows = "/a/2/7/3",
 
     .map_file = "a/0/1/2",
@@ -138,7 +136,7 @@ const white2_info = Info{
     .trainers = black2_info.trainers,
     .parties = black2_info.parties,
     .wild_pokemons = black2_info.wild_pokemons,
-    .itemdata = black2_info.itemdata,
+    .items = black2_info.items,
     .hidden_hollows = black2_info.hidden_hollows,
 
     .map_file = black2_info.map_file,
@@ -207,7 +205,7 @@ const black_info = Info{
     .trainers = "/a/0/9/2",
     .parties = "/a/0/9/3",
     .wild_pokemons = "/a/1/2/6",
-    .itemdata = black2_info.itemdata,
+    .items = black2_info.items,
     .hidden_hollows = null,
 
     .map_file = black2_info.map_file,
@@ -251,7 +249,7 @@ const white_info = Info{
     .trainers = black_info.trainers,
     .parties = black_info.parties,
     .wild_pokemons = black_info.wild_pokemons,
-    .itemdata = black_info.itemdata,
+    .items = black_info.items,
     .hidden_hollows = black_info.hidden_hollows,
 
     .map_file = black_info.map_file,
@@ -278,3 +276,9 @@ const white_info = Info{
 pub const hm_count = 6;
 pub const hm_tm_prefix = "\x87\x03\x88\x03";
 pub const tm_count = 95;
+
+test {
+    _ = common;
+}
+
+const common = @import("../common.zig");

@@ -13,7 +13,6 @@ const log = std.log;
 const math = std.math;
 const mem = std.mem;
 const os = std.os;
-const rand = std.rand;
 const testing = std.testing;
 
 const format = core.format;
@@ -89,7 +88,7 @@ fn output(program: *Program, writer: anytype) !void {
 }
 
 fn randomize(program: *Program) !void {
-    var default_random = rand.DefaultPrng.init(program.options.seed);
+    var default_random = std.Random.DefaultPrng.init(program.options.seed);
     const random = default_random.random();
     const pick_from = try program.getStartersToPickFrom();
 

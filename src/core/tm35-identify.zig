@@ -1,7 +1,8 @@
 const clap = @import("clap");
-const core = @import("core");
 const std = @import("std");
-const util = @import("util");
+
+const core = @import("../core.zig");
+const util = @import("../util.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -49,8 +50,8 @@ pub const params = clap.parseParamsComptime(
 );
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals;
-    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+    const pos = args.positionals[0];
+    const file_name = pos orelse return error.MissingFile;
     return Program{ .allocator = allocator, .file = file_name };
 }
 

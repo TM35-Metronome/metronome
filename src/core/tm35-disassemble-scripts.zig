@@ -1,7 +1,8 @@
 const clap = @import("clap");
-const core = @import("core");
 const std = @import("std");
-const util = @import("util");
+
+const core = @import("../core.zig");
+const util = @import("../util.zig");
 
 const fs = std.fs;
 const heap = std.heap;
@@ -15,11 +16,6 @@ const gen4 = core.gen4;
 const gen5 = core.gen5;
 const rom = core.rom;
 const script = core.script;
-
-const li16 = rom.int.li16;
-const li32 = rom.int.li32;
-const lu16 = rom.int.lu16;
-const lu32 = rom.int.lu32;
 
 const nds = rom.nds;
 
@@ -50,8 +46,8 @@ pub const params = clap.parseParamsComptime(
 );
 
 pub fn init(allocator: mem.Allocator, args: anytype) !Program {
-    const pos = args.positionals;
-    const file_name = if (pos.len > 0) pos[0] else return error.MissingFile;
+    const pos = args.positionals[0];
+    const file_name = if (pos) |p| p else return error.MissingFile;
 
     return Program{
         .allocator = allocator,
@@ -152,7 +148,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
         defer offsets.deinit();
 
         for (gen4.script.getScriptOffsets(script_data), 0..) |relative_offset, i| {
-            const offset = relative_offset.value() + @as(isize, @intCast(i + 1)) * @sizeOf(lu32);
+            const offset = relative_offset + @as(isize, @intCast(i + 1)) * @sizeOf(u32);
             if (@as(isize, @intCast(script_data.len)) < offset)
                 continue;
             if (offset < 0)
@@ -182,7 +178,7 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @as(lu16, @enumFromInt(@as(u16, @bitCast(rest[0..2].*)))).value(),
+                        @as(u16, @bitCast(rest[0..2].*)),
                         decoder.i,
                     }),
                 }
@@ -193,10 +189,10 @@ fn outputGen4GameScripts(game: gen4.Game, allocator: mem.Allocator, writer: anyt
                 switch (command.kind) {
                     .jump, .compare_last_result_jump, .call, .compare_last_result_call => {
                         const off = switch (command.kind) {
-                            .compare_last_result_call => command.compare_last_result_call.adr.value(),
-                            .call => command.call.adr.value(),
-                            .jump => command.jump.adr.value(),
-                            .compare_last_result_jump => command.compare_last_result_jump.adr.value(),
+                            .compare_last_result_call => command.compare_last_result_call.adr,
+                            .call => command.call.adr,
+                            .jump => command.jump.adr,
+                            .compare_last_result_jump => command.compare_last_result_jump.adr,
                             else => unreachable,
                         };
                         const location = off + @as(isize, @intCast(decoder.i));
@@ -219,8 +215,8 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
         defer offsets.deinit();
 
         for (gen5.script.getScriptOffsets(script_data), 0..) |relative, i| {
-            const position = @as(isize, @intCast(i + 1)) * @sizeOf(lu32);
-            const offset = math.cast(usize, relative.value() + position) orelse continue;
+            const position = @as(isize, @intCast(i + 1)) * @sizeOf(u32);
+            const offset = math.cast(usize, relative + position) orelse continue;
             if (script_data.len < offset)
                 continue;
             try offsets.append(offset);
@@ -244,7 +240,7 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                         decoder.i,
                     }),
                     else => try writer.print("\tUnknown(0x{x:0>4})\t@0x{x}\n", .{
-                        @as(lu16, @enumFromInt(@as(u16, @bitCast(rest[0..2].*)))).value(),
+                        @as(u16, @bitCast(rest[0..2].*)),
                         decoder.i,
                     }),
                 }
@@ -255,9 +251,9 @@ fn outputGen5GameScripts(game: gen5.Game, allocator: mem.Allocator, writer: anyt
                 switch (command.kind) {
                     .jump, .@"if", .call_routine => {
                         const off = switch (command.kind) {
-                            .jump => command.jump.offset.value(),
-                            .@"if" => command.@"if".offset.value(),
-                            .call_routine => command.call_routine.offset.value(),
+                            .jump => command.jump.offset,
+                            .@"if" => command.@"if".offset,
+                            .call_routine => command.call_routine.offset,
                             else => unreachable,
                         };
                         if (math.cast(usize, off + @as(isize, @intCast(decoder.i)))) |loc| {
@@ -282,37 +278,37 @@ fn printCommand(writer: anytype, command: anytype, decoder: anytype) !void {
 fn printCommandHelper(writer: anytype, value: anytype) !void {
     const T = @TypeOf(value);
 
-    // lu16 and lu16 are seen as enums, but really they should be treated
+    // u16 and u16 are seen as enums, but really they should be treated
     // the same as int values.
-    if (T == lu16)
-        return printCommandHelper(writer, value.value());
-    if (T == lu32)
-        return printCommandHelper(writer, value.value());
-    if (T == li16)
-        return printCommandHelper(writer, value.value());
-    if (T == li32)
-        return printCommandHelper(writer, value.value());
+    if (T == u16)
+        return printCommandHelper(writer, value);
+    if (T == u32)
+        return printCommandHelper(writer, value);
+    if (T == i16)
+        return printCommandHelper(writer, value);
+    if (T == i32)
+        return printCommandHelper(writer, value);
 
     // Inferred error sets enforce us to have to return an error somewhere. This
     // messes up with the below comptime branch selection, where some branches
     // does not return any errors.
     try writer.writeAll("");
     switch (@typeInfo(T)) {
-        .Void => {},
-        .Int => try writer.print("{}", .{value}),
-        .Enum => try writer.print("{s}", .{@tagName(value)}),
-        .Array => for (value) |v| {
+        .void => {},
+        .int => try writer.print("{}", .{value}),
+        .@"enum" => try writer.print("{s}", .{@tagName(value)}),
+        .array => for (value) |v| {
             try printCommandHelper(writer, v);
         },
-        .Struct => |s| {
+        .@"struct" => |s| {
             inline for (s.fields, 0..) |struct_field, i| {
                 try printCommandHelper(writer, @field(value, struct_field.name));
                 if (i + 1 != s.fields.len)
                     try writer.writeAll(" ");
             }
         },
-        .Union => |u| {
-            if (u.layout != .Packed and u.layout != .Extern)
+        .@"union" => |u| {
+            if (u.layout != .@"packed" and u.layout != .@"extern")
                 @compileError(@typeName(T) ++ " is not packed or extern");
             if (u.tag_type != null)
                 @compileError(@typeName(T) ++ " cannot have a tag.");
@@ -321,7 +317,7 @@ fn printCommandHelper(writer: anytype, value: anytype) !void {
             const tag = @field(value, tag_field.name);
             const TagEnum = @TypeOf(tag);
 
-            inline for (@typeInfo(TagEnum).Enum.fields) |enum_field| {
+            inline for (@typeInfo(TagEnum).@"enum".fields) |enum_field| {
                 if (@field(TagEnum, enum_field.name) == tag) {
                     const union_field = @field(value, enum_field.name);
                     return printCommandHelper(writer, union_field);
