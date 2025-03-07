@@ -41,6 +41,7 @@ test {
 
     _ = bit;
     _ = glob;
+    _ = it;
     _ = set;
 }
 
@@ -48,6 +49,7 @@ pub const ArgParser = @import("util/ArgParser.zig");
 
 pub const bit = @import("util/bit.zig");
 pub const glob = @import("util/glob.zig");
+pub const it = @import("util/it.zig");
 pub const set = @import("util/set.zig");
 
 const std = @import("std");

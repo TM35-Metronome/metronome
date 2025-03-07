@@ -1049,7 +1049,7 @@ fn fillWithBestMovesForLevel(
         };
 
         // We keep the moves sorted so the worst move is always the last move
-        std.sort.insertion(u16, moves, Context{
+        std.mem.sort(u16, moves, Context{
             .pokemon = pokemon,
             .all_moves = all_moves,
         }, Context.lessThan);
